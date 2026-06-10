@@ -125,79 +125,89 @@ const DB = (() => {
     return normalizeUser(data);
   }
 
-  // ── Tassen eintragen ────────────────────────────────────────────────────────
-  async function addCups(memberId, amount) {
-    amount = parseInt(amount);
-    if (isNaN(amount) || amount < 1) throw new Error('Ungültige Menge');
-    const now     = new Date();
-    const hour    = now.getHours();
-    const dateStr = today();
-    const monthStr = getSeasonId();
+ // ── Tassen eintragen ────────────────────────────────────────────────────────
+async function addCups(memberId, amount) {
+  amount = parseInt(amount);
+  if (isNaN(amount) || amount < 1) throw new Error('Ungültige Menge');
+  const now      = new Date();
+  const hour     = now.getHours();
+  const dateStr  = today();
+  const monthStr = getSeasonId();
 
-    // Member laden
-    const { data: rawMember, error: mErr } = await _sb.from('members').select('*').eq('id', memberId).single();
-    if (mErr || !rawMember) throw new Error('Mitglied nicht gefunden');
+  // Member laden
+  const { data: rawMember, error: mErr } = await _sb.from('members').select('*').eq('id', memberId).single();
+  if (mErr || !rawMember) throw new Error('Mitglied nicht gefunden');
+  const member = normalizeUser(rawMember);
 
-    const member = normalizeUser(rawMember);
-    const activeDays = [...(member.activeDays || [])];
-    if (!activeDays.includes(dateStr)) activeDays.push(dateStr);
-    if (activeDays.length > 400) activeDays.splice(0, activeDays.length - 400);
-
-    const newTotal     = member.totalCups + amount;
-    const newStreak    = calcStreak(activeDays);
-    const newMaxStreak = Math.max(member.maxStreak, newStreak);
-    const seasonCups   = { ...member.seasonCups, [monthStr]: (member.seasonCups[monthStr] || 0) + amount };
-
-    const updatedMember = { ...member, totalCups: newTotal, currentStreak: newStreak, maxStreak: newMaxStreak, seasonCups, activeDays };
-
-    // Achievements prüfen
-    const { unlocked: inputUnlocked, newAch: inputAch } = checkInputAchievements(amount, hour, updatedMember);
-    const milestoneUnlocked = checkAchievements(updatedMember, inputAch);
-    const allNew = [...inputUnlocked, ...milestoneUnlocked].filter(Boolean);
-    const achievements = { ...(member.achievements || {}), ...inputAch };
-    for (const a of milestoneUnlocked) achievements[a.id] = true;
-
-    // Top-1 Achievement
-    const { data: topMember } = await _sb.from('members').select('id').eq('group_id', _groupId).order('total_cups', { ascending: false }).limit(1).single();
-    if (topMember?.id === memberId && !achievements.top1) {
-      achievements.top1 = true;
-      const top1Ach = ACHIEVEMENTS.find(a => a.id === 'top1');
-      if (top1Ach) allNew.push(top1Ach);
-    }
-
-    // Member updaten
-    await _sb.from('members').update({
-      total_cups: newTotal, current_streak: newStreak,
-      max_streak: newMaxStreak, last_active: dateStr,
-      active_days: activeDays, season_cups: seasonCups, achievements
-    }).eq('id', memberId);
-
-    // Entry einfügen
-    await _sb.from('entries').insert({ group_id: _groupId, member_id: memberId, amount, date: dateStr });
-
-    // Daily stats upsert
-    const { data: todayStats } = await _sb.from('daily_stats').select('*')
-      .eq('group_id', _groupId).eq('date', dateStr).maybeSingle();
-    const newDayTotal = (todayStats?.total || 0) + amount;
-    const newStats    = { ...(todayStats?.stats || {}), [memberId]: ((todayStats?.stats || {})[memberId] || 0) + amount };
-    await _sb.from('daily_stats').upsert({ group_id: _groupId, date: dateStr, total: newDayTotal, stats: newStats }, { onConflict: 'group_id,date' });
-
-    // Hall of Fame
-    const { data: hof } = await _sb.from('hall_of_fame').select('*').eq('group_id', _groupId).maybeSingle();
-    const hofUpdates = { group_id: _groupId };
-    if (!hof?.max_cups_value || newTotal > (hof.max_cups_value || 0)) {
-      hofUpdates.max_cups_value = newTotal; hofUpdates.max_cups_name = member.name;
-    }
-    if (!hof?.longest_streak_value || newMaxStreak > (hof.longest_streak_value || 0)) {
-      hofUpdates.longest_streak_value = newMaxStreak; hofUpdates.longest_streak_name = member.name;
-    }
-    await _sb.from('hall_of_fame').upsert({ ...(hof || {}), ...hofUpdates }, { onConflict: 'group_id' });
-
-    // Saison sicherstellen
-    await ensureSeason();
-
-    return allNew;
+  // ── Entry einfügen — Trigger prüft Tageslimit HIER ───────────────────────
+  // Bewusst vor den Member-Updates: schlägt der Trigger an, bleiben
+  // total_cups / streak / daily_stats unverändert (kein inkonsistenter Zustand).
+  const { error: entryError } = await _sb.from('entries')
+    .insert({ group_id: _groupId, member_id: memberId, amount, date: dateStr });
+  if (entryError) {
+    if (entryError.message?.includes('Tageslimit')) throw new Error(entryError.message);
+    throw new Error('Eintrag konnte nicht gespeichert werden');
   }
+
+  // Ab hier: Entry ist in DB — Statistiken aktualisieren ────────────────────
+  const activeDays = [...(member.activeDays || [])];
+  if (!activeDays.includes(dateStr)) activeDays.push(dateStr);
+  if (activeDays.length > 400) activeDays.splice(0, activeDays.length - 400);
+
+  const newTotal      = member.totalCups + amount;
+  const newStreak     = calcStreak(activeDays);
+  const newMaxStreak  = Math.max(member.maxStreak, newStreak);
+  const seasonCups    = { ...member.seasonCups, [monthStr]: (member.seasonCups[monthStr] || 0) + amount };
+  const updatedMember = { ...member, totalCups: newTotal, currentStreak: newStreak, maxStreak: newMaxStreak, seasonCups, activeDays };
+
+  // Achievements prüfen
+  const { unlocked: inputUnlocked, newAch: inputAch } = checkInputAchievements(amount, hour, updatedMember);
+  const milestoneUnlocked = checkAchievements(updatedMember, inputAch);
+  const allNew = [...inputUnlocked, ...milestoneUnlocked].filter(Boolean);
+  const achievements = { ...(member.achievements || {}), ...inputAch };
+  for (const a of milestoneUnlocked) achievements[a.id] = true;
+
+  // Top-1 Achievement
+  const { data: topMember } = await _sb.from('members').select('id')
+    .eq('group_id', _groupId).order('total_cups', { ascending: false }).limit(1).single();
+  if (topMember?.id === memberId && !achievements.top1) {
+    achievements.top1 = true;
+    const top1Ach = ACHIEVEMENTS.find(a => a.id === 'top1');
+    if (top1Ach) allNew.push(top1Ach);
+  }
+
+  // Member updaten
+  await _sb.from('members').update({
+    total_cups: newTotal, current_streak: newStreak,
+    max_streak: newMaxStreak, last_active: dateStr,
+    active_days: activeDays, season_cups: seasonCups, achievements
+  }).eq('id', memberId);
+
+  // Daily stats upsert
+  const { data: todayStats } = await _sb.from('daily_stats').select('*')
+    .eq('group_id', _groupId).eq('date', dateStr).maybeSingle();
+  const newDayTotal = (todayStats?.total || 0) + amount;
+  const newStats    = { ...(todayStats?.stats || {}), [memberId]: ((todayStats?.stats || {})[memberId] || 0) + amount };
+  await _sb.from('daily_stats').upsert(
+    { group_id: _groupId, date: dateStr, total: newDayTotal, stats: newStats },
+    { onConflict: 'group_id,date' }
+  );
+
+  // Hall of Fame
+  const { data: hof } = await _sb.from('hall_of_fame').select('*').eq('group_id', _groupId).maybeSingle();
+  const hofUpdates = { group_id: _groupId };
+  if (!hof?.max_cups_value || newTotal > (hof.max_cups_value || 0)) {
+    hofUpdates.max_cups_value = newTotal; hofUpdates.max_cups_name = member.name;
+  }
+  if (!hof?.longest_streak_value || newMaxStreak > (hof.longest_streak_value || 0)) {
+    hofUpdates.longest_streak_value = newMaxStreak; hofUpdates.longest_streak_name = member.name;
+  }
+  await _sb.from('hall_of_fame').upsert({ ...(hof || {}), ...hofUpdates }, { onConflict: 'group_id' });
+
+  // Saison sicherstellen
+  await ensureSeason();
+  return allNew;
+}
 
   // ── Saison abschließen ──────────────────────────────────────────────────────
   async function closeSeason(seasonId) {
