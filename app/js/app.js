@@ -530,7 +530,7 @@ function renderQR() {
     colorDark: '#1a0a00', colorLight: '#ffffff',
     correctLevel: QRCode.CorrectLevel.H
   });
-  document.getElementById('qr-url').textContent = window.location.href.split('?')[0];
+  document.getElementById('qr-url').textContent = '☕ Zur Coffee Champion App';
 }
 
 // ── Poster Generator ──────────────────────────────────────────────────────────
