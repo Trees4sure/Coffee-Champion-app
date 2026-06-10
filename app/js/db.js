@@ -58,7 +58,7 @@ const DB = (() => {
     const hash = await hashPassword(password);
     const { data, error } = await _sb.from('groups')
       .insert({ name: name.trim(), password_hash: hash })
-      .select().single();
+      .select('id, name').single();
     if (error) {
       if (error.code === '23505') throw new Error('Gruppenname bereits vergeben');
       throw new Error(error.message);
@@ -70,12 +70,11 @@ const DB = (() => {
   // ── Gruppe beitreten ────────────────────────────────────────────────────────
   async function joinGroup(name, password) {
     const hash = await hashPassword(password);
-    const { data, error } = await _sb.from('groups')
-      .select('*').eq('name', name.trim()).eq('password_hash', hash).maybeSingle();
+    const { data, error } = await _sb.rpc('check_group_password', { p_name: name.trim(), p_hash: hash });
     if (error) throw new Error(error.message);
-    if (!data) throw new Error('Falscher Gruppenname oder Passwort');
-    _groupId = data.id;
-    return data;
+    if (!data || data.length === 0) throw new Error('Falscher Gruppenname oder Passwort');
+    _groupId = data[0].id;
+    return { id: data[0].id, name: data[0].name };
   }
 
   // ── Daten laden ─────────────────────────────────────────────────────────────
@@ -280,7 +279,7 @@ const DB = (() => {
 
   // ── Pinnwand ────────────────────────────────────────────────────────────────
   async function getPinnedMessage() {
-    const { data } = await _sb.from('groups')
+    const { data } = await _sb.from('groups_public')
       .select('pinned_message, pinned_by, pinned_at').eq('id', _groupId).single();
     return data || {};
   }
