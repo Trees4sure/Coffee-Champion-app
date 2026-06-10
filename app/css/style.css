@@ -136,13 +136,17 @@ header {
   text-shadow: 0 0 18px var(--gold-glow); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .header-subtitle { color: var(--muted); font-size: 0.65rem; letter-spacing: 2px; text-transform: uppercase; margin-top: 1px; }
-.header-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.header-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; max-width: 60%; }
+.header-user-wrap { min-width: 0; overflow: hidden; }
 .header-avatar {
   width: 36px; height: 36px; border-radius: 50%; border: 2px solid var(--gold);
   background: var(--bg3); display: flex; align-items: center; justify-content: center;
-  font-size: 1rem; box-shadow: 0 0 10px var(--gold-glow);
+  font-size: 1rem; box-shadow: 0 0 10px var(--gold-glow); flex-shrink: 0;
 }
-.header-user { font-size: 0.8rem; font-weight: 600; color: var(--cream); }
+.header-user {
+  font-size: 0.8rem; font-weight: 600; color: var(--cream);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .header-group { font-size: 0.65rem; color: var(--muted); }
 .btn-icon { background: none; color: var(--muted); font-size: 1.2rem; padding: 4px 8px; }
 .btn-icon:hover { color: var(--cream); }
