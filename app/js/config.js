@@ -1,0 +1,2 @@
+const SUPABASE_URL      = 'https://sbnitlanboqlrqfcegzt.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNibml0bGFuYm9xbHJxZmNlZ3p0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwMjY4ODIsImV4cCI6MjA5NjYwMjg4Mn0.huwrNIvETKSp7O8wIaIU2GGzUilmt7JvUG5cSqHigdM';

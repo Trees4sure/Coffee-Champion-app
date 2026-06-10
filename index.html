@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Coffee Champion – Die Kaffee-Meisterschaft fürs Büro</title>
+  <meta name="description" content="Verwandelt eure Büro-Kaffeepause in eine echte Championship. Rangliste, Achievements, Poster – in 30 Sekunden startklar.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:    #0d0b08;
+      --bg2:   #141008;
+      --bg3:   #1c160d;
+      --gold:  #d4aa37;
+      --goldB: #f0c84a;
+      --goldD: #7a6118;
+      --glow:  #d4aa3755;
+      --cream: #f2ead8;
+      --muted: #8a7a5a;
+    }
+
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--bg); color: var(--cream);
+      font-family: 'Inter', sans-serif; font-size: 16px;
+      overflow-x: hidden;
+    }
+
+    /* ── Hintergrund-Textur ── */
+    body::before {
+      content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+      background:
+        radial-gradient(ellipse 80% 40% at 50% 0%,   #2a1f0a1a 0%, transparent 60%),
+        radial-gradient(ellipse 50% 30% at 90% 100%, #1a0f0211 0%, transparent 50%);
+    }
+    section, nav, footer { position: relative; z-index: 1; }
+
+    /* ── NAV ── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 40px; height: 64px;
+      background: linear-gradient(180deg, #1a140888 0%, #0d0b0800 100%);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid #d4aa3722;
+    }
+    .nav-logo {
+      font-family: 'Orbitron', sans-serif; color: var(--gold);
+      font-size: 1rem; letter-spacing: 3px;
+      text-shadow: 0 0 16px var(--glow);
+    }
+    .nav-cta {
+      background: var(--gold); color: #0d0b08; border: none;
+      padding: 8px 22px; border-radius: 6px; font-weight: 700;
+      cursor: pointer; font-size: 0.9rem; font-family: 'Inter', sans-serif;
+      text-decoration: none; transition: background 0.2s;
+    }
+    .nav-cta:hover { background: var(--goldB); }
+
+    /* ── HERO ── */
+    .hero {
+      min-height: 100vh;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      text-align: center; padding: 120px 24px 80px;
+    }
+    .hero-badge {
+      display: inline-block; background: #d4aa3718; border: 1px solid var(--goldD);
+      color: var(--gold); font-size: 0.75rem; letter-spacing: 2px;
+      text-transform: uppercase; padding: 6px 18px; border-radius: 20px;
+      margin-bottom: 28px;
+    }
+    .hero h1 {
+      font-family: 'Orbitron', sans-serif; font-size: clamp(2.4rem, 7vw, 5rem);
+      font-weight: 900; color: var(--gold); letter-spacing: 4px; line-height: 1.1;
+      text-shadow: 0 0 40px var(--glow), 0 0 80px #d4aa3733;
+      margin-bottom: 16px;
+    }
+    .hero h1 span { display: block; color: var(--cream); font-size: 0.55em; letter-spacing: 6px; margin-top: 8px; }
+    .hero-sub {
+      color: var(--muted); font-size: 1.15rem; max-width: 580px;
+      line-height: 1.7; margin: 0 auto 48px;
+    }
+    .hero-sub strong { color: var(--cream); }
+    .hero-btns { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; }
+    .btn-hero-primary {
+      background: linear-gradient(135deg, var(--gold), #b8911f);
+      color: #0d0b08; border: none; padding: 16px 40px; border-radius: 8px;
+      font-weight: 700; font-size: 1.05rem; cursor: pointer; font-family: 'Inter', sans-serif;
+      box-shadow: 0 4px 24px var(--glow); text-decoration: none;
+      transition: all 0.2s; letter-spacing: 0.5px;
+    }
+    .btn-hero-primary:hover { background: linear-gradient(135deg, var(--goldB), var(--gold)); transform: translateY(-2px); box-shadow: 0 8px 32px var(--glow); }
+    .btn-hero-secondary {
+      background: transparent; border: 1px solid var(--goldD); color: var(--gold);
+      padding: 16px 32px; border-radius: 8px; font-size: 1rem; cursor: pointer;
+      font-family: 'Inter', sans-serif; text-decoration: none; transition: all 0.2s;
+    }
+    .btn-hero-secondary:hover { border-color: var(--gold); background: #1c1608; }
+
+    .hero-preview {
+      margin-top: 72px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;
+    }
+    .preview-card {
+      background: var(--bg2); border: 1px solid #2a2010; border-radius: 10px;
+      padding: 16px 20px; text-align: center; min-width: 120px;
+    }
+    .preview-card .pc-icon { font-size: 1.8rem; }
+    .preview-card .pc-val  { font-family: 'Orbitron', sans-serif; color: var(--gold); font-size: 1.3rem; font-weight: 700; margin-top: 6px; }
+    .preview-card .pc-lbl  { color: var(--muted); font-size: 0.75rem; margin-top: 3px; letter-spacing: 0.5px; text-transform: uppercase; }
+
+    /* ── DIVIDER ── */
+    .gold-line {
+      height: 1px; margin: 0 40px;
+      background: linear-gradient(90deg, transparent, var(--goldD), transparent);
+    }
+
+    /* ── SECTIONS ── */
+    .section { padding: 96px 24px; max-width: 1080px; margin: 0 auto; }
+    .section-label {
+      text-align: center; color: var(--gold); font-size: 0.72rem;
+      letter-spacing: 3px; text-transform: uppercase; margin-bottom: 14px;
+    }
+    .section-title {
+      font-family: 'Orbitron', sans-serif; font-size: clamp(1.6rem, 4vw, 2.4rem);
+      font-weight: 700; text-align: center; color: var(--cream);
+      margin-bottom: 16px; letter-spacing: 2px;
+    }
+    .section-title span { color: var(--gold); }
+    .section-sub {
+      text-align: center; color: var(--muted); font-size: 1rem;
+      max-width: 560px; margin: 0 auto 64px; line-height: 1.7;
+    }
+
+    /* ── HOW IT WORKS ── */
+    .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 24px; }
+    .step {
+      background: var(--bg2); border: 1px solid #2a2010; border-radius: 12px;
+      padding: 32px 28px; position: relative; transition: border-color 0.2s, transform 0.2s;
+    }
+    .step:hover { border-color: var(--goldD); transform: translateY(-4px); }
+    .step-num {
+      font-family: 'Orbitron', sans-serif; font-size: 3rem; font-weight: 900;
+      color: #d4aa3718; position: absolute; top: 16px; right: 20px; line-height: 1;
+    }
+    .step-icon { font-size: 2.2rem; margin-bottom: 16px; }
+    .step h3 { color: var(--gold); font-size: 1rem; margin-bottom: 10px; letter-spacing: 0.5px; }
+    .step p { color: var(--muted); line-height: 1.6; font-size: 0.92rem; }
+
+    /* ── FEATURES ── */
+    .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+    .feature {
+      background: var(--bg2); border: 1px solid #2a2010; border-radius: 10px;
+      padding: 24px; display: flex; gap: 16px; align-items: flex-start;
+      transition: border-color 0.2s;
+    }
+    .feature:hover { border-color: var(--goldD); }
+    .feat-icon { font-size: 1.8rem; flex-shrink: 0; }
+    .feat-title { color: var(--cream); font-weight: 700; margin-bottom: 6px; }
+    .feat-desc  { color: var(--muted); font-size: 0.88rem; line-height: 1.6; }
+
+    /* ── PRICING ── */
+    .pricing { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 24px; }
+    .price-card {
+      background: var(--bg2); border: 1px solid #2a2010; border-radius: 12px;
+      padding: 36px 28px; text-align: center; position: relative;
+      transition: all 0.2s;
+    }
+    .price-card:hover { transform: translateY(-4px); }
+    .price-card.featured {
+      border: 2px solid var(--gold);
+      box-shadow: 0 0 40px var(--glow);
+    }
+    .featured-badge {
+      position: absolute; top: -14px; left: 50%; transform: translateX(-50%);
+      background: var(--gold); color: #0d0b08; font-size: 0.72rem;
+      font-weight: 700; padding: 4px 16px; border-radius: 20px; letter-spacing: 1px;
+      white-space: nowrap;
+    }
+    .price-name { font-family: 'Orbitron', sans-serif; color: var(--gold); font-size: 0.8rem; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 20px; }
+    .price-amount { font-family: 'Orbitron', sans-serif; font-size: 2.8rem; font-weight: 900; color: var(--cream); }
+    .price-amount span { font-size: 1rem; color: var(--muted); font-family: 'Inter', sans-serif; }
+    .price-period { color: var(--muted); font-size: 0.82rem; margin-top: 4px; margin-bottom: 28px; }
+    .price-features { list-style: none; text-align: left; margin-bottom: 32px; }
+    .price-features li { color: var(--muted); font-size: 0.88rem; padding: 7px 0; border-bottom: 1px solid #1a1408; display: flex; align-items: center; gap: 10px; }
+    .price-features li::before { content: '✓'; color: var(--gold); font-weight: 700; flex-shrink: 0; }
+    .price-features li.no { color: #4a4030; }
+    .price-features li.no::before { content: '–'; color: #4a4030; }
+    .btn-price {
+      width: 100%; padding: 12px; border-radius: 7px; font-weight: 700;
+      font-size: 0.95rem; cursor: pointer; font-family: 'Inter', sans-serif;
+      transition: all 0.2s; text-decoration: none; display: block;
+    }
+    .btn-price-outline { background: transparent; border: 1px solid var(--goldD); color: var(--gold); }
+    .btn-price-outline:hover { border-color: var(--gold); background: #1c1608; }
+    .btn-price-solid { background: linear-gradient(135deg, var(--gold), #b8911f); color: #0d0b08; border: none; box-shadow: 0 2px 16px var(--glow); }
+    .btn-price-solid:hover { background: linear-gradient(135deg, var(--goldB), var(--gold)); }
+
+    /* ── TESTIMONIAL / MOTTO ── */
+    .motto-section {
+      background: linear-gradient(135deg, #1a1408 0%, #0d0b08 100%);
+      border-top: 1px solid #2a2010; border-bottom: 1px solid #2a2010;
+      padding: 72px 24px; text-align: center;
+    }
+    .motto-text {
+      font-family: 'Orbitron', sans-serif; font-size: clamp(1.1rem, 3vw, 1.8rem);
+      color: var(--gold); letter-spacing: 4px; text-transform: uppercase;
+      text-shadow: 0 0 30px var(--glow);
+    }
+    .motto-sub { color: var(--muted); font-size: 0.85rem; letter-spacing: 2px; margin-top: 12px; text-transform: uppercase; }
+
+    /* ── FOOTER ── */
+    footer {
+      border-top: 1px solid #2a2010; padding: 40px 40px 32px;
+      display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px;
+    }
+    .footer-logo { font-family: 'Orbitron', sans-serif; color: var(--goldD); font-size: 0.85rem; letter-spacing: 2px; }
+    .footer-links { display: flex; gap: 24px; }
+    .footer-links a { color: var(--muted); font-size: 0.82rem; text-decoration: none; }
+    .footer-links a:hover { color: var(--gold); }
+    .footer-copy { color: #3a3020; font-size: 0.78rem; width: 100%; text-align: center; margin-top: 8px; }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 640px) {
+      nav { padding: 0 20px; }
+      .hero h1 { font-size: 2rem; }
+      .section { padding: 64px 18px; }
+      .hero-btns { flex-direction: column; align-items: center; }
+      .btn-hero-primary, .btn-hero-secondary { width: 100%; max-width: 320px; text-align: center; }
+      footer { flex-direction: column; align-items: center; text-align: center; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── NAV ── -->
+<nav>
+  <div class="nav-logo">&#x2615; COFFEE CHAMPION</div>
+  <a href="#start" class="nav-cta">Kostenlos starten</a>
+</nav>
+
+<!-- ── HERO ── -->
+<section class="hero">
+  <div class="hero-badge">&#x26A1; Die Meisterschaft für echte Kaffee-Champions &#x26A1;</div>
+  <h1>COFFEE<br>CHAMPION<span>FÜR EUER BÜRO-TEAM</span></h1>
+  <p class="hero-sub">
+    Verwandelt eure tägliche Kaffeepause in eine echte Meisterschaft.<br>
+    <strong>Rangliste, Achievements, Monats-Saisons</strong> — in 30 Sekunden startklar.<br>
+    Kein Setup. Kein Account erforderlich.
+  </p>
+  <div class="hero-btns">
+    <a href="#start" class="btn-hero-primary">&#x2615; Jetzt kostenlos starten</a>
+    <a href="#features" class="btn-hero-secondary">Mehr erfahren</a>
+  </div>
+
+  <div class="hero-preview">
+    <div class="preview-card">
+      <div class="pc-icon">&#x1F3C6;</div>
+      <div class="pc-val">1</div>
+      <div class="pc-lbl">Klick zum Start</div>
+    </div>
+    <div class="preview-card">
+      <div class="pc-icon">&#x2615;</div>
+      <div class="pc-val">∞</div>
+      <div class="pc-lbl">Tassen tracken</div>
+    </div>
+    <div class="preview-card">
+      <div class="pc-icon">&#x1F4C8;</div>
+      <div class="pc-val">20</div>
+      <div class="pc-lbl">Achievements</div>
+    </div>
+    <div class="preview-card">
+      <div class="pc-icon">&#x1F5A8;</div>
+      <div class="pc-val">A3</div>
+      <div class="pc-lbl">Poster-Generator</div>
+    </div>
+  </div>
+</section>
+
+<div class="gold-line"></div>
+
+<!-- ── HOW IT WORKS ── -->
+<section class="section" id="how">
+  <div class="section-label">So funktioniert's</div>
+  <h2 class="section-title">In <span>30 Sekunden</span> startklar</h2>
+  <p class="section-sub">Kein Konto, keine App, kein Technik-Stress. Einfach den Link teilen — los geht's.</p>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">01</div>
+      <div class="step-icon">&#x1F517;</div>
+      <h3>Link öffnen</h3>
+      <p>Öffnet die App im Browser — auf dem Handy oder am PC. Keine Installation nötig.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">02</div>
+      <div class="step-icon">&#x1F464;</div>
+      <h3>Namen wählen</h3>
+      <p>Jeder tippt einfach seinen Namen. Kein Passwort, keine Email, kein Account.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">03</div>
+      <div class="step-icon">&#x2615;</div>
+      <h3>Tassen tracken</h3>
+      <p>Nach jedem Kaffee kurz antippen — die Rangliste aktualisiert sich live für alle.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">04</div>
+      <div class="step-icon">&#x1F3C6;</div>
+      <h3>Monat gewinnen</h3>
+      <p>Am Monatsende wird der Sieger gekürt. Poster drucken, aufhängen, nächste Runde.</p>
+    </div>
+  </div>
+</section>
+
+<div class="gold-line"></div>
+
+<!-- ── FEATURES ── -->
+<section class="section" id="features">
+  <div class="section-label">Features</div>
+  <h2 class="section-title">Alles was eine <span>Championship</span> braucht</h2>
+  <p class="section-sub">Mehr als nur eine Strichliste — ein echtes Wettkampf-System für euer Büro.</p>
+  <div class="features">
+    <div class="feature">
+      <div class="feat-icon">&#x1F3C5;</div>
+      <div>
+        <div class="feat-title">Live-Rangliste</div>
+        <div class="feat-desc">Podium mit Gold, Silber, Bronze. Aktualisiert sich alle 30 Sekunden automatisch.</div>
+      </div>
+    </div>
+    <div class="feature">
+      <div class="feat-icon">&#x1F451;</div>
+      <div>
+        <div class="feat-title">10 Titel-Stufen</div>
+        <div class="feat-desc">Von "Kaffee-Neuling" bis "Kaiser des Koffeins" — jede Tasse bringt euch weiter.</div>
+      </div>
+    </div>
+    <div class="feature">
+      <div class="feat-icon">&#x1F3C6;</div>
+      <div>
+        <div class="feat-title">20 Achievements</div>
+        <div class="feat-desc">Früh-Kaffee, Serientrinker, Monatssieger — geheime Errungenschaften zum Entdecken.</div>
+      </div>
+    </div>
+    <div class="feature">
+      <div class="feat-icon">&#x1F5A8;</div>
+      <div>
+        <div class="feat-title">Poster-Generator</div>
+        <div class="feat-desc">Ein Klick — ein druckfertiger A3-Aushang mit echten Ranglisten-Daten.</div>
+      </div>
+    </div>
+    <div class="feature">
+      <div class="feat-icon">&#x1F525;</div>
+      <div>
+        <div class="feat-title">Streak-System</div>
+        <div class="feat-desc">Tägliche Serien tracken. Wer trinkt die meisten Tage am Stück?</div>
+      </div>
+    </div>
+    <div class="feature">
+      <div class="feat-icon">&#x1F4C5;</div>
+      <div>
+        <div class="feat-title">Monats-Saisons</div>
+        <div class="feat-desc">Jeden Monat ein neuer Champion. Hall of Fame für alle Sieger.</div>
+      </div>
+    </div>
+    <div class="feature">
+      <div class="feat-icon">&#x1F4F1;</div>
+      <div>
+        <div class="feat-title">Mobile-First</div>
+        <div class="feat-desc">Funktioniert auf jedem Handy, Tablet und PC — kein App-Store nötig.</div>
+      </div>
+    </div>
+    <div class="feature">
+      <div class="feat-icon">&#x1F4CA;</div>
+      <div>
+        <div class="feat-title">Statistiken</div>
+        <div class="feat-desc">Täglicher Verlauf, Saison-Vergleich, persönlicher Fortschritt — alles im Blick.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── MOTTO ── -->
+<div class="motto-section">
+  <div class="motto-text">&#x26A1; Mehr Kaffee &nbsp;·&nbsp; Mehr Power &nbsp;·&nbsp; Mehr wir &#x26A1;</div>
+  <div class="motto-sub">Die einzige Meisterschaft, die ihr täglich gewinnen könnt</div>
+</div>
+
+<!-- ── KOOPERATION ── -->
+<section class="section" id="pricing">
+  <div class="section-label">Kooperation</div>
+  <h2 class="section-title">Für <span>Kaffeemarken</span></h2>
+  <p class="section-sub">Coffee Champion ist kostenlos — für immer. Wir glauben, dass die besten Tools keine Paywall brauchen.<br>Stattdessen suchen wir Partner, die genauso für guten Kaffee brennen wie unsere Nutzer.</p>
+
+  <div class="pricing">
+
+    <div class="price-card">
+      <div class="feat-icon" style="font-size:2rem;margin-bottom:10px">☕</div>
+      <div class="price-name">Röstereien</div>
+      <div class="price-period" style="margin-bottom:14px">Direkter Zugang zur kaffeeverrücktesten Büro-Community</div>
+      <ul class="price-features">
+        <li>Euer Produkt bei echten Kaffee-Enthusiasten</li>
+        <li>Meilenstein-Belohnungen mit eurem Angebot</li>
+        <li>Authentisches Umfeld — kein klassisches Ad</li>
+        <li>Büros = Großabnehmer</li>
+      </ul>
+    </div>
+
+    <div class="price-card featured">
+      <div class="featured-badge">&#x2B50; INTERESSE?</div>
+      <div class="feat-icon" style="font-size:2rem;margin-bottom:10px">🏆</div>
+      <div class="price-name">Kaffeemaschinen</div>
+      <div class="price-period" style="margin-bottom:14px">Wo Kaffee gezählt wird, werden Maschinen gebraucht</div>
+      <ul class="price-features">
+        <li>Produktplatzierung im Poster-Generator</li>
+        <li>Sponsored Achievements &amp; Meilensteine</li>
+        <li>Büro-Zielgruppe mit Kaufkraft</li>
+        <li>Leistungsbasierte Provision</li>
+      </ul>
+      <a href="mailto:jepemana@gmail.com?subject=Coffee Champion Kooperation" class="btn-price btn-price-solid">Kontakt aufnehmen</a>
+    </div>
+
+    <div class="price-card">
+      <div class="feat-icon" style="font-size:2rem;margin-bottom:10px">🫘</div>
+      <div class="price-name">Zubehör &amp; Mehr</div>
+      <div class="price-period" style="margin-bottom:14px">Tassen, Filter, Sirup, Snacks — alles rund ums Büro-Kaffeeritual</div>
+      <ul class="price-features">
+        <li>Affiliate-Links bei Meilensteinen</li>
+        <li>Erwähnung im Gruppen-Chat</li>
+        <li>Nutzer die aktiv kaufen wollen</li>
+        <li>Flexibles Modell</li>
+      </ul>
+    </div>
+
+  </div>
+  <p style="text-align:center;color:var(--muted);font-size:0.78rem;margin-top:24px">
+    Interesse? Schreib uns: <a href="mailto:jepemana@gmail.com?subject=Coffee Champion Kooperation" style="color:var(--gold)">jepemana@gmail.com</a>
+  </p>
+</section>
+
+<!-- ── START CTA ── -->
+<section class="section" id="start" style="text-align:center;padding-top:64px;padding-bottom:96px">
+  <div style="font-size:3rem;margin-bottom:20px">&#x2615;</div>
+  <h2 class="section-title" style="margin-bottom:12px">Bereit für die <span>Championship</span>?</h2>
+  <p class="section-sub" style="margin-bottom:40px">
+    Einfach den Link teilen. Kein Account, keine Kreditkarte, kein Stress.<br>
+    Eure erste Saison startet heute.
+  </p>
+  <a href="app/" class="btn-hero-primary" style="display:inline-block">
+    &#x1F3C6; Gruppe jetzt erstellen — kostenlos
+  </a>
+  <p style="color:var(--muted);font-size:0.8rem;margin-top:16px;letter-spacing:0.5px">
+    Keine Kreditkarte. Keine Installation. Kein Konto erforderlich.
+  </p>
+</section>
+
+<div class="gold-line"></div>
+
+<!-- ── FOOTER ── -->
+<footer>
+  <div class="footer-logo">&#x2615; COFFEE CHAMPION</div>
+  <div class="footer-links">
+    <a href="#">Datenschutz</a>
+    <a href="#">Impressum</a>
+    <a href="#">Kontakt</a>
+  </div>
+  <div class="footer-copy">© 2026 Coffee Champion · Mit &#x2615; gemacht</div>
+</footer>
+
+</body>
+</html>

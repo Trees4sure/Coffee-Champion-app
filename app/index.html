@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Coffee Champion</title>
+  <meta name="theme-color" content="#0d0b08">
+  <meta name="description" content="Die Meisterschaft für echte Kaffee-Champions">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- ── Loading ────────────────────────────────────────────────────────────── -->
+<div id="loading-screen" class="screen">
+  <div class="loading-trophy">🏆</div>
+  <div class="loading-text">Lade Meisterschaft…</div>
+</div>
+
+<!-- ── Gruppe erstellen / beitreten ───────────────────────────────────────── -->
+<div id="group-screen" class="screen hidden">
+  <div class="group-card">
+    <div class="group-logo">
+      <div class="trophy-icon">🏆</div>
+      <h1>COFFEE CHAMPION</h1>
+      <p>Starte oder tritt einer Gruppe bei</p>
+    </div>
+    <div class="tab-bar">
+      <button class="tab-btn active" id="tab-create-btn">Neu erstellen</button>
+      <button class="tab-btn" id="tab-join-btn">Beitreten</button>
+    </div>
+    <!-- Erstellen -->
+    <div class="tab-panel" id="panel-create">
+      <label for="create-name">Gruppenname</label>
+      <input type="text" id="create-name" placeholder="z.B. Büro Frankfurt" maxlength="40" autocomplete="off">
+      <label for="create-pass">Passwort</label>
+      <input type="password" id="create-pass" placeholder="Gruppenpasswort" maxlength="60" autocomplete="new-password">
+      <button class="btn-primary" id="btn-create">Gruppe erstellen</button>
+      <p class="tab-hint">Du wirst automatisch Admin</p>
+    </div>
+    <!-- Beitreten -->
+    <div class="tab-panel hidden" id="panel-join">
+      <label for="join-name">Gruppenname</label>
+      <input type="text" id="join-name" placeholder="Exakter Gruppenname" maxlength="40" autocomplete="off">
+      <label for="join-pass">Passwort</label>
+      <input type="password" id="join-pass" placeholder="Gruppenpasswort" maxlength="60" autocomplete="current-password">
+      <button class="btn-primary" id="btn-join">Beitreten</button>
+      <p class="tab-hint">Gruppenname und Passwort vom Admin erfragen</p>
+    </div>
+  </div>
+</div>
+
+<!-- ── Name Picker ─────────────────────────────────────────────────────────── -->
+<div id="auth-screen" class="screen hidden">
+  <div class="auth-card">
+    <div class="auth-header">
+      <h2>☕ Wer bist du?</h2>
+      <p>Wähle deinen Namen oder trag dich neu ein</p>
+    </div>
+    <div class="user-grid" id="user-buttons"></div>
+    <div class="auth-divider">— oder neu —</div>
+    <div class="new-user-row">
+      <input type="text" id="new-name-input" placeholder="Dein Name" maxlength="30" autocomplete="off">
+      <button class="btn-primary" id="btn-register">Dabei!</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── App ─────────────────────────────────────────────────────────────────── -->
+<div id="app-screen" class="hidden">
+
+  <!-- Header -->
+  <header>
+    <div class="header-trophy">🏆</div>
+    <div class="header-center">
+      <div class="header-title">COFFEE CHAMPION</div>
+      <div class="header-subtitle" id="header-groupname"></div>
+    </div>
+    <div class="header-right">
+      <div>
+        <div class="header-user" id="header-username"></div>
+      </div>
+      <div class="header-avatar" id="btn-logout" title="Abmelden" style="cursor:pointer">☕</div>
+    </div>
+  </header>
+
+  <!-- Views -->
+  <div class="views">
+
+    <!-- Rangliste -->
+    <div class="view active" id="view-rangliste">
+      <div class="add-cups-bar">
+        <div class="add-cups-title">☕ Tassen eintragen</div>
+        <div class="quick-buttons">
+          <button class="btn-quick" data-quick="1">+1</button>
+          <button class="btn-quick" data-quick="2">+2</button>
+          <button class="btn-quick" data-quick="3">+3</button>
+          <button class="btn-quick" data-quick="5">+5</button>
+        </div>
+        <div class="custom-row">
+          <input type="number" id="custom-cups-input" placeholder="Eigene Anzahl…" min="1" max="99">
+          <button class="btn-add" id="btn-custom-add">+ Eintragen</button>
+        </div>
+      </div>
+      <!-- Pinnwand -->
+      <div class="pinnwand-display hidden" id="pinnwand-display">
+        <span class="pinnwand-icon">📌</span>
+        <span class="pinnwand-text" id="pinnwand-text"></span>
+        <span class="pinnwand-by" id="pinnwand-by"></span>
+        <button class="pinnwand-clear" id="btn-pinnwand-clear" title="Entfernen">✕</button>
+      </div>
+      <div class="pinnwand-bar">
+        <div class="pinnwand-presets">
+          <button class="preset-btn" data-msg="☕ Kaffee alle!">☕ Kaffee alle!</button>
+          <button class="preset-btn" data-msg="🥛 Milch leer!">🥛 Milch leer!</button>
+          <button class="preset-btn" data-msg="🍩 Kuchen im Pausenraum!">🍩 Kuchen!</button>
+          <button class="preset-btn" data-msg="💀 Brauche Nektar!">💀 Nektar!</button>
+          <button class="preset-btn" data-msg="🫘 Kann jemand Kaffee besorgen?">🫘 Nachschub!</button>
+          <button class="preset-btn" data-msg="⚡ Wer kommt mit zur Küche?">⚡ Küche!</button>
+        </div>
+        <div class="pinnwand-custom-row">
+          <input type="text" id="pinnwand-input" placeholder="Eigene Nachricht…" maxlength="80" autocomplete="off">
+          <button class="btn-add" id="btn-pinnwand-post">📌 Posten</button>
+        </div>
+      </div>
+
+      <div class="refresh-row">
+        <span id="last-refreshed" style="color:var(--muted);font-size:.7rem;"></span>
+        <button class="btn-refresh-sm" id="btn-refresh">↻ Aktualisieren</button>
+      </div>
+      <div class="podium" id="podium"></div>
+      <div class="lb-card" id="leaderboard-table"></div>
+      <p class="motto" style="margin-top:16px">⚡ Mehr Kaffee. Mehr Power. Mehr wir. ⚡</p>
+    </div>
+
+    <!-- Profil -->
+    <div class="view" id="view-profil">
+      <div class="profile-header">
+        <div class="profile-avatar">☕</div>
+        <div class="profile-name" id="profile-name">–</div>
+        <div class="profile-title" id="profile-title">–</div>
+        <div class="profile-stats">
+          <div class="stat-box"><div class="stat-val" id="profile-cups">0</div><div class="stat-lbl">Tassen</div></div>
+          <div class="stat-box"><div class="stat-val" id="profile-streak">0</div><div class="stat-lbl">Serie 🔥</div></div>
+          <div class="stat-box"><div class="stat-val" id="season-cups">0</div><div class="stat-lbl">Saison</div></div>
+        </div>
+      </div>
+
+      <div class="progress-section">
+        <div class="section-title">Fortschritt zum nächsten Titel</div>
+        <div class="progress-bar-bg"><div class="progress-bar-fill" id="next-tier-bar" style="width:0%"></div></div>
+        <div class="progress-label" id="next-tier-label"></div>
+        <div class="beans-wrap">
+          <div class="section-title" style="margin-top:12px">🫘 Bohnen-Wand <small style="font-size:.65rem">(1 Bohne = 10 Tassen)</small></div>
+          <div id="beans-container"></div>
+        </div>
+      </div>
+
+      <div class="add-cups-bar" style="margin-bottom:14px">
+        <div class="add-cups-title">Tassen eintragen</div>
+        <div class="add-cups-inline">
+          <input type="number" id="profile-cups-input" placeholder="Anzahl" min="1" max="99">
+          <button class="btn-primary" id="btn-profile-add" style="flex-shrink:0;padding:10px 18px;font-size:.82rem">+ Eintragen</button>
+        </div>
+      </div>
+
+      <div class="progress-section">
+        <div class="section-title">Achievements</div>
+        <div class="achievements-grid" id="achievements-grid"></div>
+      </div>
+
+      <div style="padding:8px 0">
+        <div class="section-title" style="margin-bottom:8px">Saison-Rang</div>
+        <p style="color:var(--cream);font-size:.9rem">Platz <span id="season-rank" style="color:var(--gold);font-weight:700">—</span> in dieser Saison</p>
+      </div>
+
+      <div style="padding:8px 0 16px">
+        <div class="section-title" style="margin-bottom:8px">Session</div>
+        <button class="btn-leave" id="btn-leave-group">🚪 Gruppe verlassen</button>
+        <p style="color:var(--muted);font-size:.72rem;margin-top:8px;text-align:center">Name wechseln → ☕ oben rechts tippen</p>
+      </div>
+    </div>
+
+    <!-- Statistiken / Auswertung -->
+    <div class="view" id="view-statistiken">
+      <div class="period-tabs">
+        <button class="period-btn active" data-period="monat">📅 Monat</button>
+        <button class="period-btn" data-period="quartal">📊 Quartal</button>
+        <button class="period-btn" data-period="jahr">🗓 Jahr</button>
+      </div>
+      <div class="period-nav">
+        <button class="period-arrow" id="btn-period-prev">‹</button>
+        <span class="period-label" id="period-label"></span>
+        <button class="period-arrow" id="btn-period-next">›</button>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title" id="chart-main-title"></div>
+        <div class="chart-wrap" style="height:260px"><canvas id="chart-main"></canvas></div>
+      </div>
+      <div class="summary-card" id="period-summary"></div>
+    </div>
+
+    <!-- Hall of Fame -->
+    <div class="view" id="view-halloffame">
+      <div class="hof-grid" id="hof-container"></div>
+      <button class="hof-poster-btn" id="btn-poster" style="margin-top:16px">
+        🖼 Meisterschafts-Poster generieren
+      </button>
+    </div>
+
+    <!-- Saisons -->
+    <div class="view" id="view-saisons">
+      <div id="seasons-container"></div>
+    </div>
+
+    <!-- Admin -->
+    <div class="view" id="view-admin">
+      <div class="admin-section">
+        <div class="admin-subtitle">Gruppeninfo</div>
+        <div class="admin-group-info">Gruppe: <span id="admin-group-name">–</span></div>
+        <div class="admin-subtitle" style="margin-top:14px">Teilnehmer</div>
+        <div id="admin-user-list"></div>
+      </div>
+      <div class="admin-section">
+        <div class="admin-subtitle">Aktionen</div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <button class="btn-secondary" id="btn-admin-close-season">📅 Aktuelle Saison abschließen</button>
+          <button class="btn-danger" id="btn-admin-reset">⚠️ Alle Daten zurücksetzen</button>
+        </div>
+      </div>
+      <div class="admin-section">
+        <div class="admin-subtitle">Session</div>
+        <p style="color:var(--muted);font-size:.78rem">Abmelden / Gruppe verlassen → im Profil-Tab</p>
+      </div>
+    </div>
+
+    <!-- Nachrichten -->
+    <div class="view" id="view-nachrichten">
+      <div class="messages-list" id="messages-list"></div>
+      <div class="messages-input-bar">
+        <div class="pinnwand-presets">
+          <button class="preset-btn" data-msg="☕ Kaffee alle!">☕ Kaffee alle!</button>
+          <button class="preset-btn" data-msg="🥛 Milch leer!">🥛 Milch leer!</button>
+          <button class="preset-btn" data-msg="🍩 Kuchen im Pausenraum!">🍩 Kuchen!</button>
+          <button class="preset-btn" data-msg="💀 Brauche Nektar!">💀 Nektar!</button>
+          <button class="preset-btn" data-msg="🫘 Kann jemand Kaffee besorgen?">🫘 Nachschub!</button>
+          <button class="preset-btn" data-msg="⚡ Wer kommt mit zur Küche?">⚡ Küche!</button>
+        </div>
+        <div class="msg-input-row">
+          <input type="text" id="msg-input" placeholder="Nachricht schreiben…" maxlength="200" autocomplete="off">
+          <button class="btn-add" id="btn-msg-send">➤</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- QR Code -->
+    <div class="view" id="view-qrcode">
+      <div class="qr-card">
+        <div class="qr-title">📱 App teilen</div>
+        <div class="qr-sub">Scanne den Code, um zur App zu gelangen</div>
+        <div class="qr-wrap"><div id="qr-container"></div></div>
+        <div id="qr-url"></div>
+      </div>
+    </div>
+
+  </div><!-- /views -->
+
+  <!-- Nav -->
+  <nav>
+    <button class="nav-btn active" data-view="rangliste"><span class="nav-icon">🏆</span>Rangliste</button>
+    <button class="nav-btn" data-view="profil"><span class="nav-icon">👤</span>Profil</button>
+    <button class="nav-btn" data-view="statistiken"><span class="nav-icon">📊</span>Statistik</button>
+    <button class="nav-btn" data-view="halloffame"><span class="nav-icon">🎖</span>Hall of Fame</button>
+    <button class="nav-btn" data-view="saisons"><span class="nav-icon">📅</span>Saisons</button>
+    <button class="nav-btn" data-view="nachrichten"><span class="nav-icon">💬</span>Chat</button>
+    <button class="nav-btn hidden" data-view="admin" id="nav-admin"><span class="nav-icon">⚙️</span>Admin</button>
+    <button class="nav-btn" data-view="qrcode"><span class="nav-icon">📱</span>Teilen</button>
+  </nav>
+
+</div><!-- /app-screen -->
+
+<!-- ── Toast + Achievement ─────────────────────────────────────────────────── -->
+<div id="toast-container"></div>
+<div id="achievement-popup">
+  <div class="ach-popup-label">🏅 Achievement freigeschaltet!</div>
+  <div class="ach-icon"></div>
+  <div class="ach-name"></div>
+  <div class="ach-desc"></div>
+</div>
+
+<!-- ── Scripts ─────────────────────────────────────────────────────────────── -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="js/config.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/achievements.js"></script>
+<script src="js/db.js"></script>
+<script src="js/app.js"></script>
+
+</body>
+</html>

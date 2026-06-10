@@ -1,0 +1,45 @@
+const ACHIEVEMENTS = [
+  { id: 'first_cup',     icon: '☕', name: 'Erste Tasse',          desc: 'Erste Tasse erfasst',                condition: u => u.totalCups >= 1 },
+  { id: 'cups_10',       icon: '🫘', name: '10 Tassen',            desc: '10 Tassen erreicht',                 condition: u => u.totalCups >= 10 },
+  { id: 'cups_50',       icon: '🏅', name: '50 Tassen',            desc: '50 Tassen erreicht',                 condition: u => u.totalCups >= 50 },
+  { id: 'cups_100',      icon: '💯', name: '100 Tassen',           desc: '100 Tassen erreicht',                condition: u => u.totalCups >= 100 },
+  { id: 'cups_250',      icon: '⚔️', name: '250 Tassen',           desc: '250 Tassen erreicht',                condition: u => u.totalCups >= 250 },
+  { id: 'cups_500',      icon: '🎖️', name: '500 Tassen',           desc: '500 Tassen erreicht',                condition: u => u.totalCups >= 500 },
+  { id: 'cups_750',      icon: '👑', name: '750 Tassen',           desc: '750 Tassen erreicht',                condition: u => u.totalCups >= 750 },
+  { id: 'cups_1000',     icon: '🌟', name: '1000 Tassen',          desc: '1000 Tassen erreicht',               condition: u => u.totalCups >= 1000 },
+  { id: 'cups_1500',     icon: '⚡', name: '1500 Tassen',          desc: '1500 Tassen erreicht',               condition: u => u.totalCups >= 1500 },
+  { id: 'cups_2500',     icon: '🔥', name: '2500 Tassen',          desc: '2500 Tassen erreicht',               condition: u => u.totalCups >= 2500 },
+  { id: 'cups_5000',     icon: '🏆', name: '5000 Tassen',          desc: '5000 Tassen erreicht',               condition: u => u.totalCups >= 5000 },
+  { id: 'streak_7',      icon: '📅', name: '7 Tage Serie',         desc: '7 Tage in Folge aktiv',              condition: u => u.maxStreak >= 7 },
+  { id: 'streak_30',     icon: '🗓️', name: '30 Tage Serie',        desc: '30 Tage in Folge aktiv',             condition: u => u.maxStreak >= 30 },
+  { id: 'streak_100',    icon: '💎', name: '100 Tage Serie',       desc: '100 Tage in Folge aktiv',            condition: u => u.maxStreak >= 100 },
+  { id: 'doppio',        icon: '🥤', name: 'Doppio-Meister',       desc: '10+ Tassen auf einmal erfasst',      condition: null },
+  { id: 'barista',       icon: '🎩', name: 'Barista',              desc: '5+ Tassen auf einmal erfasst',       condition: null },
+  { id: 'early_bird',    icon: '🌅', name: 'Frühaufsteher',        desc: 'Vor 8 Uhr Tassen erfasst',           condition: null },
+  { id: 'night_owl',     icon: '🦉', name: 'Nachteule',            desc: 'Nach 22 Uhr Tassen erfasst',         condition: null },
+  { id: 'top1',          icon: '🥇', name: 'Spitzenreiter',        desc: 'Platz 1 in der Rangliste',           condition: null },
+  { id: 'monthly_win',   icon: '🏆', name: 'Monatssieger',         desc: 'Eine Saison gewonnen',               condition: u => (u.monthlyWins || 0) >= 1 },
+];
+
+function checkAchievements(userData, newAchievements = {}) {
+  const unlocked = [];
+  for (const ach of ACHIEVEMENTS) {
+    if (newAchievements[ach.id]) continue;
+    if (userData.achievements && userData.achievements[ach.id]) continue;
+    if (ach.condition && ach.condition(userData)) {
+      unlocked.push(ach);
+    }
+  }
+  return unlocked;
+}
+
+function checkInputAchievements(amount, hour, userData) {
+  const unlocked = [];
+  const existing = userData.achievements || {};
+  const newAch = { ...existing };
+  if (amount >= 10 && !existing['doppio'])   { unlocked.push(ACHIEVEMENTS.find(a => a.id === 'doppio'));     newAch['doppio'] = true; }
+  if (amount >= 5  && !existing['barista'])  { unlocked.push(ACHIEVEMENTS.find(a => a.id === 'barista'));    newAch['barista'] = true; }
+  if (hour < 8     && !existing['early_bird']) { unlocked.push(ACHIEVEMENTS.find(a => a.id === 'early_bird')); newAch['early_bird'] = true; }
+  if (hour >= 22   && !existing['night_owl']) { unlocked.push(ACHIEVEMENTS.find(a => a.id === 'night_owl'));  newAch['night_owl'] = true; }
+  return { unlocked, newAch };
+}
