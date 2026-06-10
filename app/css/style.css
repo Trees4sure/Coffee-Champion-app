@@ -503,3 +503,8 @@ nav::-webkit-scrollbar { display: none; }
   .header-title { font-size: 0.9rem; letter-spacing: 2px; }
   .quick-buttons .btn-quick { padding: 7px 10px; font-size: 0.8rem; }
 }
+@media (max-width: 480px) {
+  /* Nutzername im Header ausblenden, damit der ☕-Abmelden-Button auf
+     schmalen Smartphone-Breiten (Hochformat) immer sichtbar bleibt. */
+  .header-right > div:first-child { display: none; }
+}
