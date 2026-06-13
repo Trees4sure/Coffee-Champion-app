@@ -29,7 +29,7 @@ let pollInterval    = null;
 let charts          = {};
 
 // ── Views ─────────────────────────────────────────────────────────────────────
-const views = ['rangliste','profil','statistiken','halloffame','saisons','nachrichten','admin','qrcode'];
+const views = ['rangliste','profil','statistiken','halloffame','saisons','nachrichten','admin','imperium','qrcode']
 
 function switchView(view) {
   views.forEach(v => {
@@ -38,11 +38,21 @@ function switchView(view) {
   });
   activeView = view;
   if (view === 'rangliste')   renderLeaderboard();
-  if (view === 'profil')      renderProfile();
+  if (view === 'profil') {
+    renderProfile();
+    renderCoinSection(currentUserData);
+    renderSprueche(currentUserData);
+    // Coin-Anzeige im Header aktualisieren
+    const hc = document.getElementById('header-coins');
+    if (hc && currentUserData?.coins !== undefined) {
+      hc.innerHTML = `<span style="font-size:11px">🫘</span>${Math.floor(currentUserData.coins)}`;
+    }
+  }
+  if (view === 'imperium')    renderImperium();
   if (view === 'statistiken') renderStats();
   if (view === 'halloffame')  renderHallOfFame();
   if (view === 'saisons')     renderSeasons();
-  if (view === 'nachrichten') renderMessages();
+  if (view === 'nachrichten') { renderMessages(); renderPackPresets(currentUserData); }
   if (view === 'admin')       renderAdmin();
   if (view === 'qrcode')      renderQR();
 }
@@ -58,6 +68,9 @@ function showApp() {
   document.getElementById('header-username').textContent = currentUser.name;
   document.getElementById('header-groupname').textContent = group?.name || '';
   document.getElementById('nav-admin').classList.toggle('hidden', !currentUserData?.isAdmin);
+  const headerAv = document.getElementById('btn-logout');
+  if (headerAv) headerAv.textContent = currentUserData?.cosmetics?.avatar || '☕';
+  if (typeof applyTheme === 'function') applyTheme(currentUserData?.cosmetics?.theme || 'default');
   startPolling();
   DB.getPinnedMessage().then(renderPinnwand);
   switchView('rangliste');
@@ -135,6 +148,31 @@ async function sendMessage(text) {
     document.getElementById('msg-input').value = '';
     await renderMessages();
   } catch (e) { showToast(e.message, 'error'); }
+}
+
+// Zusätzliche Kurz-Presets für freigeschaltete Spruch-Packs (passend zu "☕ Kaffee alle!")
+function renderPackPresets(member) {
+  const el = document.getElementById('pinnwand-packs');
+  if (!el) return;
+  const unlocked = member?.cosmetics?.unlockedPacks || {};
+  const packIds = Object.keys(unlocked)
+    .filter(packId => unlocked[packId] && typeof PACK_PRESETS !== 'undefined' && PACK_PRESETS[packId]);
+
+  // Jeder Pack liefert mehrere Presets (Array) — alle einsammeln
+  const messages = packIds.flatMap(packId => {
+    const p = PACK_PRESETS[packId];
+    return Array.isArray(p) ? p : [p];
+  });
+
+  if (!messages.length) { el.innerHTML = ''; el.style.display = 'none'; return; }
+  el.style.display = '';
+
+  el.innerHTML = messages.map(msg =>
+    `<button class="preset-btn" data-msg="${_esc(msg)}">${_esc(msg)}</button>`
+  ).join('');
+  el.querySelectorAll('.preset-btn').forEach(btn =>
+    btn.addEventListener('click', () => sendMessage(btn.dataset.msg))
+  );
 }
 
 // ── Pinnwand ──────────────────────────────────────────────────────────────────
@@ -240,7 +278,27 @@ async function quickAdd(amount) {
     showToast(`+${amount} Tasse${amount > 1 ? 'n' : ''} eingetragen!`, 'success');
     for (const a of newAch) showAchievementPopup(a);
     await refreshData();
-    if (activeView === 'profil') renderProfile();
+    if (activeView === 'profil') {
+      renderProfile();
+      renderCoinSection(currentUserData);
+      renderSprueche(currentUserData);
+    }
+    // CoffeeCoin Feedback
+    if (newAch.coinsEarned > 0) {
+      showToast(`+${newAch.coinsEarned.toFixed(1)} ☕ CC`, 'success');
+    }
+    if (newAch.morning) {
+      setTimeout(() => showToast('🌅 Morgenröte +1 CC/Tasse!', 'info'), 600);
+    }
+    if (newAch.passiveEarned > 0) {
+      setTimeout(() => showToast(`🌿 +${newAch.passiveEarned.toFixed(1)} CC passiv`, 'info'), 1200);
+    }
+    // Header-Coins nach Reload aktualisieren
+    const hc = document.getElementById('header-coins');
+    if (hc && appData?.users) {
+      const me = appData.users.find(u => u.id === currentUserData?.id);
+      if (me) hc.innerHTML = `<span style="font-size:11px">🫘</span>${Math.floor(me.coins)}`;
+    }
   } catch (e) { showToast(e.message, 'error'); }
   finally { if (btn) btn.disabled = false; }
 }
@@ -273,7 +331,7 @@ function renderLeaderboard() {
   podium.innerHTML = podiumOrder.map((u, i) => u ? `
     <div class="podium-place podium-${podiumPos[i]}">
       <div class="podium-rank">${['🥈','🥇','🥉'][i]}</div>
-      <div class="podium-name">${_esc(u.name)}</div>
+      <div class="podium-name">${_esc2(u.cosmetics?.avatar || '☕')} ${_esc(u.name)}</div>
       <div class="podium-cups">${u.totalCups} ☕</div>
       <div class="podium-title">${_esc(DB.getTitle(u.totalCups))}</div>
     </div>` : '<div class="podium-place podium-empty"></div>').join('');
@@ -281,7 +339,7 @@ function renderLeaderboard() {
     <thead><tr><th>#</th><th>Name</th><th>Titel</th><th>Tassen</th></tr></thead>
     <tbody>${leaderboardData.map((u, i) => `
       <tr class="${u.id === currentUser?.id ? 'own-row' : ''}">
-        <td>${i + 1}</td><td>${_esc(u.name)}</td>
+        <td>${i + 1}</td><td>${_esc2(u.cosmetics?.avatar || '☕')} ${_esc(u.name)}</td>
         <td class="title-cell">${_esc(DB.getTitle(u.totalCups))}</td>
         <td>${u.totalCups}</td>
       </tr>`).join('')}
@@ -292,6 +350,8 @@ function renderLeaderboard() {
 function renderProfile() {
   const u = currentUserData;
   if (!u) return;
+  const profAv = document.querySelector('#view-profil .profile-avatar');
+  if (profAv) profAv.textContent = u.cosmetics?.avatar || '☕';
   document.getElementById('profile-name').textContent   = u.name;
   document.getElementById('profile-title').textContent  = DB.getTitle(u.totalCups);
   document.getElementById('profile-cups').textContent   = u.totalCups;
@@ -417,7 +477,8 @@ function renderQuartal(info) {
     ${info.months.map(m => {
       const sid = `${info.year}-${String(m).padStart(2,'0')}`;
       const s   = seasons.find(x => x.season_id === sid);
-      return `<tr ${s?.winner_name === currentUser?.name ? 'class="winner-row"' : ''}><td>${MONATE[m-1]}</td><td>${_esc(s?.winner_name || '–')}</td><td>${s?.winner_cups || '–'}</td></tr>`;
+      const winnerNames = (s?.winner_name || '').split(' & ').map(n => n.trim());
+      return `<tr ${winnerNames.includes(currentUser?.name) ? 'class="winner-row"' : ''}><td>${MONATE[m-1]}</td><td>${_esc(s?.winner_name || '–')}</td><td>${s?.winner_cups || '–'}</td></tr>`;
     }).join('')}
     </tbody></table>`;
 }
@@ -442,7 +503,7 @@ function renderJahr(info) {
   const yearTotal = top5.map(u => ({
     name: u.name, id: u.id,
     cups: Array.from({length:12},(_,mi) => (u.seasonCups||{})[`${info.year}-${String(mi+1).padStart(2,'0')}`]||0).reduce((a,b)=>a+b,0),
-    wins: seasons.filter(s => s.winner_name === u.name).length
+    wins: seasons.filter(s => (s.winner_name || '').split(' & ').map(n => n.trim()).includes(u.name)).length
   })).sort((a,b) => b.cups - a.cups);
   document.getElementById('period-summary').innerHTML = `
     <table><thead><tr><th>Name</th><th>Tassen ${info.year}</th><th>Monatssiege</th></tr></thead><tbody>
@@ -494,11 +555,40 @@ function renderAdmin() {
 
 async function adminCloseSeason() {
   const seasonId = DB.getSeasonId();
-  if (!confirm(`Saison ${seasonId} wirklich abschließen?`)) return;
+  if (!confirm(`Saison "${seasonId}" wirklich abschließen?`)) return;
   try {
-    const winner = await DB.closeSeason(seasonId);
-    showToast(winner ? `Sieger: ${winner.name} (${winner.cups} Tassen)` : 'Kein Sieger', 'success');
-    await refreshData(); renderAdmin();
+    const result = await DB.closeSeason(seasonId);
+    await refreshData();
+    renderAdmin();
+    if (activeView === 'rangliste') renderLeaderboard();
+
+    if (!result?.winner) {
+      showToast('Saison abgeschlossen — kein aktiver Teilnehmer.', 'info');
+      return;
+    }
+
+    // Ranglisten-Text für alle platzierten Spieler bauen (Gleichstand = gleicher Rang)
+    const CC_BY_RANK = [50, 20, 10];
+    const CC_PART    = 5;
+    let rank = 0;
+    const lines = result.standings.map((m, i) => {
+      if (i > 0 && m.sc !== result.standings[i - 1].sc) rank = i;
+      const cc    = CC_BY_RANK[rank] ?? CC_PART;
+      const medal = ['🥇','🥈','🥉'][rank] || `${rank + 1}.`;
+      return `${medal} ${m.name} — ${m.sc} Tassen (+${cc.toLocaleString('de-DE')} CC)`;
+    }).join('\n');
+
+    const themeMsg = result.themeId
+      ? `\n🎨 Gewinner erhält Theme: ${result.themeId}`
+      : '';
+
+    const championNames = (result.winners || [result.winner]).map(w => w.name).join(' & ');
+
+    alert(
+      `☕ Saison ${seasonId} abgeschlossen!\n\n` +
+      `🏆 Champion: ${championNames} (${result.winner.sc} Tassen)\n\n` +
+      `Endstand:\n${lines}${themeMsg}`
+    );
   } catch (e) { showToast(e.message, 'error'); }
 }
 
@@ -513,6 +603,7 @@ async function adminResetData() {
     await sb.from('daily_stats').delete().eq('group_id', group.id);
     await sb.from('seasons').delete().eq('group_id', group.id);
     await sb.from('hall_of_fame').delete().eq('group_id', group.id);
+    await sb.from('group_treasury').delete().eq('group_id', group.id);
     await sb.from('members').delete().eq('group_id', group.id);
     AUTH.clearAll();
     showToast('Alle Daten zurückgesetzt', 'success');
