@@ -1,0 +1,275 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   imperium.css — CoffeeCoins: alle neuen Styles
+   Ergänzt css/style.css ohne etwas zu überschreiben
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── CoffeeCoin Badge ──────────────────────────────────────────────────────── */
+.cc-coin {
+  position: relative;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: #FAC775;
+  border: 2px solid #BA7517;
+  vertical-align: middle;
+}
+.cc-coin::after {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  border: 0.5px solid #BA7517;
+  opacity: .4;
+  inset: 20%;
+}
+.cc-coin-lg { width: 56px; height: 56px; border-width: 3px; }
+.cc-coin-md { width: 38px; height: 38px; border-width: 2px; }
+.cc-coin-sm { width: 22px; height: 22px; border-width: 1.5px; }
+
+/* ── Header Coins (klein, rechts oben) ─────────────────────────────────────── */
+#header-coins {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: .75rem;
+  color: #FAC775;
+  font-weight: 600;
+  margin-right: 4px;
+}
+
+/* ── Imperium View ─────────────────────────────────────────────────────────── */
+.imperium-header {
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+  margin-bottom: 12px;
+}
+.imperium-coins {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.imperium-coins-val { font-size: 1.3rem; font-weight: 700; color: #FAC775; }
+.imperium-coins-lbl { font-size: .8rem; color: #BA7517; }
+.imperium-passive   { font-size: .75rem; color: rgba(255,255,255,.45); margin-left: 6px; }
+.imperium-score     { font-size: .78rem; color: rgba(255,255,255,.5); }
+
+/* ── Imperium Tabs ─────────────────────────────────────────────────────────── */
+.imperium-tabs {
+  display: flex;
+  overflow-x: auto;
+  gap: 0;
+  border-bottom: 1px solid rgba(255,255,255,.1);
+  margin-bottom: 0;
+  scrollbar-width: none;
+}
+.imperium-tabs::-webkit-scrollbar { display: none; }
+.imp-tab {
+  padding: 9px 14px;
+  font-size: .8rem;
+  font-weight: 500;
+  background: transparent;
+  border: none;
+  color: rgba(255,255,255,.45);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  transition: color .15s, border-color .15s;
+}
+.imp-tab.active {
+  color: #FAC775;
+  border-bottom-color: #FAC775;
+}
+
+#imp-content { padding: 14px 16px 80px; }
+
+/* ── Tier-Sektionen ────────────────────────────────────────────────────────── */
+.cc-tier-section  { margin-bottom: 18px; }
+.cc-tier-header   {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 7px 12px;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  border: 1px solid transparent;
+  font-size: .82rem;
+  font-weight: 600;
+}
+.cc-tier-range { font-size: .72rem; font-weight: 400; opacity: .8; font-family: monospace; }
+
+/* ── Research Item Cards ───────────────────────────────────────────────────── */
+.cc-research-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 7px;
+}
+.cc-ri {
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 10px;
+  padding: 8px 7px;
+  text-align: center;
+  position: relative;
+  transition: border-color .15s;
+}
+.cc-ri-owned {
+  background: rgba(212, 175, 55, .12);
+  border-color: rgba(212, 175, 55, .35);
+}
+.cc-ri-path  { font-size: 9px; position: absolute; top: 4px; left: 5px; opacity: .5; }
+.cc-ri-icon  { font-size: 22px; margin: 4px 0 3px; line-height: 1; }
+.cc-ri-name  { font-size: 10px; font-weight: 500; color: rgba(255,255,255,.85); margin: 0 0 2px; line-height: 1.3; }
+.cc-ri-cost  { font-size: 9px;  font-family: monospace; color: #EF9F27; margin: 0; }
+.cc-ri-bonus { font-size: 9px;  color: #9FE1CB; margin: 0; }
+.cc-buy-btn  {
+  display: block;
+  width: 100%;
+  margin-top: 5px;
+  padding: 3px 0;
+  font-size: 9.5px;
+  background: rgba(212,175,55,.2);
+  border: 1px solid rgba(212,175,55,.4);
+  border-radius: 6px;
+  color: #FAC775;
+  cursor: pointer;
+}
+.cc-buy-btn:active { opacity: .7; }
+
+/* ── Combos ────────────────────────────────────────────────────────────────── */
+.cc-combos-section { margin-top: 8px; }
+.cc-combo-card {
+  background: rgba(255,255,255,.03);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+}
+.cc-combo-ready { border-color: rgba(212,175,55,.4); background: rgba(212,175,55,.06); }
+.cc-combo-owned { border-color: rgba(157,225,203,.3); background: rgba(157,225,203,.06); }
+.cc-combo-parts { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-bottom: 6px; }
+.cc-combo-chip  { background: rgba(255,255,255,.08); border-radius: 6px; padding: 2px 7px; font-size: 11px; }
+.cc-combo-chip-ok { background: rgba(157,225,203,.2); color: #9FE1CB; }
+.cc-combo-plus  { font-size: 12px; color: rgba(255,255,255,.35); }
+.cc-combo-arrow { font-size: 13px; color: rgba(255,255,255,.5); }
+.cc-combo-result { background: rgba(212,175,55,.25); color: #FAC775; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; }
+.cc-combo-free   { background: rgba(157,225,203,.25); color: #9FE1CB; padding: 2px 6px; border-radius: 10px; font-size: 10px; font-weight: 600; }
+.cc-combo-cost   { color: #EF9F27; font-size: 10px; font-family: monospace; }
+.cc-combo-desc   { font-size: 11px; color: rgba(255,255,255,.5); margin: 0 0 4px; }
+.cc-combo-buy-btn { margin-top: 4px; padding: 4px 12px; font-size: 11px; }
+.cc-combo-locked { font-size: 10px; color: rgba(255,255,255,.3); margin: 3px 0 0; }
+.cc-combo-owned-lbl { font-size: 10px; color: #9FE1CB; margin: 3px 0 0; }
+
+/* ── Kasse ─────────────────────────────────────────────────────────────────── */
+.cc-kasse-header    { padding: 0 0 12px; border-bottom: 1px solid rgba(255,255,255,.08); margin-bottom: 12px; }
+.cc-kasse-balance   { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.cc-kasse-bal-val   { font-size: 1.2rem; font-weight: 700; color: #9FE1CB; }
+.cc-kasse-mycontrib { font-size: .78rem; color: rgba(255,255,255,.45); margin: 0; }
+.cc-kasse-contribute { display: flex; gap: 8px; margin-bottom: 16px; align-items: center; }
+.cc-kasse-contribute input { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.15); border-radius: 8px; padding: 8px 10px; color: inherit; font-size: .84rem; }
+
+.cc-goal       { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; }
+.cc-goal-done  { border-color: rgba(157,225,203,.35); background: rgba(157,225,203,.06); }
+.cc-goal-head  { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.cc-goal-icon  { font-size: 20px; }
+.cc-goal-name  { font-size: 13px; font-weight: 600; flex: 1; }
+.cc-goal-cost  { font-size: 11px; color: #9FE1CB; font-family: monospace; font-weight: 600; }
+.cc-goal-desc  { font-size: 11px; color: rgba(255,255,255,.5); margin: 0 0 6px; }
+.cc-goal-done-lbl  { font-size: 11px; color: #9FE1CB; margin: 4px 0 0; }
+.cc-progress-bar   { height: 4px; background: rgba(255,255,255,.1); border-radius: 2px; overflow: hidden; }
+.cc-progress-fill  { height: 100%; background: #9FE1CB; border-radius: 2px; transition: width .4s; }
+.cc-progress-pct   { font-size: 10px; color: rgba(255,255,255,.4); margin: 3px 0 0; text-align: right; }
+
+/* ── Imperium Statistik ────────────────────────────────────────────────────── */
+.cc-stats-list   { display: flex; flex-direction: column; gap: 10px; }
+.cc-stats-player { display: flex; gap: 10px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1); border-radius: 10px; padding: 10px 12px; }
+.cc-stats-av     { width: 36px; height: 36px; border-radius: 50%; background: #FAC775; border: 2px solid #BA7517; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+.cc-stats-info   { flex: 1; min-width: 0; }
+.cc-stats-name   { font-size: 13px; font-weight: 600; margin-bottom: 3px; }
+.cc-stats-sub    { font-size: 11px; color: rgba(255,255,255,.45); margin-bottom: 6px; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.cc-res-bars     { display: flex; flex-direction: column; gap: 3px; }
+.cc-res-bar-row  { display: flex; align-items: center; gap: 5px; }
+.cc-res-bar-lbl  { font-size: 11px; width: 20px; flex-shrink: 0; }
+.cc-res-bar      { flex: 1; height: 4px; background: rgba(255,255,255,.1); border-radius: 2px; overflow: hidden; }
+.cc-res-bar-fill { height: 100%; background: #FAC775; border-radius: 2px; }
+.cc-res-bar-val  { font-size: 10px; color: rgba(255,255,255,.4); min-width: 28px; text-align: right; }
+
+/* ── Cosmetics ─────────────────────────────────────────────────────────────── */
+.cc-cosm-grid  { display: grid; grid-template-columns: repeat(auto-fill, minmax(105px, 1fr)); gap: 8px; }
+.cc-cosm-item  { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1); border-radius: 10px; padding: 8px 7px; text-align: center; }
+.cc-cosm-active { border-color: #FAC775; background: rgba(212,175,55,.15); }
+.cc-cosm-locked { opacity: .45; }
+.cc-cosm-icon   { font-size: 22px; margin-bottom: 4px; line-height: 1; }
+.cc-cosm-name   { font-size: 11px; font-weight: 600; margin: 0 0 2px; }
+.cc-cosm-how    { font-size: 9.5px; color: rgba(255,255,255,.45); margin: 0 0 5px; line-height: 1.4; }
+.cc-cosm-btn    { display: block; width: 100%; padding: 3px 0; font-size: 9.5px; background: rgba(212,175,55,.2); border: 1px solid rgba(212,175,55,.4); border-radius: 6px; color: #FAC775; cursor: pointer; margin-top: 2px; }
+
+/* ── Profil: Coins + Titel ─────────────────────────────────────────────────── */
+.cc-profile-coins  { padding: 14px 0 10px; border-top: 1px solid rgba(255,255,255,.08); margin-top: 6px; }
+.cc-coins-display  { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.cc-coins-amount   { font-size: 1.3rem; font-weight: 700; color: #FAC775; line-height: 1.2; }
+.cc-coins-passive  { font-size: .75rem; color: rgba(255,255,255,.4); }
+.cc-cafe-name      { font-size: .85rem; color: rgba(255,255,255,.55); font-style: italic; margin: 4px 0 8px; }
+.cc-titel-combo    { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.cc-lt             { font-size: .78rem; color: rgba(255,255,255,.65); background: rgba(255,255,255,.08); padding: 3px 9px; border-radius: 10px; }
+.cc-sep            { color: rgba(255,255,255,.3); }
+.cc-zt             { font-size: .78rem; font-weight: 600; color: #FAC775; background: rgba(212,175,55,.2); padding: 3px 9px; border-radius: 10px; }
+
+/* ── Profil: Sprüche ───────────────────────────────────────────────────────── */
+.cc-sprueche-section { padding: 14px 0 6px; border-top: 1px solid rgba(255,255,255,.08); margin-top: 6px; }
+.cc-quote-card       { font-size: .95rem; font-style: italic; color: rgba(255,255,255,.75); background: rgba(255,255,255,.05); border-radius: 10px; padding: 12px 14px; border-left: 3px solid #FAC775; margin-bottom: 6px; line-height: 1.6; }
+.cc-pack-grid        { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 7px; }
+.cc-pack-item        { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1); border-radius: 10px; padding: 8px 9px; text-align: center; }
+.cc-pack-icon        { font-size: 20px; display: block; margin-bottom: 4px; }
+.cc-pack-name        { font-size: 11px; font-weight: 600; margin: 0 0 5px; }
+.cc-pack-buy         { padding: 4px 10px; font-size: 11px; background: rgba(212,175,55,.2); border: 1px solid rgba(212,175,55,.4); border-radius: 6px; color: #FAC775; cursor: pointer; }
+.cc-booster-card     { display: flex; align-items: center; gap: 10px; margin-top: 10px; padding: 9px 12px; background: linear-gradient(135deg, rgba(212,175,55,.18), rgba(212,175,55,.06)); border: 1px solid rgba(212,175,55,.4); border-radius: 10px; }
+.cc-booster-card .cc-pack-icon { font-size: 22px; }
+.cc-booster-card > div          { flex: 1; }
+.cc-booster-card .cc-pack-buy   { flex-shrink: 0; }
+
+/* ── Toast: Coin-Variante ──────────────────────────────────────────────────── */
+.toast-coin { background: rgba(212,175,55,.25) !important; border: 1px solid rgba(212,175,55,.5) !important; color: #FAC775 !important; }
+
+/* ── Saisonpokale (Profil) ─────────────────────────────────────────────────── */
+.cc-trophies {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 8px 0;
+}
+.cc-trophy {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  background: rgba(212,175,55,.18);
+  border: 1px solid rgba(212,175,55,.4);
+  border-radius: 8px;
+  padding: 4px 8px;
+  font-size: 16px;
+  line-height: 1.2;
+  cursor: default;
+}
+.cc-trophy small {
+  font-size: 9px;
+  color: #FAC775;
+  font-weight: 600;
+  letter-spacing: .3px;
+  line-height: 1.2;
+}
+
+/* ── Jahres-Champion Badge ─────────────────────────────────────────────────── */
+.cc-jahres-champion {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: linear-gradient(90deg, rgba(212,175,55,.3), rgba(212,175,55,.15));
+  border: 1px solid rgba(212,175,55,.5);
+  border-radius: 12px;
+  padding: 4px 12px;
+  font-size: .82rem;
+  font-weight: 700;
+  color: #FAC775;
+  margin: 6px 0;
+}
