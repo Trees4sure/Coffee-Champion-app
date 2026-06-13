@@ -574,7 +574,7 @@ function renderSprueche(member) {
         </div>` : ''}
     </div>`;
 
-  el.addEventListener('click', async (e) => {
+  el.onclick = async (e) => {
     const boosterBtn = e.target.closest('[data-buy-booster]');
     if (boosterBtn) {
       const newCoins = await DB.spendCoins(member.id, boosterCost);
@@ -604,5 +604,5 @@ function renderSprueche(member) {
     _updateHeaderCoins(updated || member);
     if (typeof renderPackPresets === 'function') renderPackPresets(updated || member);
     showToast(`🎁 Pack freigeschaltet! (-50 CC)`, 'success');
-  }, { once: true });
+  };
 }
