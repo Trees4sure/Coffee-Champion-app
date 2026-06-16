@@ -487,3 +487,44 @@
   text-align: center;
 }
 .cc-karte-buy-steps:hover { background: rgba(212,175,55,.22); }
+
+/* ── Charakter-Upgrades ──────────────────────────────────────────────────── */
+.cc-karte-upgrades {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-top: 10px;
+}
+.cc-karte-upg-card {
+  background: rgba(20,14,8,.7);
+  border: 1px solid rgba(212,175,55,.2);
+  border-radius: 8px;
+  padding: 8px 4px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  transition: border-color .2s;
+}
+.cc-karte-upg-card.owned {
+  border-color: rgba(212,175,55,.55);
+  background: rgba(212,175,55,.07);
+}
+.cc-karte-upg-icon  { font-size: 20px; line-height: 1; }
+.cc-karte-upg-name  { font-size: 10px; font-weight: 700; color: #e0d8c8; font-family: monospace; text-align: center; }
+.cc-karte-upg-desc  { font-size: 9px;  color: rgba(212,175,55,.7); font-family: monospace; text-align: center; }
+.cc-karte-upg-status{ font-size: 10px; color: var(--gold); font-family: monospace; margin-top: 2px; }
+.cc-karte-upg-buy {
+  margin-top: 4px;
+  padding: 4px 7px;
+  background: rgba(212,175,55,.12);
+  border: 1px solid rgba(212,175,55,.4);
+  border-radius: 6px;
+  color: var(--gold);
+  font-size: 10px;
+  font-weight: 700;
+  font-family: monospace;
+  cursor: pointer;
+  transition: background .15s;
+}
+.cc-karte-upg-buy:hover { background: rgba(212,175,55,.24); }
