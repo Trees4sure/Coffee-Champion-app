@@ -711,7 +711,7 @@ function _buildKarte(member, el) {
         <span id="karte-step-num">${stepsUsed0}/${stepsMax0}</span>
       </div>
       <button class="cc-karte-buy-steps" id="cc-karte-buy-steps"
-        style="display:${!extraB0 && stepsMax0 < 10 ? 'block' : 'none'}">
+        style="display:${!extraB0 && stepsMax0 < KARTE_MAX_STEPS + (state.mapData?.upgrades?.boots ? 2 : 0) ? 'block' : 'none'}">
         +5 Schritte kaufen &nbsp;·&nbsp; 10 🫘 CC
       </button>
       <p class="cc-karte-hint${stepsLeft0 === 0 ? ' cc-karte-hint--done' : ''}" id="karte-hint">
@@ -719,6 +719,19 @@ function _buildKarte(member, el) {
           ? '⏳ Alle Schritte verbraucht — morgen wieder 5 verfügbar!'
           : `Klick auf ein <span style="color:var(--gold)">leuchtendes</span> Feld &nbsp;(${stepsLeft0} Schritte übrig)`}
       </p>
+      <div class="cc-karte-upgrades" id="karte-upgrades">
+        ${KARTE_UPGRADES.map(u => {
+          const owned = !!(state.mapData?.upgrades?.[u.key]);
+          return `<div class="cc-karte-upg-card${owned ? ' owned' : ''}">
+            <div class="cc-karte-upg-icon">${u.emoji}</div>
+            <div class="cc-karte-upg-name">${u.name}</div>
+            <div class="cc-karte-upg-desc">${u.desc}</div>
+            ${owned
+              ? '<div class="cc-karte-upg-status">✅ Aktiv</div>'
+              : `<button class="cc-karte-upg-buy" data-upg="${u.key}" data-cost="${u.cost}">${u.cost} 🫘</button>`}
+          </div>`;
+        }).join('')}
+      </div>
     </div>
     <div id="cc-karte-popup" class="cc-karte-popup hidden"></div>
   `;
@@ -742,6 +755,13 @@ function _buildKarte(member, el) {
     if (c) karteRender(c, state.mapData, seed, state.vpX, state.vpY);
   });
 
+  // Upgrade-Kauf Handler
+  document.getElementById('karte-upgrades')?.addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-upg]');
+    if (!btn) return;
+    await _handleKarteUpgrade(btn.dataset.upg, parseInt(btn.dataset.cost), member, state, seed);
+  });
+
   // Canvas Click-Handler (einmalig, nutzt state.vpX/vpY statt Auto-Centering)
   canvas?.addEventListener('click', async (e) => {
     const rect   = canvas.getBoundingClientRect();
@@ -761,7 +781,9 @@ function _buildKarte(member, el) {
 
 async function _handleKarteStep(tx, ty, member, state, seed, COLS, ROWS, MARGIN) {
   const prevMapData = state.mapData;
-  const { newMapData, treasure } = karteExploreTile(tx, ty, state.mapData, seed, {});
+  const { newMapData, treasure } = karteExploreTile(tx, ty, state.mapData, seed, {
+    treasureBoost: !!state.mapData?.upgrades?.nose,
+  });
   state.mapData = newMapData;
 
   try {
@@ -805,6 +827,41 @@ async function _handleKarteStep(tx, ty, member, state, seed, COLS, ROWS, MARGIN)
   const canvas = document.getElementById('cc-karte-canvas');
   if (canvas) karteRender(canvas, state.mapData, seed, state.vpX, state.vpY);
 
+  _karteUpdateHUD(state);
+}
+
+async function _handleKarteUpgrade(key, cost, member, state, seed) {
+  const upg = KARTE_UPGRADES.find(u => u.key === key);
+  if (!upg) return;
+  const newCoins = await DB.spendCoins(member.id, cost);
+  if (newCoins === null) { showToast('Nicht genug CoffeeCoins!', 'error'); return; }
+
+  state.memberCoins = newCoins;
+  currentUserData = { ...(currentUserData || {}), coins: newCoins };
+  _updateHeaderCoins({ coins: newCoins });
+
+  state.mapData = { ...state.mapData, upgrades: { ...(state.mapData.upgrades || {}), [key]: true } };
+  await DB.updateMapData(member.id, state.mapData).catch(() => {});
+  currentUserData = { ...(currentUserData || {}), map_data: state.mapData };
+
+  showToast(`${upg.emoji} ${upg.name} freigeschaltet!`, 'success');
+
+  // Upgrade-Card auf "Aktiv" umschalten
+  const btn = document.querySelector(`[data-upg="${key}"]`);
+  if (btn) {
+    const card = btn.closest('.cc-karte-upg-card');
+    if (card) {
+      card.classList.add('owned');
+      const statusEl = document.createElement('div');
+      statusEl.className = 'cc-karte-upg-status';
+      statusEl.textContent = '✅ Aktiv';
+      btn.replaceWith(statusEl);
+    }
+  }
+
+  // Canvas neu rendern (Kompass ändert Fog-Rendering)
+  const canvas = document.getElementById('cc-karte-canvas');
+  if (canvas) karteRender(canvas, state.mapData, seed, state.vpX, state.vpY);
   _karteUpdateHUD(state);
 }
 
