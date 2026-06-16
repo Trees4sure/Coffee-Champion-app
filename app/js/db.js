@@ -83,6 +83,7 @@ const DB = (() => {
       coins:     parseFloat(u.coins)     || 0,
       research:  u.research              || {},
       cosmetics: u.cosmetics             || {},
+      map_data:  u.map_data              || {},
     };
   }
 
@@ -568,6 +569,17 @@ const DB = (() => {
     if (error) throw new Error(error.message);
   }
 
+  // ── Karte ────────────────────────────────────────────────────────────────────
+  async function updateMapData(memberId, mapData) {
+    const { error } = await _sb.rpc('save_map_data', { p_member_id: memberId, p_map_data: mapData });
+    if (error) throw new Error(error.message);
+  }
+
+  async function addCoins(memberId, amount) {
+    const { error } = await _sb.rpc('add_coins', { p_member_id: memberId, p_amount: Math.max(0, amount) });
+    if (error) throw new Error(error.message);
+  }
+
   // ── Pinnwand ─────────────────────────────────────────────────────────────────
   async function getPinnedMessage() {
     const { data } = await _sb.from('groups_public')
@@ -598,5 +610,6 @@ const DB = (() => {
     // Neu:
     spendCoins, fetchTreasury, contributeToTreasury,
     purchaseResearchItem, saveCosmetics,
+    updateMapData, addCoins,
   };
 })();

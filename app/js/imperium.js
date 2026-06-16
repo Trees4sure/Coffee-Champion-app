@@ -103,6 +103,7 @@ async function renderImperium() {
     <div class="imperium-tabs" id="imp-tabs">
       <button class="imp-tab active" data-tab="baum">🌳 Forschung</button>
       <button class="imp-tab" data-tab="kasse">🏛️ Kasse</button>
+      <button class="imp-tab" data-tab="karte">🗺️ Karte</button>
       <button class="imp-tab" data-tab="stats">📊 Statistik</button>
       <button class="imp-tab" data-tab="cosmetics">🎨 Cosmetics</button>
     </div>
@@ -115,7 +116,9 @@ async function renderImperium() {
     if (!btn) return;
     document.querySelectorAll('.imp-tab').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    _renderImperiumTab(btn.dataset.tab, member);
+    // Karte-Tab: immer aktuellsten Stand (currentUserData hat map_data-Updates)
+    const freshMember = btn.dataset.tab === 'karte' ? (currentUserData || member) : member;
+    _renderImperiumTab(btn.dataset.tab, freshMember);
   });
 
   _renderImperiumTab('baum', member);
@@ -126,6 +129,7 @@ async function _renderImperiumTab(tab, member) {
   if (!el) return;
   if (tab === 'baum')      el.innerHTML = _buildForschungsbaum(member.research || {});
   if (tab === 'kasse')     el.innerHTML = await _buildKasse(member);
+  if (tab === 'karte')     { el.innerHTML = ''; _buildKarte(member, el); return; }
   if (tab === 'stats')     el.innerHTML = _buildImperiumStats();
   if (tab === 'cosmetics') el.innerHTML = _buildCosmetics(member);
 
@@ -605,4 +609,224 @@ function renderSprueche(member) {
     if (typeof renderPackPresets === 'function') renderPackPresets(updated || member);
     showToast(`🎁 Pack freigeschaltet! (-50 CC)`, 'success');
   };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ── Pixel Exploration Karte ───────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+
+let _karteSeedCache = null;
+function _karteWorldSeed() {
+  if (_karteSeedCache !== null) return _karteSeedCache;
+  try {
+    const group = AUTH.getGroup();
+    const gid = group?.id || group?.name;
+    if (!gid) return 12345678;
+    let h = 5381;
+    for (let i = 0; i < gid.length; i++) h = (((h << 5) + h) + gid.charCodeAt(i)) | 0;
+    _karteSeedCache = (h >>> 0) || 12345678;
+    return _karteSeedCache;
+  } catch { return 12345678; }
+}
+
+// Aktualisiert nur die Text/Bar-Elemente — kein DOM-Rebuild
+function _karteUpdateHUD(state) {
+  const stepsMax  = karteStepsAllowed(state.mapData);
+  const stepsUsed = karteStepsUsed(state.mapData);
+  const stepsLeft = Math.max(0, stepsMax - stepsUsed);
+  const pos       = kartePos(state.mapData);
+  const explCount = Object.keys(state.mapData.explored  || {}).length;
+  const trCount   = Object.keys(state.mapData.treasures || {}).length;
+
+  const fill    = document.getElementById('karte-step-fill');
+  const num     = document.getElementById('karte-step-num');
+  const hint    = document.getElementById('karte-hint');
+  const posEl   = document.getElementById('karte-pos');
+  const statsEl = document.getElementById('karte-stats');
+  const buyBtn  = document.getElementById('cc-karte-buy-steps');
+
+  if (fill) fill.style.width = `${stepsMax > 0 ? Math.min(100, stepsUsed / stepsMax * 100) : 0}%`;
+  if (num)  num.textContent  = `${stepsUsed}/${stepsMax}`;
+  if (hint) {
+    hint.className = 'cc-karte-hint' + (stepsLeft === 0 ? ' cc-karte-hint--done' : '');
+    hint.innerHTML = stepsLeft === 0
+      ? '⏳ Alle Schritte verbraucht — morgen wieder 5 verfügbar!'
+      : `Klick auf ein <span style="color:var(--gold)">leuchtendes</span> Feld &nbsp;(${stepsLeft} Schritte übrig)`;
+  }
+  if (posEl)   posEl.textContent   = `📍 ${pos.x}, ${pos.y}`;
+  if (statsEl) statsEl.textContent = `🗺️ ${explCount} Felder · 🏆 ${trCount} Schätze`;
+  if (buyBtn)  buyBtn.style.display = (!karteExtraStepsBought(state.mapData) && stepsMax < 10) ? 'block' : 'none';
+}
+
+function _buildKarte(member, el) {
+  let mapData = member.map_data || {};
+
+  // Start-Tile beim ersten Öffnen auto-erkunden
+  if (!mapData.explored || Object.keys(mapData.explored).length === 0) {
+    mapData = {
+      ...mapData,
+      pos: { x: KARTE_START_X, y: KARTE_START_Y },
+      explored: { [`${KARTE_START_X},${KARTE_START_Y}`]: Date.now() },
+    };
+    DB.updateMapData(member.id, mapData).catch(() => {});
+  }
+
+  const _COLS = Math.floor(320 / KARTE_TILE);
+  const _ROWS = Math.floor(280 / KARTE_TILE);
+  const _MARGIN = 4;  // Rand-Abstand bevor Viewport scrollt
+
+  const state = {
+    mapData,
+    memberCoins: member.coins || 0,
+    // Viewport-Ursprung: zentriert auf Start-Position
+    vpX: KARTE_START_X - Math.floor(_COLS / 2),
+    vpY: KARTE_START_Y - Math.floor(_ROWS / 2),
+  };
+  const seed  = _karteWorldSeed();
+
+  // ── DOM einmalig aufbauen ──────────────────────────────────────────────
+  const stepsMax0  = karteStepsAllowed(state.mapData);
+  const stepsUsed0 = karteStepsUsed(state.mapData);
+  const stepsLeft0 = Math.max(0, stepsMax0 - stepsUsed0);
+  const extraB0    = karteExtraStepsBought(state.mapData);
+  const pos0       = kartePos(state.mapData);
+  const expl0      = Object.keys(state.mapData.explored  || {}).length;
+  const tr0        = Object.keys(state.mapData.treasures || {}).length;
+
+  el.innerHTML = `
+    <div class="cc-karte-wrap">
+      <div class="cc-karte-topbar">
+        <span id="karte-pos">📍 ${pos0.x}, ${pos0.y}</span>
+        <span id="karte-stats">🗺️ ${expl0} Felder &nbsp;·&nbsp; 🏆 ${tr0} Schätze</span>
+      </div>
+      <canvas id="cc-karte-canvas" class="cc-karte-canvas" width="320" height="280"></canvas>
+      <div class="cc-karte-step-row">
+        <span class="cc-karte-step-lbl">Schritte heute</span>
+        <div class="cc-karte-step-bar-wrap">
+          <div class="cc-karte-step-bar">
+            <div class="cc-karte-step-fill" id="karte-step-fill"
+              style="width:${stepsMax0 > 0 ? Math.min(100, stepsUsed0 / stepsMax0 * 100) : 0}%"></div>
+          </div>
+        </div>
+        <span id="karte-step-num">${stepsUsed0}/${stepsMax0}</span>
+      </div>
+      <button class="cc-karte-buy-steps" id="cc-karte-buy-steps"
+        style="display:${!extraB0 && stepsMax0 < 10 ? 'block' : 'none'}">
+        +5 Schritte kaufen &nbsp;·&nbsp; 10 🫘 CC
+      </button>
+      <p class="cc-karte-hint${stepsLeft0 === 0 ? ' cc-karte-hint--done' : ''}" id="karte-hint">
+        ${stepsLeft0 === 0
+          ? '⏳ Alle Schritte verbraucht — morgen wieder 5 verfügbar!'
+          : `Klick auf ein <span style="color:var(--gold)">leuchtendes</span> Feld &nbsp;(${stepsLeft0} Schritte übrig)`}
+      </p>
+    </div>
+    <div id="cc-karte-popup" class="cc-karte-popup hidden"></div>
+  `;
+
+  const canvas = document.getElementById('cc-karte-canvas');
+  if (canvas) karteRender(canvas, state.mapData, seed, state.vpX, state.vpY);
+
+  // Kauf-Button Handler
+  document.getElementById('cc-karte-buy-steps')?.addEventListener('click', async () => {
+    const newCoins = await DB.spendCoins(member.id, 10);
+    if (newCoins === null) { showToast('Nicht genug CoffeeCoins!', 'error'); return; }
+    state.memberCoins = newCoins;
+    currentUserData = { ...(currentUserData || {}), coins: newCoins };
+    _updateHeaderCoins({ coins: newCoins });
+    state.mapData = { ...state.mapData, steps_extra_date: new Date().toLocaleDateString('de-DE') };
+    await DB.updateMapData(member.id, state.mapData).catch(() => {});
+    currentUserData = { ...(currentUserData || {}), map_data: state.mapData };
+    showToast('✅ +5 Schritte freigeschaltet!', 'success');
+    _karteUpdateHUD(state);
+    const c = document.getElementById('cc-karte-canvas');
+    if (c) karteRender(c, state.mapData, seed, state.vpX, state.vpY);
+  });
+
+  // Canvas Click-Handler (einmalig, nutzt state.vpX/vpY statt Auto-Centering)
+  canvas?.addEventListener('click', async (e) => {
+    const rect   = canvas.getBoundingClientRect();
+    const scaleX = canvas.width  / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const cx = (e.clientX - rect.left) * scaleX;
+    const cy = (e.clientY - rect.top)  * scaleY;
+
+    // Weltkoordinaten des geklickten Tiles (Viewport bleibt stabil!)
+    const tx = state.vpX + Math.floor(cx / KARTE_TILE);
+    const ty = state.vpY + Math.floor(cy / KARTE_TILE);
+
+    if (!karteCanStep(tx, ty, state.mapData)) return;
+    await _handleKarteStep(tx, ty, member, state, seed, _COLS, _ROWS, _MARGIN);
+  });
+}
+
+async function _handleKarteStep(tx, ty, member, state, seed, COLS, ROWS, MARGIN) {
+  const prevMapData = state.mapData;
+  const { newMapData, treasure } = karteExploreTile(tx, ty, state.mapData, seed, {});
+  state.mapData = newMapData;
+
+  try {
+    await DB.updateMapData(member.id, newMapData);
+  } catch {
+    state.mapData = prevMapData;  // Revert bei Fehler
+    showToast('Karte konnte nicht gespeichert werden.', 'error');
+    return;
+  }
+
+  currentUserData = { ...(currentUserData || {}), map_data: newMapData };
+
+  if (treasure) {
+    // Optimistic UI update sofort (ohne auf DB zu warten)
+    state.memberCoins += treasure.cc;
+    currentUserData = { ...(currentUserData || {}), coins: state.memberCoins };
+    _updateHeaderCoins({ coins: state.memberCoins });
+    try {
+      await DB.addCoins(member.id, treasure.cc);
+    } catch (e) { console.warn('add_coins Fehler:', e); }
+    try {
+      await DB.postMessage(
+        `🗺️ ${_esc2(member.name)} hat "${treasure.name}" entdeckt! (+${treasure.cc} ☕ CC)\n"${treasure.quote}"`,
+        member.name
+      );
+    } catch (e) { console.warn('Chat-Broadcast Fehler:', e); }
+    _showKarteDiscovery(treasure);
+    showToast(`${treasure.emoji} ${treasure.name} entdeckt! +${treasure.cc} CC`, 'success');
+  }
+
+  // Viewport nur an Rändern verschieben (Spieler läuft sichtbar übers Canvas)
+  const pos  = kartePos(state.mapData);
+  const pvpX = pos.x - state.vpX;
+  const pvpY = pos.y - state.vpY;
+  if (pvpX < MARGIN)            state.vpX = Math.max(0, pos.x - MARGIN);
+  else if (pvpX > COLS - MARGIN - 1) state.vpX = Math.min(KARTE_WORLD - COLS, pos.x - (COLS - MARGIN - 1));
+  if (pvpY < MARGIN)            state.vpY = Math.max(0, pos.y - MARGIN);
+  else if (pvpY > ROWS - MARGIN - 1) state.vpY = Math.min(KARTE_WORLD - ROWS, pos.y - (ROWS - MARGIN - 1));
+
+  // Canvas smooth neu zeichnen mit stabilem Viewport
+  const canvas = document.getElementById('cc-karte-canvas');
+  if (canvas) karteRender(canvas, state.mapData, seed, state.vpX, state.vpY);
+
+  _karteUpdateHUD(state);
+}
+
+function _showKarteDiscovery(treasure) {
+  const popup = document.getElementById('cc-karte-popup');
+  if (!popup) return;
+  popup.classList.remove('hidden');
+  popup.innerHTML = `
+    <div class="cc-karte-popup-inner">
+      <div class="cc-karte-popup-hdr">✦ ENTDECKUNG!</div>
+      <div class="cc-karte-popup-body">
+        <span class="cc-karte-popup-emoji">${treasure.emoji}</span>
+        <div class="cc-karte-popup-text">
+          <strong>${_esc2(treasure.name)}</strong>
+          <em>"${_esc2(treasure.quote)}"</em>
+          <span class="cc-karte-popup-cc">+${treasure.cc} 🫘 CC</span>
+        </div>
+      </div>
+      <button class="cc-karte-popup-close"
+        onclick="document.getElementById('cc-karte-popup').classList.add('hidden')">
+        Weiter →
+      </button>
+    </div>
+  `;
 }
