@@ -39,6 +39,9 @@
 }
 
 /* ── Imperium View ─────────────────────────────────────────────────────────── */
+#view-imperium {
+  overflow-x: hidden;
+}
 .imperium-header {
   padding: 14px 16px 10px;
   border-bottom: 1px solid rgba(255,255,255,.08);
@@ -120,7 +123,7 @@
 }
 .cc-ri-path  { font-size: 9px; position: absolute; top: 4px; left: 5px; opacity: .5; }
 .cc-ri-icon  { font-size: 22px; margin: 4px 0 3px; line-height: 1; }
-.cc-ri-name  { font-size: 10px; font-weight: 500; color: rgba(255,255,255,.85); margin: 0 0 2px; line-height: 1.3; }
+.cc-ri-name  { font-size: 10px; font-weight: 500; color: rgba(255,255,255,.85); margin: 0 0 2px; line-height: 1.3; word-break: break-word; overflow-wrap: anywhere; }
 .cc-ri-cost  { font-size: 9px;  font-family: monospace; color: #EF9F27; margin: 0; }
 .cc-ri-bonus { font-size: 9px;  color: #9FE1CB; margin: 0; }
 .cc-buy-btn  {
@@ -149,7 +152,7 @@
 .cc-combo-ready { border-color: rgba(212,175,55,.4); background: rgba(212,175,55,.06); }
 .cc-combo-owned { border-color: rgba(157,225,203,.3); background: rgba(157,225,203,.06); }
 .cc-combo-parts { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-bottom: 6px; }
-.cc-combo-chip  { background: rgba(255,255,255,.08); border-radius: 6px; padding: 2px 7px; font-size: 11px; }
+.cc-combo-chip  { background: rgba(255,255,255,.08); border-radius: 6px; padding: 2px 7px; font-size: 11px; word-break: break-word; overflow-wrap: anywhere; }
 .cc-combo-chip-ok { background: rgba(157,225,203,.2); color: #9FE1CB; }
 .cc-combo-plus  { font-size: 12px; color: rgba(255,255,255,.35); }
 .cc-combo-arrow { font-size: 13px; color: rgba(255,255,255,.5); }
@@ -166,8 +169,8 @@
 .cc-kasse-balance   { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
 .cc-kasse-bal-val   { font-size: 1.2rem; font-weight: 700; color: #9FE1CB; }
 .cc-kasse-mycontrib { font-size: .78rem; color: rgba(255,255,255,.45); margin: 0; }
-.cc-kasse-contribute { display: flex; gap: 8px; margin-bottom: 16px; align-items: center; }
-.cc-kasse-contribute input { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.15); border-radius: 8px; padding: 8px 10px; color: inherit; font-size: .84rem; }
+.cc-kasse-contribute { display: flex; gap: 8px; margin-bottom: 16px; align-items: center; flex-wrap: wrap; }
+.cc-kasse-contribute input { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.15); border-radius: 8px; padding: 8px 10px; color: inherit; font-size: .84rem; flex: 1; min-width: 80px; }
 
 .cc-goal       { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; }
 .cc-goal-done  { border-color: rgba(157,225,203,.35); background: rgba(157,225,203,.06); }
@@ -186,7 +189,7 @@
 .cc-stats-player { display: flex; gap: 10px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1); border-radius: 10px; padding: 10px 12px; }
 .cc-stats-av     { width: 36px; height: 36px; border-radius: 50%; background: #FAC775; border: 2px solid #BA7517; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
 .cc-stats-info   { flex: 1; min-width: 0; }
-.cc-stats-name   { font-size: 13px; font-weight: 600; margin-bottom: 3px; }
+.cc-stats-name   { font-size: 13px; font-weight: 600; margin-bottom: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cc-stats-sub    { font-size: 11px; color: rgba(255,255,255,.45); margin-bottom: 6px; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
 .cc-res-bars     { display: flex; flex-direction: column; gap: 3px; }
 .cc-res-bar-row  { display: flex; align-items: center; gap: 5px; }
@@ -226,7 +229,7 @@
 .cc-pack-buy         { padding: 4px 10px; font-size: 11px; background: rgba(212,175,55,.2); border: 1px solid rgba(212,175,55,.4); border-radius: 6px; color: #FAC775; cursor: pointer; }
 .cc-booster-card     { display: flex; align-items: center; gap: 10px; margin-top: 10px; padding: 9px 12px; background: linear-gradient(135deg, rgba(212,175,55,.18), rgba(212,175,55,.06)); border: 1px solid rgba(212,175,55,.4); border-radius: 10px; }
 .cc-booster-card .cc-pack-icon { font-size: 22px; }
-.cc-booster-card > div          { flex: 1; }
+.cc-booster-card > div          { flex: 1; min-width: 0; word-break: break-word; }
 .cc-booster-card .cc-pack-buy   { flex-shrink: 0; }
 
 /* ── Toast: Coin-Variante ──────────────────────────────────────────────────── */
@@ -273,3 +276,196 @@
   color: #FAC775;
   margin: 6px 0;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Pixel Exploration Karte
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.cc-karte-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 4px 4px;
+}
+
+.cc-karte-topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  max-width: 320px;
+  font-size: 11px;
+  font-family: monospace;
+  letter-spacing: .5px;
+}
+
+.cc-karte-pos   { color: var(--gold); }
+.cc-karte-stats { color: rgba(255,255,255,.45); }
+
+.cc-karte-canvas {
+  display: block;
+  width: 320px;
+  height: 280px;
+  cursor: pointer;
+  border: 1px solid rgba(255,255,255,.06);
+  border-radius: 4px;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+@media (max-width: 360px) {
+  .cc-karte-canvas { width: 100%; height: auto; }
+}
+
+/* Steps Bar */
+.cc-karte-step-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  max-width: 320px;
+}
+
+.cc-karte-step-lbl {
+  font-size: 10px;
+  font-family: monospace;
+  color: rgba(255,255,255,.4);
+  white-space: nowrap;
+  letter-spacing: .5px;
+}
+
+.cc-karte-step-bar-wrap {
+  flex: 1;
+  min-width: 0;
+}
+
+.cc-karte-step-bar {
+  height: 6px;
+  background: rgba(255,255,255,.08);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.cc-karte-step-fill {
+  height: 100%;
+  background: var(--gold);
+  border-radius: 3px;
+  transition: width .3s ease;
+}
+
+.cc-karte-step-num {
+  font-size: 11px;
+  font-family: monospace;
+  font-weight: 700;
+  color: var(--gold);
+  white-space: nowrap;
+}
+
+/* Hint-Text */
+.cc-karte-hint {
+  font-size: 11px;
+  color: rgba(255,255,255,.35);
+  text-align: center;
+  margin: 0;
+  max-width: 320px;
+  line-height: 1.5;
+}
+
+.cc-karte-hint--done {
+  color: rgba(212,175,55,.45);
+}
+
+/* ── Discovery Popup ────────────────────────────────────────────────────── */
+.cc-karte-popup {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(0,0,0,.55);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  animation: kartePopupIn .2s ease;
+}
+
+.cc-karte-popup.hidden { display: none; }
+
+@keyframes kartePopupIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.cc-karte-popup-inner {
+  background: #14100a;
+  border: 1.5px solid var(--gold);
+  border-radius: 14px 14px 0 0;
+  width: 100%;
+  max-width: 480px;
+  padding: 16px 18px 20px;
+}
+
+.cc-karte-popup-hdr {
+  font-size: 10px;
+  font-family: monospace;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--gold);
+  margin-bottom: 12px;
+}
+
+.cc-karte-popup-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.cc-karte-popup-emoji {
+  font-size: 42px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.cc-karte-popup-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cc-karte-popup-text strong {
+  font-size: 15px;
+  font-weight: 700;
+  color: rgba(255,255,255,.9);
+}
+
+.cc-karte-popup-text em {
+  font-size: 12px;
+  font-style: italic;
+  color: rgba(255,255,255,.45);
+  line-height: 1.4;
+}
+
+.cc-karte-popup-cc {
+  margin-top: 4px;
+  font-size: 13px;
+  font-weight: 700;
+  font-family: monospace;
+  color: var(--gold);
+}
+
+.cc-karte-popup-close {
+  width: 100%;
+  padding: 10px;
+  background: rgba(212,175,55,.15);
+  border: 1px solid rgba(212,175,55,.4);
+  border-radius: 8px;
+  color: var(--gold);
+  font-size: 13px;
+  font-weight: 700;
+  font-family: monospace;
+  cursor: pointer;
+  transition: background .15s;
+}
+
+.cc-karte-popup-close:hover { background: rgba(212,175,55,.25); }
