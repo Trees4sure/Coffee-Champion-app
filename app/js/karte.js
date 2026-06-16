@@ -4,7 +4,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 const KARTE_WORLD      = 64;   // Weltgröße (64×64 Tiles)
-const KARTE_TILE       = 10;   // Pixel pro Tile im Canvas
+const KARTE_TILE       = 16;   // Pixel pro Tile im Canvas
 const KARTE_VP_COLS    = 32;   // Viewport-Breite in Tiles
 const KARTE_VP_ROWS    = 28;   // Viewport-Höhe in Tiles
 const KARTE_START_X    = 32;   // Start-X in der Weltmitte
@@ -39,6 +39,13 @@ const KARTE_TREASURES = [
   { emoji:'☕', name:'Geheime zweite Kaffeemaschine',  cc:10, quote:'EINE ZWEITE KAFFEEMASCHINE. Im Keller. Schicksal hat dich hierher geführt.' },
   { emoji:'💰', name:'Kleingeld auf dem Kopierer',     cc:1,  quote:'1.80 Euro. Reicht für... symbolisch was. Schön trotzdem.' },
   { emoji:'🧃', name:'Multivitaminsaft',               cc:2,  quote:'Gesund ist auch eine Überlebensstrategie. Zählt.' },
+];
+
+// ── Charakter-Upgrades ───────────────────────────────────────────────────────
+const KARTE_UPGRADES = [
+  { key: 'boots',   emoji: '👟', name: 'Wanderschuhe',  cost: 50,  desc: '+2 Schritte pro Tag' },
+  { key: 'nose',    emoji: '🔍', name: 'Schatzgespür',  cost: 80,  desc: 'Schatz-Chance +50%' },
+  { key: 'compass', emoji: '🧭', name: 'Kompass',        cost: 120, desc: 'Umgebung durch Nebel' },
 ];
 
 // ── Terrain-Farben ────────────────────────────────────────────────────────────
@@ -89,10 +96,10 @@ function _tileColor(x, y, worldSeed) {
 }
 
 // ── Schatz-Logik ──────────────────────────────────────────────────────────────
-function karteTreasureSpot(x, y, worldSeed) {
+function karteTreasureSpot(x, y, worldSeed, p) {
   const terrain = karteTerrain(x, y, worldSeed);
   if (terrain === 'RIVER' || terrain === 'PATH') return false;
-  return _tileRng(x, y, 777, worldSeed)() < KARTE_TREASURE_P;
+  return _tileRng(x, y, 777, worldSeed)() < (p !== undefined ? p : KARTE_TREASURE_P);
 }
 
 function karteTreasureIndex(x, y, worldSeed, round) {
@@ -102,8 +109,9 @@ function karteTreasureIndex(x, y, worldSeed, round) {
 
 // ── Steps-Logik ───────────────────────────────────────────────────────────────
 function karteStepsAllowed(mapData) {
-  const extra = mapData?.steps_extra_date === _todayKey() ? KARTE_EXTRA_STEPS : 0;
-  return Math.min(KARTE_MAX_STEPS, KARTE_BASE_STEPS + extra);
+  const bootBonus = mapData?.upgrades?.boots ? 2 : 0;
+  const extra     = mapData?.steps_extra_date === _todayKey() ? KARTE_EXTRA_STEPS : 0;
+  return Math.min(KARTE_MAX_STEPS + bootBonus, KARTE_BASE_STEPS + bootBonus + extra);
 }
 
 function karteExtraStepsBought(mapData) {
@@ -141,15 +149,16 @@ function karteCanStep(tx, ty, mapData) {
 }
 
 // Gibt { newMapData, treasure } zurück; treasure ist null wenn keiner gefunden.
-function karteExploreTile(tx, ty, mapData, worldSeed, research) {
+function karteExploreTile(tx, ty, mapData, worldSeed, opts) {
   const now = Date.now();
   const stepsUsed = karteStepsUsed(mapData);
+  const treasureP = opts?.treasureBoost ? KARTE_TREASURE_P * 1.5 : KARTE_TREASURE_P;
 
   const newExplored = { ...(mapData?.explored || {}), [`${tx},${ty}`]: now };
   let newTreasures = { ...(mapData?.treasures || {}) };
   let treasure = null;
 
-  if (karteTreasureSpot(tx, ty, worldSeed)) {
+  if (karteTreasureSpot(tx, ty, worldSeed, treasureP)) {
     const prev = newTreasures[`${tx},${ty}`];
     const isRespawn = prev && (now - prev.ts > KARTE_RESPAWN_MS);
     if (!prev || isRespawn) {
@@ -182,11 +191,12 @@ function karteRender(canvas, mapData, worldSeed, vpX, vpY) {
   const COLS = Math.floor(W / T);
   const ROWS = Math.floor(H / T);
 
-  const pos      = kartePos(mapData);
-  const explored = mapData?.explored  || {};
+  const pos       = kartePos(mapData);
+  const explored  = mapData?.explored  || {};
   const treasures = mapData?.treasures || {};
-  const originX  = (vpX !== undefined) ? vpX : pos.x - Math.floor(COLS / 2);
-  const originY  = (vpY !== undefined) ? vpY : pos.y - Math.floor(ROWS / 2);
+  const hasCompass = !!(mapData?.upgrades?.compass);
+  const originX   = (vpX !== undefined) ? vpX : pos.x - Math.floor(COLS / 2);
+  const originY   = (vpY !== undefined) ? vpY : pos.y - Math.floor(ROWS / 2);
 
   ctx.clearRect(0, 0, W, H);
 
@@ -204,13 +214,22 @@ function karteRender(canvas, mapData, worldSeed, vpX, vpY) {
         ctx.fillStyle = '#0c0a07';
         ctx.fillRect(px, py, T, T);
 
+        // Kompass: Terrain angrenzender Tiles gedimmt anzeigen
+        if (inBounds && hasCompass && Math.abs(wx - pos.x) <= 1 && Math.abs(wy - pos.y) <= 1) {
+          const { color } = _tileColor(wx, wy, worldSeed);
+          ctx.fillStyle = color;
+          ctx.globalAlpha = 0.38;
+          ctx.fillRect(px, py, T, T);
+          ctx.globalAlpha = 1.0;
+        }
+
         // Highlight: angrenzend, betretbar
         if (inBounds && karteCanStep(wx, wy, mapData)) {
-          ctx.fillStyle = 'rgba(212,175,55,0.13)';
+          ctx.fillStyle = 'rgba(212,175,55,0.15)';
           ctx.fillRect(px, py, T, T);
-          ctx.strokeStyle = 'rgba(212,175,55,0.5)';
-          ctx.lineWidth = 1;
-          ctx.strokeRect(px + 0.5, py + 0.5, T - 1, T - 1);
+          ctx.strokeStyle = 'rgba(212,175,55,0.6)';
+          ctx.lineWidth = 1.5;
+          ctx.strokeRect(px + 1, py + 1, T - 2, T - 2);
         }
         continue;
       }
@@ -230,64 +249,68 @@ function karteRender(canvas, mapData, worldSeed, vpX, vpY) {
         ctx.fillRect(px + 2, py + 2, T - 4, T - 4);
       }
 
-      // Terrain-Detail-Pixel (Wald-Baum, Berg-Fels, Kaffee-Reihen)
+      // Terrain-Details (skaliert mit T=16)
+      const t3 = Math.floor(T * 0.3);
+      const t7 = Math.floor(T * 0.7);
       if (terrain === 'FOREST') {
         const treeR = _tileRng(wx, wy, 333, worldSeed)();
         if (treeR > 0.4) {
           ctx.fillStyle = treeR > 0.7 ? '#0d1e06' : '#0e2208';
-          ctx.fillRect(px + 1, py + 0, T - 2, T - 1);
+          ctx.fillRect(px + 2, py, T - 4, T - 2);
         }
       } else if (terrain === 'MOUNTAIN') {
         ctx.fillStyle = 'rgba(80,70,60,0.3)';
-        ctx.fillRect(px + 2, py + 1, T - 4, 3);
+        ctx.fillRect(px + 3, py + 2, T - 6, 4);
+        ctx.fillStyle = 'rgba(120,110,100,0.15)';
+        ctx.fillRect(px + 5, py + 7, T - 10, 3);
       } else if (terrain === 'COFFEE') {
         ctx.fillStyle = '#3e2410';
-        ctx.fillRect(px, py + 3, T, 1);
-        ctx.fillRect(px, py + 7, T, 1);
+        ctx.fillRect(px, py + t3, T, 2);
+        ctx.fillRect(px, py + t7, T, 2);
       } else if (terrain === 'RIVER') {
         ctx.fillStyle = 'rgba(18,42,80,0.5)';
-        ctx.fillRect(px + 1, py + 3, T - 2, 3);
+        ctx.fillRect(px + 2, py + t3, T - 4, Math.floor(T * 0.3));
       }
 
       // ── Schatz-Sparkle ──
       const tr = treasures[key];
       if (tr) {
         ctx.fillStyle = '#FAC775';
-        ctx.font = 'bold 8px sans-serif';
-        ctx.fillText('✦', px + 1, py + 8);
+        ctx.font = `bold ${Math.floor(T * 0.75)}px sans-serif`;
+        ctx.fillText('✦', px + 2, py + T - 2);
       }
 
-      // ── Spieler-Charakter ──
+      // ── Spieler-Charakter (16×16) ──
       if (wx === pos.x && wy === pos.y) {
         // Aura
         const aura = ctx.createRadialGradient(px + T/2, py + T/2, 0, px + T/2, py + T/2, T * 1.5);
-        aura.addColorStop(0, 'rgba(212,175,55,0.18)');
+        aura.addColorStop(0, 'rgba(212,175,55,0.2)');
         aura.addColorStop(1, 'rgba(212,175,55,0)');
         ctx.fillStyle = aura;
         ctx.fillRect(px - T, py - T, T * 3, T * 3);
         // Schatten
         ctx.fillStyle = 'rgba(0,0,0,0.35)';
-        ctx.fillRect(px + 3, py + 9, 4, 1);
+        ctx.fillRect(px + 4, py + 14, 8, 2);
         // Beine
         ctx.fillStyle = '#1a2840';
-        ctx.fillRect(px + 3, py + 7, 1, 2);
-        ctx.fillRect(px + 6, py + 7, 1, 2);
+        ctx.fillRect(px + 4, py + 10, 2, 5);
+        ctx.fillRect(px + 10, py + 10, 2, 5);
         // Körper (blaue Jacke)
         ctx.fillStyle = '#263a5a';
-        ctx.fillRect(px + 2, py + 4, 6, 4);
+        ctx.fillRect(px + 3, py + 6, 10, 5);
         // Kopf
         ctx.fillStyle = '#8a5430';
-        ctx.fillRect(px + 3, py + 1, 4, 4);
+        ctx.fillRect(px + 5, py + 1, 6, 6);
         // Haare
         ctx.fillStyle = '#3a2010';
-        ctx.fillRect(px + 3, py + 1, 4, 2);
-        // Augen (1px)
+        ctx.fillRect(px + 5, py + 1, 6, 3);
+        // Augen
         ctx.fillStyle = '#1a1008';
-        ctx.fillRect(px + 4, py + 3, 1, 1);
-        ctx.fillRect(px + 6, py + 3, 1, 1);
-        // Kaffeetasse (rechts neben Charakter)
+        ctx.fillRect(px + 6, py + 4, 1, 1);
+        ctx.fillRect(px + 9, py + 4, 1, 1);
+        // Kaffeetasse
         ctx.fillStyle = '#FAC775';
-        ctx.fillRect(px + 8, py + 5, 2, 2);
+        ctx.fillRect(px + 13, py + 7, 3, 3);
       }
     }
   }
