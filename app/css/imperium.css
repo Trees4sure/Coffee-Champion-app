@@ -469,3 +469,21 @@
 }
 
 .cc-karte-popup-close:hover { background: rgba(212,175,55,.25); }
+
+.cc-karte-buy-steps {
+  display: block;
+  width: 100%;
+  margin: 8px 0 4px;
+  padding: 10px 16px;
+  background: rgba(212,175,55,.12);
+  border: 1px solid rgba(212,175,55,.5);
+  border-radius: 8px;
+  color: var(--gold);
+  font-size: 13px;
+  font-weight: 700;
+  font-family: monospace;
+  cursor: pointer;
+  transition: background .15s;
+  text-align: center;
+}
+.cc-karte-buy-steps:hover { background: rgba(212,175,55,.22); }
