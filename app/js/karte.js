@@ -4,7 +4,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 const KARTE_WORLD      = 64;   // Weltgröße (64×64 Tiles)
-const KARTE_TILE       = 16;   // Pixel pro Tile im Canvas
+const KARTE_TILE       = 20;   // Pixel pro Tile im Canvas
 const KARTE_VP_COLS    = 32;   // Viewport-Breite in Tiles
 const KARTE_VP_ROWS    = 28;   // Viewport-Höhe in Tiles
 const KARTE_START_X    = 32;   // Start-X in der Weltmitte

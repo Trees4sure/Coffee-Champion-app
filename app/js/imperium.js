@@ -675,12 +675,13 @@ function _buildKarte(member, el) {
   const _ROWS = Math.floor(280 / KARTE_TILE);
   const _MARGIN = 4;  // Rand-Abstand bevor Viewport scrollt
 
+  // Viewport auf aktuelle Spielerposition zentrieren (nicht auf Start)
+  const initPos = kartePos(mapData);
   const state = {
     mapData,
     memberCoins: member.coins || 0,
-    // Viewport-Ursprung: zentriert auf Start-Position
-    vpX: KARTE_START_X - Math.floor(_COLS / 2),
-    vpY: KARTE_START_Y - Math.floor(_ROWS / 2),
+    vpX: Math.max(0, Math.min(KARTE_WORLD - _COLS, initPos.x - Math.floor(_COLS / 2))),
+    vpY: Math.max(0, Math.min(KARTE_WORLD - _ROWS, initPos.y - Math.floor(_ROWS / 2))),
   };
   const seed  = _karteWorldSeed();
 
@@ -692,46 +693,49 @@ function _buildKarte(member, el) {
   const pos0       = kartePos(state.mapData);
   const expl0      = Object.keys(state.mapData.explored  || {}).length;
   const tr0        = Object.keys(state.mapData.treasures || {}).length;
+  const buyBtnDisplay = (!extraB0 && stepsMax0 < KARTE_MAX_STEPS + (state.mapData?.upgrades?.boots ? 2 : 0)) ? 'block' : 'none';
+  const hintClass     = stepsLeft0 === 0 ? ' cc-karte-hint--done' : '';
+  const hintText      = stepsLeft0 === 0
+    ? '&#9203; Alle Schritte verbraucht &mdash; morgen wieder 5 verf&uuml;gbar!'
+    : 'Klick auf ein <span style="color:var(--gold)">leuchtendes</span> Feld &nbsp;(' + stepsLeft0 + ' Schritte &uuml;brig)';
+
+  // Upgrade-Karten separat aufbauen (kein verschachteltes Template-Literal)
+  const upgradeHtml = KARTE_UPGRADES.map(function(u) {
+    const owned = !!(state.mapData && state.mapData.upgrades && state.mapData.upgrades[u.key]);
+    const actionHtml = owned
+      ? '<div class="cc-karte-upg-status">✅ Aktiv</div>'
+      : '<button class="cc-karte-upg-buy" data-upg="' + u.key + '" data-cost="' + u.cost + '">' + u.cost + ' 🫘</button>';
+    return '<div class="cc-karte-upg-card' + (owned ? ' owned' : '') + '">'
+      + '<div class="cc-karte-upg-icon">' + u.emoji + '</div>'
+      + '<div class="cc-karte-upg-name">' + u.name + '</div>'
+      + '<div class="cc-karte-upg-desc">' + u.desc + '</div>'
+      + actionHtml
+      + '</div>';
+  }).join('');
+
+  const stepBarPct = stepsMax0 > 0 ? Math.min(100, stepsUsed0 / stepsMax0 * 100) : 0;
 
   el.innerHTML = `
     <div class="cc-karte-wrap">
       <div class="cc-karte-topbar">
         <span id="karte-pos">📍 ${pos0.x}, ${pos0.y}</span>
-        <span id="karte-stats">🗺️ ${expl0} Felder &nbsp;·&nbsp; 🏆 ${tr0} Schätze</span>
+        <span id="karte-stats">🗺️ ${expl0} Felder &nbsp;&middot;&nbsp; 🏆 ${tr0} Schätze</span>
       </div>
       <canvas id="cc-karte-canvas" class="cc-karte-canvas" width="320" height="280"></canvas>
       <div class="cc-karte-step-row">
         <span class="cc-karte-step-lbl">Schritte heute</span>
         <div class="cc-karte-step-bar-wrap">
           <div class="cc-karte-step-bar">
-            <div class="cc-karte-step-fill" id="karte-step-fill"
-              style="width:${stepsMax0 > 0 ? Math.min(100, stepsUsed0 / stepsMax0 * 100) : 0}%"></div>
+            <div class="cc-karte-step-fill" id="karte-step-fill" style="width:${stepBarPct}%"></div>
           </div>
         </div>
         <span id="karte-step-num">${stepsUsed0}/${stepsMax0}</span>
       </div>
-      <button class="cc-karte-buy-steps" id="cc-karte-buy-steps"
-        style="display:${!extraB0 && stepsMax0 < KARTE_MAX_STEPS + (state.mapData?.upgrades?.boots ? 2 : 0) ? 'block' : 'none'}">
-        +5 Schritte kaufen &nbsp;·&nbsp; 10 🫘 CC
+      <button class="cc-karte-buy-steps" id="cc-karte-buy-steps" style="display:${buyBtnDisplay}">
+        +5 Schritte kaufen &nbsp;&middot;&nbsp; 10 🫘 CC
       </button>
-      <p class="cc-karte-hint${stepsLeft0 === 0 ? ' cc-karte-hint--done' : ''}" id="karte-hint">
-        ${stepsLeft0 === 0
-          ? '⏳ Alle Schritte verbraucht — morgen wieder 5 verfügbar!'
-          : `Klick auf ein <span style="color:var(--gold)">leuchtendes</span> Feld &nbsp;(${stepsLeft0} Schritte übrig)`}
-      </p>
-      <div class="cc-karte-upgrades" id="karte-upgrades">
-        ${KARTE_UPGRADES.map(u => {
-          const owned = !!(state.mapData?.upgrades?.[u.key]);
-          return `<div class="cc-karte-upg-card${owned ? ' owned' : ''}">
-            <div class="cc-karte-upg-icon">${u.emoji}</div>
-            <div class="cc-karte-upg-name">${u.name}</div>
-            <div class="cc-karte-upg-desc">${u.desc}</div>
-            ${owned
-              ? '<div class="cc-karte-upg-status">✅ Aktiv</div>'
-              : `<button class="cc-karte-upg-buy" data-upg="${u.key}" data-cost="${u.cost}">${u.cost} 🫘</button>`}
-          </div>`;
-        }).join('')}
-      </div>
+      <p class="cc-karte-hint${hintClass}" id="karte-hint">${hintText}</p>
+      <div class="cc-karte-upgrades" id="karte-upgrades">${upgradeHtml}</div>
     </div>
     <div id="cc-karte-popup" class="cc-karte-popup hidden"></div>
   `;
