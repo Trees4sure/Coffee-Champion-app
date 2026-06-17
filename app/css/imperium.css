@@ -3,6 +3,13 @@
    Ergänzt css/style.css ohne etwas zu überschreiben
    ══════════════════════════════════════════════════════════════════════════ */
 
+/* ── Heute-erhalten Log (Profil) ───────────────────────────────────────────── */
+.today-log-list  { display: flex; flex-direction: column; gap: 4px; }
+.today-log-row   { display: flex; justify-content: space-between; align-items: center;
+                    padding: 6px 10px; background: rgba(255,255,255,.04); border-radius: 6px; font-size: 12px; }
+.today-log-label  { color: rgba(255,255,255,.7); }
+.today-log-amount { color: var(--gold, #d4aa37); font-weight: 600; }
+
 /* ── CoffeeCoin Badge ──────────────────────────────────────────────────────── */
 .cc-coin {
   position: relative;
