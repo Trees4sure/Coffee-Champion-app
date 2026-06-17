@@ -287,6 +287,7 @@ function _buildImperiumStats() {
     const effectLine    = activeEffects.map(function(e) {
       if (e.type === 'step_bonus')     return '⚡+' + e.amount + ' Schritte';
       if (e.type === 'step_malus')     return '⚡−' + e.amount + ' Schritte';
+      if (e.type === 'build_block')    return '🚫 Baustopp';
       if (e.type === 'treasure_boost') return '⚡×' + e.factor + ' Schatz';
       if (e.type === 'cc_multiplier')  return '⚡×1–' + e.max + ' Schatz';
       return '';
@@ -898,7 +899,13 @@ function _buildKarte(member, el) {
       const cover = karteBuildingCovering(tx, ty, state.mapData.buildings || {});
       if (cover) { _showKarteBuildingInfo(cover.b); return; }
       const options = karteBuildableAt(tx, ty, state.mapData, seed);
-      if (options.length) _showKarteBuildMenu(options, tx, ty, member, state, seed);
+      if (options.length) {
+        if (karteIsBuildBlocked(state.mapData)) {
+          showToast('🏛️ Umweltbehörde: heute keine Baugenehmigung!', 'error');
+          return;
+        }
+        _showKarteBuildMenu(options, tx, ty, member, state, seed);
+      }
     }
   }
 
@@ -961,8 +968,9 @@ async function _handleKarteStep(tx, ty, member, state, seed, COLS, ROWS, MARGIN)
     showToast(`${treasure.emoji} ${treasure.name} entdeckt! +${totalCC} CC`, 'success');
   } else if (event) {
     const eff = event.effect;
-    let bonusCC  = 0;
-    let noteText = '';
+    let bonusCC   = 0;
+    let penaltyCC = 0;
+    let noteText  = '';
 
     if (eff.type === 'cc_bonus') {
       bonusCC  = eff.amount;
@@ -987,6 +995,15 @@ async function _handleKarteStep(tx, ty, member, state, seed, COLS, ROWS, MARGIN)
       noteText = '-' + eff.amount + ' Schritt heute';
     } else if (eff.type === 'step_malus' && eff.when === 'tomorrow') {
       noteText = '-' + eff.amount + ' Schritte morgen';
+    } else if (eff.type === 'build_block') {
+      noteText = '🚫 Heute keine Baugenehmigung';
+    } else if (eff.type === 'cc_penalty') {
+      penaltyCC = eff.amount;
+      noteText  = '−' + penaltyCC + ' CC';
+    } else if (eff.type === 'tile_block') {
+      noteText = '🐾 Ein Feld ist heute blockiert';
+    } else if (eff.type === 'storm_damage') {
+      noteText = '🏚️ Ein Gebäude pausiert heute';
     } else if (eff.type === 'step_bonus') {
       noteText = '+' + eff.amount + ' Schritte heute';
     } else if (eff.type === 'treasure_boost') {
@@ -1007,6 +1024,22 @@ async function _handleKarteStep(tx, ty, member, state, seed, COLS, ROWS, MARGIN)
           currentUserData = { ...(currentUserData || {}), map_data: state.mapData };
           await DB.updateMapData(member.id, state.mapData);
         } catch (e) { console.warn('Tages-Log (Event) Fehler:', e); }
+      }
+    }
+
+    if (penaltyCC > 0) {
+      // gedeckelt aufs Guthaben — nie ins Minus
+      const pay = Math.min(penaltyCC, state.memberCoins || 0);
+      if (pay > 0) {
+        state.memberCoins -= pay;
+        currentUserData = { ...(currentUserData || {}), coins: state.memberCoins };
+        _updateHeaderCoins({ coins: state.memberCoins });
+        try { await DB.spendCoins(member.id, pay); } catch (e) { console.warn('cc_penalty Fehler:', e); }
+        try {
+          state.mapData = DB.appendTodayLog(state.mapData, [{ label: `${event.emoji} ${event.name}`, amount: -pay }]);
+          currentUserData = { ...(currentUserData || {}), map_data: state.mapData };
+          await DB.updateMapData(member.id, state.mapData);
+        } catch (e) { console.warn('Tages-Log (Strafe) Fehler:', e); }
       }
     }
 
@@ -1139,7 +1172,11 @@ function _showKarteBuildingInfo(b) {
   if (!def) return;
   let status;
   if (b.completesAt <= Date.now()) {
-    status = _buildingEffectLabel(def) || 'Fertiggestellt';
+    if (typeof _todayKey === 'function' && b.damaged === _todayKey()) {
+      status = '🌩️ Sturmschaden — heute kein Einkommen (morgen repariert)';
+    } else {
+      status = _buildingEffectLabel(def) || 'Fertiggestellt';
+    }
   } else {
     const daysLeft = Math.max(1, Math.ceil((b.completesAt - Date.now()) / 86400000));
     status = `🚧 Im Bau — noch ca. ${daysLeft} Tag${daysLeft > 1 ? 'e' : ''}`;
@@ -1166,6 +1203,10 @@ function _showKarteBuildingInfo(b) {
 async function _handleKarteBuild(buildingKey, ax, ay, member, state, seed) {
   const def = karteBuildingDef(buildingKey);
   if (!def) return;
+  if (karteIsBuildBlocked(state.mapData)) {
+    showToast('🏛️ Heute keine Baugenehmigung (Umweltbehörde)!', 'error');
+    return;
+  }
   // Re-Validierung (Stand kann sich seit Menü-Anzeige geändert haben)
   if (!karteCanBuildAt(buildingKey, ax, ay, state.mapData, seed)) {
     showToast('Hier kann nicht (mehr) gebaut werden.', 'error');

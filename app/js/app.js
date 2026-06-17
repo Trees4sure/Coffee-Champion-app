@@ -374,11 +374,14 @@ function renderProfile() {
     const log = (u.map_data?.todayLog?.date === todayKey) ? (u.map_data.todayLog.entries || []) : [];
     if (log.length) {
       logSection.style.display = '';
-      logList.innerHTML = log.slice().reverse().map(e => `
+      logList.innerHTML = log.slice().reverse().map(e => {
+        const neg = e.amount < 0;
+        return `
         <div class="today-log-row">
           <span class="today-log-label">${_esc(e.label)}</span>
-          <span class="today-log-amount">+${_fmtCoins(e.amount)} CC</span>
-        </div>`).join('');
+          <span class="today-log-amount"${neg ? ' style="color:#e0795a"' : ''}>${neg ? '' : '+'}${_fmtCoins(e.amount)} CC</span>
+        </div>`;
+      }).join('');
     } else {
       logSection.style.display = 'none';
       logList.innerHTML = '';

@@ -104,6 +104,36 @@ const KARTE_EVENTS = [
   { id: 'new_machine',      emoji: '✨',  name: 'Neue Kaffeemaschine!',
     text: 'Vollautomatik. Milchaufschäumer. Die Frage nach dem Sinn des Lebens: beantwortet. +8 CC.',
     effect: { type: 'cc_bonus', amount: 8 } },
+  // ── Stufe-1 Flavor-Events (milde „Gegner" ohne eigenes Kampfsystem) ──
+  { id: 'umweltbehoerde',   emoji: '🏛️',  name: 'Umweltbehörde-Kontrolle!',
+    text: 'Klemmbrett, Warnweste, viele Fragen. Heute wird NICHT gebaut. Bau für heute gesperrt.',
+    effect: { type: 'build_block', when: 'today' } },
+  { id: 'demonstranten',    emoji: '📢',  name: 'Demonstranten vor dem Büro!',
+    text: '"Mehr Pausen für alle!" Du kommst kaum durch. -2 Schritte heute.',
+    effect: { type: 'step_malus', amount: 2, when: 'today' } },
+  { id: 'wespennest',       emoji: '🐝',  name: 'Wespennest im Treppenhaus!',
+    text: 'Niemand will da durch. Umweg über den Hinterausgang. -1 Schritt heute.',
+    effect: { type: 'step_malus', amount: 1, when: 'today' } },
+  { id: 'sturmwarnung',     emoji: '🌪️',  name: 'Unwetterwarnung!',
+    text: 'Sturmböen, Regen quer. Heute bleibt man lieber drin. -2 Schritte heute.',
+    effect: { type: 'step_malus', amount: 2, when: 'today' } },
+  { id: 'eichhoernchen',    emoji: '🐿️',  name: 'Eichhörnchen-Invasion!',
+    text: 'Sie horten Nüsse im Aktenschrank. Chaos. -1 Schritt heute, dafür süß.',
+    effect: { type: 'step_malus', amount: 1, when: 'today' } },
+  // ── Stufe 2: Strafzölle / Bußgelder (kosten echte CC, gedeckelt aufs Guthaben) ──
+  { id: 'strafzoll',        emoji: '💸',  name: 'Strafzoll-Bescheid!',
+    text: 'Die Behörde greift zu. Bürokratie kennt kein Erbarmen. -15 CC.',
+    effect: { type: 'cc_penalty', amount: 15 } },
+  { id: 'bussgeld',         emoji: '🧾',  name: 'Bußgeld: Kaffee überm Limit!',
+    text: 'Angeblich „gewerbliche Mengen". Absurd, aber teuer. -10 CC.',
+    effect: { type: 'cc_penalty', amount: 10 } },
+  // ── Stufe 3: Tier blockiert ein Feld / Sturmschaden an einem Gebäude ──
+  { id: 'bueroganse',       emoji: '🦢',  name: 'Aggressive Bürogänse!',
+    text: 'Sie haben ein Feld besetzt. Heute kommt da niemand durch.',
+    effect: { type: 'tile_block' } },
+  { id: 'gewittersturm',    emoji: '⛈️',  name: 'Gewittersturm!',
+    text: 'Ein Gebäude hat Sturmschaden — heute kein Einkommen. Morgen ist es repariert.',
+    effect: { type: 'storm_damage' } },
 ];
 
 // ── RPG Items (Slot-System) ──────────────────────────────────────────────────
@@ -300,13 +330,21 @@ function karteBuildingsCompleted(buildings) {
 // Passives CC-Einkommen aller FERTIGEN Gebäude (analog calcResearchPerDay)
 function calcBuildingPerDay(buildings) {
   const now = Date.now();
+  const today = _todayKey();
   let sum = 0;
   for (const b of Object.values(buildings || {})) {
     if (b.completesAt > now) continue;
+    if (b.damaged === today) continue; // Sturmschaden: heute kein Einkommen
     const def = karteBuildingDef(b.type);
     if (def) sum += (def.perDay || 0);
   }
   return Math.round(sum * 100) / 100;
+}
+
+// Baustopp heute aktiv? (z.B. durch Umweltbehörde-Event)
+function karteIsBuildBlocked(mapData) {
+  const today = _todayKey();
+  return (mapData?.activeEffects || []).some(e => e.type === 'build_block' && e.expires === today);
 }
 
 // Dauerhafter Schritte-Cap-Bonus aller fertigen Gebäude (z.B. Aktenlager)
@@ -450,6 +488,7 @@ function karteCanStep(tx, ty, mapData) {
   if (karteStepsLeft(mapData) <= 0) return false;
   if (karteIsExplored(tx, ty, mapData)) return false;
   if (tx < 0 || tx >= KARTE_WORLD || ty < 0 || ty >= KARTE_WORLD) return false;
+  if ((mapData?.blocked || {})[`${tx},${ty}`] === _todayKey()) return false; // Tier blockiert das Feld heute
   const p = kartePos(mapData);
   return Math.abs(p.x - tx) <= 1 && Math.abs(p.y - ty) <= 1 && !(p.x === tx && p.y === ty);
 }
@@ -477,6 +516,8 @@ function karteExploreTile(tx, ty, mapData, worldSeed, opts) {
   const newExplored    = { ...(mapData?.explored || {}), [`${tx},${ty}`]: now };
   let newTreasures     = { ...(mapData?.treasures || {}) };
   let newActiveEffects = [...effects];
+  let newBlocked       = null; // nur gesetzt, wenn ein tile_block-Event ein Feld sperrt
+  let newBuildings     = null; // nur gesetzt, wenn ein storm_damage-Event ein Gebäude trifft
   let treasure         = null;
   let event            = null;
 
@@ -515,9 +556,26 @@ function karteExploreTile(tx, ty, mapData, worldSeed, opts) {
       if (eff.type === 'step_bonus'    && eff.when === 'today')    newActiveEffects.push({ type: 'step_bonus',     amount: eff.amount,  expires: today    });
       if (eff.type === 'step_malus'    && eff.when === 'today')    newActiveEffects.push({ type: 'step_malus',     amount: eff.amount,  expires: today    });
       if (eff.type === 'step_malus'    && eff.when === 'tomorrow') newActiveEffects.push({ type: 'step_malus',     amount: eff.amount,  expires: tomorrow });
+      if (eff.type === 'build_block'   && eff.when === 'today')    newActiveEffects.push({ type: 'build_block',                          expires: today    });
       if (eff.type === 'treasure_boost')                           newActiveEffects.push({ type: 'treasure_boost', factor: eff.factor,  expires: today    });
       if (eff.type === 'cc_multiplier')                            newActiveEffects.push({ type: 'cc_multiplier',  min: eff.min, max: eff.max, expires: today });
-      // cc_bonus, cc_random, cc_risk → sofort in imperium.js ausgewertet, nicht gespeichert
+      // Tier blockiert ein angrenzendes, unerkundetes Feld für heute
+      if (eff.type === 'tile_block') {
+        const cand = [[tx + 1, ty], [tx - 1, ty], [tx, ty + 1], [tx, ty - 1]]
+          .find(([nx, ny]) => nx >= 0 && nx < KARTE_WORLD && ny >= 0 && ny < KARTE_WORLD && !newExplored[`${nx},${ny}`]);
+        const pruned = {}; // Altlasten vergangener Tage entfernen
+        for (const [k, v] of Object.entries(mapData?.blocked || {})) if (v === today) pruned[k] = v;
+        if (cand) pruned[`${cand[0]},${cand[1]}`] = today;
+        newBlocked = pruned;
+      }
+      // Sturmschaden: ein fertiges Einkommens-Gebäude pausiert heute
+      if (eff.type === 'storm_damage') {
+        const blds = { ...(mapData?.buildings || {}) };
+        const target = Object.entries(blds).find(([, b]) =>
+          b.completesAt <= now && (karteBuildingDef(b.type)?.perDay || 0) > 0 && b.damaged !== today);
+        if (target) { blds[target[0]] = { ...target[1], damaged: today }; newBuildings = blds; }
+      }
+      // cc_bonus, cc_random, cc_risk, cc_penalty → sofort in imperium.js ausgewertet, nicht hier gespeichert
     }
   }
 
@@ -529,6 +587,8 @@ function karteExploreTile(tx, ty, mapData, worldSeed, opts) {
     activeEffects: newActiveEffects,
     steps_today:   stepsUsed + 1,
     steps_date:    today,
+    ...(newBlocked   ? { blocked:   newBlocked }   : {}),
+    ...(newBuildings ? { buildings: newBuildings } : {}),
   };
 
   return { newMapData, treasure, event };
@@ -556,7 +616,9 @@ function karteRender(canvas, mapData, worldSeed, vpX, vpY) {
 
   // Gebäude + Aussichtsturm-Positionen (für Nebel-Aufdeckung im Umkreis)
   const buildings = mapData?.buildings || {};
+  const blocked   = mapData?.blocked   || {};
   const nowTs     = Date.now();
+  const todayK    = _todayKey();
   const towers    = [];
   for (const [k, b] of Object.entries(buildings)) {
     if (b.type === 'aussichtsturm' && b.completesAt <= nowTs) {
@@ -610,6 +672,14 @@ function karteRender(canvas, mapData, worldSeed, vpX, vpY) {
           ctx.font = `bold ${Math.floor(T * 0.6)}px sans-serif`;
           ctx.fillText('✦', px + 4, py + T - 3);
           ctx.globalAlpha = 1.0;
+        }
+
+        // Tier blockiert dieses Feld heute → 🐾 statt betretbar
+        if (inBounds && blocked[key] === todayK) {
+          ctx.font = `${Math.floor(T * 0.7)}px sans-serif`;
+          ctx.fillStyle = '#fff';
+          ctx.fillText('🐾', px + 2, py + T - 3);
+          continue;
         }
 
         // Highlight: angrenzend, betretbar
@@ -730,6 +800,13 @@ function karteRender(canvas, mapData, worldSeed, vpX, vpY) {
       ctx.font = `bold ${Math.floor(T * 0.5)}px sans-serif`;
       ctx.fillStyle = '#FAC775';
       ctx.fillText(daysLeft + 'd', bpx + wPx / 2, bpy + hPx - T * 0.32);
+    } else if (b.damaged === todayK) {
+      // Sturmschaden: rötliche Tönung + Warnsymbol, heute kein Einkommen
+      ctx.fillStyle = 'rgba(170,40,30,0.30)';
+      ctx.fillRect(bpx, bpy, wPx, hPx);
+      ctx.font = `bold ${Math.floor(T * 0.5)}px sans-serif`;
+      ctx.fillStyle = '#ff9a8a';
+      ctx.fillText('⚠️', bpx + wPx / 2, bpy + hPx - T * 0.32);
     }
   }
   ctx.textAlign = 'start';
