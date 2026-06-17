@@ -334,8 +334,8 @@ const DB = (() => {
     const research = raw.research || {};
     if (research[itemId]) throw new Error('Bereits freigeschaltet');
 
-    // Kombo ohne Kosten: Voraussetzungen prüfen
-    if (combo && cost === 0) {
+    // Kombo: Voraussetzungen prüfen — gilt auch für kostenpflichtige Kombos
+    if (combo) {
       const prereqsMet = (combo.requires || []).every(req => research[req]);
       if (!prereqsMet) throw new Error('Voraussetzungen nicht erfüllt');
     }

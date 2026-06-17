@@ -187,7 +187,7 @@ function _buildForschungsbaum(research) {
   for (const combo of RESEARCH_COMBOS) {
     const owned    = !!research[combo.id];
     const prereqs  = (combo.requires || []).every(req => research[req]);
-    const canBuy   = !owned && (combo.cost === 0 ? prereqs : true);
+    const canBuy   = !owned && prereqs;
     html += `<div class="cc-combo-card ${owned ? 'cc-combo-owned' : prereqs && !owned ? 'cc-combo-ready' : ''}">
       <div class="cc-combo-parts">
         ${(combo.requires || []).map(r => {
