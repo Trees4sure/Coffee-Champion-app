@@ -528,3 +528,25 @@
   transition: background .15s;
 }
 .cc-karte-upg-buy:hover { background: rgba(212,175,55,.24); }
+
+/* ── RPG Slot-Gruppen ────────────────────────────────────────────────────── */
+.cc-karte-upgrades { display: block; }
+.cc-karte-slot { margin-bottom: 14px; }
+.cc-karte-slot-label {
+  font-size: 10px; font-weight: 700; color: rgba(212,175,55,.6);
+  font-family: monospace; letter-spacing: .06em; text-transform: uppercase;
+  margin-bottom: 5px; padding-left: 2px;
+}
+.cc-karte-slot-items { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+.cc-karte-slot-items:has(.cc-karte-upg-card:only-child) { grid-template-columns: 1fr; }
+.cc-karte-upg-card.superseded {
+  opacity: 0.38;
+  border-color: rgba(212,175,55,.1);
+}
+.cc-karte-upg-card.superseded .cc-karte-upg-status { color: var(--muted); font-size: 9px; }
+/* Event-Popup Farbe */
+.cc-karte-popup-hdr--event { color: #f0a030; }
+
+/* ── Stats: Karten-Zeile ─────────────────────────────────────────────────── */
+.cc-stats-karte { color: rgba(160,220,160,.75); margin-top: 2px; }
+.cc-stats-effect { color: #f0a030; }
