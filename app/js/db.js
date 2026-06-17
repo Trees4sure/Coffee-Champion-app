@@ -232,9 +232,9 @@ const DB = (() => {
       }
     }
 
-    // Member updaten
+    // Member updaten (current_streak wird separat atomar via claim_streak_bonus gesetzt, s.u.)
     await _sb.from('members').update({
-      total_cups: newTotal, current_streak: newStreak,
+      total_cups: newTotal,
       max_streak: newMaxStreak, last_active: dateStr,
       active_days: activeDays, season_cups: seasonCups, achievements
     }).eq('id', memberId);
@@ -271,10 +271,23 @@ const DB = (() => {
     let achCoinTotal = 0;
     for (const a of allNew) achCoinTotal += (a.coinReward || 0);
 
-    // Streak-Meilenstein Coins — nur bei der Tasse, die den Streak tatsächlich erhöht
-    // (sonst würde derselbe Bonus für jede weitere Tasse am selben Tag erneut vergeben)
+    // Streak-Meilenstein Coins — current_streak wird atomar via DB-RPC gesetzt UND
+    // geprüft (claim_streak_bonus, SQL: migration_2026-06-18_atomic_streak_bonus.sql).
+    // Verhindert Doppel-Auszahlung bei nahezu gleichzeitigen Tassen-Eintragungen:
+    // ein lokaler Vergleich (newStreak > member.currentStreak) reicht nicht, weil
+    // zwei parallele Requests beide noch den alten Wert lesen könnten.
     let streakBonus = 0;
-    if (newStreak > member.currentStreak) {
+    let streakClaimed = false;
+    try {
+      const { data, error } = await _sb.rpc('claim_streak_bonus', { p_member_id: memberId, p_new_streak: newStreak });
+      if (error) throw error;
+      streakClaimed = !!data;
+    } catch (e) {
+      console.warn('claim_streak_bonus RPC fehlgeschlagen (SQL-Migration ausgeführt?), Fallback ohne Bonus:', e.message);
+      // Fallback: current_streak trotzdem persistieren (sonst bleibt der Wert stehen), aber kein Bonus
+      await _sb.from('members').update({ current_streak: newStreak }).eq('id', memberId);
+    }
+    if (streakClaimed) {
       if (newStreak >= 5   && newStreak % 5  === 0 && newStreak < 20)  streakBonus = 100;
       if (newStreak >= 20  && newStreak % 20 === 0 && newStreak < 100) streakBonus = 400;
       if (newStreak >= 100 && newStreak % 100 === 0)                    streakBonus = 2000;
