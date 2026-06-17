@@ -530,13 +530,79 @@ function renderJahr(info) {
 }
 
 // ── Hall of Fame ──────────────────────────────────────────────────────────────
+// ── Imperium-Kennzahlen (geteilt von Hall of Fame + Poster) ─────────────────────
+function _ccBldScore(u) {
+  let s = 0;
+  for (const b of Object.values(u.map_data?.buildings || {})) {
+    const def = (typeof karteBuildingDef === 'function') ? karteBuildingDef(b.type) : null;
+    if (def) s += def.cost || 0;
+  }
+  return s;
+}
+function _ccBldCount(u) {
+  const now = Date.now();
+  return Object.values(u.map_data?.buildings || {}).filter(b => b.completesAt <= now).length;
+}
+function _ccResearchScore(u) {
+  return (typeof calcResearchScore === 'function') ? calcResearchScore(u.research || {}) : 0;
+}
+function _ccWealth(u) {
+  return Math.round((u.coins || 0) + _ccResearchScore(u) + _ccBldScore(u));
+}
+function _ccTreasures(u) { return Object.keys(u.map_data?.treasures || {}).length; }
+function _ccExploredPct(u) {
+  const WORLD = (typeof KARTE_WORLD !== 'undefined') ? KARTE_WORLD : 128;
+  const n = Object.keys(u.map_data?.explored || {}).length;
+  return Math.round(n / (WORLD * WORLD) * 1000) / 10;
+}
+function _ccCosmCount(u) {
+  const c = u.cosmetics || {};
+  let n = 0;
+  n += (c.seasonThemes || []).length;
+  n += (c.trophies || []).length;
+  n += Object.keys(c.boughtAvatars || {}).length;
+  n += Object.keys(c.boughtTitel || {}).length;
+  if (c.theme && c.theme !== 'default') n += 1;
+  if (c.avatar && c.avatar !== '☕')     n += 1;
+  if (c.zusatztitel)                     n += 1;
+  if (c.cafeName)                        n += 1;
+  if (c.jahresChampion)                  n += 1;
+  return n;
+}
+// Aktuell führender Spieler für eine Metrik (Live-Snapshot, kein persistierter Rekord)
+function _ccLeader(users, fn) {
+  let best = null, bestVal = -1;
+  for (const u of (users || [])) {
+    const v = fn(u) || 0;
+    if (v > bestVal) { bestVal = v; best = u; }
+  }
+  return (best && bestVal > 0) ? { val: bestVal, name: best.name } : { val: null, name: null };
+}
+
 function renderHallOfFame() {
-  const hof = appData?.halloffame || {};
-  document.getElementById('hof-container').innerHTML = [
-    { icon: '☕', label: 'Meiste Tassen',      val: hof.max_cups_value,        name: hof.max_cups_name },
-    { icon: '🔥', label: 'Längste Serie',       val: hof.longest_streak_value,  name: hof.longest_streak_name },
-    { icon: '🏆', label: 'Meiste Monatssiege', val: hof.most_wins_value,        name: hof.most_wins_name },
-  ].map(r => `
+  const hof   = appData?.halloffame || {};
+  const users = appData?.users || [];
+
+  const wl = _ccLeader(users, _ccWealth);
+  const el = _ccLeader(users, _ccExploredPct);
+  const bl = _ccLeader(users, _ccBldCount);
+  const rl = _ccLeader(users, _ccResearchScore);
+  const tl = _ccLeader(users, _ccTreasures);
+  const cl = _ccLeader(users, _ccCosmCount);
+
+  const cards = [
+    { icon: '☕', label: 'Meiste Tassen',      val: hof.max_cups_value,       name: hof.max_cups_name },
+    { icon: '🔥', label: 'Längste Serie',       val: hof.longest_streak_value, name: hof.longest_streak_name },
+    { icon: '🏆', label: 'Meiste Monatssiege', val: hof.most_wins_value,       name: hof.most_wins_name },
+    { icon: '💰', label: 'Größtes Vermögen',   val: wl.val != null ? `${wl.val.toLocaleString('de-DE')} CC` : null, name: wl.name },
+    { icon: '🗺️', label: 'Karte erkundet',     val: el.val != null ? `${el.val}%` : null, name: el.name },
+    { icon: '🏗️', label: 'Meiste Gebäude',     val: bl.val, name: bl.name },
+    { icon: '🔬', label: 'Top-Forschung',      val: rl.val != null ? `${rl.val.toLocaleString('de-DE')} CC` : null, name: rl.name },
+    { icon: '✦', label: 'Meiste Schätze',      val: tl.val, name: tl.name },
+    { icon: '🎨', label: 'Meiste Cosmetics',   val: cl.val, name: cl.name },
+  ];
+
+  document.getElementById('hof-container').innerHTML = cards.map(r => `
     <div class="hof-card">
       <div class="hof-icon">${r.icon}</div>
       <div class="hof-label">${r.label}</div>
@@ -662,8 +728,20 @@ function renderPoster() {
   }).join('');
   const milestones = tiers.map(t => { const n=leaderboardData.filter(u=>u.totalCups>=t.cups).length; return `<div class="ms ${n>0?'reached':''}"><div class="ms-cups">${t.cups}</div><div class="ms-icon">${t.icon}</div><div class="ms-info"><div class="ms-title">${t.title}</div><div class="ms-n">${n} erreicht</div></div></div>`; }).join('');
   const wallRows = lb.map(u => { const f=Math.min(Math.floor(u.totalCups/10),10); const cells=Array.from({length:10},(_,i)=>`<span class="bc ${i<f?'on':'off'}">🫘</span>`).join(''); const extra=u.totalCups>100?`<span class="extra">+${u.totalCups-100}</span>`:''; return `<tr><td class="wn">${_esc(u.name)}</td><td class="wb">${cells}${extra}</td><td class="wc">${u.totalCups}</td></tr>`; }).join('');
+  // Imperium-Champions (gleiche Kennzahlen wie die Hall of Fame)
+  const impCats = [
+    { icon:'💰', label:'Vermögen',  L:_ccLeader(leaderboardData, _ccWealth),         fmt:v=>`${v.toLocaleString('de-DE')} CC` },
+    { icon:'🗺️', label:'Karte',     L:_ccLeader(leaderboardData, _ccExploredPct),    fmt:v=>`${v}%` },
+    { icon:'🏗️', label:'Gebäude',   L:_ccLeader(leaderboardData, _ccBldCount),       fmt:v=>`${v}` },
+    { icon:'🔬', label:'Forschung', L:_ccLeader(leaderboardData, _ccResearchScore),  fmt:v=>`${v.toLocaleString('de-DE')} CC` },
+    { icon:'✦', label:'Schätze',   L:_ccLeader(leaderboardData, _ccTreasures),      fmt:v=>`${v}` },
+    { icon:'🎨', label:'Cosmetics', L:_ccLeader(leaderboardData, _ccCosmCount),      fmt:v=>`${v}` },
+  ];
+  const hasImp = impCats.some(c => c.L.val != null);
+  const impCards = impCats.map(c => `<div class="imp-card"><div class="imp-ic">${c.icon}</div><div class="imp-lbl">${c.label}</div><div class="imp-val">${c.L.val!=null?c.fmt(c.L.val):'—'}</div><div class="imp-nm">${_esc(c.L.name||'—')}</div></div>`).join('');
+  const impSection = hasImp ? `<div class="imp"><div class="wall-hdr"><h2>🏛️ IMPERIUM-CHAMPIONS</h2><p>Vermögen · Karte · Gebäude · Forschung · Schätze · Style</p></div><div class="imp-grid">${impCards}</div></div>` : '';
   const group = AUTH.getGroup();
-  const html = `<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8"><title>Coffee Championship – ${dateStr}</title><link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Inter:wght@400;600;700&display=swap" rel="stylesheet"><style>*{box-sizing:border-box;margin:0;padding:0}body{background:#0d0b08;color:#f2ead8;font-family:'Inter',sans-serif;font-size:13px;padding:16px}.poster{max-width:960px;margin:0 auto;border:2px solid #d4aa37;border-radius:10px;overflow:hidden;background:#0d0b08}.hdr{background:linear-gradient(180deg,#1e1810 0%,#0d0b08 100%);border-bottom:2px solid #d4aa37;padding:20px 28px;display:flex;align-items:center;justify-content:space-between}.hdr-trophy{font-size:2.8rem;filter:drop-shadow(0 0 14px #d4aa3799)}.hdr-center{text-align:center;flex:1}.hdr h1{font-family:'Orbitron',sans-serif;font-size:2rem;font-weight:900;color:#d4aa37;letter-spacing:6px;text-shadow:0 0 30px #d4aa3799}.hdr-sub{color:#8a7a5a;font-size:0.72rem;letter-spacing:3px;text-transform:uppercase;margin-top:5px}.hdr-badge{text-align:center;background:#d4aa3715;border:1px solid #d4aa3755;border-radius:8px;padding:8px 16px}.hdr-badge .bl{color:#8a7a5a;font-size:0.6rem;letter-spacing:1px;text-transform:uppercase}.hdr-badge .bv{color:#d4aa37;font-size:0.9rem;font-weight:700;margin-top:2px}.body{display:flex}.lb{flex:1;padding:18px 22px;border-right:1px solid #2a2010}.sec-title{font-family:'Orbitron',sans-serif;color:#d4aa37;font-size:0.65rem;letter-spacing:2px;text-transform:uppercase;margin-bottom:10px;padding-bottom:7px;border-bottom:1px solid #2a2010}table{width:100%;border-collapse:collapse}td,th{padding:6px 5px;vertical-align:middle}th{color:#8a7a5a;font-size:0.65rem;letter-spacing:1px;text-transform:uppercase;border-bottom:1px solid #2a2010}tr{border-bottom:1px solid #1a1408}tr.top3 td{background:#1a1408}.r-rank{width:34px;text-align:center}.r-name{font-weight:600;color:#f2ead8}.r-cups{color:#d4aa37;font-size:0.82rem;white-space:nowrap}.r-title{color:#8a7a5a;font-size:0.72rem;text-align:right}.badge{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;font-weight:900;font-size:0.75rem}.gold{background:#d4aa37;color:#0d0b08}.silver{background:#a8a8a8;color:#0d0b08}.bronze{background:#cd7f32;color:#0d0b08}.rn{color:#8a7a5a;font-size:0.82rem;display:inline-block;width:22px;text-align:center}.ms-col{width:190px;padding:18px 14px}.ms{display:flex;align-items:center;gap:8px;background:#1c160d;border:1px solid #2a2010;border-radius:5px;padding:7px 9px;margin-bottom:7px;opacity:.35}.ms.reached{opacity:1;border-color:#d4aa37;background:#1e1808}.ms-cups{font-family:'Orbitron',sans-serif;color:#d4aa37;font-size:0.85rem;font-weight:700;min-width:34px}.ms-icon{font-size:1rem}.ms-title{color:#f2ead8;font-size:0.7rem}.ms-n{color:#8a7a5a;font-size:0.62rem;margin-top:2px}.wall{border-top:2px solid #2a2010;background:#141008;padding:18px 22px}.wall-hdr{text-align:center;margin-bottom:14px}.wall-hdr h2{font-family:'Orbitron',sans-serif;color:#d4aa37;font-size:1rem;letter-spacing:4px;text-shadow:0 0 16px #d4aa3766}.wall-hdr p{color:#8a7a5a;font-size:0.65rem;letter-spacing:2px;text-transform:uppercase;margin-top:4px}.wn{width:110px;font-weight:600;font-size:0.82rem}.bc{margin:1px;display:inline-block}.bc.off{opacity:.1;filter:grayscale(1)}.bc.on{filter:drop-shadow(0 0 2px #d4aa3788)}.extra{color:#d4aa37;font-size:0.75rem;font-weight:700;margin-left:6px}.wc{width:50px;text-align:right;color:#d4aa37;font-weight:700;font-size:0.82rem}.ftr{border-top:1px solid #2a2010;background:#0a0804;padding:12px 28px;display:flex;align-items:center;justify-content:space-between}.motto{font-family:'Orbitron',sans-serif;color:#d4aa37;font-size:0.62rem;letter-spacing:3px;text-transform:uppercase}.pbtn{background:#d4aa37;color:#0d0b08;border:none;padding:8px 22px;border-radius:6px;font-weight:700;cursor:pointer;font-size:0.85rem;font-family:'Inter',sans-serif}@media print{body{background:#0d0b08!important;padding:0}.poster{border:none;border-radius:0;max-width:100%}.pbtn{display:none}@page{size:A3 landscape;margin:8mm}}</style></head><body><div class="poster"><div class="hdr"><div class="hdr-trophy">🏆</div><div class="hdr-center"><h1>COFFEE CHAMPIONSHIP</h1><div class="hdr-sub">⚡ ${_esc(group?.name || 'Euer Team')} ⚡</div></div><div class="hdr-badge"><div class="bl">Saison</div><div class="bv">${dateStr}</div></div></div><div class="body"><div class="lb"><div class="sec-title">⚡ Rangliste</div><table><thead><tr><th>#</th><th>Name</th><th>☕ Tassen</th><th style="text-align:right">Titel</th></tr></thead><tbody>${rows}</tbody></table></div><div class="ms-col"><div class="sec-title">Meilensteine</div>${milestones}</div></div><div class="wall"><div class="wall-hdr"><h2>⚡ WALL OF CAFFEINE ⚡</h2><p>Jeder Schluck zählt · 1 Bohne = 10 Tassen</p></div><table><thead><tr><th style="text-align:left">Name</th><th>Fortschritt</th><th style="text-align:right">Tassen</th></tr></thead><tbody>${wallRows}</tbody></table></div><div class="ftr"><div class="motto">⚡ Mehr Kaffee · Mehr Power · Mehr wir ⚡</div><button class="pbtn" onclick="window.print()">🖨 Drucken</button></div></div></body></html>`;
+  const html = `<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8"><title>Coffee Championship – ${dateStr}</title><link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Inter:wght@400;600;700&display=swap" rel="stylesheet"><style>*{box-sizing:border-box;margin:0;padding:0}body{background:#0d0b08;color:#f2ead8;font-family:'Inter',sans-serif;font-size:13px;padding:16px}.poster{max-width:960px;margin:0 auto;border:2px solid #d4aa37;border-radius:10px;overflow:hidden;background:#0d0b08}.hdr{background:linear-gradient(180deg,#1e1810 0%,#0d0b08 100%);border-bottom:2px solid #d4aa37;padding:20px 28px;display:flex;align-items:center;justify-content:space-between}.hdr-trophy{font-size:2.8rem;filter:drop-shadow(0 0 14px #d4aa3799)}.hdr-center{text-align:center;flex:1}.hdr h1{font-family:'Orbitron',sans-serif;font-size:2rem;font-weight:900;color:#d4aa37;letter-spacing:6px;text-shadow:0 0 30px #d4aa3799}.hdr-sub{color:#8a7a5a;font-size:0.72rem;letter-spacing:3px;text-transform:uppercase;margin-top:5px}.hdr-badge{text-align:center;background:#d4aa3715;border:1px solid #d4aa3755;border-radius:8px;padding:8px 16px}.hdr-badge .bl{color:#8a7a5a;font-size:0.6rem;letter-spacing:1px;text-transform:uppercase}.hdr-badge .bv{color:#d4aa37;font-size:0.9rem;font-weight:700;margin-top:2px}.body{display:flex}.lb{flex:1;padding:18px 22px;border-right:1px solid #2a2010}.sec-title{font-family:'Orbitron',sans-serif;color:#d4aa37;font-size:0.65rem;letter-spacing:2px;text-transform:uppercase;margin-bottom:10px;padding-bottom:7px;border-bottom:1px solid #2a2010}table{width:100%;border-collapse:collapse}td,th{padding:6px 5px;vertical-align:middle}th{color:#8a7a5a;font-size:0.65rem;letter-spacing:1px;text-transform:uppercase;border-bottom:1px solid #2a2010}tr{border-bottom:1px solid #1a1408}tr.top3 td{background:#1a1408}.r-rank{width:34px;text-align:center}.r-name{font-weight:600;color:#f2ead8}.r-cups{color:#d4aa37;font-size:0.82rem;white-space:nowrap}.r-title{color:#8a7a5a;font-size:0.72rem;text-align:right}.badge{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;font-weight:900;font-size:0.75rem}.gold{background:#d4aa37;color:#0d0b08}.silver{background:#a8a8a8;color:#0d0b08}.bronze{background:#cd7f32;color:#0d0b08}.rn{color:#8a7a5a;font-size:0.82rem;display:inline-block;width:22px;text-align:center}.ms-col{width:190px;padding:18px 14px}.ms{display:flex;align-items:center;gap:8px;background:#1c160d;border:1px solid #2a2010;border-radius:5px;padding:7px 9px;margin-bottom:7px;opacity:.35}.ms.reached{opacity:1;border-color:#d4aa37;background:#1e1808}.ms-cups{font-family:'Orbitron',sans-serif;color:#d4aa37;font-size:0.85rem;font-weight:700;min-width:34px}.ms-icon{font-size:1rem}.ms-title{color:#f2ead8;font-size:0.7rem}.ms-n{color:#8a7a5a;font-size:0.62rem;margin-top:2px}.wall{border-top:2px solid #2a2010;background:#141008;padding:18px 22px}.wall-hdr{text-align:center;margin-bottom:14px}.wall-hdr h2{font-family:'Orbitron',sans-serif;color:#d4aa37;font-size:1rem;letter-spacing:4px;text-shadow:0 0 16px #d4aa3766}.wall-hdr p{color:#8a7a5a;font-size:0.65rem;letter-spacing:2px;text-transform:uppercase;margin-top:4px}.wn{width:110px;font-weight:600;font-size:0.82rem}.bc{margin:1px;display:inline-block}.bc.off{opacity:.1;filter:grayscale(1)}.bc.on{filter:drop-shadow(0 0 2px #d4aa3788)}.extra{color:#d4aa37;font-size:0.75rem;font-weight:700;margin-left:6px}.wc{width:50px;text-align:right;color:#d4aa37;font-weight:700;font-size:0.82rem}.ftr{border-top:1px solid #2a2010;background:#0a0804;padding:12px 28px;display:flex;align-items:center;justify-content:space-between}.motto{font-family:'Orbitron',sans-serif;color:#d4aa37;font-size:0.62rem;letter-spacing:3px;text-transform:uppercase}.pbtn{background:#d4aa37;color:#0d0b08;border:none;padding:8px 22px;border-radius:6px;font-weight:700;cursor:pointer;font-size:0.85rem;font-family:'Inter',sans-serif}.imp{border-top:2px solid #2a2010;background:#0f0c08;padding:18px 22px}.imp-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}.imp-card{background:#1c160d;border:1px solid #2a2010;border-radius:6px;padding:10px 8px;text-align:center}.imp-ic{font-size:1.2rem}.imp-lbl{color:#8a7a5a;font-size:0.58rem;letter-spacing:1px;text-transform:uppercase;margin-top:3px}.imp-val{font-family:'Orbitron',sans-serif;color:#d4aa37;font-size:0.85rem;font-weight:700;margin-top:3px}.imp-nm{color:#f2ead8;font-size:0.68rem;margin-top:2px}@media print{body{background:#0d0b08!important;padding:0}.poster{border:none;border-radius:0;max-width:100%}.pbtn{display:none}@page{size:A3 landscape;margin:8mm}}</style></head><body><div class="poster"><div class="hdr"><div class="hdr-trophy">🏆</div><div class="hdr-center"><h1>COFFEE CHAMPIONSHIP</h1><div class="hdr-sub">⚡ ${_esc(group?.name || 'Euer Team')} ⚡</div></div><div class="hdr-badge"><div class="bl">Saison</div><div class="bv">${dateStr}</div></div></div><div class="body"><div class="lb"><div class="sec-title">⚡ Rangliste</div><table><thead><tr><th>#</th><th>Name</th><th>☕ Tassen</th><th style="text-align:right">Titel</th></tr></thead><tbody>${rows}</tbody></table></div><div class="ms-col"><div class="sec-title">Meilensteine</div>${milestones}</div></div><div class="wall"><div class="wall-hdr"><h2>⚡ WALL OF CAFFEINE ⚡</h2><p>Jeder Schluck zählt · 1 Bohne = 10 Tassen</p></div><table><thead><tr><th style="text-align:left">Name</th><th>Fortschritt</th><th style="text-align:right">Tassen</th></tr></thead><tbody>${wallRows}</tbody></table></div>${impSection}<div class="ftr"><div class="motto">⚡ Mehr Kaffee · Mehr Power · Mehr wir ⚡</div><button class="pbtn" onclick="window.print()">🖨 Drucken</button></div></div></body></html>`;
   const win = window.open('', '_blank');
   if (!win) { showToast('Popup blockiert — bitte Popups erlauben', 'error'); return; }
   win.document.write(html); win.document.close();

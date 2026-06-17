@@ -161,8 +161,9 @@ const DB = (() => {
 
   // ── Passiv-Einkommen prüfen und gutschreiben ─────────────────────────────────
   async function _checkAndClaimPassive(memberId, member) {
-    if (typeof calcResearchPerDay !== 'function') return 0;
-    const perDay = calcResearchPerDay(member.research || {});
+    const researchPerDay = (typeof calcResearchPerDay === 'function') ? calcResearchPerDay(member.research || {}) : 0;
+    const buildingPerDay = (typeof calcBuildingPerDay === 'function') ? calcBuildingPerDay(member.map_data?.buildings || {}) : 0;
+    const perDay = researchPerDay + buildingPerDay;
     if (perDay <= 0) return 0;
 
     const cosm = member.cosmetics || {};
@@ -314,7 +315,20 @@ const DB = (() => {
         if (a?.coinReward) logEntries.push({ label: `🏆 ${a.name || a.id}`, amount: a.coinReward });
       }
       if (streakBonus > 0) logEntries.push({ label: `🔥 Streak ${newStreak}`, amount: streakBonus });
-      if (passiveEarned > 0) logEntries.push({ label: '⚙️ Passiv-Einkommen', amount: passiveEarned });
+      if (passiveEarned > 0) {
+        // Passiv-Einkommen anteilig nach Forschung vs. Gebäude aufschlüsseln (Transparenz)
+        const rPerDay = (typeof calcResearchPerDay === 'function') ? calcResearchPerDay(member.research || {}) : 0;
+        const bPerDay = (typeof calcBuildingPerDay === 'function') ? calcBuildingPerDay(member.map_data?.buildings || {}) : 0;
+        const totPerDay = rPerDay + bPerDay;
+        if (bPerDay > 0 && totPerDay > 0) {
+          const bShare = Math.round(passiveEarned * (bPerDay / totPerDay) * 100) / 100;
+          const rShare = Math.round((passiveEarned - bShare) * 100) / 100;
+          if (rShare > 0) logEntries.push({ label: '⚙️ Passiv-Einkommen', amount: rShare });
+          if (bShare > 0) logEntries.push({ label: '🏗️ Gebäude-Einkommen', amount: bShare });
+        } else {
+          logEntries.push({ label: '⚙️ Passiv-Einkommen', amount: passiveEarned });
+        }
+      }
 
       if (logEntries.length) {
         const newMapData = appendTodayLog(member.map_data, logEntries);
@@ -405,6 +419,34 @@ const DB = (() => {
     }
 
     await _sb.from('members').update({ research: newResearch }).eq('id', memberId);
+
+    // ── Handelshafen-Anteil ───────────────────────────────────────────────────
+    // Jedes Gruppenmitglied mit FERTIGEM Handelshafen erhält 1 % der Kaufkosten.
+    // Nutzt die bestehende add_coins-RPC (keine neue SQL-Funktion nötig).
+    if (cost > 0) {
+      try {
+        const cut = Math.round(cost * 0.01 * 100) / 100;
+        if (cut > 0) {
+          const { data: groupMembers } = await _sb.from('members')
+            .select('id, map_data').eq('group_id', _groupId);
+          const now = Date.now();
+          for (const m of (groupMembers || [])) {
+            const blds = m.map_data?.buildings || {};
+            const hasHarbor = Object.values(blds).some(
+              b => b.type === 'handelshafen' && b.completesAt <= now
+            );
+            if (!hasHarbor) continue;
+            await _sb.rpc('add_coins', { p_member_id: m.id, p_amount: cut });
+            // In das Tages-Log des Hafen-Besitzers eintragen (Transparenz)
+            try {
+              const ml = appendTodayLog(m.map_data, [{ label: '⚓ Handelshafen-Anteil', amount: cut }]);
+              await _sb.rpc('save_map_data', { p_member_id: m.id, p_map_data: ml });
+            } catch (e) { /* Log-Fehler nicht eskalieren */ }
+          }
+        }
+      } catch (e) { console.warn('Handelshafen-Anteil fehlgeschlagen:', e); }
+    }
+
     return { item: target, autoUnlocked };
   }
 

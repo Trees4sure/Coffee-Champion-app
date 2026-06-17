@@ -3,12 +3,12 @@
 // Geladen vor imperium.js; alle Exports als globale Funktionen.
 // ═══════════════════════════════════════════════════════════════════════════
 
-const KARTE_WORLD       = 64;
+const KARTE_WORLD       = 128;
 const KARTE_TILE        = 20;
 const KARTE_VP_COLS     = 32;
 const KARTE_VP_ROWS     = 28;
-const KARTE_START_X     = 32;
-const KARTE_START_Y     = 32;
+const KARTE_START_X     = 64;
+const KARTE_START_Y     = 64;
 const KARTE_BASE_STEPS  = 5;
 const KARTE_EXTRA_STEPS = 5;
 const KARTE_MAX_STEPS   = 10;
@@ -144,6 +144,183 @@ function _getBestItemInSlot(slot, upgrades) {
     .sort((a, b) => b.tier - a.tier)[0] || null;
 }
 
+// ── Gebäude (Bau-System) ──────────────────────────────────────────────────────
+// 15 Gebäude in 6 Terrain-Pfaden + 1 Sonderbau. Gespeichert in
+// mapData.buildings[`${x},${y}`] = { type, startedAt, completesAt, done }.
+// Felder pro Gebäude:
+//   terrain   : Pflicht-Terrain (String, Array oder 'ANY') — gilt für ALLE Footprint-Tiles
+//   w, h      : Footprint-Größe in Tiles (default 1×1). Mehrtägige Gebäude belegen
+//               tatsächlich w×h zusammenhängende Tiles, die danach blockiert sind.
+//   adjacent  : Terrain, das orthogonal an den Footprint angrenzen muss (z.B. RIVER)
+//   requires  : Gebäude-Key, der fertig in requireRange (Chebyshev, ab Anker) stehen muss
+//   cost/days : CC-Kosten und Bauzeit in Tagen
+//   perDay    : passives CC-Einkommen nach Fertigstellung
+//   stepBonus : dauerhafter Bonus auf das tägliche Schritte-Cap
+//   fogRadius : deckt dauerhaft Nebel im Umkreis auf (nur Aussichtsturm)
+//   harbor    : true = Handelshafen (1% Anteil an Forschungskäufen, s. db.js)
+const KARTE_BUILDINGS = [
+  // ── Wiese (GRASS) ──
+  { key:'kaffeeplantage',   emoji:'🌱', name:'Kaffeeplantage',   path:'Wiese',        terrain:'GRASS',    w:2, h:2,                                cost:300,   days:3, perDay:8  },
+  { key:'oekodorf',         emoji:'🏡', name:'Ökodorf',          path:'Wiese',        terrain:'GRASS',    w:3, h:3, requires:'kaffeeplantage', requireRange:4, cost:1500, days:6, perDay:25 },
+  // ── Wald (FOREST) ──
+  { key:'sammelhuette',     emoji:'🛖', name:'Sammelhütte',      path:'Wald',         terrain:'FOREST',                                            cost:150,   days:2, perDay:5  },
+  { key:'toepferei',        emoji:'🏺', name:'Töpferei',         path:'Wald',         terrain:['FOREST','PATH'], adjacent:'RIVER',                 cost:500,   days:3, perDay:12 },
+  // ── Berg (MOUNTAIN) ──
+  { key:'serverraum',       emoji:'🖥️', name:'Serverraum',       path:'Berg',         terrain:'MOUNTAIN',                                          cost:200,   days:2, perDay:5  },
+  { key:'steinbruch',       emoji:'⛏️', name:'Steinbruch',       path:'Berg',         terrain:'MOUNTAIN', w:2, h:2,                                cost:600,   days:4, perDay:12 },
+  // ── Fluss (RIVER) ──
+  { key:'wasserquelle',     emoji:'💧', name:'Wasserquelle',     path:'Fluss',        terrain:'RIVER',                                             cost:100,   days:1, perDay:4  },
+  { key:'wassermuehle',     emoji:'🏞️', name:'Wassermühle',      path:'Fluss',        terrain:'MOUNTAIN', adjacent:'RIVER',                        cost:500,   days:4, perDay:14 },
+  { key:'handelshafen',     emoji:'⚓', name:'Handelshafen',     path:'Fluss',        terrain:'RIVER',    w:2, h:2,                                cost:800,   days:5, perDay:0, harbor:true },
+  // ── Kaffeefelder (COFFEE) ──
+  { key:'roesterei',        emoji:'🔥', name:'Rösterei',         path:'Kaffeefelder', terrain:'COFFEE',                                            cost:350,   days:3, perDay:10 },
+  { key:'cafe',             emoji:'🏠', name:'Café',             path:'Kaffeefelder', terrain:'COFFEE',   w:2, h:2, requires:'roesterei', requireRange:4, cost:900, days:4, perDay:18 },
+  // ── Weg (PATH) ──
+  { key:'aktenlager',       emoji:'📦', name:'Aktenlager',       path:'Weg',          terrain:'PATH',                                              cost:250,   days:2, perDay:0, stepBonus:1 },
+  { key:'verpackungsfabrik',emoji:'🏭', name:'Verpackungsfabrik',path:'Weg',          terrain:'PATH',     w:2, h:2,                                cost:1200,  days:5, perDay:20 },
+  { key:'logistikzentrum',  emoji:'🏗️', name:'Logistikzentrum',  path:'Weg',          terrain:'PATH',     w:3, h:3,                                cost:3000,  days:7, perDay:35 },
+  // ── Sonderbau (überall) ──
+  { key:'aussichtsturm',    emoji:'🗼', name:'Aussichtsturm',    path:'Sonderbau',    terrain:'ANY',                                               cost:150,   days:1, perDay:0, fogRadius:1 },
+];
+
+function karteBuildingDef(key) {
+  return KARTE_BUILDINGS.find(b => b.key === key) || null;
+}
+
+function _karteHasAdjacent(x, y, terrain, worldSeed) {
+  const nb = [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]];
+  return nb.some(([nx, ny]) =>
+    nx >= 0 && nx < KARTE_WORLD && ny >= 0 && ny < KARTE_WORLD &&
+    karteTerrain(nx, ny, worldSeed) === terrain);
+}
+
+function _karteHasBuildingNear(type, x, y, mapData, range) {
+  const blds = mapData?.buildings || {};
+  const now = Date.now();
+  for (const [k, b] of Object.entries(blds)) {
+    if (b.type !== type || b.completesAt > now) continue;
+    const [bx, by] = k.split(',').map(Number);
+    if (Math.abs(bx - x) <= range && Math.abs(by - y) <= range) return true;
+  }
+  return false;
+}
+
+// Alle Tiles, die ein an (ax,ay) verankertes Gebäude belegt (Anker = obere linke Ecke)
+function karteBuildingFootprint(ax, ay, def) {
+  const w = def?.w || 1, h = def?.h || 1;
+  const tiles = [];
+  for (let dy = 0; dy < h; dy++)
+    for (let dx = 0; dx < w; dx++)
+      tiles.push([ax + dx, ay + dy]);
+  return tiles;
+}
+
+// Gebäude (Anker-Eintrag), dessen Footprint das Tile (tx,ty) abdeckt — oder null
+function karteBuildingCovering(tx, ty, buildings) {
+  for (const [coord, b] of Object.entries(buildings || {})) {
+    const def = karteBuildingDef(b.type);
+    const w = b.w || def?.w || 1, h = b.h || def?.h || 1;
+    const [bx, by] = coord.split(',').map(Number);
+    if (tx >= bx && tx < bx + w && ty >= by && ty < by + h) return { coord, b };
+  }
+  return null;
+}
+
+// Prüft, ob ein an (ax,ay) verankertes Gebäude komplett baubar ist (ganzer Footprint)
+function karteCanBuildAt(buildingKey, ax, ay, mapData, worldSeed) {
+  const def = karteBuildingDef(buildingKey);
+  if (!def) return false;
+  const buildings = mapData?.buildings || {};
+  const footprint = karteBuildingFootprint(ax, ay, def);
+  for (const [tx, ty] of footprint) {
+    if (tx < 0 || tx >= KARTE_WORLD || ty < 0 || ty >= KARTE_WORLD) return false;
+    if (!karteIsExplored(tx, ty, mapData)) return false;          // alles erkundet
+    if (karteBuildingCovering(tx, ty, buildings)) return false;    // nichts überbauen
+    if (def.terrain !== 'ANY') {
+      const allowed = Array.isArray(def.terrain) ? def.terrain : [def.terrain];
+      if (!allowed.includes(karteTerrain(tx, ty, worldSeed))) return false; // einheitliches Terrain
+    }
+  }
+  if (def.adjacent) {
+    const anyAdj = footprint.some(([tx, ty]) => _karteHasAdjacent(tx, ty, def.adjacent, worldSeed));
+    if (!anyAdj) return false;
+  }
+  if (def.requires && !_karteHasBuildingNear(def.requires, ax, ay, mapData, def.requireRange || 3)) return false;
+  return true;
+}
+
+// Gültigen Anker finden, sodass das geklickte Tile (cx,cy) im Footprint liegt.
+// 1×1: muss exakt das Tile sein. Größer: probiert alle Anker, bei denen (cx,cy) drin liegt.
+function _karteValidAnchorFor(def, cx, cy, mapData, worldSeed) {
+  const w = def.w || 1, h = def.h || 1;
+  if (w === 1 && h === 1) {
+    return karteCanBuildAt(def.key, cx, cy, mapData, worldSeed) ? [cx, cy] : null;
+  }
+  for (let ax = cx - (w - 1); ax <= cx; ax++) {
+    for (let ay = cy - (h - 1); ay <= cy; ay++) {
+      if (karteCanBuildAt(def.key, ax, ay, mapData, worldSeed)) return [ax, ay];
+    }
+  }
+  return null;
+}
+
+// Liste baubarer Gebäude am geklickten Tile: [{ def, ax, ay }] (ax/ay = gewählter Anker)
+function karteBuildableAt(cx, cy, mapData, worldSeed) {
+  const out = [];
+  for (const def of KARTE_BUILDINGS) {
+    const anchor = _karteValidAnchorFor(def, cx, cy, mapData, worldSeed);
+    if (anchor) out.push({ def, ax: anchor[0], ay: anchor[1] });
+  }
+  return out;
+}
+
+// Baut ein Gebäude am Anker (reine Datentransformation, kein DB-Zugriff)
+function karteStartBuild(buildingKey, ax, ay, mapData, now) {
+  const def = karteBuildingDef(buildingKey);
+  if (!def) return mapData;
+  const buildings = { ...(mapData?.buildings || {}) };
+  buildings[`${ax},${ay}`] = {
+    type: buildingKey,
+    startedAt: now,
+    completesAt: now + def.days * 86400000,
+    w: def.w || 1,
+    h: def.h || 1,
+  };
+  return { ...mapData, buildings };
+}
+
+// Fertige Gebäude (completesAt <= jetzt); jedes Element: { coord, type, ... }
+function karteBuildingsCompleted(buildings) {
+  const now = Date.now();
+  return Object.entries(buildings || {})
+    .filter(([, b]) => b.completesAt <= now)
+    .map(([coord, b]) => ({ ...b, coord }));
+}
+
+// Passives CC-Einkommen aller FERTIGEN Gebäude (analog calcResearchPerDay)
+function calcBuildingPerDay(buildings) {
+  const now = Date.now();
+  let sum = 0;
+  for (const b of Object.values(buildings || {})) {
+    if (b.completesAt > now) continue;
+    const def = karteBuildingDef(b.type);
+    if (def) sum += (def.perDay || 0);
+  }
+  return Math.round(sum * 100) / 100;
+}
+
+// Dauerhafter Schritte-Cap-Bonus aller fertigen Gebäude (z.B. Aktenlager)
+function calcBuildingStepBonus(buildings) {
+  const now = Date.now();
+  let s = 0;
+  for (const b of Object.values(buildings || {})) {
+    if (b.completesAt > now) continue;
+    const def = karteBuildingDef(b.type);
+    if (def) s += (def.stepBonus || 0);
+  }
+  return s;
+}
+
 // ── Terrain-Farben ────────────────────────────────────────────────────────────
 const KARTE_TERRAIN_COLORS = {
   GRASS:    ['#2e4818','#243810','#3a5820'],
@@ -243,7 +420,8 @@ function karteStepsAllowed(mapData) {
     : effects
         .filter(e => e.type === 'step_malus' && e.expires === today)
         .reduce((s, e) => s + (e.amount || 0), 0);
-  return Math.max(1, KARTE_BASE_STEPS + footBonus + extra + stepBonus - stepMalus);
+  const buildStep = calcBuildingStepBonus(mapData?.buildings);
+  return Math.max(1, KARTE_BASE_STEPS + footBonus + extra + stepBonus + buildStep - stepMalus);
 }
 
 function karteExtraStepsBought(mapData) {
@@ -376,6 +554,17 @@ function karteRender(canvas, mapData, worldSeed, vpX, vpY) {
   const showTreasureInFog = navItem?.key === 'old_map';
   const hasBart           = !!_getBestItemInSlot('look', upg);
 
+  // Gebäude + Aussichtsturm-Positionen (für Nebel-Aufdeckung im Umkreis)
+  const buildings = mapData?.buildings || {};
+  const nowTs     = Date.now();
+  const towers    = [];
+  for (const [k, b] of Object.entries(buildings)) {
+    if (b.type === 'aussichtsturm' && b.completesAt <= nowTs) {
+      const [bx, by] = k.split(',').map(Number);
+      towers.push([bx, by]);
+    }
+  }
+
   const originX = (vpX !== undefined) ? vpX : pos.x - Math.floor(COLS / 2);
   const originY = (vpY !== undefined) ? vpY : pos.y - Math.floor(ROWS / 2);
 
@@ -400,6 +589,16 @@ function karteRender(canvas, mapData, worldSeed, vpX, vpY) {
           const { color } = _tileColor(wx, wy, worldSeed);
           ctx.fillStyle = color;
           ctx.globalAlpha = 0.38;
+          ctx.fillRect(px, py, T, T);
+          ctx.globalAlpha = 1.0;
+        }
+
+        // Aussichtsturm: deckt Terrain im Umkreis dauerhaft gedimmt auf
+        if (inBounds && towers.length &&
+            towers.some(([bx, by]) => Math.abs(bx - wx) <= 1 && Math.abs(by - wy) <= 1)) {
+          const { color } = _tileColor(wx, wy, worldSeed);
+          ctx.fillStyle = color;
+          ctx.globalAlpha = 0.42;
           ctx.fillRect(px, py, T, T);
           ctx.globalAlpha = 1.0;
         }
@@ -500,6 +699,41 @@ function karteRender(canvas, mapData, worldSeed, vpX, vpY) {
       }
     }
   }
+
+  // ── Gebäude-Pass (über dem Terrain, mehrere Tiles pro Gebäude) ──
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  for (const [coord, b] of Object.entries(buildings)) {
+    const def = karteBuildingDef(b.type);
+    if (!def) continue;
+    const bw = b.w || def.w || 1, bh = b.h || def.h || 1;
+    const [bx, by] = coord.split(',').map(Number);
+    const bpx = (bx - originX) * T;
+    const bpy = (by - originY) * T;
+    const wPx = bw * T, hPx = bh * T;
+    if (bpx + wPx <= 0 || bpy + hPx <= 0 || bpx >= W || bpy >= H) continue; // außer Sicht
+    const building = b.completesAt > nowTs;
+    // Footprint-Tönung + Rahmen
+    ctx.fillStyle = building ? 'rgba(0,0,0,0.42)' : 'rgba(212,175,55,0.12)';
+    ctx.fillRect(bpx, bpy, wPx, hPx);
+    ctx.strokeStyle = building ? 'rgba(212,175,55,0.35)' : 'rgba(212,175,55,0.6)';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(bpx + 1, bpy + 1, wPx - 2, hPx - 2);
+    // Emoji mittig, skaliert mit Footprint
+    const fs = Math.floor(Math.min(wPx, hPx) * 0.7);
+    ctx.font = `${fs}px sans-serif`;
+    ctx.fillStyle = '#fff';
+    ctx.fillText(building ? '🚧' : def.emoji, bpx + wPx / 2, bpy + hPx / 2);
+    // Resttage bei Baustelle
+    if (building) {
+      const daysLeft = Math.max(1, Math.ceil((b.completesAt - nowTs) / 86400000));
+      ctx.font = `bold ${Math.floor(T * 0.5)}px sans-serif`;
+      ctx.fillStyle = '#FAC775';
+      ctx.fillText(daysLeft + 'd', bpx + wPx / 2, bpy + hPx - T * 0.32);
+    }
+  }
+  ctx.textAlign = 'start';
+  ctx.textBaseline = 'alphabetic';
 
   // Vignette
   const vig = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.3, W / 2, H / 2, Math.min(W, H) * 0.7);

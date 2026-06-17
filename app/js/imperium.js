@@ -102,9 +102,9 @@ async function renderImperium() {
 
     <div class="imperium-tabs" id="imp-tabs">
       <button class="imp-tab active" data-tab="baum">🌳 Forschung</button>
-      <button class="imp-tab" data-tab="kasse">🏛️ Kasse</button>
       <button class="imp-tab" data-tab="karte">🗺️ Karte</button>
       <button class="imp-tab" data-tab="stats">📊 Statistik</button>
+      <button class="imp-tab" data-tab="kasse">🏛️ Kasse</button>
       <button class="imp-tab" data-tab="cosmetics">🎨 Cosmetics</button>
     </div>
 
@@ -268,6 +268,14 @@ function _buildImperiumStats() {
     const explCount = Object.keys(md.explored  || {}).length;
     const trCount   = Object.keys(md.treasures || {}).length;
     const upg       = md.upgrades || {};
+    // Gebäude-Statistik
+    const buildings = md.buildings || {};
+    const bldDone   = Object.values(buildings).filter(b => b.completesAt <= Date.now());
+    const bldPerDay = (typeof calcBuildingPerDay === 'function') ? calcBuildingPerDay(buildings) : 0;
+    const bldIcons  = bldDone.map(b => {
+      const d = (typeof karteBuildingDef === 'function') ? karteBuildingDef(b.type) : null;
+      return d ? d.emoji : '';
+    }).join('');
     const itemIcons = (typeof KARTE_ITEMS !== 'undefined' ? KARTE_ITEMS : [])
       .filter(function(i) {
         return !!(upg[i.key]) || (i.key === 'walking_boots' && upg.boots) || (i.key === 'coffee_nose' && upg.nose);
@@ -297,6 +305,7 @@ function _buildImperiumStats() {
           ${itemIcons ? '&nbsp;·&nbsp; ' + itemIcons : ''}
           ${effectLine ? '&nbsp;·&nbsp; <span class="cc-stats-effect">' + _esc2(effectLine) + '</span>' : ''}
         </div>
+        ${bldDone.length ? `<div class="cc-stats-sub cc-stats-karte">🏗️ ${bldDone.length} Gebäude ${bldIcons}${bldPerDay > 0 ? ' &nbsp;·&nbsp; +' + _fmtCoins(bldPerDay) + '/Tag' : ''}</div>` : ''}
         ${_buildResearchBars(u.research || {})}
       </div>
     </div>`;
@@ -711,6 +720,34 @@ function _buildKarte(member, el) {
   };
   const seed  = _karteWorldSeed();
 
+  // Fertiggestellte Baustellen seit dem letzten Öffnen melden (einmalig, done-Flag)
+  const _justDone = Object.entries(state.mapData.buildings || {})
+    .filter(([, b]) => b.completesAt <= Date.now() && !b.done);
+  if (_justDone.length) {
+    const nb = { ...state.mapData.buildings };
+    for (const [k, b] of _justDone) nb[k] = { ...b, done: true };
+    state.mapData = { ...state.mapData, buildings: nb };
+    DB.updateMapData(member.id, state.mapData).catch(() => {});
+    currentUserData = { ...(currentUserData || {}), map_data: state.mapData };
+    // Fertigstellung wie ein Achievement anzeigen ("Wassermühle aktiv!")
+    _justDone.forEach(([, b], i) => {
+      const def = karteBuildingDef(b.type);
+      if (!def) return;
+      const desc = def.perDay    ? `Liefert jetzt +${def.perDay} CC/Tag`
+                 : def.harbor    ? 'Handelshafen aktiv — 1% aller Forschungskäufe'
+                 : def.stepBonus ? `Dauerhaft +${def.stepBonus} Schritt/Tag`
+                 : def.fogRadius ? 'Deckt den Nebel im Umkreis auf'
+                 : 'Gebäude fertiggestellt';
+      setTimeout(() => {
+        if (typeof showAchievementPopup === 'function') {
+          showAchievementPopup({ icon: def.emoji, name: `${def.name} aktiv!`, desc });
+        } else {
+          showToast(`🏗️ ${def.name} aktiv!`, 'success');
+        }
+      }, i * 3700); // mehrere Fertigstellungen nacheinander, nicht überlappend
+    });
+  }
+
   // ── DOM einmalig aufbauen ──────────────────────────────────────────────
   const stepsMax0  = karteStepsAllowed(state.mapData);
   const stepsUsed0 = karteStepsUsed(state.mapData);
@@ -771,6 +808,7 @@ function _buildKarte(member, el) {
         +5 Schritte kaufen &nbsp;&middot;&nbsp; 10 🫘 CC
       </button>
       <p class="cc-karte-hint${hintClass}" id="karte-hint">${hintText}</p>
+      <p class="cc-karte-hint" style="opacity:.6;font-size:10px;margin-top:-2px">🏗️ Tipp auf ein erkundetes Feld, um dort zu bauen &nbsp;·&nbsp; ziehen = Karte verschieben</p>
       <div class="cc-karte-upgrades" id="karte-upgrades">${upgradeHtml}</div>
     </div>
     <div id="cc-karte-popup" class="cc-karte-popup hidden"></div>
@@ -802,21 +840,75 @@ function _buildKarte(member, el) {
     await _handleKarteUpgrade(btn.dataset.upg, parseInt(btn.dataset.cost), member, state, seed);
   });
 
-  // Canvas Click-Handler (einmalig, nutzt state.vpX/vpY statt Auto-Centering)
-  canvas?.addEventListener('click', async (e) => {
+  // ── Canvas-Interaktion: Tippen = Schritt/Bauen, Ziehen = Karte verschieben ──
+  // Tap-vs-Drag-Unterscheidung über _DRAG_THRESH, damit normales Antippen nicht
+  // versehentlich als Wischen gewertet wird (und umgekehrt).
+  let _down = false, _moved = false, _sx = 0, _sy = 0, _startVpX = 0, _startVpY = 0;
+  const _DRAG_THRESH = 8; // px
+
+  function _tileFromEvent(e) {
     const rect   = canvas.getBoundingClientRect();
     const scaleX = canvas.width  / rect.width;
     const scaleY = canvas.height / rect.height;
     const cx = (e.clientX - rect.left) * scaleX;
     const cy = (e.clientY - rect.top)  * scaleY;
+    return {
+      tx: state.vpX + Math.floor(cx / KARTE_TILE),
+      ty: state.vpY + Math.floor(cy / KARTE_TILE),
+    };
+  }
 
-    // Weltkoordinaten des geklickten Tiles (Viewport bleibt stabil!)
-    const tx = state.vpX + Math.floor(cx / KARTE_TILE);
-    const ty = state.vpY + Math.floor(cy / KARTE_TILE);
-
-    if (!karteCanStep(tx, ty, state.mapData)) return;
-    await _handleKarteStep(tx, ty, member, state, seed, _COLS, _ROWS, _MARGIN);
+  canvas?.addEventListener('pointerdown', (e) => {
+    _down = true; _moved = false;
+    _sx = e.clientX; _sy = e.clientY;
+    _startVpX = state.vpX; _startVpY = state.vpY;
+    canvas.setPointerCapture?.(e.pointerId);
   });
+
+  canvas?.addEventListener('pointermove', (e) => {
+    if (!_down) return;
+    const dxPx = e.clientX - _sx;
+    const dyPx = e.clientY - _sy;
+    if (!_moved && Math.abs(dxPx) < _DRAG_THRESH && Math.abs(dyPx) < _DRAG_THRESH) return;
+    _moved = true;
+    const rect   = canvas.getBoundingClientRect();
+    const scaleX = canvas.width  / rect.width;
+    const scaleY = canvas.height / rect.height;
+    // Wischen nach rechts schiebt den Karten-Inhalt nach rechts → Viewport nach links
+    const dxT = Math.round(dxPx * scaleX / KARTE_TILE);
+    const dyT = Math.round(dyPx * scaleY / KARTE_TILE);
+    const nvX = Math.max(0, Math.min(KARTE_WORLD - _COLS, _startVpX - dxT));
+    const nvY = Math.max(0, Math.min(KARTE_WORLD - _ROWS, _startVpY - dyT));
+    if (nvX !== state.vpX || nvY !== state.vpY) {
+      state.vpX = nvX; state.vpY = nvY;
+      karteRender(canvas, state.mapData, seed, state.vpX, state.vpY);
+    }
+  });
+
+  async function _onCanvasTap(e) {
+    if (_moved) return; // war ein Wischen, kein Tippen
+    const { tx, ty } = _tileFromEvent(e);
+    // 1) Betretbares (angrenzendes, unerkundetes) Feld → Schritt
+    if (karteCanStep(tx, ty, state.mapData)) {
+      await _handleKarteStep(tx, ty, member, state, seed, _COLS, _ROWS, _MARGIN);
+      return;
+    }
+    // 2) Erkundetes Feld → Gebäude-Info (falls Footprint trifft) oder Bau-Menü
+    if (karteIsExplored(tx, ty, state.mapData)) {
+      const cover = karteBuildingCovering(tx, ty, state.mapData.buildings || {});
+      if (cover) { _showKarteBuildingInfo(cover.b); return; }
+      const options = karteBuildableAt(tx, ty, state.mapData, seed);
+      if (options.length) _showKarteBuildMenu(options, tx, ty, member, state, seed);
+    }
+  }
+
+  canvas?.addEventListener('pointerup', (e) => {
+    if (!_down) return;
+    _down = false;
+    canvas.releasePointerCapture?.(e.pointerId);
+    _onCanvasTap(e);
+  });
+  canvas?.addEventListener('pointercancel', () => { _down = false; });
 }
 
 async function _handleKarteStep(tx, ty, member, state, seed, COLS, ROWS, MARGIN) {
@@ -994,6 +1086,120 @@ function _showKarteDiscovery(treasure) {
       </button>
     </div>
   `;
+}
+
+// ── Gebäude-Bau ───────────────────────────────────────────────────────────────
+function _buildingEffectLabel(b) {
+  if (b.perDay)    return `+${b.perDay} CC/Tag`;
+  if (b.harbor)    return '1% aller Forschungskäufe der Gruppe';
+  if (b.stepBonus) return `+${b.stepBonus} Schritt/Tag`;
+  if (b.fogRadius) return 'Deckt Nebel im Umkreis auf';
+  return '';
+}
+
+function _showKarteBuildMenu(options, cx, cy, member, state, seed) {
+  const popup = document.getElementById('cc-karte-popup');
+  if (!popup) return;
+  popup.classList.remove('hidden');
+  const rows = options.map(({ def, ax, ay }) => {
+    const afford = (state.memberCoins || 0) >= def.cost;
+    const w = def.w || 1, h = def.h || 1;
+    const size = (w > 1 || h > 1) ? ` · ${w}×${h}` : '';
+    return `<div class="cc-build-opt">
+      <span class="cc-build-emoji">${def.emoji}</span>
+      <div class="cc-build-info">
+        <strong>${_esc2(def.name)}${size}</strong>
+        <span class="cc-build-eff">${_buildingEffectLabel(def)} · fertig in ${def.days} Tag${def.days > 1 ? 'en' : ''}</span>
+      </div>
+      <button class="cc-build-btn" data-build="${def.key}" data-ax="${ax}" data-ay="${ay}" ${afford ? '' : 'disabled'}>${afford ? 'Bauen' : 'zu wenig'} · ${def.cost} 🫘</button>
+    </div>`;
+  }).join('');
+  popup.innerHTML = `
+    <div class="cc-karte-popup-inner">
+      <div class="cc-karte-popup-hdr">🏗️ HIER BAUEN &nbsp;(${cx}, ${cy})</div>
+      <div class="cc-build-list">${rows}</div>
+      <button class="cc-karte-popup-close"
+        onclick="document.getElementById('cc-karte-popup').classList.add('hidden')">
+        Abbrechen
+      </button>
+    </div>
+  `;
+  const list = popup.querySelector('.cc-build-list');
+  if (list) list.onclick = async (e) => {
+    const btn = e.target.closest('[data-build]');
+    if (!btn || btn.disabled) return;
+    await _handleKarteBuild(btn.dataset.build, parseInt(btn.dataset.ax, 10), parseInt(btn.dataset.ay, 10), member, state, seed);
+  };
+}
+
+function _showKarteBuildingInfo(b) {
+  const popup = document.getElementById('cc-karte-popup');
+  if (!popup) return;
+  const def = karteBuildingDef(b.type);
+  if (!def) return;
+  let status;
+  if (b.completesAt <= Date.now()) {
+    status = _buildingEffectLabel(def) || 'Fertiggestellt';
+  } else {
+    const daysLeft = Math.max(1, Math.ceil((b.completesAt - Date.now()) / 86400000));
+    status = `🚧 Im Bau — noch ca. ${daysLeft} Tag${daysLeft > 1 ? 'e' : ''}`;
+  }
+  popup.classList.remove('hidden');
+  popup.innerHTML = `
+    <div class="cc-karte-popup-inner">
+      <div class="cc-karte-popup-hdr">${def.emoji} ${_esc2(def.name)}</div>
+      <div class="cc-karte-popup-body">
+        <span class="cc-karte-popup-emoji">${def.emoji}</span>
+        <div class="cc-karte-popup-text">
+          <strong>${_esc2(def.name)}</strong>
+          <em>${_esc2(status)}</em>
+        </div>
+      </div>
+      <button class="cc-karte-popup-close"
+        onclick="document.getElementById('cc-karte-popup').classList.add('hidden')">
+        Schließen
+      </button>
+    </div>
+  `;
+}
+
+async function _handleKarteBuild(buildingKey, ax, ay, member, state, seed) {
+  const def = karteBuildingDef(buildingKey);
+  if (!def) return;
+  // Re-Validierung (Stand kann sich seit Menü-Anzeige geändert haben)
+  if (!karteCanBuildAt(buildingKey, ax, ay, state.mapData, seed)) {
+    showToast('Hier kann nicht (mehr) gebaut werden.', 'error');
+    return;
+  }
+  const newCoins = await DB.spendCoins(member.id, def.cost);
+  if (newCoins === null) { showToast('Nicht genug CoffeeCoins!', 'error'); return; }
+
+  state.memberCoins = newCoins;
+  currentUserData = { ...(currentUserData || {}), coins: newCoins };
+  _updateHeaderCoins({ coins: newCoins });
+
+  state.mapData = karteStartBuild(buildingKey, ax, ay, state.mapData, Date.now());
+  try {
+    await DB.updateMapData(member.id, state.mapData);
+  } catch {
+    showToast('Bau konnte nicht gespeichert werden.', 'error');
+  }
+  currentUserData = { ...(currentUserData || {}), map_data: state.mapData };
+
+  document.getElementById('cc-karte-popup')?.classList.add('hidden');
+  showToast(`🏗️ ${def.name} im Bau — fertig in ${def.days} Tag${def.days > 1 ? 'en' : ''}!`, 'success');
+
+  // Gruppen-Broadcast im Chat (analog zum Schatz-Fund)
+  try {
+    await DB.postMessage(
+      `🏗️ ${_esc2(member.name)} baut "${_esc2(def.name)}" ${def.emoji} — fertig in ${def.days} Tag${def.days > 1 ? 'en' : ''}!`,
+      member.name
+    );
+  } catch (e) { console.warn('Chat-Broadcast (Bau) Fehler:', e); }
+
+  const canvas = document.getElementById('cc-karte-canvas');
+  if (canvas) karteRender(canvas, state.mapData, seed, state.vpX, state.vpY);
+  _karteUpdateHUD(state);
 }
 
 function _showKarteEvent(event, noteText) {
