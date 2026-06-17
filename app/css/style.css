@@ -505,6 +505,9 @@ nav::-webkit-scrollbar { display: none; }
 }
 @media (max-width: 480px) {
   /* Nutzername im Header ausblenden, damit der ☕-Abmelden-Button auf
-     schmalen Smartphone-Breiten (Hochformat) immer sichtbar bleibt. */
-  .header-right > div:first-child { display: none; }
+     schmalen Smartphone-Breiten (Hochformat) immer sichtbar bleibt.
+     Gezielt über :has(#header-username) statt :first-child, weil seit dem
+     CoffeeCoins-Feature #header-coins als neues erstes Kind eingefügt wird —
+     :first-child würde sonst das CC-Badge statt den Nutzernamen verstecken. */
+  .header-right > div:has(#header-username) { display: none; }
 }
