@@ -87,6 +87,16 @@ const DB = (() => {
     };
   }
 
+  // ── Tages-Log: woher kamen die CoffeeCoins heute? (Transparenz für Spieler) ──
+  // Lebt in map_data.todayLog, wird bei Datumswechsel automatisch geleert.
+  function appendTodayLog(mapData, entries) {
+    if (!entries || !entries.length) return mapData || {};
+    const day  = today();
+    const prev = (mapData?.todayLog?.date === day) ? (mapData.todayLog.entries || []) : [];
+    const next = [...prev, ...entries.map(e => ({ ...e, t: new Date().toISOString() }))].slice(-30);
+    return { ...(mapData || {}), todayLog: { date: day, entries: next } };
+  }
+
   // ── Gruppe erstellen ─────────────────────────────────────────────────────────
   async function createGroup(name, password) {
     const hash = await hashPassword(password);
@@ -279,6 +289,25 @@ const DB = (() => {
 
     // Passiv-Einkommen prüfen
     const passiveEarned = await _checkAndClaimPassive(memberId, member);
+
+    // Tages-Log aktualisieren (woher kamen die Coins?) — Fehler hier dürfen den Tassen-Eintrag nicht blockieren
+    try {
+      const logEntries = [];
+      if (baseCoins + morningBonus > 0) {
+        logEntries.push({ label: amount > 1 ? `☕ ${amount} Tassen` : '☕ Tasse', amount: Math.round((baseCoins + morningBonus) * 100) / 100 });
+      }
+      if (researchBonus > 0) logEntries.push({ label: '🔬 Forschung', amount: researchBonus });
+      for (const a of allNew) {
+        if (a?.coinReward) logEntries.push({ label: `🏆 ${a.name || a.id}`, amount: a.coinReward });
+      }
+      if (streakBonus > 0) logEntries.push({ label: `🔥 Streak ${newStreak}`, amount: streakBonus });
+      if (passiveEarned > 0) logEntries.push({ label: '⚙️ Passiv-Einkommen', amount: passiveEarned });
+
+      if (logEntries.length) {
+        const newMapData = appendTodayLog(member.map_data, logEntries);
+        await updateMapData(memberId, newMapData);
+      }
+    } catch (e) { console.warn('Tages-Log konnte nicht gespeichert werden:', e); }
 
     // Rückgabe: Array mit Achievement-Popups + Coin-Info als Eigenschaft
     allNew.coinsEarned   = totalCoins;
@@ -613,6 +642,6 @@ const DB = (() => {
     // Neu:
     spendCoins, fetchTreasury, contributeToTreasury,
     purchaseResearchItem, saveCosmetics,
-    updateMapData, addCoins,
+    updateMapData, addCoins, appendTodayLog,
   };
 })();

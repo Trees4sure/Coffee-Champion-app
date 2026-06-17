@@ -367,6 +367,24 @@ function renderProfile() {
     document.getElementById('next-tier-bar').style.width = '100%';
     document.getElementById('next-tier-label').textContent = 'Maximaler Rang erreicht!';
   }
+  const logSection = document.getElementById('today-log-section');
+  const logList    = document.getElementById('today-log-list');
+  if (logSection && logList) {
+    const todayKey = new Date().toISOString().slice(0, 10);
+    const log = (u.map_data?.todayLog?.date === todayKey) ? (u.map_data.todayLog.entries || []) : [];
+    if (log.length) {
+      logSection.style.display = '';
+      logList.innerHTML = log.slice().reverse().map(e => `
+        <div class="today-log-row">
+          <span class="today-log-label">${_esc(e.label)}</span>
+          <span class="today-log-amount">+${_fmtCoins(e.amount)} CC</span>
+        </div>`).join('');
+    } else {
+      logSection.style.display = 'none';
+      logList.innerHTML = '';
+    }
+  }
+
   document.getElementById('achievements-grid').innerHTML = ACHIEVEMENTS.map(a => `
     <div class="achievement-card ${u.achievements?.[a.id] ? 'unlocked' : 'locked'}" title="${_esc(a.desc)}">
       <div class="ach-icon-sm">${a.icon}</div>

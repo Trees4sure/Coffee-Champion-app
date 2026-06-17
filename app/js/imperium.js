@@ -854,6 +854,11 @@ async function _handleKarteStep(tx, ty, member, state, seed, COLS, ROWS, MARGIN)
       await DB.addCoins(member.id, totalCC);
     } catch (e) { console.warn('add_coins Fehler:', e); }
     try {
+      state.mapData = DB.appendTodayLog(state.mapData, [{ label: `🗺️ ${treasure.name}`, amount: totalCC }]);
+      currentUserData = { ...(currentUserData || {}), map_data: state.mapData };
+      await DB.updateMapData(member.id, state.mapData);
+    } catch (e) { console.warn('Tages-Log (Schatz) Fehler:', e); }
+    try {
       await DB.postMessage(
         `🗺️ ${_esc2(member.name)} hat "${_esc2(treasure.name)}" entdeckt! (+${totalCC} ☕ CC)\n"${_esc2(treasure.quote)}"`,
         member.name
@@ -883,6 +888,7 @@ async function _handleKarteStep(tx, ty, member, state, seed, COLS, ROWS, MARGIN)
         activeEffects: [...(state.mapData.activeEffects || []),
           { type: 'step_malus', amount: eff.malus, expires: tom }]
       };
+      state.mapData = DB.appendTodayLog(state.mapData, [{ label: `${event.emoji} ${event.name}`, amount: bonusCC }]);
       await DB.updateMapData(member.id, state.mapData).catch(() => {});
       currentUserData = { ...(currentUserData || {}), map_data: state.mapData };
     } else if (eff.type === 'step_malus' && eff.when === 'today') {
@@ -902,6 +908,14 @@ async function _handleKarteStep(tx, ty, member, state, seed, COLS, ROWS, MARGIN)
       currentUserData = { ...(currentUserData || {}), coins: state.memberCoins };
       _updateHeaderCoins({ coins: state.memberCoins });
       await DB.addCoins(member.id, bonusCC).catch(() => {});
+      // cc_risk hat den Log-Eintrag bereits oben (zusammen mit dem step_malus) gespeichert
+      if (eff.type !== 'cc_risk') {
+        try {
+          state.mapData = DB.appendTodayLog(state.mapData, [{ label: `${event.emoji} ${event.name}`, amount: bonusCC }]);
+          currentUserData = { ...(currentUserData || {}), map_data: state.mapData };
+          await DB.updateMapData(member.id, state.mapData);
+        } catch (e) { console.warn('Tages-Log (Event) Fehler:', e); }
+      }
     }
 
     _showKarteEvent(event, noteText);
