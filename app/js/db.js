@@ -261,11 +261,14 @@ const DB = (() => {
     let achCoinTotal = 0;
     for (const a of allNew) achCoinTotal += (a.coinReward || 0);
 
-    // Streak-Meilenstein Coins
+    // Streak-Meilenstein Coins — nur bei der Tasse, die den Streak tatsächlich erhöht
+    // (sonst würde derselbe Bonus für jede weitere Tasse am selben Tag erneut vergeben)
     let streakBonus = 0;
-    if (newStreak >= 5   && newStreak % 5  === 0 && newStreak < 20)  streakBonus = 100;
-    if (newStreak >= 20  && newStreak % 20 === 0 && newStreak < 100) streakBonus = 400;
-    if (newStreak >= 100 && newStreak % 100 === 0)                    streakBonus = 2000;
+    if (newStreak > member.currentStreak) {
+      if (newStreak >= 5   && newStreak % 5  === 0 && newStreak < 20)  streakBonus = 100;
+      if (newStreak >= 20  && newStreak % 20 === 0 && newStreak < 100) streakBonus = 400;
+      if (newStreak >= 100 && newStreak % 100 === 0)                    streakBonus = 2000;
+    }
 
     let totalCoins = baseCoins + morningBonus + researchBonus + achCoinTotal + streakBonus;
 
