@@ -319,6 +319,10 @@
   border-radius: 4px;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
+  /* Eigenes Pan-Handling (Wischen verschiebt die Karte) — Browser-Scroll/Zoom
+     auf dem Canvas unterdrücken, sonst kommen auf Touch keine pointermove-Events
+     an. Die Seite bleibt über Bereiche außerhalb des Canvas scrollbar. */
+  touch-action: none;
 }
 
 @media (max-width: 360px) {
@@ -557,3 +561,40 @@
 /* ── Stats: Karten-Zeile ─────────────────────────────────────────────────── */
 .cc-stats-karte { color: rgba(160,220,160,.75); margin-top: 2px; }
 .cc-stats-effect { color: #f0a030; }
+
+/* ── Bau-Menü (Karte) ────────────────────────────────────────────────────── */
+.cc-build-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+  max-height: 46vh;
+  overflow-y: auto;
+}
+.cc-build-opt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(212,175,55,.18);
+  border-radius: 8px;
+}
+.cc-build-emoji { font-size: 22px; line-height: 1; flex-shrink: 0; }
+.cc-build-info  { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.cc-build-info strong { font-size: 13px; color: rgba(255,255,255,.9); }
+.cc-build-eff   { font-size: 10.5px; color: rgba(212,175,55,.75); font-family: monospace; }
+.cc-build-btn {
+  flex-shrink: 0;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: monospace;
+  background: rgba(212,175,55,.18);
+  border: 1px solid rgba(212,175,55,.45);
+  border-radius: 6px;
+  color: var(--gold, #d4aa37);
+  cursor: pointer;
+}
+.cc-build-btn:disabled { opacity: .4; cursor: default; }
+.cc-build-btn:not(:disabled):hover { background: rgba(212,175,55,.3); }
