@@ -3,17 +3,18 @@
 // Geladen vor imperium.js; alle Exports als globale Funktionen.
 // ═══════════════════════════════════════════════════════════════════════════
 
-const KARTE_WORLD      = 64;   // Weltgröße (64×64 Tiles)
-const KARTE_TILE       = 20;   // Pixel pro Tile im Canvas
-const KARTE_VP_COLS    = 32;   // Viewport-Breite in Tiles
-const KARTE_VP_ROWS    = 28;   // Viewport-Höhe in Tiles
-const KARTE_START_X    = 32;   // Start-X in der Weltmitte
-const KARTE_START_Y    = 32;   // Start-Y in der Weltmitte
-const KARTE_BASE_STEPS = 5;    // Basis-Schritte pro Tag
-const KARTE_EXTRA_STEPS = 5;  // Kaufbare Zusatz-Schritte
-const KARTE_MAX_STEPS   = 10; // Tages-Maximum
-const KARTE_RESPAWN_MS = 7 * 24 * 3600_000; // Schatz-Respawn nach 7 Tagen
-const KARTE_TREASURE_P = 0.30; // 30 % Chance auf latenten Schatz
+const KARTE_WORLD       = 64;
+const KARTE_TILE        = 20;
+const KARTE_VP_COLS     = 32;
+const KARTE_VP_ROWS     = 28;
+const KARTE_START_X     = 32;
+const KARTE_START_Y     = 32;
+const KARTE_BASE_STEPS  = 5;
+const KARTE_EXTRA_STEPS = 5;
+const KARTE_MAX_STEPS   = 10;
+const KARTE_RESPAWN_MS  = 7 * 24 * 3600_000;
+const KARTE_TREASURE_P  = 0.30;
+const KARTE_EVENT_CHANCE = 0.20;
 
 // ── Schatz-Bibliothek ─────────────────────────────────────────────────────────
 const KARTE_TREASURES = [
@@ -41,12 +42,107 @@ const KARTE_TREASURES = [
   { emoji:'🧃', name:'Multivitaminsaft',               cc:2,  quote:'Gesund ist auch eine Überlebensstrategie. Zählt.' },
 ];
 
-// ── Charakter-Upgrades ───────────────────────────────────────────────────────
-const KARTE_UPGRADES = [
-  { key: 'boots',   emoji: '👟', name: 'Wanderschuhe',  cost: 50,  desc: '+2 Schritte pro Tag' },
-  { key: 'nose',    emoji: '🔍', name: 'Schatzgespür',  cost: 80,  desc: 'Schatz-Chance +50%' },
-  { key: 'compass', emoji: '🧭', name: 'Kompass',        cost: 120, desc: 'Umgebung durch Nebel' },
+// ── Random Events (20 Stück) ─────────────────────────────────────────────────
+const KARTE_EVENTS = [
+  { id: 'coffee_broken',    emoji: '☕💔', name: 'Kaffeemaschine defekt!',
+    text: 'Totalausfall auf Etage 3. Fußmarsch zur Kantine. -2 Schritte morgen.',
+    effect: { type: 'step_malus', amount: 2, when: 'tomorrow' } },
+  { id: 'birthday_cake',    emoji: '🎂',  name: 'Sabine hat Geburtstag!',
+    text: 'Es gibt Kuchen. Wer Sabine ist, bleibt offen. +5 CC.',
+    effect: { type: 'cc_bonus', amount: 5 } },
+  { id: 'printer_jam',      emoji: '📠',  name: 'Drucker kaputt!',
+    text: 'Wie immer, sagt jeder. Du nutzt die Zeit produktiv. Nächster Schatz ×2 CC.',
+    effect: { type: 'treasure_boost', factor: 2 } },
+  { id: 'stairs_sprint',    emoji: '🏃',  name: 'Aufzug streikt — Treppe!',
+    text: 'Du läufst. Du brennst. Du lebst. +3 Bonus-Schritte heute.',
+    effect: { type: 'step_bonus', amount: 3, when: 'today' } },
+  { id: 'mystery_package',  emoji: '📦',  name: 'Mysterium-Paket',
+    text: 'Kein Absender. Kein Empfänger. Finder = Behalter.',
+    effect: { type: 'cc_random', min: 1, max: 12 } },
+  { id: 'good_idea',        emoji: '💡',  name: 'Gute Idee im Flur!',
+    text: 'Du hast einen Gedanken gehabt. Dein Gehirn belohnt sich selbst. +5 CC.',
+    effect: { type: 'cc_bonus', amount: 5 } },
+  { id: 'spontaneous_meet', emoji: '📣',  name: 'Spontan-Meeting!',
+    text: '"Kurz zusammenkommen." — Es dauert 50 Minuten. -1 Schritt heute.',
+    effect: { type: 'step_malus', amount: 1, when: 'today' } },
+  { id: 'chefs_espresso',   emoji: '😈',  name: 'Chefs Espresso geklaut!',
+    text: '+20 CC sofort. -1 Schritt morgen. Keine Reue.',
+    effect: { type: 'cc_risk', cc: 20, malus: 1 } },
+  { id: 'microwave_feast',  emoji: '🍱',  name: 'Mikrowellen-Jackpot!',
+    text: 'Unbekannte Lunchbox. Noch warm. Keine Fragen. +3 CC.',
+    effect: { type: 'cc_bonus', amount: 3 } },
+  { id: 'vip_elevator',     emoji: '🛗',  name: 'Privat-Aufzug entdeckt!',
+    text: 'VIP-Only. Du bist VIP. Heute. +2 Schritte.',
+    effect: { type: 'step_bonus', amount: 2, when: 'today' } },
+  { id: 'office_rumor',     emoji: '🤫',  name: 'Büroflüstern!',
+    text: 'Du hörst etwas. Du sagst nichts. Nächster Schatz ×1,5 CC.',
+    effect: { type: 'treasure_boost', factor: 1.5 } },
+  { id: 'dice_oracle',      emoji: '🎲',  name: 'Das Würfel-Orakel',
+    text: 'Alles auf eine Karte. Nächster Schatz ×1–6 CC.',
+    effect: { type: 'cc_multiplier', min: 1, max: 6 } },
+  { id: 'fire_alarm',       emoji: '🚨',  name: 'Feueralarm!',
+    text: 'Alle raus. Alle warten. Du hast trotzdem 2 Schritte gemacht. +2 heute.',
+    effect: { type: 'step_bonus', amount: 2, when: 'today' } },
+  { id: 'fridge_mission',   emoji: '🧊',  name: 'Kühlschrank-Kontrolle',
+    text: 'Jemand hat aufgeräumt. Was bleibt, gehört jetzt dir.',
+    effect: { type: 'cc_random', min: 2, max: 7 } },
+  { id: 'welcome_cake',     emoji: '👋',  name: 'Neuer Kollege!',
+    text: 'Er heißt Tim. Oder Tom. Egal — er bringt Kekse. +6 CC.',
+    effect: { type: 'cc_bonus', amount: 6 } },
+  { id: 'wifi_outage',      emoji: '📵',  name: 'WLAN ausgefallen!',
+    text: 'Kein Internet, kein Stress. Du hast dich sinnvoll beschäftigt. +4 CC.',
+    effect: { type: 'cc_bonus', amount: 4 } },
+  { id: 'overtime_call',    emoji: '⏰',  name: '"Kannst du kurz bleiben?"',
+    text: '+7 CC. -1 Schritt morgen. Du weißt, warum.',
+    effect: { type: 'cc_risk', cc: 7, malus: 1 } },
+  { id: 'lost_and_found',   emoji: '🎫',  name: 'Fundsachen-Kiste!',
+    text: 'Offiziell Fundsachen. Inoffiziell: Schatzgrube.',
+    effect: { type: 'cc_random', min: 1, max: 9 } },
+  { id: 'secret_snacks',    emoji: '🍫',  name: 'Geheimvorrat!',
+    text: 'Hinter dem Drucker. Wer das versteckt hat, hätte es besser machen sollen. +4 CC.',
+    effect: { type: 'cc_bonus', amount: 4 } },
+  { id: 'new_machine',      emoji: '✨',  name: 'Neue Kaffeemaschine!',
+    text: 'Vollautomatik. Milchaufschäumer. Die Frage nach dem Sinn des Lebens: beantwortet. +8 CC.',
+    effect: { type: 'cc_bonus', amount: 8 } },
 ];
+
+// ── RPG Items (Slot-System) ──────────────────────────────────────────────────
+// Slot-Tier: gleicher Slot → höheres Tier hat Vorrang, kein Stacking
+// Backward-compat: alter key 'boots' → 'walking_boots', 'nose' → 'coffee_nose'
+const KARTE_ITEMS = [
+  { key: 'walking_boots', slot: 'feet',   tier: 1, emoji: '👟', name: 'Wanderschuhe', cost:  50, desc: '+2 Schritte/Tag' },
+  { key: 'trail_runner',  slot: 'feet',   tier: 2, emoji: '🥾', name: 'Trailrunner',   cost: 150, desc: '+4 Schritte/Tag' },
+  { key: 'coffee_nose',   slot: 'sensor', tier: 1, emoji: '🔍', name: 'Schatzgespür', cost:  80, desc: 'Schatz-Chance +50%' },
+  { key: 'truffle_nose',  slot: 'sensor', tier: 2, emoji: '🐽', name: 'Trüffelnase',   cost: 200, desc: 'Schatz-Chance +120%' },
+  { key: 'compass',       slot: 'nav',    tier: 1, emoji: '🧭', name: 'Kompass',       cost: 120, desc: '1 Feld durch Nebel' },
+  { key: 'old_map',       slot: 'nav',    tier: 2, emoji: '🗺️', name: 'Alte Karte',    cost: 300, desc: '2 Felder + ✦ durch Nebel' },
+  { key: 'thermos',       slot: 'bag',    tier: 1, emoji: '☕', name: 'Thermos',       cost:  60, desc: 'Event-Malus ignorieren' },
+  { key: 'backpack',      slot: 'bag',    tier: 2, emoji: '🎒', name: 'Rucksack',      cost: 150, desc: 'Respawn-Felder +25% Schatz' },
+  { key: 'barista_bart',  slot: 'look',   tier: 1, emoji: '🧔', name: 'Barista Bart',  cost: 250, desc: '+1 CC je Schatzfund' },
+];
+
+const KARTE_SLOT_NAMES = {
+  feet:   '👟 Füße',
+  sensor: '🔍 Sensorik',
+  nav:    '🧭 Navigation',
+  bag:    '☕ Rucksack',
+  look:   '🧔 Stil',
+};
+
+// Bestes Item im Slot (höchstes Tier das besessen wird)
+function _getBestItemInSlot(slot, upgrades) {
+  if (!upgrades) return null;
+  function isOwned(key) {
+    if (upgrades[key]) return true;
+    // Backward-compat
+    if (key === 'walking_boots' && upgrades.boots)      return true;
+    if (key === 'coffee_nose'   && upgrades.nose)       return true;
+    return false;
+  }
+  return KARTE_ITEMS
+    .filter(i => i.slot === slot && isOwned(i.key))
+    .sort((a, b) => b.tier - a.tier)[0] || null;
+}
 
 // ── Terrain-Farben ────────────────────────────────────────────────────────────
 const KARTE_TERRAIN_COLORS = {
@@ -75,7 +171,6 @@ function _tileRng(x, y, salt, worldSeed) {
 }
 
 // ── Terrain-Generierung ───────────────────────────────────────────────────────
-// 4×4-Tile Patches für zusammenhängende Biome
 function karteTerrain(x, y, worldSeed) {
   const cx = Math.floor(x / 4);
   const cy = Math.floor(y / 4);
@@ -107,19 +202,52 @@ function karteTreasureIndex(x, y, worldSeed, round) {
   return Math.floor(r * KARTE_TREASURES.length) % KARTE_TREASURES.length;
 }
 
+// ── Event-Logik ───────────────────────────────────────────────────────────────
+function _todayNum() {
+  return parseInt(new Date().toISOString().slice(0, 10).replace(/-/g, ''), 10);
+}
+
+function karteEventSpot(x, y, worldSeed) {
+  const s = (((x * 73856093) ^ (y * 19349663) ^ _todayNum()) + worldSeed) >>> 0;
+  return _kRng(s)() < KARTE_EVENT_CHANCE;
+}
+
+function karteEventIndex(x, y, worldSeed) {
+  const r = _tileRng(x + _todayNum(), y + _todayNum(), 9999, worldSeed)();
+  return Math.floor(r * KARTE_EVENTS.length) % KARTE_EVENTS.length;
+}
+
 // ── Steps-Logik ───────────────────────────────────────────────────────────────
+function _todayKey() {
+  return new Date().toLocaleDateString('de-DE');
+}
+
+function _tomorrowKey() {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  return d.toLocaleDateString('de-DE');
+}
+
 function karteStepsAllowed(mapData) {
-  const bootBonus = mapData?.upgrades?.boots ? 2 : 0;
+  const upg      = mapData?.upgrades || {};
+  const bestFeet = _getBestItemInSlot('feet', upg);
+  const footBonus = bestFeet?.key === 'trail_runner' ? 4 : bestFeet ? 2 : 0;
   const extra     = mapData?.steps_extra_date === _todayKey() ? KARTE_EXTRA_STEPS : 0;
-  return Math.min(KARTE_MAX_STEPS + bootBonus, KARTE_BASE_STEPS + bootBonus + extra);
+  const hasBag    = !!_getBestItemInSlot('bag', upg);
+  const today     = _todayKey();
+  const effects   = mapData?.activeEffects || [];
+  const stepBonus = effects
+    .filter(e => e.type === 'step_bonus' && e.expires === today)
+    .reduce((s, e) => s + (e.amount || 0), 0);
+  const stepMalus = hasBag ? 0
+    : effects
+        .filter(e => e.type === 'step_malus' && e.expires === today)
+        .reduce((s, e) => s + (e.amount || 0), 0);
+  return Math.max(1, KARTE_BASE_STEPS + footBonus + extra + stepBonus - stepMalus);
 }
 
 function karteExtraStepsBought(mapData) {
   return mapData?.steps_extra_date === _todayKey();
-}
-
-function _todayKey() {
-  return new Date().toLocaleDateString('de-DE');
 }
 
 function karteStepsUsed(mapData) {
@@ -148,41 +276,87 @@ function karteCanStep(tx, ty, mapData) {
   return Math.abs(p.x - tx) <= 1 && Math.abs(p.y - ty) <= 1 && !(p.x === tx && p.y === ty);
 }
 
-// Gibt { newMapData, treasure } zurück; treasure ist null wenn keiner gefunden.
+// Gibt { newMapData, treasure, event } zurück; treasure/event sind null wenn nichts passiert.
 function karteExploreTile(tx, ty, mapData, worldSeed, opts) {
-  const now = Date.now();
+  const now      = Date.now();
+  const today    = _todayKey();
+  const tomorrow = _tomorrowKey();
   const stepsUsed = karteStepsUsed(mapData);
-  const treasureP = opts?.treasureBoost ? KARTE_TREASURE_P * 1.5 : KARTE_TREASURE_P;
 
-  const newExplored = { ...(mapData?.explored || {}), [`${tx},${ty}`]: now };
-  let newTreasures = { ...(mapData?.treasures || {}) };
-  let treasure = null;
+  // Sensor-Item: Schatz-Faktor (1.0 = normal, 1.5 = Schatzgespür, 2.2 = Trüffelnase)
+  const treasureFactor = opts?.treasureFactor ?? 1.0;
+  const treasureP      = KARTE_TREASURE_P * treasureFactor;
+
+  // activeEffects: nur nicht-abgelaufene behalten
+  const effects     = (mapData?.activeEffects || []).filter(e =>
+    e.expires === today || e.expires === tomorrow
+  );
+  // Treasure-Boost / CC-Multiplikator: wird beim Schatzfund verbraucht
+  const boostEffect = effects.find(e =>
+    (e.type === 'treasure_boost' || e.type === 'cc_multiplier') && e.expires === today
+  );
+
+  const newExplored    = { ...(mapData?.explored || {}), [`${tx},${ty}`]: now };
+  let newTreasures     = { ...(mapData?.treasures || {}) };
+  let newActiveEffects = [...effects];
+  let treasure         = null;
+  let event            = null;
 
   if (karteTreasureSpot(tx, ty, worldSeed, treasureP)) {
-    const prev = newTreasures[`${tx},${ty}`];
+    const prev      = newTreasures[`${tx},${ty}`];
     const isRespawn = prev && (now - prev.ts > KARTE_RESPAWN_MS);
     if (!prev || isRespawn) {
       const round = (prev?.round || 0) + (isRespawn ? 1 : 0);
-      const idx = karteTreasureIndex(tx, ty, worldSeed, round);
-      treasure = KARTE_TREASURES[idx];
+      const idx   = karteTreasureIndex(tx, ty, worldSeed, round);
+      let cc      = KARTE_TREASURES[idx].cc;
+
+      // Rucksack: Respawn-Felder geben +1 CC Bonus
+      if (opts?.backpackBoost && isRespawn) cc += 1;
+
+      // Aktiven Boost-Effect anwenden und verbrauchen
+      if (boostEffect) {
+        if (boostEffect.type === 'treasure_boost') {
+          cc = Math.round(cc * (boostEffect.factor || 2));
+        } else if (boostEffect.type === 'cc_multiplier') {
+          const mult = Math.floor(Math.random() * ((boostEffect.max || 6) - (boostEffect.min || 1) + 1)) + (boostEffect.min || 1);
+          cc = Math.round(cc * mult);
+        }
+        newActiveEffects = newActiveEffects.filter(e => e !== boostEffect);
+      }
+
+      treasure = { ...KARTE_TREASURES[idx], cc };
       newTreasures[`${tx},${ty}`] = { i: idx, ts: now, round };
+    }
+  } else {
+    // Kein Schatz → Event-Check (20% Chance, täglich rotierend)
+    if (karteEventSpot(tx, ty, worldSeed)) {
+      const idx = karteEventIndex(tx, ty, worldSeed);
+      event = KARTE_EVENTS[idx];
+      const eff = event.effect;
+      // Persistente Effects in activeEffects eintragen
+      if (eff.type === 'step_bonus'    && eff.when === 'today')    newActiveEffects.push({ type: 'step_bonus',     amount: eff.amount,  expires: today    });
+      if (eff.type === 'step_malus'    && eff.when === 'today')    newActiveEffects.push({ type: 'step_malus',     amount: eff.amount,  expires: today    });
+      if (eff.type === 'step_malus'    && eff.when === 'tomorrow') newActiveEffects.push({ type: 'step_malus',     amount: eff.amount,  expires: tomorrow });
+      if (eff.type === 'treasure_boost')                           newActiveEffects.push({ type: 'treasure_boost', factor: eff.factor,  expires: today    });
+      if (eff.type === 'cc_multiplier')                            newActiveEffects.push({ type: 'cc_multiplier',  min: eff.min, max: eff.max, expires: today });
+      // cc_bonus, cc_random, cc_risk → sofort in imperium.js ausgewertet, nicht gespeichert
     }
   }
 
   const newMapData = {
     ...mapData,
-    pos: { x: tx, y: ty },
-    explored: newExplored,
-    treasures: newTreasures,
-    steps_today: stepsUsed + 1,
-    steps_date: _todayKey(),
+    pos:           { x: tx, y: ty },
+    explored:      newExplored,
+    treasures:     newTreasures,
+    activeEffects: newActiveEffects,
+    steps_today:   stepsUsed + 1,
+    steps_date:    today,
   };
 
-  return { newMapData, treasure };
+  return { newMapData, treasure, event };
 }
 
 // ── Canvas-Rendering ──────────────────────────────────────────────────────────
-// vpX, vpY = Weltkoordinaten der linken oberen Ecke des Viewports (kein Auto-Centering!)
 function karteRender(canvas, mapData, worldSeed, vpX, vpY) {
   const ctx = canvas.getContext('2d');
   const W = canvas.width;
@@ -191,12 +365,19 @@ function karteRender(canvas, mapData, worldSeed, vpX, vpY) {
   const COLS = Math.floor(W / T);
   const ROWS = Math.floor(H / T);
 
-  const pos       = kartePos(mapData);
-  const explored  = mapData?.explored  || {};
+  const pos      = kartePos(mapData);
+  const explored = mapData?.explored  || {};
   const treasures = mapData?.treasures || {};
-  const hasCompass = !!(mapData?.upgrades?.compass);
-  const originX   = (vpX !== undefined) ? vpX : pos.x - Math.floor(COLS / 2);
-  const originY   = (vpY !== undefined) ? vpY : pos.y - Math.floor(ROWS / 2);
+  const upg      = mapData?.upgrades  || {};
+
+  // Item-Effekte im Renderer
+  const navItem           = _getBestItemInSlot('nav',  upg);
+  const navRadius         = navItem?.key === 'old_map' ? 2 : navItem ? 1 : 0;
+  const showTreasureInFog = navItem?.key === 'old_map';
+  const hasBart           = !!_getBestItemInSlot('look', upg);
+
+  const originX = (vpX !== undefined) ? vpX : pos.x - Math.floor(COLS / 2);
+  const originY = (vpY !== undefined) ? vpY : pos.y - Math.floor(ROWS / 2);
 
   ctx.clearRect(0, 0, W, H);
 
@@ -214,12 +395,21 @@ function karteRender(canvas, mapData, worldSeed, vpX, vpY) {
         ctx.fillStyle = '#0c0a07';
         ctx.fillRect(px, py, T, T);
 
-        // Kompass: Terrain angrenzender Tiles gedimmt anzeigen
-        if (inBounds && hasCompass && Math.abs(wx - pos.x) <= 1 && Math.abs(wy - pos.y) <= 1) {
+        // Nav-Item: Terrain im Radius gedimmt anzeigen
+        if (inBounds && navRadius > 0 && Math.abs(wx - pos.x) <= navRadius && Math.abs(wy - pos.y) <= navRadius) {
           const { color } = _tileColor(wx, wy, worldSeed);
           ctx.fillStyle = color;
           ctx.globalAlpha = 0.38;
           ctx.fillRect(px, py, T, T);
+          ctx.globalAlpha = 1.0;
+        }
+
+        // Alte Karte: ✦ Schatz-Marker durch Nebel
+        if (inBounds && showTreasureInFog && treasures[key]) {
+          ctx.globalAlpha = 0.6;
+          ctx.fillStyle = '#FAC775';
+          ctx.font = `bold ${Math.floor(T * 0.6)}px sans-serif`;
+          ctx.fillText('✦', px + 4, py + T - 3);
           ctx.globalAlpha = 1.0;
         }
 
@@ -239,7 +429,6 @@ function karteRender(canvas, mapData, worldSeed, vpX, vpY) {
       ctx.fillStyle = color;
       ctx.fillRect(px, py, T, T);
 
-      // Textur-Variation
       const texR = _tileRng(wx * 3 + 7, wy * 3 + 11, 55, worldSeed)();
       if (texR > 0.72) {
         ctx.fillStyle = 'rgba(0,0,0,0.22)';
@@ -249,7 +438,6 @@ function karteRender(canvas, mapData, worldSeed, vpX, vpY) {
         ctx.fillRect(px + 2, py + 2, T - 4, T - 4);
       }
 
-      // Terrain-Details (skaliert mit T=16)
       const t3 = Math.floor(T * 0.3);
       const t7 = Math.floor(T * 0.7);
       if (terrain === 'FOREST') {
@@ -280,42 +468,40 @@ function karteRender(canvas, mapData, worldSeed, vpX, vpY) {
         ctx.fillText('✦', px + 2, py + T - 2);
       }
 
-      // ── Spieler-Charakter (16×16) ──
+      // ── Spieler-Charakter ──
       if (wx === pos.x && wy === pos.y) {
-        // Aura
         const aura = ctx.createRadialGradient(px + T/2, py + T/2, 0, px + T/2, py + T/2, T * 1.5);
         aura.addColorStop(0, 'rgba(212,175,55,0.2)');
         aura.addColorStop(1, 'rgba(212,175,55,0)');
         ctx.fillStyle = aura;
         ctx.fillRect(px - T, py - T, T * 3, T * 3);
-        // Schatten
         ctx.fillStyle = 'rgba(0,0,0,0.35)';
         ctx.fillRect(px + 4, py + 14, 8, 2);
-        // Beine
         ctx.fillStyle = '#1a2840';
         ctx.fillRect(px + 4, py + 10, 2, 5);
         ctx.fillRect(px + 10, py + 10, 2, 5);
-        // Körper (blaue Jacke)
         ctx.fillStyle = '#263a5a';
         ctx.fillRect(px + 3, py + 6, 10, 5);
-        // Kopf
         ctx.fillStyle = '#8a5430';
         ctx.fillRect(px + 5, py + 1, 6, 6);
-        // Haare
         ctx.fillStyle = '#3a2010';
         ctx.fillRect(px + 5, py + 1, 6, 3);
-        // Augen
         ctx.fillStyle = '#1a1008';
         ctx.fillRect(px + 6, py + 4, 1, 1);
         ctx.fillRect(px + 9, py + 4, 1, 1);
-        // Kaffeetasse
+        // Barista Bart: Pixel-Bart unter den Augen
+        if (hasBart) {
+          ctx.fillStyle = '#5a3018';
+          ctx.fillRect(px + 5, py + 5, 6, 2);
+          ctx.fillRect(px + 6, py + 6, 4, 1);
+        }
         ctx.fillStyle = '#FAC775';
         ctx.fillRect(px + 13, py + 7, 3, 3);
       }
     }
   }
 
-  // Vignette (Nebelrand um Viewport)
+  // Vignette
   const vig = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.3, W / 2, H / 2, Math.min(W, H) * 0.7);
   vig.addColorStop(0, 'rgba(12,10,7,0)');
   vig.addColorStop(1, 'rgba(12,10,7,0.6)');

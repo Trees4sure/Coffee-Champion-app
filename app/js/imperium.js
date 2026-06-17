@@ -260,8 +260,29 @@ function _buildImperiumStats() {
   for (const u of users) {
     const score   = typeof calcResearchScore  === 'function' ? calcResearchScore(u.research   || {}) : 0;
     const perDay  = typeof calcResearchPerDay === 'function' ? calcResearchPerDay(u.research  || {}) : 0;
+    const perCup  = typeof calcResearchPerCup === 'function' ? calcResearchPerCup(u.research  || {}) : 0;
     const cosm    = u.cosmetics || {};
     const avatar  = cosm.avatar || '☕';
+    // Karten-Statistiken
+    const md        = u.map_data || {};
+    const explCount = Object.keys(md.explored  || {}).length;
+    const trCount   = Object.keys(md.treasures || {}).length;
+    const upg       = md.upgrades || {};
+    const itemIcons = (typeof KARTE_ITEMS !== 'undefined' ? KARTE_ITEMS : [])
+      .filter(function(i) {
+        return !!(upg[i.key]) || (i.key === 'walking_boots' && upg.boots) || (i.key === 'coffee_nose' && upg.nose);
+      })
+      .map(function(i) { return i.emoji; })
+      .join('');
+    const today         = typeof _todayKey === 'function' ? _todayKey() : '';
+    const activeEffects = (md.activeEffects || []).filter(function(e) { return e.expires === today; });
+    const effectLine    = activeEffects.map(function(e) {
+      if (e.type === 'step_bonus')     return '⚡+' + e.amount + ' Schritte';
+      if (e.type === 'step_malus')     return '⚡−' + e.amount + ' Schritte';
+      if (e.type === 'treasure_boost') return '⚡×' + e.factor + ' Schatz';
+      if (e.type === 'cc_multiplier')  return '⚡×1–' + e.max + ' Schatz';
+      return '';
+    }).filter(Boolean).join(' · ');
     html += `<div class="cc-stats-player">
       <div class="cc-stats-av">${avatar}</div>
       <div class="cc-stats-info">
@@ -269,7 +290,12 @@ function _buildImperiumStats() {
         <div class="cc-stats-sub">
           ${_coinBadge(u.coins, 'sm')} ${_fmtCoins(u.coins)} CC
           &nbsp;·&nbsp; Forschung: ${score.toLocaleString('de-DE')} CC
-          &nbsp;·&nbsp; +${_fmtCoins(perDay)}/Tag
+          &nbsp;·&nbsp; +${_fmtCoins(perCup)}/T &nbsp;·&nbsp; +${_fmtCoins(perDay)}/Tag
+        </div>
+        <div class="cc-stats-sub cc-stats-karte">
+          🗺️ ${explCount} Felder &nbsp;·&nbsp; 🏆 ${trCount} Schätze
+          ${itemIcons ? '&nbsp;·&nbsp; ' + itemIcons : ''}
+          ${effectLine ? '&nbsp;·&nbsp; <span class="cc-stats-effect">' + _esc2(effectLine) + '</span>' : ''}
         </div>
         ${_buildResearchBars(u.research || {})}
       </div>
@@ -526,7 +552,7 @@ function renderCoinSection(member) {
         ${_coinBadge(member.coins, 'lg')}
         <div>
           <div class="cc-coins-amount">${_fmtCoins(member.coins)} CC</div>
-          <div class="cc-coins-passive">+${_fmtCoins(typeof calcResearchPerDay === 'function' ? calcResearchPerDay(member.research||{}) : 0)} CC/Tag passiv</div>
+          <div class="cc-coins-passive">+${_fmtCoins(typeof calcResearchPerCup === 'function' ? calcResearchPerCup(member.research||{}) : 0)} CC/Tasse &nbsp;·&nbsp; +${_fmtCoins(typeof calcResearchPerDay === 'function' ? calcResearchPerDay(member.research||{}) : 0)} CC/Tag</div>
         </div>
       </div>
       ${cafeName}
@@ -655,7 +681,7 @@ function _karteUpdateHUD(state) {
   }
   if (posEl)   posEl.textContent   = `📍 ${pos.x}, ${pos.y}`;
   if (statsEl) statsEl.textContent = `🗺️ ${explCount} Felder · 🏆 ${trCount} Schätze`;
-  if (buyBtn)  buyBtn.style.display = (!karteExtraStepsBought(state.mapData) && stepsMax < 10) ? 'block' : 'none';
+  if (buyBtn)  buyBtn.style.display = !karteExtraStepsBought(state.mapData) ? 'block' : 'none';
 }
 
 function _buildKarte(member, el) {
@@ -693,24 +719,34 @@ function _buildKarte(member, el) {
   const pos0       = kartePos(state.mapData);
   const expl0      = Object.keys(state.mapData.explored  || {}).length;
   const tr0        = Object.keys(state.mapData.treasures || {}).length;
-  const buyBtnDisplay = (!extraB0 && stepsMax0 < KARTE_MAX_STEPS + (state.mapData?.upgrades?.boots ? 2 : 0)) ? 'block' : 'none';
+  const buyBtnDisplay = !extraB0 ? 'block' : 'none';
   const hintClass     = stepsLeft0 === 0 ? ' cc-karte-hint--done' : '';
   const hintText      = stepsLeft0 === 0
     ? '&#9203; Alle Schritte verbraucht &mdash; morgen wieder 5 verf&uuml;gbar!'
     : 'Klick auf ein <span style="color:var(--gold)">leuchtendes</span> Feld &nbsp;(' + stepsLeft0 + ' Schritte &uuml;brig)';
 
-  // Upgrade-Karten separat aufbauen (kein verschachteltes Template-Literal)
-  const upgradeHtml = KARTE_UPGRADES.map(function(u) {
-    const owned = !!(state.mapData && state.mapData.upgrades && state.mapData.upgrades[u.key]);
-    const actionHtml = owned
-      ? '<div class="cc-karte-upg-status">✅ Aktiv</div>'
-      : '<button class="cc-karte-upg-buy" data-upg="' + u.key + '" data-cost="' + u.cost + '">' + u.cost + ' 🫘</button>';
-    return '<div class="cc-karte-upg-card' + (owned ? ' owned' : '') + '">'
-      + '<div class="cc-karte-upg-icon">' + u.emoji + '</div>'
-      + '<div class="cc-karte-upg-name">' + u.name + '</div>'
-      + '<div class="cc-karte-upg-desc">' + u.desc + '</div>'
-      + actionHtml
-      + '</div>';
+  // Item-Karten nach Slot gruppiert aufbauen (kein verschachteltes Template-Literal)
+  const _slots0 = [...new Set(KARTE_ITEMS.map(function(i) { return i.slot; }))];
+  const upgradeHtml = _slots0.map(function(slot) {
+    const slotItems  = KARTE_ITEMS.filter(function(i) { return i.slot === slot; });
+    const bestOwned0 = _getBestItemInSlot(slot, state.mapData?.upgrades || {});
+    const itemsHtml  = slotItems.map(function(u) {
+      const owned = !!(state.mapData?.upgrades?.[u.key]) ||
+        (u.key === 'walking_boots' && state.mapData?.upgrades?.boots) ||
+        (u.key === 'coffee_nose'   && state.mapData?.upgrades?.nose);
+      const superseded = owned && bestOwned0 && bestOwned0.key !== u.key;
+      const actionHtml = owned
+        ? '<div class="cc-karte-upg-status">' + (superseded ? '⬆️ Ersetzt' : '✅ Aktiv') + '</div>'
+        : '<button class="cc-karte-upg-buy" data-upg="' + u.key + '" data-cost="' + u.cost + '">' + u.cost + ' 🫘</button>';
+      return '<div class="cc-karte-upg-card' + (owned ? (superseded ? ' superseded' : ' owned') : '') + '">'
+        + '<div class="cc-karte-upg-icon">' + u.emoji + '</div>'
+        + '<div class="cc-karte-upg-name">' + u.name + '</div>'
+        + '<div class="cc-karte-upg-desc">' + u.desc + '</div>'
+        + actionHtml + '</div>';
+    }).join('');
+    return '<div class="cc-karte-slot">'
+      + '<div class="cc-karte-slot-label">' + KARTE_SLOT_NAMES[slot] + '</div>'
+      + '<div class="cc-karte-slot-items">' + itemsHtml + '</div></div>';
   }).join('');
 
   const stepBarPct = stepsMax0 > 0 ? Math.min(100, stepsUsed0 / stepsMax0 * 100) : 0;
@@ -784,16 +820,23 @@ function _buildKarte(member, el) {
 }
 
 async function _handleKarteStep(tx, ty, member, state, seed, COLS, ROWS, MARGIN) {
-  const prevMapData = state.mapData;
-  const { newMapData, treasure } = karteExploreTile(tx, ty, state.mapData, seed, {
-    treasureBoost: !!state.mapData?.upgrades?.nose,
+  const prevMapData  = state.mapData;
+  const upg          = state.mapData?.upgrades || {};
+  const sensorItem   = _getBestItemInSlot('sensor', upg);
+  const bagItem      = _getBestItemInSlot('bag',    upg);
+  const hasBart      = !!_getBestItemInSlot('look', upg);
+  const sensorFactor = sensorItem?.key === 'truffle_nose' ? 2.2 : sensorItem ? 1.5 : 1.0;
+
+  const { newMapData, treasure, event } = karteExploreTile(tx, ty, state.mapData, seed, {
+    treasureFactor: sensorFactor,
+    backpackBoost:  bagItem?.key === 'backpack',
   });
   state.mapData = newMapData;
 
   try {
     await DB.updateMapData(member.id, newMapData);
   } catch {
-    state.mapData = prevMapData;  // Revert bei Fehler
+    state.mapData = prevMapData;
     showToast('Karte konnte nicht gespeichert werden.', 'error');
     return;
   }
@@ -801,21 +844,68 @@ async function _handleKarteStep(tx, ty, member, state, seed, COLS, ROWS, MARGIN)
   currentUserData = { ...(currentUserData || {}), map_data: newMapData };
 
   if (treasure) {
-    // Optimistic UI update sofort (ohne auf DB zu warten)
-    state.memberCoins += treasure.cc;
+    const bartBonus  = hasBart ? 1 : 0;
+    const totalCC    = treasure.cc + bartBonus;
+    // Optimistic UI update sofort
+    state.memberCoins += totalCC;
     currentUserData = { ...(currentUserData || {}), coins: state.memberCoins };
     _updateHeaderCoins({ coins: state.memberCoins });
     try {
-      await DB.addCoins(member.id, treasure.cc);
+      await DB.addCoins(member.id, totalCC);
     } catch (e) { console.warn('add_coins Fehler:', e); }
     try {
       await DB.postMessage(
-        `🗺️ ${_esc2(member.name)} hat "${treasure.name}" entdeckt! (+${treasure.cc} ☕ CC)\n"${treasure.quote}"`,
+        `🗺️ ${_esc2(member.name)} hat "${_esc2(treasure.name)}" entdeckt! (+${totalCC} ☕ CC)\n"${_esc2(treasure.quote)}"`,
         member.name
       );
     } catch (e) { console.warn('Chat-Broadcast Fehler:', e); }
-    _showKarteDiscovery(treasure);
-    showToast(`${treasure.emoji} ${treasure.name} entdeckt! +${treasure.cc} CC`, 'success');
+    const displayTreasure = bartBonus ? { ...treasure, cc: totalCC } : treasure;
+    _showKarteDiscovery(displayTreasure);
+    showToast(`${treasure.emoji} ${treasure.name} entdeckt! +${totalCC} CC`, 'success');
+  } else if (event) {
+    const eff = event.effect;
+    let bonusCC  = 0;
+    let noteText = '';
+
+    if (eff.type === 'cc_bonus') {
+      bonusCC  = eff.amount;
+      noteText = '+' + bonusCC + ' CC';
+    } else if (eff.type === 'cc_random') {
+      bonusCC  = Math.floor(Math.random() * (eff.max - eff.min + 1)) + eff.min;
+      noteText = '+' + bonusCC + ' CC';
+    } else if (eff.type === 'cc_risk') {
+      bonusCC  = eff.cc;
+      noteText = '+' + eff.cc + ' CC, -' + eff.malus + ' Schritt morgen';
+      // step_malus für morgen in activeEffects nachtragen
+      const tom = _tomorrowKey();
+      state.mapData = {
+        ...state.mapData,
+        activeEffects: [...(state.mapData.activeEffects || []),
+          { type: 'step_malus', amount: eff.malus, expires: tom }]
+      };
+      await DB.updateMapData(member.id, state.mapData).catch(() => {});
+      currentUserData = { ...(currentUserData || {}), map_data: state.mapData };
+    } else if (eff.type === 'step_malus' && eff.when === 'today') {
+      noteText = '-' + eff.amount + ' Schritt heute';
+    } else if (eff.type === 'step_malus' && eff.when === 'tomorrow') {
+      noteText = '-' + eff.amount + ' Schritte morgen';
+    } else if (eff.type === 'step_bonus') {
+      noteText = '+' + eff.amount + ' Schritte heute';
+    } else if (eff.type === 'treasure_boost') {
+      noteText = 'Nächster Schatz ×' + eff.factor + ' CC';
+    } else if (eff.type === 'cc_multiplier') {
+      noteText = 'Nächster Schatz ×1–' + eff.max + ' CC';
+    }
+
+    if (bonusCC > 0) {
+      state.memberCoins += bonusCC;
+      currentUserData = { ...(currentUserData || {}), coins: state.memberCoins };
+      _updateHeaderCoins({ coins: state.memberCoins });
+      await DB.addCoins(member.id, bonusCC).catch(() => {});
+    }
+
+    _showKarteEvent(event, noteText);
+    showToast(event.emoji + ' ' + event.name + (noteText ? ' — ' + noteText : ''), 'success');
   }
 
   // Viewport nur an Rändern verschieben (Spieler läuft sichtbar übers Canvas)
@@ -835,7 +925,7 @@ async function _handleKarteStep(tx, ty, member, state, seed, COLS, ROWS, MARGIN)
 }
 
 async function _handleKarteUpgrade(key, cost, member, state, seed) {
-  const upg = KARTE_UPGRADES.find(u => u.key === key);
+  const upg = KARTE_ITEMS.find(u => u.key === key);
   if (!upg) return;
   const newCoins = await DB.spendCoins(member.id, cost);
   if (newCoins === null) { showToast('Nicht genug CoffeeCoins!', 'error'); return; }
@@ -882,6 +972,29 @@ function _showKarteDiscovery(treasure) {
           <strong>${_esc2(treasure.name)}</strong>
           <em>"${_esc2(treasure.quote)}"</em>
           <span class="cc-karte-popup-cc">+${treasure.cc} 🫘 CC</span>
+        </div>
+      </div>
+      <button class="cc-karte-popup-close"
+        onclick="document.getElementById('cc-karte-popup').classList.add('hidden')">
+        Weiter →
+      </button>
+    </div>
+  `;
+}
+
+function _showKarteEvent(event, noteText) {
+  const popup = document.getElementById('cc-karte-popup');
+  if (!popup) return;
+  popup.classList.remove('hidden');
+  popup.innerHTML = `
+    <div class="cc-karte-popup-inner">
+      <div class="cc-karte-popup-hdr cc-karte-popup-hdr--event">⚡ EREIGNIS!</div>
+      <div class="cc-karte-popup-body">
+        <span class="cc-karte-popup-emoji">${event.emoji}</span>
+        <div class="cc-karte-popup-text">
+          <strong>${_esc2(event.name)}</strong>
+          <em>${_esc2(event.text)}</em>
+          ${noteText ? '<span class="cc-karte-popup-cc">' + _esc2(noteText) + '</span>' : ''}
         </div>
       </div>
       <button class="cc-karte-popup-close"
