@@ -74,6 +74,28 @@ function showApp() {
   startPolling();
   DB.getPinnedMessage().then(renderPinnwand);
   switchView('rangliste');
+  // Passives Einkommen beim App-Start einlösen (entkoppelt von Tassen)
+  claimPassiveAndRefresh();
+}
+
+// Passives Einkommen einlösen und bei Gutschrift Anzeige aktualisieren.
+let _lastPassiveAttempt = 0;
+async function claimPassiveAndRefresh(force = false) {
+  if (!currentUser?.id) return;
+  // Drosselung: höchstens alle 15 Min einen DB-Versuch (Server begrenzt ohnehin auf 1×/Std)
+  if (!force && Date.now() - _lastPassiveAttempt < 15 * 60 * 1000) return;
+  _lastPassiveAttempt = Date.now();
+  try {
+    const earned = await DB.claimPassive(currentUser.id);
+    if (earned > 0) {
+      await refreshData();
+      const hc = document.getElementById('header-coins');
+      if (hc && currentUserData?.coins !== undefined) {
+        hc.innerHTML = `<span style="font-size:11px">🫘</span>${Math.floor(currentUserData.coins)}`;
+      }
+      showToast(`⚙️ +${earned} CC passives Einkommen`, 'success');
+    }
+  } catch (e) { console.warn('Passiv-Einlösung fehlgeschlagen:', e.message); }
 }
 
 function showNamePicker(users) {
@@ -119,6 +141,8 @@ async function refreshData() {
     const el = document.getElementById('last-refreshed');
     if (el) el.textContent = 'Aktualisiert: ' + new Date().toLocaleTimeString('de-DE', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
   } catch (e) { console.warn('Refresh fehlgeschlagen:', e.message); }
+  // Passives Einkommen für lange offene Sessions (intern auf 15 Min / 1 Std gedrosselt)
+  claimPassiveAndRefresh();
 }
 
 // ── Nachrichten ───────────────────────────────────────────────────────────────
@@ -333,17 +357,25 @@ function renderLeaderboard() {
       <div class="podium-rank">${['🥈','🥇','🥉'][i]}</div>
       <div class="podium-name">${_esc2(u.cosmetics?.avatar || '☕')} ${_esc(u.name)}</div>
       <div class="podium-cups">${u.totalCups} ☕</div>
-      <div class="podium-title">${_esc(DB.getTitle(u.totalCups))}</div>
+      <div class="podium-title">${_esc(DB.getTitle(u.totalCups))}${_esc(_zusatztitelSuffix(u))}</div>
     </div>` : '<div class="podium-place podium-empty"></div>').join('');
   container.innerHTML = `<table>
     <thead><tr><th>#</th><th>Name</th><th>Titel</th><th>Tassen</th></tr></thead>
     <tbody>${leaderboardData.map((u, i) => `
       <tr class="${u.id === currentUser?.id ? 'own-row' : ''}">
         <td>${i + 1}</td><td>${_esc2(u.cosmetics?.avatar || '☕')} ${_esc(u.name)}</td>
-        <td class="title-cell">${_esc(DB.getTitle(u.totalCups))}</td>
+        <td class="title-cell">${_esc(DB.getTitle(u.totalCups))}${_esc(_zusatztitelSuffix(u))}</td>
         <td>${u.totalCups}</td>
       </tr>`).join('')}
     </tbody></table>`;
+}
+
+// Zusatztitel (aus Cosmetics) als Suffix für die Titel-Anzeige — leer wenn keiner aktiv.
+function _zusatztitelSuffix(u) {
+  const ztId = u.cosmetics?.zusatztitel;
+  if (!ztId || typeof ZUSATZTITEL === 'undefined') return '';
+  const ztDef = (ZUSATZTITEL || []).find(z => z.id === ztId);
+  return ztDef ? ` · ${ztDef.icon} ${ztDef.name}` : '';
 }
 
 // ── Profil ────────────────────────────────────────────────────────────────────
@@ -380,7 +412,7 @@ function renderProfile() {
         <div class="today-log-row">
           <span class="today-log-label">${_esc(e.label)}</span>
           <span class="today-log-amount"${neg ? ' style="color:#e0795a"' : ''}>${neg ? '' : '+'}${_fmtCoins(e.amount)} CC</span>
-        </div>`;
+        </div>${e.detail ? `<div class="today-log-detail">${_esc(e.detail)}</div>` : ''}`;
       }).join('');
     } else {
       logSection.style.display = 'none';

@@ -168,13 +168,22 @@ function _buildForschungsbaum(research) {
     for (const item of allTierItems) {
       const owned = !!research[item.id];
       const bonus = item.perCup > 0 ? `+${item.perCup}/T` : item.perDay > 0 ? `+${item.perDay}/Tag` : item.special ? '✦' : '';
-      html += `<div class="cc-ri ${owned ? 'cc-ri-owned' : ''}" title="${_esc2(item.name)} — ${_esc2(bonus)}">
+      // Voraussetzungen: fehlende Items ermitteln (Namen aus normalen Items ODER Kombos)
+      const missing = (item.requires || []).filter(r => !research[r]);
+      const prereqOk = missing.length === 0;
+      const missingNames = missing.map(r => {
+        const ri = getAllResearchItems().find(i => i.id === r) || (RESEARCH_COMBOS || []).find(c => c.id === r);
+        return ri ? `${ri.icon} ${ri.name}` : r;
+      }).join(', ');
+      html += `<div class="cc-ri ${owned ? 'cc-ri-owned' : !prereqOk ? 'cc-ri-locked' : ''}" title="${_esc2(item.name)} — ${_esc2(bonus)}">
         <span class="cc-ri-path">${item.pathIcon}</span>
         <div class="cc-ri-icon">${item.icon}</div>
         <p class="cc-ri-name">${_esc2(item.name)}</p>
         <p class="cc-ri-cost">${owned ? '✓' : item.cost.toLocaleString('de-DE') + ' CC'}</p>
-        <p class="cc-ri-bonus">${owned ? _esc2(bonus) : _esc2(bonus)}</p>
-        ${!owned ? `<button class="cc-buy-btn" data-buy="${item.id}">Kaufen</button>` : ''}
+        <p class="cc-ri-bonus">${_esc2(bonus)}</p>
+        ${owned ? ''
+          : prereqOk ? `<button class="cc-buy-btn" data-buy="${item.id}">Kaufen</button>`
+          : `<p class="cc-ri-locked-lbl">🔒 Voraussetzung fehlt</p><p class="cc-ri-need">Braucht: ${_esc2(missingNames)}</p>`}
       </div>`;
     }
     html += `</div></div>`;
@@ -451,6 +460,10 @@ function _isTitelUnlocked(z, member) {
 // ── Event-Handler: Kauf, Kasse, Cosmetics ────────────────────────────────────
 async function _handleBuy(itemId, member) {
   try {
+    // Welche Zusatztitel hatte der Spieler VOR dem Kauf? (für Titel-Freischaltungs-Chat)
+    const titlesBefore = (typeof ZUSATZTITEL !== 'undefined')
+      ? (ZUSATZTITEL || []).filter(z => _isTitelUnlocked(z, member)) : [];
+
     const result = await DB.purchaseResearchItem(member.id, itemId);
     appData = await DB.fetchData();
     const updatedMember = appData.users.find(u => u.id === member.id);
@@ -460,6 +473,22 @@ async function _handleBuy(itemId, member) {
     if (result.autoUnlocked?.length) {
       for (const c of result.autoUnlocked) showToast(`✦ Kombo: ${c.name} freigeschaltet!`, 'success');
     }
+
+    // Chat-Benachrichtigungen — Fehler hier dürfen den Kauf nicht beeinträchtigen.
+    try {
+      await DB.postMessage(`${member.name} hat ${result.item.icon} ${result.item.name} freigeschaltet! 🔬`, member.name);
+      for (const combo of (result.autoUnlocked || [])) {
+        await DB.postMessage(`${member.name} hat ✦ ${combo.icon} ${combo.name} kombiniert! 🎉`, member.name);
+      }
+      // Neu freigeschaltete Zusatztitel (durch Forschung, z.B. Röstmeister/Baron/Bio…)
+      if (typeof ZUSATZTITEL !== 'undefined' && updatedMember) {
+        const titlesAfter = (ZUSATZTITEL || []).filter(z => _isTitelUnlocked(z, updatedMember));
+        for (const t of titlesAfter.filter(z => !titlesBefore.find(b => b.id === z.id))) {
+          await DB.postMessage(`${member.name} hat den Titel ${t.icon} ${t.name} freigeschaltet! ✨`, member.name);
+        }
+      }
+    } catch (e) { console.warn('Chat-Post (Forschung) fehlgeschlagen:', e); }
+
     await renderImperium();
   } catch (e) { showToast(e.message, 'error'); }
 }
@@ -511,6 +540,9 @@ async function _handleCosmeticsSet(field, val, member) {
     cosm.boughtTitel = { ...(cosm.boughtTitel || {}), [val]: true };
     cosm.zusatztitel = val;
     showToast(`✓ Titel "${t.name}" gekauft! (-${t.cost} CC)`, 'success');
+    try {
+      await DB.postMessage(`${member.name} hat den Titel ${t.icon} ${t.name} erworben! ✨`, member.name);
+    } catch (e) { console.warn('Chat-Post (Titel-Kauf) fehlgeschlagen:', e); }
   }
 
   try {
@@ -1178,8 +1210,10 @@ function _showKarteBuildingInfo(b) {
       status = _buildingEffectLabel(def) || 'Fertiggestellt';
     }
   } else {
-    const daysLeft = Math.max(1, Math.ceil((b.completesAt - Date.now()) / 86400000));
-    status = `🚧 Im Bau — noch ca. ${daysLeft} Tag${daysLeft > 1 ? 'e' : ''}`;
+    const rem = (typeof karteBuildRemaining === 'function')
+      ? karteBuildRemaining(b.completesAt)
+      : { text: Math.max(1, Math.ceil((b.completesAt - Date.now()) / 86400000)) + ' Tage' };
+    status = `🚧 Im Bau — noch ca. ${rem.text}`;
   }
   popup.classList.remove('hidden');
   popup.innerHTML = `

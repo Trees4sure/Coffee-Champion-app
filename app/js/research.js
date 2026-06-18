@@ -8,12 +8,13 @@ const RESEARCH_PATHS = {
   anbau: {
     name: 'Anbau', icon: '🌱',
     items: [
+      // Tier 1: keine Voraussetzungen (Einstieg)
       { id: 'kaffeesamen',    name: 'Kaffeesamen',        icon: '🌰', tier: 1, cost: 30,    perCup: 0.2, perDay: 0   },
       { id: 'wasserquelle',   name: 'Wasserquelle',       icon: '💧', tier: 1, cost: 60,    perCup: 0,   perDay: 1   },
-      { id: 'duengemittel',   name: 'Düngemittel',        icon: '🧪', tier: 2, cost: 180,   perCup: 0.6, perDay: 0   },
-      { id: 'kaffeegarten',   name: 'Kaffeegarten',       icon: '🌳', tier: 3, cost: 600,   perCup: 2,   perDay: 6   },
-      { id: 'plantage',       name: 'Plantage',           icon: '🌄', tier: 4, cost: 3000,  perCup: 7,   perDay: 30  },
-      { id: 'exportplantage', name: 'Exportplantage',     icon: '🌍', tier: 5, cost: 10000, perCup: 16,  perDay: 100 },
+      { id: 'duengemittel',   name: 'Düngemittel',        icon: '🧪', tier: 2, cost: 180,   perCup: 0.6, perDay: 0,   requires: ['kaffeesamen'] },
+      { id: 'kaffeegarten',   name: 'Kaffeegarten',       icon: '🌳', tier: 3, cost: 600,   perCup: 2,   perDay: 6,   requires: ['kaffeepflanze'] },
+      { id: 'plantage',       name: 'Plantage',           icon: '🌄', tier: 4, cost: 3000,  perCup: 7,   perDay: 30,  requires: ['kaffeegarten'] },
+      { id: 'exportplantage', name: 'Exportplantage',     icon: '🌍', tier: 5, cost: 10000, perCup: 16,  perDay: 100, requires: ['plantage'] },
     ]
   },
   technik: {
@@ -21,11 +22,11 @@ const RESEARCH_PATHS = {
     items: [
       { id: 'handmuehle',     name: 'Handmühle',          icon: '⚙️', tier: 1, cost: 50,    perCup: 0.4, perDay: 0   },
       { id: 'thermometer',    name: 'Thermometer',        icon: '🌡️', tier: 2, cost: 150,   perCup: 0.6, perDay: 0   },
-      { id: 'el_muehle',      name: 'Elektrische Mühle',  icon: '🔌', tier: 2, cost: 200,   perCup: 1.2, perDay: 0   },
-      { id: 'siebtraeger',    name: 'Siebträger',         icon: '🫗', tier: 3, cost: 400,   perCup: 2.4, perDay: 0   },
-      { id: 'roestmaschine',  name: 'Röstmaschine',       icon: '🔥', tier: 3, cost: 1200,  perCup: 5,   perDay: 0   },
-      { id: 'halbautomatik',  name: 'Halbautomatik',      icon: '🤖', tier: 4, cost: 2500,  perCup: 8,   perDay: 0   },
-      { id: 'iot_roester',    name: 'IoT-Röster',         icon: '📡', tier: 5, cost: 8000,  perCup: 0,   perDay: 0,   special: 'technik_x2' },
+      { id: 'el_muehle',      name: 'Elektrische Mühle',  icon: '🔌', tier: 2, cost: 200,   perCup: 1.2, perDay: 0,   requires: ['handmuehle'] },
+      { id: 'siebtraeger',    name: 'Siebträger',         icon: '🫗', tier: 3, cost: 400,   perCup: 2.4, perDay: 0,   requires: ['el_muehle'] },
+      { id: 'roestmaschine',  name: 'Röstmaschine',       icon: '🔥', tier: 3, cost: 1200,  perCup: 5,   perDay: 0,   requires: ['siebtraeger'] },
+      { id: 'halbautomatik',  name: 'Halbautomatik',      icon: '🤖', tier: 4, cost: 2500,  perCup: 8,   perDay: 0,   requires: ['el_muehle','roestmaschine'] },
+      { id: 'iot_roester',    name: 'IoT-Röster',         icon: '📡', tier: 5, cost: 8000,  perCup: 0,   perDay: 0,   requires: ['halbautomatik'], special: 'technik_x2' },
     ]
   },
   handwerk: {
@@ -34,19 +35,19 @@ const RESEARCH_PATHS = {
       { id: 'ton',            name: 'Ton',                icon: '🟤', tier: 1, cost: 40,    perCup: 0.2, perDay: 0   },
       { id: 'toepferei',      name: 'Töpferei-Werkzeug',  icon: '🏺', tier: 1, cost: 80,    perCup: 0.4, perDay: 0   },
       { id: 'kunstbuch',      name: 'Kunstbuch',          icon: '🎨', tier: 2, cost: 100,   perCup: 0.4, perDay: 0   },
-      { id: 'lim_edition',    name: 'Limitierte Edition', icon: '✨', tier: 3, cost: 600,   perCup: 0,   perDay: 0,   special: 'ach_bonus_25' },
-      { id: 'kunstobjekt',    name: 'Kunstobjekt',        icon: '🗿', tier: 4, cost: 2500,  perCup: 0,   perDay: 0,   special: 'ach_bonus_50' },
+      { id: 'lim_edition',    name: 'Limitierte Edition', icon: '✨', tier: 3, cost: 600,   perCup: 0,   perDay: 0,   requires: ['kunstbuch'], special: 'ach_bonus_25' },
+      { id: 'kunstobjekt',    name: 'Kunstobjekt',        icon: '🗿', tier: 4, cost: 2500,  perCup: 0,   perDay: 0,   requires: ['lim_edition'], special: 'ach_bonus_50' },
     ]
   },
   mobilitaet: {
     name: 'Mobilität', icon: '🚗',
     items: [
       { id: 'fahrradkurier',  name: 'Fahrradkurier',      icon: '🚲', tier: 1, cost: 100,   perCup: 0.6, perDay: 0   },
-      { id: 'rollwagen',      name: 'Kaffee-Rollwagen',   icon: '🛒', tier: 2, cost: 250,   perCup: 1.2, perDay: 0   },
+      { id: 'rollwagen',      name: 'Kaffee-Rollwagen',   icon: '🛒', tier: 2, cost: 250,   perCup: 1.2, perDay: 0,   requires: ['fahrradkurier'] },
       { id: 'kaffeemobil',    name: 'Kaffeemobil',        icon: '🚐', tier: 2, cost: 450,   perCup: 2,   perDay: 0   },
-      { id: 'lieferwagen',    name: 'Lieferwagen',        icon: '🚚', tier: 3, cost: 1000,  perCup: 4.4, perDay: 0   },
-      { id: 'lieferflotte',   name: 'Lieferflotte',       icon: '🚛', tier: 4, cost: 4000,  perCup: 11,  perDay: 50  },
-      { id: 'logistikzentrum',name: 'Logistikzentrum',    icon: '🏗️', tier: 5, cost: 12000, perCup: 40,  perDay: 0   },
+      { id: 'lieferwagen',    name: 'Lieferwagen',        icon: '🚚', tier: 3, cost: 1000,  perCup: 4.4, perDay: 0,   requires: ['kaffeemobil'] },
+      { id: 'lieferflotte',   name: 'Lieferflotte',       icon: '🚛', tier: 4, cost: 4000,  perCup: 11,  perDay: 50,  requires: ['lieferwagen'] },
+      { id: 'logistikzentrum',name: 'Logistikzentrum',    icon: '🏗️', tier: 5, cost: 12000, perCup: 40,  perDay: 0,   requires: ['lieferflotte'] },
     ]
   },
   natur: {
@@ -54,8 +55,8 @@ const RESEARCH_PATHS = {
     items: [
       { id: 'kompost',        name: 'Kompost',            icon: '🍂', tier: 1, cost: 80,    perCup: 0.4, perDay: 0   },
       { id: 'kaffee_buch',    name: 'Kaffee-Buch',       icon: '📖', tier: 1, cost: 70,    perCup: 0.4, perDay: 0   },
-      { id: 'biogarten',      name: 'Biogarten',          icon: '🌻', tier: 2, cost: 300,   perCup: 0,   perDay: 5   },
-      { id: 'barista_kurs',   name: 'Barista-Kurs',      icon: '🎓', tier: 2, cost: 250,   perCup: 0,   perDay: 0,   special: 'ach_bonus_25' },
+      { id: 'biogarten',      name: 'Biogarten',          icon: '🌻', tier: 2, cost: 300,   perCup: 0,   perDay: 5,   requires: ['kaffeepflanze'] },
+      { id: 'barista_kurs',   name: 'Barista-Kurs',      icon: '🎓', tier: 2, cost: 250,   perCup: 0,   perDay: 0,   requires: ['kaffee_buch'], special: 'ach_bonus_25' },
       { id: 'regenwasser',    name: 'Regenwasser-Anlage', icon: '🌧️', tier: 3, cost: 600,   perCup: 0,   perDay: 9   },
       { id: 'sensorik',       name: 'Sensorik-Workshop',  icon: '👃', tier: 3, cost: 800,   perCup: 0,   perDay: 0,   special: 'unlock_title' },
       { id: 'wildnis_camp',   name: 'Wildnis-Camp',      icon: '🏕️', tier: 4, cost: 2000,  perCup: 0,   perDay: 16,  special: 'cosmetic_zen' },
@@ -67,10 +68,10 @@ const RESEARCH_PATHS = {
     unlockRequires: 3,
     items: [
       { id: 'popup_stand',    name: 'Pop-Up-Stand',       icon: '⛺', tier: 3, cost: 600,   perCup: 0,   perDay: 8   },
-      { id: 'kiosk',          name: 'Kiosk',              icon: '🏪', tier: 3, cost: 800,   perCup: 0,   perDay: 12  },
+      { id: 'kiosk',          name: 'Kiosk',              icon: '🏪', tier: 3, cost: 800,   perCup: 0,   perDay: 12,  requires: ['popup_stand'] },
       { id: 'online_shop',    name: 'Online-Shop',        icon: '🛍️', tier: 4, cost: 2500,  perCup: 3,   perDay: 30  },
-      { id: 'erstes_cafe',    name: 'Erstes Café',        icon: '🏠', tier: 4, cost: 3500,  perCup: 0,   perDay: 50  },
-      { id: 'kaffeekette',    name: 'Kaffeekette',        icon: '🏢', tier: 5, cost: 15000, perCup: 0,   perDay: 200 },
+      { id: 'erstes_cafe',    name: 'Erstes Café',        icon: '🏠', tier: 4, cost: 3500,  perCup: 0,   perDay: 50,  requires: ['kiosk'] },
+      { id: 'kaffeekette',    name: 'Kaffeekette',        icon: '🏢', tier: 5, cost: 15000, perCup: 0,   perDay: 200, requires: ['erstes_cafe'] },
     ]
   }
 };
@@ -295,6 +296,53 @@ function calcResearchPerDay(research) {
   if (research.weltkonzern)    bonus *= 3;
   if (research.weltreise)      bonus *= 1.5;
   return Math.round(bonus * 100) / 100;
+}
+
+// ── Quellen-Aufschlüsselung (für „Heute erhalten" — Transparenz/Lerneffekt) ──────
+function researchPerCupSources(research) {
+  if (!research) return [];
+  const out = [];
+  for (const item of getAllResearchItems()) if (research[item.id] && (item.perCup || 0) > 0) out.push(item);
+  for (const combo of RESEARCH_COMBOS)     if (research[combo.id] && (combo.perCup || 0) > 0) out.push(combo);
+  return out;
+}
+function researchPerDaySources(research) {
+  if (!research) return [];
+  const out = [];
+  for (const item of getAllResearchItems()) if (research[item.id] && (item.perDay || 0) > 0) out.push(item);
+  for (const combo of RESEARCH_COMBOS)     if (research[combo.id] && (combo.perDay || 0) > 0) out.push(combo);
+  return out;
+}
+// Aktive globale Multiplikatoren, getrennt nach Wirkung auf Tasse vs. Tag
+function researchPerCupMultipliers(research) {
+  const m = [];
+  if (research?.bio_zertifikat)  m.push('Bio +20%');
+  if (research?.iot_roester)     m.push('IoT-Röster ×2');
+  if (research?.ki_kaffee_genie) m.push('KI-Genie ×3');
+  if (research?.weltreise)       m.push('Weltreise ×1.5');
+  if (research?.weltkonzern)     m.push('Weltkonzern ×3');
+  return m;
+}
+function researchPerDayMultipliers(research) {
+  const m = [];
+  if (research?.bio_zertifikat) m.push('Bio +20%');
+  if (research?.weltreise)      m.push('Weltreise ×1.5');
+  if (research?.weltkonzern)    m.push('Weltkonzern ×3');
+  return m;
+}
+// Detail-Strings für das Tages-Log
+function researchPerCupDetail(research, amount, perCupRate) {
+  const src = researchPerCupSources(research).map(s => `${s.icon}+${s.perCup}`).join(', ');
+  const mul = researchPerCupMultipliers(research);
+  let d = `${amount}× à ${perCupRate}/Tasse`;
+  if (src) d += ` · ${src}`;
+  if (mul.length) d += ` · ${mul.join(', ')}`;
+  return d;
+}
+function researchPerDayDetail(research) {
+  const src = researchPerDaySources(research).map(s => `${s.icon} ${s.name} +${s.perDay}/Tag`).join(', ');
+  const mul = researchPerDayMultipliers(research);
+  return src + (mul.length ? ` · ${mul.join(', ')}` : '');
 }
 
 function isComboAutoUnlocked(comboId, research) {

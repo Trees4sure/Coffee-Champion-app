@@ -97,6 +97,26 @@ const DB = (() => {
     return { ...(mapData || {}), todayLog: { date: day, entries: next } };
   }
 
+  // Passiv-Einkommen anteilig nach Forschung vs. Gebäude aufschlüsseln, jeweils mit Quellen-Detail
+  // (woraus genau es entsteht — für „Heute erhalten"). Von addCups UND claimPassive genutzt.
+  function _passiveLogEntries(member, passiveEarned) {
+    const rPerDay = (typeof calcResearchPerDay === 'function') ? calcResearchPerDay(member.research || {}) : 0;
+    const bPerDay = (typeof calcBuildingPerDay === 'function') ? calcBuildingPerDay(member.map_data?.buildings || {}) : 0;
+    const totPerDay = rPerDay + bPerDay;
+    const rDetail = (typeof researchPerDayDetail === 'function') ? researchPerDayDetail(member.research) : '';
+    const bDetail = (typeof buildingPerDayDetail === 'function') ? buildingPerDayDetail(member.map_data?.buildings || {}) : '';
+    const out = [];
+    if (bPerDay > 0 && totPerDay > 0) {
+      const bShare = Math.round(passiveEarned * (bPerDay / totPerDay) * 100) / 100;
+      const rShare = Math.round((passiveEarned - bShare) * 100) / 100;
+      if (rShare > 0) out.push({ label: '⚙️ Forschung (passiv)', amount: rShare, detail: rDetail });
+      if (bShare > 0) out.push({ label: '🏗️ Gebäude-Einkommen',  amount: bShare, detail: bDetail });
+    } else {
+      out.push({ label: '⚙️ Passiv-Einkommen', amount: passiveEarned, detail: rDetail });
+    }
+    return out;
+  }
+
   // ── Gruppe erstellen ─────────────────────────────────────────────────────────
   async function createGroup(name, password) {
     const hash = await hashPassword(password);
@@ -172,13 +192,44 @@ const DB = (() => {
     if (hoursDiff < 1) return 0; // Max einmal pro Stunde
 
     const earned  = Math.round(perDay * (hoursDiff / 24) * 100) / 100;
-    const capped  = Math.min(earned, perDay * 2); // Max 2 Tages-Passiv auf einmal
+    const capped  = Math.min(earned, perDay * 4); // Max 4 Tages-Passiv auf einmal (deckt Wochenende/Abwesenheit ab)
     if (capped < 0.01) return 0;
 
     await _sb.rpc('add_coins', { p_member_id: memberId, p_amount: capped });
     const newCosmetics = { ...cosm, lastPassiveClaim: new Date().toISOString() };
     await _sb.from('members').update({ cosmetics: newCosmetics }).eq('id', memberId);
     return capped;
+  }
+
+  // ── Passives Einkommen EIGENSTÄNDIG einlösen (entkoppelt von Tassen) ──────────
+  // Damit das passive Einkommen wirklich passiv ist: wird beim App-Start und
+  // periodisch aufgerufen, nicht nur beim Tassen-Eintrag. Zeitbasiert (kein Cron),
+  // _checkAndClaimPassive begrenzt selbst auf max. 1×/Stunde und 2 Tages-Passiv.
+  // _passiveBusy verhindert, dass sich zwei eigene Aufrufe (Login + erster Poll)
+  // überlappen und doppelt auszahlen.
+  let _passiveBusy = false;
+  async function claimPassive(memberId) {
+    if (_passiveBusy || !memberId) return 0;
+    _passiveBusy = true;
+    try {
+      const { data: raw } = await _sb.from('members').select('*').eq('id', memberId).single();
+      if (!raw) return 0;
+      const member = normalizeUser(raw);
+      const earned = await _checkAndClaimPassive(memberId, member);
+      if (earned > 0) {
+        // Tages-Log (Forschung vs. Gebäude anteilig + Quellen-Detail) — Fehler nicht eskalieren
+        try {
+          const md = appendTodayLog(member.map_data, _passiveLogEntries(member, earned));
+          await updateMapData(memberId, md);
+        } catch (e) { console.warn('Passiv-Log konnte nicht gespeichert werden:', e); }
+      }
+      return earned;
+    } catch (e) {
+      console.warn('claimPassive fehlgeschlagen:', e.message);
+      return 0;
+    } finally {
+      _passiveBusy = false;
+    }
   }
 
   // ── Tassen eintragen ─────────────────────────────────────────────────────────
@@ -310,24 +361,17 @@ const DB = (() => {
       if (baseCoins + morningBonus > 0) {
         logEntries.push({ label: amount > 1 ? `☕ ${amount} Tassen` : '☕ Tasse', amount: Math.round((baseCoins + morningBonus) * 100) / 100 });
       }
-      if (researchBonus > 0) logEntries.push({ label: '🔬 Forschung', amount: researchBonus });
+      if (researchBonus > 0) {
+        const detail = (typeof researchPerCupDetail === 'function')
+          ? researchPerCupDetail(member.research, amount, calcResearchPerCup(member.research)) : '';
+        logEntries.push({ label: '🔬 Forschung', amount: researchBonus, detail });
+      }
       for (const a of allNew) {
         if (a?.coinReward) logEntries.push({ label: `🏆 ${a.name || a.id}`, amount: a.coinReward });
       }
       if (streakBonus > 0) logEntries.push({ label: `🔥 Streak ${newStreak}`, amount: streakBonus });
       if (passiveEarned > 0) {
-        // Passiv-Einkommen anteilig nach Forschung vs. Gebäude aufschlüsseln (Transparenz)
-        const rPerDay = (typeof calcResearchPerDay === 'function') ? calcResearchPerDay(member.research || {}) : 0;
-        const bPerDay = (typeof calcBuildingPerDay === 'function') ? calcBuildingPerDay(member.map_data?.buildings || {}) : 0;
-        const totPerDay = rPerDay + bPerDay;
-        if (bPerDay > 0 && totPerDay > 0) {
-          const bShare = Math.round(passiveEarned * (bPerDay / totPerDay) * 100) / 100;
-          const rShare = Math.round((passiveEarned - bShare) * 100) / 100;
-          if (rShare > 0) logEntries.push({ label: '⚙️ Passiv-Einkommen', amount: rShare });
-          if (bShare > 0) logEntries.push({ label: '🏗️ Gebäude-Einkommen', amount: bShare });
-        } else {
-          logEntries.push({ label: '⚙️ Passiv-Einkommen', amount: passiveEarned });
-        }
+        for (const e of _passiveLogEntries(member, passiveEarned)) logEntries.push(e);
       }
 
       if (logEntries.length) {
@@ -390,10 +434,11 @@ const DB = (() => {
     const research = raw.research || {};
     if (research[itemId]) throw new Error('Bereits freigeschaltet');
 
-    // Kombo: Voraussetzungen prüfen — gilt auch für kostenpflichtige Kombos
-    if (combo) {
-      const prereqsMet = (combo.requires || []).every(req => research[req]);
-      if (!prereqsMet) throw new Error('Voraussetzungen nicht erfüllt');
+    // Voraussetzungen prüfen — für Kombos UND normale Items mit requires.
+    // Gated nur Neukäufe; bereits besessene Items bleiben unberührt (target ist hier noch nicht owned).
+    const prereqs = target.requires || [];
+    if (prereqs.length && !prereqs.every(req => research[req])) {
+      throw new Error('Voraussetzungen nicht erfüllt');
     }
 
     // Coins abziehen (bei kostenpflichtigen Items)
@@ -697,6 +742,6 @@ const DB = (() => {
     // Neu:
     spendCoins, fetchTreasury, contributeToTreasury,
     purchaseResearchItem, saveCosmetics,
-    updateMapData, addCoins, appendTodayLog,
+    updateMapData, addCoins, appendTodayLog, claimPassive,
   };
 })();

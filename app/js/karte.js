@@ -217,6 +217,31 @@ function karteBuildingDef(key) {
   return KARTE_BUILDINGS.find(b => b.key === key) || null;
 }
 
+// Restzeit bis Fertigstellung, menschlich gerundet (Stunden statt ganzer Tagesblöcke).
+// { text: fürs Popup ("9 Std." / "45 Min" / "3 Tage"), short: fürs Canvas ("9h" / "45m" / "3d") }
+function karteBuildRemaining(completesAt, nowTs) {
+  const ms = (completesAt || 0) - (nowTs || Date.now());
+  if (ms <= 0)              return { text: 'fertig',     short: '✓' };
+  if (ms < 3600000)         { const m = Math.max(1, Math.round(ms / 60000));  return { text: `${m} Min`,  short: `${m}m` }; }
+  if (ms <= 24 * 3600000)   { const h = Math.max(1, Math.round(ms / 3600000)); return { text: `${h} Std.`, short: `${h}h` }; }
+  const d = Math.round(ms / 86400000);                                         return { text: `${d} Tage`, short: `${d}d` };
+}
+
+// Fertige, einkommensbringende Gebäude als Quellen-Liste (für „Heute erhalten"-Aufschlüsselung)
+function buildingPerDaySources(buildings) {
+  const now = Date.now(), today = _todayKey();
+  const out = [];
+  for (const b of Object.values(buildings || {})) {
+    if (b.completesAt > now || b.damaged === today) continue;
+    const def = karteBuildingDef(b.type);
+    if (def && (def.perDay || 0) > 0) out.push({ icon: def.emoji, name: def.name, perDay: def.perDay });
+  }
+  return out;
+}
+function buildingPerDayDetail(buildings) {
+  return buildingPerDaySources(buildings).map(s => `${s.icon} ${s.name} +${s.perDay}/Tag`).join(', ');
+}
+
 function _karteHasAdjacent(x, y, terrain, worldSeed) {
   const nb = [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]];
   return nb.some(([nx, ny]) =>
@@ -796,10 +821,10 @@ function karteRender(canvas, mapData, worldSeed, vpX, vpY) {
     ctx.fillText(building ? '🚧' : def.emoji, bpx + wPx / 2, bpy + hPx / 2);
     // Resttage bei Baustelle
     if (building) {
-      const daysLeft = Math.max(1, Math.ceil((b.completesAt - nowTs) / 86400000));
-      ctx.font = `bold ${Math.floor(T * 0.5)}px sans-serif`;
+      const rem = karteBuildRemaining(b.completesAt, nowTs);
+      ctx.font = `bold ${Math.floor(T * 0.42)}px sans-serif`;
       ctx.fillStyle = '#FAC775';
-      ctx.fillText(daysLeft + 'd', bpx + wPx / 2, bpy + hPx - T * 0.32);
+      ctx.fillText(rem.short, bpx + wPx / 2, bpy + hPx - T * 0.32);
     } else if (b.damaged === todayK) {
       // Sturmschaden: rötliche Tönung + Warnsymbol, heute kein Einkommen
       ctx.fillStyle = 'rgba(170,40,30,0.30)';
