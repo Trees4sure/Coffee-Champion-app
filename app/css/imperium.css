@@ -9,6 +9,8 @@
                     padding: 6px 10px; background: rgba(255,255,255,.04); border-radius: 6px; font-size: 12px; }
 .today-log-label  { color: rgba(255,255,255,.7); }
 .today-log-amount { color: var(--gold, #d4aa37); font-weight: 600; }
+.today-log-detail { color: rgba(255,255,255,.45); font-size: 10.5px; line-height: 1.35;
+                    padding: 1px 10px 3px; margin-top: -2px; word-break: break-word; overflow-wrap: anywhere; }
 
 /* ── CoffeeCoin Badge ──────────────────────────────────────────────────────── */
 .cc-coin {
@@ -128,6 +130,12 @@
   background: rgba(212, 175, 55, .12);
   border-color: rgba(212, 175, 55, .35);
 }
+.cc-ri-locked {
+  opacity: .55;
+  border-style: dashed;
+}
+.cc-ri-locked-lbl { font-size: 9px; color: rgba(255,255,255,.5); margin: 5px 0 1px; }
+.cc-ri-need       { font-size: 8.5px; color: #EF9F27; margin: 0; line-height: 1.25; word-break: break-word; overflow-wrap: anywhere; }
 .cc-ri-path  { font-size: 9px; position: absolute; top: 4px; left: 5px; opacity: .5; }
 .cc-ri-icon  { font-size: 22px; margin: 4px 0 3px; line-height: 1; }
 .cc-ri-name  { font-size: 10px; font-weight: 500; color: rgba(255,255,255,.85); margin: 0 0 2px; line-height: 1.3; word-break: break-word; overflow-wrap: anywhere; }
