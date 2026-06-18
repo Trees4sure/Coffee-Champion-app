@@ -1,0 +1,82 @@
+/* world.css — Weltkarte (Globaler Kaffee-Imperialismus) */
+
+.cc-world-intro {
+  font-size: 12px; color: rgba(255,255,255,.7); line-height: 1.45;
+  margin: 4px 2px 10px;
+}
+
+#cc-world-map {
+  height: 340px; width: 100%;
+  border-radius: 12px; overflow: hidden;
+  border: 1px solid rgba(212,175,55,.25);
+  background: #14110b;
+}
+/* Leaflet-Tiles im dunklen Rahmen halten */
+#cc-world-map .leaflet-container { background: #14110b; font-family: inherit; }
+
+.cc-world-legend {
+  display: flex; flex-wrap: wrap; gap: 8px 14px;
+  margin: 10px 2px; font-size: 11px; color: rgba(255,255,255,.65);
+}
+.cc-world-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.cc-world-legend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block;
+  border: 1px solid rgba(0,0,0,.5); }
+
+/* Lock-Hinweis (Tier-Gating) */
+.cc-world-lock { text-align: center; padding: 36px 20px; color: rgba(255,255,255,.8); }
+.cc-world-lock-icon { font-size: 40px; margin-bottom: 10px; }
+.cc-world-lock-hint { font-size: 12px; color: rgba(255,255,255,.55); line-height: 1.5; margin-top: 6px; }
+
+/* Bottom-Sheet pro Land */
+.cc-world-sheet {
+  margin-top: 12px; padding: 12px 14px;
+  background: rgba(20,17,11,.96);
+  border: 1px solid rgba(212,175,55,.3); border-radius: 12px;
+}
+.cc-world-sheet.hidden { display: none; }
+.cc-world-sheet-head {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 14px; color: #fff; margin-bottom: 10px;
+}
+.cc-world-close {
+  background: none; border: none; color: rgba(255,255,255,.5);
+  font-size: 18px; cursor: pointer; padding: 0 4px; line-height: 1;
+}
+.cc-world-slots { display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px; }
+.cc-world-slot {
+  display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center;
+  padding: 6px 9px; background: rgba(255,255,255,.04); border-radius: 7px; font-size: 12px;
+}
+.cc-world-slot.cc-world-mine { background: rgba(212,175,55,.14); border: 1px solid rgba(212,175,55,.4); }
+.cc-world-slot-rank  { color: rgba(255,255,255,.85); font-weight: 600; white-space: nowrap; }
+.cc-world-slot-who   { color: rgba(255,255,255,.6); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cc-world-slot-bonus { color: #9FE1CB; font-size: 11px; white-space: nowrap; }
+
+.cc-world-status { font-size: 12px; color: rgba(255,255,255,.75); line-height: 1.5; margin: 4px 2px 10px; }
+
+.cc-world-invest { display: flex; gap: 8px; }
+.cc-world-invest input {
+  flex: 1; min-width: 0; padding: 9px 11px; font-size: 14px;
+  background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.15);
+  border-radius: 8px; color: #fff;
+}
+.cc-world-invest .cc-build-btn { white-space: nowrap; }
+
+/* Gebäude + Garde (Phase 2) */
+.cc-world-section-title {
+  margin: 14px 2px 4px; font-size: 12px; font-weight: 700; color: #FAC775;
+}
+.cc-world-section-title span { font-weight: 400; color: rgba(255,255,255,.45); font-size: 11px; }
+.cc-world-pctnote { font-size: 11px; color: rgba(255,255,255,.6); margin: 0 2px 8px; line-height: 1.4; }
+.cc-world-blds { display: flex; flex-direction: column; gap: 5px; }
+.cc-world-bld {
+  display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center;
+  padding: 6px 9px; background: rgba(255,255,255,.04); border-radius: 7px; font-size: 12px;
+}
+.cc-world-bld-name { color: rgba(255,255,255,.85); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cc-world-bld-name em { color: rgba(255,255,255,.45); font-style: normal; font-size: 10px; }
+.cc-world-bld-eff  { color: #9FE1CB; font-size: 11px; white-space: nowrap; }
+.cc-world-bbtn { padding: 6px 10px !important; font-size: 11px !important; white-space: nowrap; }
+.cc-world-blocked { font-size: 11px; color: rgba(255,255,255,.4); white-space: nowrap; }
+.cc-world-garde { margin-top: 4px; }
+.cc-world-garde-on { font-size: 12px; color: #d4aa37; font-weight: 600; }
