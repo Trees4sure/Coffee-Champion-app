@@ -103,6 +103,7 @@ async function renderImperium() {
     <div class="imperium-tabs" id="imp-tabs">
       <button class="imp-tab active" data-tab="baum">🌳 Forschung</button>
       <button class="imp-tab" data-tab="karte">🗺️ Karte</button>
+      <button class="imp-tab" data-tab="welt">🌍 Weltkarte</button>
       <button class="imp-tab" data-tab="stats">📊 Statistik</button>
       <button class="imp-tab" data-tab="kasse">🏛️ Kasse</button>
       <button class="imp-tab" data-tab="cosmetics">🎨 Cosmetics</button>
@@ -116,8 +117,8 @@ async function renderImperium() {
     if (!btn) return;
     document.querySelectorAll('.imp-tab').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    // Karte-Tab: immer aktuellsten Stand (currentUserData hat map_data-Updates)
-    const freshMember = btn.dataset.tab === 'karte' ? (currentUserData || member) : member;
+    // Karte/Welt-Tab: immer aktuellsten Stand (currentUserData hat map_data/coins-Updates)
+    const freshMember = (btn.dataset.tab === 'karte' || btn.dataset.tab === 'welt') ? (currentUserData || member) : member;
     _renderImperiumTab(btn.dataset.tab, freshMember);
   });
 
@@ -130,6 +131,7 @@ async function _renderImperiumTab(tab, member) {
   if (tab === 'baum')      el.innerHTML = _buildForschungsbaum(member.research || {});
   if (tab === 'kasse')     el.innerHTML = await _buildKasse(member);
   if (tab === 'karte')     { el.innerHTML = ''; _buildKarte(member, el); return; }
+  if (tab === 'welt')      { el.innerHTML = ''; _buildWeltkarte(member, el); return; }
   if (tab === 'stats')     el.innerHTML = _buildImperiumStats();
   if (tab === 'cosmetics') el.innerHTML = _buildCosmetics(member);
 

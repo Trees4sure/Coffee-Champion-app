@@ -86,6 +86,7 @@ const RESEARCH_COMBOS = [
   { id: 'natur_cafe',          name: 'Natur-Café',         icon: '🌲', requires: ['erstes_cafe','biogarten'],                          cost: 0,   perCup: 0,  perDay: 0,   special: 'cosmetic_waldcafe',desc: 'Waldcafé-Theme freigeschaltet' },
   { id: 'ki_kaffee_genie',     name: 'KI-Kaffee-Genie',   icon: '🤖', requires: ['iot_roester','weltreise'],                          cost: 0,   perCup: 0,  perDay: 0,   special: 'technik_x3',       desc: 'Technik ×3 + Titel "KI-Röstmeister"' },
   { id: 'weltkonzern',         name: 'Weltkonzern',        icon: '👑', requires: ['exportplantage','logistikzentrum','kaffeekette'],   cost: 0,   perCup: 0,  perDay: 0,   special: 'all_x3',           desc: 'ALLE Boni ×3 — End-Game!' },
+  { id: 'welthandelslizenz',   name: 'Welthandels-Lizenz', icon: '🌍', requires: ['kaffeesamen','wasserquelle','handmuehle','ton','toepferei','fahrradkurier','kompost','kaffee_buch'], cost: 200, perCup: 0, perDay: 0, special: 'unlock_world', desc: 'Schaltet die 🌍 Weltkarte frei — alle Tier-1-Forschungen nötig' },
 ];
 
 // ── Tier-Namen ────────────────────────────────────────────────────────────────

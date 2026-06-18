@@ -604,6 +604,12 @@ function _ccCosmCount(u) {
   if (c.jahresChampion)                  n += 1;
   return n;
 }
+function _ccWorldInvested(u) {
+  return (typeof worldInvestedTotal === 'function') ? worldInvestedTotal(appData?.worldInvestments, u.id) : 0;
+}
+function _ccGovernments(u) {
+  return (typeof worldGovernments === 'function') ? worldGovernments(appData?.worldInvestments, u.id) : 0;
+}
 // Aktuell führender Spieler für eine Metrik (Live-Snapshot, kein persistierter Rekord)
 function _ccLeader(users, fn) {
   let best = null, bestVal = -1;
@@ -624,6 +630,8 @@ function renderHallOfFame() {
   const rl = _ccLeader(users, _ccResearchScore);
   const tl = _ccLeader(users, _ccTreasures);
   const cl = _ccLeader(users, _ccCosmCount);
+  const il = _ccLeader(users, _ccWorldInvested);
+  const gl = _ccLeader(users, _ccGovernments);
 
   const cards = [
     { icon: '☕', label: 'Meiste Tassen',      val: hof.max_cups_value,       name: hof.max_cups_name },
@@ -635,6 +643,8 @@ function renderHallOfFame() {
     { icon: '🔬', label: 'Top-Forschung',      val: rl.val != null ? `${rl.val.toLocaleString('de-DE')} CC` : null, name: rl.name },
     { icon: '✦', label: 'Meiste Schätze',      val: tl.val, name: tl.name },
     { icon: '🎨', label: 'Meiste Cosmetics',   val: cl.val, name: cl.name },
+    { icon: '🌍', label: 'Größter Weltinvestor', val: il.val != null ? `${il.val.toLocaleString('de-DE')} CC` : null, name: il.name },
+    { icon: '🏛️', label: 'Meiste Regierungen', val: gl.val, name: gl.name },
   ];
 
   document.getElementById('hof-container').innerHTML = cards.map(r => `

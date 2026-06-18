@@ -97,23 +97,27 @@ const DB = (() => {
     return { ...(mapData || {}), todayLog: { date: day, entries: next } };
   }
 
-  // Passiv-Einkommen anteilig nach Forschung vs. Gebäude aufschlüsseln, jeweils mit Quellen-Detail
-  // (woraus genau es entsteht — für „Heute erhalten"). Von addCups UND claimPassive genutzt.
-  function _passiveLogEntries(member, passiveEarned) {
+  // Passiv-Einkommen anteilig nach Forschung / Gebäude / Welt-Einfluss aufschlüsseln,
+  // jeweils mit Quellen-Detail (woraus es entsteht — für „Heute erhalten").
+  function _passiveLogEntries(member, passiveEarned, worldRankMap, worldByCountry) {
     const rPerDay = (typeof calcResearchPerDay === 'function') ? calcResearchPerDay(member.research || {}) : 0;
     const bPerDay = (typeof calcBuildingPerDay === 'function') ? calcBuildingPerDay(member.map_data?.buildings || {}) : 0;
-    const totPerDay = rPerDay + bPerDay;
-    const rDetail = (typeof researchPerDayDetail === 'function') ? researchPerDayDetail(member.research) : '';
-    const bDetail = (typeof buildingPerDayDetail === 'function') ? buildingPerDayDetail(member.map_data?.buildings || {}) : '';
+    const wRank   = (worldRankMap && typeof calcWorldPerDay === 'function') ? calcWorldPerDay(worldRankMap) : 0;
+    const wBld    = (worldRankMap && typeof calcWorldBuildingPerDay === 'function') ? calcWorldBuildingPerDay(worldRankMap, worldByCountry) : 0;
+    const wPerDay = wRank + wBld;
+    const tot = rPerDay + bPerDay + wPerDay;
+    if (tot <= 0) return [{ label: '⚙️ Passiv-Einkommen', amount: passiveEarned }];
+    const bShare = Math.round(passiveEarned * (bPerDay / tot) * 100) / 100;
+    const wShare = Math.round(passiveEarned * (wPerDay / tot) * 100) / 100;
+    const rShare = Math.round((passiveEarned - bShare - wShare) * 100) / 100;
+    const wDetail = [
+      (typeof worldPerDayDetail === 'function') ? worldPerDayDetail(worldRankMap) : '',
+      (typeof worldBuildingPerDayDetail === 'function') ? worldBuildingPerDayDetail(worldRankMap, worldByCountry) : '',
+    ].filter(Boolean).join(', ');
     const out = [];
-    if (bPerDay > 0 && totPerDay > 0) {
-      const bShare = Math.round(passiveEarned * (bPerDay / totPerDay) * 100) / 100;
-      const rShare = Math.round((passiveEarned - bShare) * 100) / 100;
-      if (rShare > 0) out.push({ label: '⚙️ Forschung (passiv)', amount: rShare, detail: rDetail });
-      if (bShare > 0) out.push({ label: '🏗️ Gebäude-Einkommen',  amount: bShare, detail: bDetail });
-    } else {
-      out.push({ label: '⚙️ Passiv-Einkommen', amount: passiveEarned, detail: rDetail });
-    }
+    if (rShare > 0) out.push({ label: '⚙️ Forschung (passiv)', amount: rShare, detail: (typeof researchPerDayDetail === 'function') ? researchPerDayDetail(member.research) : '' });
+    if (bShare > 0) out.push({ label: '🏗️ Gebäude-Einkommen',  amount: bShare, detail: (typeof buildingPerDayDetail === 'function') ? buildingPerDayDetail(member.map_data?.buildings || {}) : '' });
+    if (wShare > 0) out.push({ label: '🌍 Welt-Einfluss',       amount: wShare, detail: wDetail });
     return out;
   }
 
@@ -143,17 +147,22 @@ const DB = (() => {
 
   // ── Daten laden ──────────────────────────────────────────────────────────────
   async function fetchData() {
-    const [m, ds, s, h] = await Promise.all([
+    const [m, ds, s, h, wi, wb] = await Promise.all([
       _sb.from('members').select('*').eq('group_id', _groupId).order('total_cups', { ascending: false }),
       _sb.from('daily_stats').select('*').eq('group_id', _groupId).order('date', { ascending: false }).limit(90),
       _sb.from('seasons').select('*').eq('group_id', _groupId).order('season_id', { ascending: false }),
-      _sb.from('hall_of_fame').select('*').eq('group_id', _groupId).maybeSingle()
+      _sb.from('hall_of_fame').select('*').eq('group_id', _groupId).maybeSingle(),
+      // Welt-Daten (Phase 1.5): liefern {data:null,error} falls noch nicht migriert → []. Kein Reject.
+      _sb.from('world_investments').select('member_id, country_id, total_invested, garde_purchased').eq('group_id', _groupId),
+      _sb.from('world_buildings').select('member_id, country_id, building_id, level').eq('group_id', _groupId),
     ]);
     return {
       users: (m.data || []).map(normalizeUser),
       dailyStats: Object.fromEntries((ds.data || []).map(d => [d.date, { date: d.date, total: d.total, entries: d.stats || {} }])),
       seasons: s.data || [],
       halloffame: h.data || {},
+      worldInvestments: wi.data || [],
+      worldBuildings: wb.data || [],
       entries: []
     };
   }
@@ -179,11 +188,37 @@ const DB = (() => {
     return normalizeUser(data);
   }
 
+  // ── Welt-Ränge des Members laden (für Welt-Boni) — robust, {} bei Fehler ──────
+  async function _fetchWorldRankMap(memberId) {
+    try {
+      const { data, error } = await _sb.rpc('get_member_country_ranks', { p_member_id: memberId, p_group_id: _groupId });
+      if (error) throw error;
+      const m = {};
+      for (const row of (data || [])) m[row.country_id] = row.rank;
+      return m;
+    } catch (e) { return {}; } // Tabelle/RPC fehlt (nicht migriert) → keine Welt-Boni, kein Crash
+  }
+
+  // ── Land-Gebäude der Gruppe laden, gruppiert nach Land — {} bei Fehler ───────
+  async function _fetchWorldBuildingsByCountry() {
+    try {
+      const { data, error } = await _sb.from('world_buildings')
+        .select('member_id, country_id, building_id, level').eq('group_id', _groupId);
+      if (error) throw error;
+      return (typeof worldBuildingsByCountry === 'function') ? worldBuildingsByCountry(data || []) : {};
+    } catch (e) { return {}; }
+  }
+
   // ── Passiv-Einkommen prüfen und gutschreiben ─────────────────────────────────
-  async function _checkAndClaimPassive(memberId, member) {
+  // worldRankMap optional durchreichen, um Doppel-Fetch zu sparen.
+  async function _checkAndClaimPassive(memberId, member, worldRankMap, worldByCountry) {
     const researchPerDay = (typeof calcResearchPerDay === 'function') ? calcResearchPerDay(member.research || {}) : 0;
     const buildingPerDay = (typeof calcBuildingPerDay === 'function') ? calcBuildingPerDay(member.map_data?.buildings || {}) : 0;
-    const perDay = researchPerDay + buildingPerDay;
+    const rankMap = worldRankMap || await _fetchWorldRankMap(memberId);
+    const byCountry = worldByCountry || (Object.keys(rankMap).length ? await _fetchWorldBuildingsByCountry() : {});
+    const worldPerDay = (typeof calcWorldPerDay === 'function') ? calcWorldPerDay(rankMap) : 0;
+    const worldBldPerDay = (typeof calcWorldBuildingPerDay === 'function') ? calcWorldBuildingPerDay(rankMap, byCountry) : 0;
+    const perDay = researchPerDay + buildingPerDay + worldPerDay + worldBldPerDay;
     if (perDay <= 0) return 0;
 
     const cosm = member.cosmetics || {};
@@ -215,11 +250,13 @@ const DB = (() => {
       const { data: raw } = await _sb.from('members').select('*').eq('id', memberId).single();
       if (!raw) return 0;
       const member = normalizeUser(raw);
-      const earned = await _checkAndClaimPassive(memberId, member);
+      const worldRankMap = await _fetchWorldRankMap(memberId);
+      const worldByCountry = Object.keys(worldRankMap).length ? await _fetchWorldBuildingsByCountry() : {};
+      const earned = await _checkAndClaimPassive(memberId, member, worldRankMap, worldByCountry);
       if (earned > 0) {
-        // Tages-Log (Forschung vs. Gebäude anteilig + Quellen-Detail) — Fehler nicht eskalieren
+        // Tages-Log (Forschung / Gebäude / Welt anteilig + Quellen-Detail) — Fehler nicht eskalieren
         try {
-          const md = appendTodayLog(member.map_data, _passiveLogEntries(member, earned));
+          const md = appendTodayLog(member.map_data, _passiveLogEntries(member, earned, worldRankMap, worldByCountry));
           await updateMapData(memberId, md);
         } catch (e) { console.warn('Passiv-Log konnte nicht gespeichert werden:', e); }
       }
@@ -320,6 +357,12 @@ const DB = (() => {
     const researchBonus = (typeof calcResearchPerCup === 'function')
       ? Math.round(amount * calcResearchPerCup(member.research) * 100) / 100
       : 0;
+    // Welt-Einfluss-Bonus pro Tasse (eigene Länder-Ränge + rangabhängige Land-Gebäude) — robust, 0 falls Backend fehlt
+    const worldRankMap = await _fetchWorldRankMap(memberId);
+    const worldByCountry = Object.keys(worldRankMap).length ? await _fetchWorldBuildingsByCountry() : {};
+    const worldPerCup = (typeof calcWorldPerCup === 'function' ? calcWorldPerCup(worldRankMap) : 0)
+                      + (typeof calcWorldBuildingPerCup === 'function' ? calcWorldBuildingPerCup(worldRankMap, worldByCountry) : 0);
+    const worldBonus = Math.round(amount * worldPerCup * 100) / 100;
     let achCoinTotal = 0;
     for (const a of allNew) achCoinTotal += (a.coinReward || 0);
 
@@ -345,15 +388,15 @@ const DB = (() => {
       if (newStreak >= 100 && newStreak % 100 === 0)                    streakBonus = 2000;
     }
 
-    let totalCoins = baseCoins + morningBonus + researchBonus + achCoinTotal + streakBonus;
+    let totalCoins = baseCoins + morningBonus + researchBonus + worldBonus + achCoinTotal + streakBonus;
 
     if (totalCoins > 0) {
       const { error: coinErr } = await _sb.rpc('add_coins', { p_member_id: memberId, p_amount: totalCoins });
       if (coinErr) { console.error('add_coins fehlgeschlagen:', coinErr.message); totalCoins = 0; }
     }
 
-    // Passiv-Einkommen prüfen
-    const passiveEarned = await _checkAndClaimPassive(memberId, member);
+    // Passiv-Einkommen prüfen (Welt-Ränge + Gebäude wiederverwenden, kein Doppel-Fetch)
+    const passiveEarned = await _checkAndClaimPassive(memberId, member, worldRankMap, worldByCountry);
 
     // Tages-Log aktualisieren (woher kamen die Coins?) — Fehler hier dürfen den Tassen-Eintrag nicht blockieren
     try {
@@ -366,12 +409,17 @@ const DB = (() => {
           ? researchPerCupDetail(member.research, amount, calcResearchPerCup(member.research)) : '';
         logEntries.push({ label: '🔬 Forschung', amount: researchBonus, detail });
       }
+      if (worldBonus > 0) {
+        const detail = (typeof worldPerCupDetail === 'function')
+          ? `${amount}× à ${worldPerCup}/Tasse · ${worldPerCupDetail(worldRankMap)}` : '';
+        logEntries.push({ label: '🌍 Welt-Einfluss', amount: worldBonus, detail });
+      }
       for (const a of allNew) {
         if (a?.coinReward) logEntries.push({ label: `🏆 ${a.name || a.id}`, amount: a.coinReward });
       }
       if (streakBonus > 0) logEntries.push({ label: `🔥 Streak ${newStreak}`, amount: streakBonus });
       if (passiveEarned > 0) {
-        for (const e of _passiveLogEntries(member, passiveEarned)) logEntries.push(e);
+        for (const e of _passiveLogEntries(member, passiveEarned, worldRankMap, worldByCountry)) logEntries.push(e);
       }
 
       if (logEntries.length) {
@@ -712,6 +760,52 @@ const DB = (() => {
     if (error) throw new Error(error.message);
   }
 
+  // ── Weltkarte ────────────────────────────────────────────────────────────────
+  async function investInCountry(memberId, countryId, amount) {
+    const { data, error } = await _sb.rpc('invest_in_country', {
+      p_member_id: memberId, p_group_id: _groupId, p_country_id: countryId, p_amount: parseFloat(amount)
+    });
+    if (error) throw new Error(error.message);
+    return data; // { ok, total_invested, coins_left } oder { error }
+  }
+
+  async function fetchCountryStandings(countryId) {
+    const { data, error } = await _sb.rpc('get_country_standings', { p_group_id: _groupId, p_country_id: countryId });
+    if (error) throw new Error(error.message);
+    return data || [];
+  }
+
+  async function fetchAllWorldInvestments() {
+    const { data, error } = await _sb.from('world_investments')
+      .select('member_id, country_id, total_invested, garde_purchased').eq('group_id', _groupId);
+    if (error) throw new Error(error.message);
+    return data || [];
+  }
+
+  async function fetchAllWorldBuildings() {
+    const { data, error } = await _sb.from('world_buildings')
+      .select('member_id, country_id, building_id, level').eq('group_id', _groupId);
+    if (error) throw new Error(error.message);
+    return data || [];
+  }
+
+  async function buildWorldStructure(memberId, countryId, buildingId, cost, upgrade) {
+    const { data, error } = await _sb.rpc('build_world_structure', {
+      p_member_id: memberId, p_group_id: _groupId, p_country_id: countryId,
+      p_building_id: buildingId, p_cost: parseFloat(cost), p_upgrade: !!upgrade
+    });
+    if (error) throw new Error(error.message);
+    return data; // { ok, level } oder { error }
+  }
+
+  async function buyGarde(memberId, countryId) {
+    const { data, error } = await _sb.rpc('buy_garde', {
+      p_member_id: memberId, p_group_id: _groupId, p_country_id: countryId
+    });
+    if (error) throw new Error(error.message);
+    return data; // { ok, cost } oder { error, cost }
+  }
+
   // ── Pinnwand ─────────────────────────────────────────────────────────────────
   async function getPinnedMessage() {
     const { data } = await _sb.from('groups_public')
@@ -743,5 +837,7 @@ const DB = (() => {
     spendCoins, fetchTreasury, contributeToTreasury,
     purchaseResearchItem, saveCosmetics,
     updateMapData, addCoins, appendTodayLog, claimPassive,
+    investInCountry, fetchCountryStandings, fetchAllWorldInvestments,
+    fetchAllWorldBuildings, buildWorldStructure, buyGarde,
   };
 })();
