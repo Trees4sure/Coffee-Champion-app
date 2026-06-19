@@ -188,13 +188,33 @@ const DB = (() => {
     return normalizeUser(data);
   }
 
+  // Garde-Akademie-Entwicklung (+10% auf alle Welt-Einkommen) — aus map_data.worldDev
+  function _gardeMult(member) {
+    return (member && member.map_data && member.map_data.worldDev && member.map_data.worldDev.garde_akademie) ? 1.1 : 1;
+  }
+
+  // Aktive Sabotagen GEGEN diesen Member (Set von country_id) — {} bei fehlender Tabelle
+  async function _fetchActiveSabotages(memberId) {
+    try {
+      const { data, error } = await _sb.from('world_sabotage')
+        .select('country_id').eq('group_id', _groupId).eq('target_id', memberId)
+        .gt('expires_at', new Date().toISOString());
+      if (error) throw error;
+      return new Set((data || []).map(r => r.country_id));
+    } catch (e) { return new Set(); }
+  }
+
   // ── Welt-Ränge des Members laden (für Welt-Boni) — robust, {} bei Fehler ──────
+  // Sabotierte Länder werden entfernt → der Member verliert dort vorübergehend das
+  // Einkommen (Einfluss + Gebäude), behält aber clientseitig seinen sichtbaren Rang.
   async function _fetchWorldRankMap(memberId) {
     try {
       const { data, error } = await _sb.rpc('get_member_country_ranks', { p_member_id: memberId, p_group_id: _groupId });
       if (error) throw error;
       const m = {};
       for (const row of (data || [])) m[row.country_id] = row.rank;
+      const sabotaged = await _fetchActiveSabotages(memberId);
+      for (const cid of sabotaged) delete m[cid];
       return m;
     } catch (e) { return {}; } // Tabelle/RPC fehlt (nicht migriert) → keine Welt-Boni, kein Crash
   }
@@ -216,8 +236,9 @@ const DB = (() => {
     const buildingPerDay = (typeof calcBuildingPerDay === 'function') ? calcBuildingPerDay(member.map_data?.buildings || {}) : 0;
     const rankMap = worldRankMap || await _fetchWorldRankMap(memberId);
     const byCountry = worldByCountry || (Object.keys(rankMap).length ? await _fetchWorldBuildingsByCountry() : {});
-    const worldPerDay = (typeof calcWorldPerDay === 'function') ? calcWorldPerDay(rankMap) : 0;
-    const worldBldPerDay = (typeof calcWorldBuildingPerDay === 'function') ? calcWorldBuildingPerDay(rankMap, byCountry) : 0;
+    const _gm = _gardeMult(member);
+    const worldPerDay = ((typeof calcWorldPerDay === 'function') ? calcWorldPerDay(rankMap) : 0) * _gm;
+    const worldBldPerDay = ((typeof calcWorldBuildingPerDay === 'function') ? calcWorldBuildingPerDay(rankMap, byCountry) : 0) * _gm;
     const perDay = researchPerDay + buildingPerDay + worldPerDay + worldBldPerDay;
     if (perDay <= 0) return 0;
 
@@ -360,8 +381,9 @@ const DB = (() => {
     // Welt-Einfluss-Bonus pro Tasse (eigene Länder-Ränge + rangabhängige Land-Gebäude) — robust, 0 falls Backend fehlt
     const worldRankMap = await _fetchWorldRankMap(memberId);
     const worldByCountry = Object.keys(worldRankMap).length ? await _fetchWorldBuildingsByCountry() : {};
-    const worldPerCup = (typeof calcWorldPerCup === 'function' ? calcWorldPerCup(worldRankMap) : 0)
-                      + (typeof calcWorldBuildingPerCup === 'function' ? calcWorldBuildingPerCup(worldRankMap, worldByCountry) : 0);
+    const worldPerCup = ((typeof calcWorldPerCup === 'function' ? calcWorldPerCup(worldRankMap) : 0)
+                      + (typeof calcWorldBuildingPerCup === 'function' ? calcWorldBuildingPerCup(worldRankMap, worldByCountry) : 0))
+                      * _gardeMult(member);
     const worldBonus = Math.round(amount * worldPerCup * 100) / 100;
     let achCoinTotal = 0;
     for (const a of allNew) achCoinTotal += (a.coinReward || 0);
@@ -806,6 +828,45 @@ const DB = (() => {
     return data; // { ok, cost } oder { error, cost }
   }
 
+  // ── Söldner-Sabotage (Welt) ──────────────────────────────────────────────────
+  // Setzt das Ziel für N Tage im betroffenen Land lahm (Einkommen pausiert).
+  async function castSabotage(attackerId, targetId, countryId, cost, days) {
+    const { data, error } = await _sb.rpc('cast_sabotage', {
+      p_attacker_id: attackerId, p_group_id: _groupId, p_target_id: targetId,
+      p_country_id: countryId, p_cost: parseFloat(cost), p_days: parseInt(days, 10)
+    });
+    if (error) throw new Error(error.message);
+    return data; // { ok, expires_at } oder { error }
+  }
+
+  // Aktive Sabotagen der Gruppe (für Anzeige im Länder-Sheet) — [] bei fehlender Tabelle
+  async function fetchSabotages() {
+    try {
+      const { data, error } = await _sb.from('world_sabotage')
+        .select('attacker_id, target_id, country_id, expires_at')
+        .eq('group_id', _groupId).gt('expires_at', new Date().toISOString());
+      if (error) throw error;
+      return data || [];
+    } catch (e) { return []; }
+  }
+
+  // Steuer-Statistik je Member (erhalten/gezahlt, Woche + gesamt).
+  // Resilient: {} falls Migration 19d (world_tax_log + get_world_tax_stats) noch nicht ausgeführt.
+  async function fetchTaxStats() {
+    const { data, error } = await _sb.rpc('get_world_tax_stats', { p_group_id: _groupId });
+    if (error) return {};
+    const map = {};
+    for (const r of (data || [])) {
+      map[r.member_id] = {
+        received_total: Number(r.received_total) || 0,
+        received_7d:    Number(r.received_7d)    || 0,
+        paid_total:     Number(r.paid_total)     || 0,
+        paid_7d:        Number(r.paid_7d)        || 0,
+      };
+    }
+    return map;
+  }
+
   // ── Pinnwand ─────────────────────────────────────────────────────────────────
   async function getPinnedMessage() {
     const { data } = await _sb.from('groups_public')
@@ -838,6 +899,7 @@ const DB = (() => {
     purchaseResearchItem, saveCosmetics,
     updateMapData, addCoins, appendTodayLog, claimPassive,
     investInCountry, fetchCountryStandings, fetchAllWorldInvestments,
-    fetchAllWorldBuildings, buildWorldStructure, buyGarde,
+    fetchAllWorldBuildings, buildWorldStructure, buyGarde, fetchTaxStats,
+    castSabotage, fetchSabotages,
   };
 })();

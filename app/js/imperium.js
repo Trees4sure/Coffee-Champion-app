@@ -266,6 +266,9 @@ async function _buildKasse(member) {
 function _buildImperiumStats() {
   if (!appData?.users?.length) return '<p style="color:var(--muted);padding:16px">Keine Daten verfügbar</p>';
   const users = [...appData.users].sort((a,b) => (calcResearchScore(b.research||{}) - calcResearchScore(a.research||{})));
+  // Welt-Daten (gruppenweit) für die kompakte Welt-Statistik-Zeile je Spieler
+  const _wInv = (appData.worldInvestments) || [];
+  const _wByCountry = (typeof worldBuildingsByCountry === 'function') ? worldBuildingsByCountry(appData.worldBuildings || []) : {};
 
   let html = '<div class="cc-stats-list">';
   for (const u of users) {
@@ -318,6 +321,7 @@ function _buildImperiumStats() {
           ${effectLine ? '&nbsp;·&nbsp; <span class="cc-stats-effect">' + _esc2(effectLine) + '</span>' : ''}
         </div>
         ${bldDone.length ? `<div class="cc-stats-sub cc-stats-karte">🏗️ ${bldDone.length} Gebäude ${bldIcons}${bldPerDay > 0 ? ' &nbsp;·&nbsp; +' + _fmtCoins(bldPerDay) + '/Tag' : ''}</div>` : ''}
+        ${typeof worldStatLineHTML === 'function' ? worldStatLineHTML(u, _wInv, _wByCountry) : ''}
         ${_buildResearchBars(u.research || {})}
       </div>
     </div>`;

@@ -232,7 +232,9 @@ async function _buildWeltkarte(member, el) {
       <span><i style="background:#5a1a1a"></i>fremd regiert</span>
       <span><i style="background:#2a2010"></i>frei</span>
     </div>
-    <div id="cc-world-sheet" class="cc-world-sheet hidden"></div>`;
+    <div id="cc-world-sheet" class="cc-world-sheet hidden"></div>
+    <div id="cc-world-stats"></div>
+    <div id="cc-world-devs"></div>`;
 
   // Investitionen der Gruppe laden (für Einfärbung) — robust, falls Backend noch nicht migriert
   let investments = [];
@@ -244,8 +246,28 @@ async function _buildWeltkarte(member, el) {
     return;
   }
 
-  try { _worldBldCache = worldBuildingsByCountry(await DB.fetchAllWorldBuildings()); }
-  catch (e) { _worldBldCache = {}; }
+  let bldRows = [];
+  try { bldRows = await DB.fetchAllWorldBuildings(); } catch (e) { bldRows = []; }
+  _worldBldCache = worldBuildingsByCountry(bldRows);
+
+  // Welt-Statistik + Entwicklungen rendern (Steuer-Statistik resilient: {} ohne 19d-Migration)
+  let taxStats = {};
+  try { if (typeof DB.fetchTaxStats === 'function') taxStats = await DB.fetchTaxStats(); } catch (e) { taxStats = {}; }
+  const users = (typeof appData !== 'undefined' && appData && appData.users) ? appData.users : [member];
+  const statsEl = document.getElementById('cc-world-stats');
+  if (statsEl) statsEl.innerHTML = _renderWeltStatistik(investments, _worldBldCache, member, taxStats, users);
+  const devsEl = document.getElementById('cc-world-devs');
+  if (devsEl) {
+    devsEl.innerHTML = _renderWeltEntwicklungen(member, investments, _worldBldCache);
+    devsEl.querySelectorAll('[data-world-dev]').forEach(b => b.onclick = () => {
+      const dev = WORLD_DEVS.find(d => d.id === b.dataset.worldDev);
+      if (dev) _handleBuyWorldDev(member, dev);
+    });
+    const fd = devsEl.querySelector('[data-fund-deposit]');  if (fd) fd.onclick = () => _handleFundDeposit(member);
+    const fw = devsEl.querySelector('[data-fund-withdraw]'); if (fw) fw.onclick = () => _handleFundWithdraw(member);
+    const fv = devsEl.querySelector('[data-fund-dividend]'); if (fv) fv.onclick = () => _handleFundDividend(member);
+  }
+  _wireAccordions();
 
   const { rankMap, foreignGovt } = worldRanksForMember(investments, member.id);
 
@@ -334,12 +356,14 @@ async function _openCountrySheet(country, member) {
       ${btn}
     </div>`;
   }).join('');
+  const hasSteuerberater = !!(member.map_data && member.map_data.worldDev && member.map_data.worldDev.steuerberater);
+  const taxPct = hasSteuerberater ? 10 : 20;
   let pctNote;
   if (!myRank) {
     pctNote = `Investiere, um an den Land-Gebäude-Boni teilzuhaben (Bauen ab Rang 3).`;
   } else {
     pctNote = `Als Rang ${myRank} erhältst du <strong>${Math.round(pct * 100)}%</strong> der Land-Gebäude-Boni.`;
-    if (myRank !== 1) pctNote += ` Beim Bauen zahlst du <strong>20 %</strong> Steuer an die Regierung.`;
+    if (myRank !== 1) pctNote += ` Beim Bauen zahlst du <strong>${taxPct} %</strong> Steuer an die Regierung${hasSteuerberater ? ' (💼 Steuerberater)' : ''}.`;
   }
 
   // ── Garde ──
@@ -349,6 +373,22 @@ async function _openCountrySheet(country, member) {
   if (hasGarde)   gardeBlock = `<span class="cc-world-garde-on">☕ Garde aktiv · +15% Einfluss</span>`;
   else if (myRow) gardeBlock = `<button class="cc-build-btn cc-world-bbtn" data-world-garde="1">☕ Garde stationieren · ${gardeCost} 🫘</button>`;
   else            gardeBlock = `<span class="cc-world-blocked">Investiere zuerst für eine Garde</span>`;
+
+  // ── Söldner-Sabotage (nur wenn freigeschaltet + fremder Regent) ──
+  const ownsSoeldner = !!(member.map_data && member.map_data.worldDev && member.map_data.worldDev.soeldner);
+  const governor = standings.find(s => s.rank === 1) || standings[0] || null;
+  let sabotageBlock = '';
+  if (ownsSoeldner && governor && governor.member_id !== member.id) {
+    let sabotages = [];
+    try { sabotages = await DB.fetchSabotages(); } catch (e) {}
+    const active = sabotages.find(s => s.country_id === country.id && s.target_id === governor.member_id);
+    if (active) {
+      const until = new Date(active.expires_at).toLocaleDateString('de-DE');
+      sabotageBlock = `<span class="cc-world-blocked">⚔️ ${_esc2(governor.member_name)} ist hier sabotiert (bis ${until})</span>`;
+    } else {
+      sabotageBlock = `<button class="cc-build-btn cc-world-bbtn cc-sabotage-btn" data-world-sabotage="1">⚔️ ${_esc2(governor.member_name)} ${SABOTAGE_DAYS} Tage lahmlegen · ${SABOTAGE_COST} 🫘</button>`;
+    }
+  }
 
   sheet.innerHTML = `
     <div class="cc-world-sheet-head">
@@ -365,11 +405,13 @@ async function _openCountrySheet(country, member) {
     <p class="cc-world-pctnote">${pctNote}</p>
     <div class="cc-world-blds">${bldRows}</div>
     <div class="cc-world-section-title">☕ Garde</div>
-    <div class="cc-world-garde">${gardeBlock}</div>`;
+    <div class="cc-world-garde">${gardeBlock}</div>
+    ${sabotageBlock ? `<div class="cc-world-section-title">⚔️ Sabotage</div><div class="cc-world-sabotage">${sabotageBlock}</div>` : ''}`;
 
   sheet.querySelector('[data-world-close]').onclick = () => sheet.classList.add('hidden');
   sheet.querySelector('[data-world-invest]').onclick = () => _handleWorldInvest(country, member);
   const gb = sheet.querySelector('[data-world-garde]'); if (gb) gb.onclick = () => _handleBuyGarde(country, member);
+  const sb = sheet.querySelector('[data-world-sabotage]'); if (sb && governor) sb.onclick = () => _handleSabotage(country, member, governor);
   sheet.querySelectorAll('[data-world-build]').forEach(b => b.onclick = () => {
     const def = worldBuildingDef(country.id, b.dataset.worldBuild); if (def) _handleBuildWorld(country, member, def);
   });
@@ -475,5 +517,360 @@ async function _handleWorldInvest(country, member) {
     }
   } catch (e) { console.warn('Chat-Post (Welt) fehlgeschlagen:', e); }
 
+  await _worldRefreshAndReopen(country, member);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Welt-Statistik + Entwicklungen (Ergaenzung_Statistik_Weltkarte)
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Freie (noch nicht gebaute) Gebäude eines Landes
+function worldFreeBuildings(countryId, byCountry) {
+  const built = new Set(((byCountry || {})[countryId] || []).map(b => b.building_id));
+  return (WORLD_BUILDINGS[countryId] || []).filter(d => !built.has(d.id));
+}
+
+// Höchste Roh-Investition (Rang-1-Schwelle) eines Landes
+function worldTopInvest(investments, countryId) {
+  let t = 0;
+  for (const w of (investments || [])) if (w.country_id === countryId) t = Math.max(t, Number(w.total_invested) || 0);
+  return t;
+}
+
+// Aktueller Regierungs-Inhaber (Rang 1, effektiver Einfluss) eines Landes
+function worldGovernorId(investments, countryId) {
+  const list = (investments || []).filter(w => w.country_id === countryId);
+  if (!list.length) return null;
+  const top = Math.max(0, ...list.map(w => Number(w.total_invested) || 0));
+  let best = null, bestE = -1;
+  for (const w of list) {
+    const e = (Number(w.total_invested) || 0) + (w.garde_purchased ? 0.15 * top : 0);
+    if (e > bestE) { bestE = e; best = w.member_id; }
+  }
+  return best;
+}
+
+// Aggregierte Welt-Kennzahlen je Member. byCountry = worldBuildingsByCountry(rows)
+function worldStatsForMember(investments, byCountry, memberId) {
+  const { rankMap } = worldRanksForMember(investments, memberId);
+  const governments = Object.values(rankMap).filter(r => r === 1).length;
+  const baurechte   = Object.values(rankMap).filter(r => r === 2 || r === 3).length;
+  const invested    = worldInvestedTotal(investments, memberId);
+  const perDay = calcWorldPerDay(rankMap) + calcWorldBuildingPerDay(rankMap, byCountry);
+  const perCup = calcWorldPerCup(rankMap) + calcWorldBuildingPerCup(rankMap, byCountry);
+  const myBld = []; let bldSpent = 0;
+  for (const [cid, list] of Object.entries(byCountry || {})) {
+    for (const b of list) if (b.member_id === memberId) {
+      const def = worldBuildingDef(cid, b.building_id);
+      myBld.push({ cid, def, level: b.level });
+      if (def) bldSpent += def.cost * (b.level === 2 ? 1.5 : 1); // L1 + 50% Ausbau
+    }
+  }
+  return {
+    rankMap, governments, baurechte, ranks: Object.keys(rankMap).length,
+    invested, perDay: Math.round(perDay * 100) / 100, perCup: Math.round(perCup * 100) / 100,
+    myBld, bldSpent: Math.round(bldSpent),
+  };
+}
+
+// Kompakte Welt-Zeile für die Imperium-Statistik (gibt '' wenn keine Welt-Aktivität)
+function worldStatLineHTML(u, investments, byCountry) {
+  if (typeof worldStatsForMember !== 'function') return '';
+  const s = worldStatsForMember(investments, byCountry, u.id);
+  if (!s.ranks && !s.myBld.length) return '';
+  const bldIcons = s.myBld.map(b => (b.def ? b.def.icon : '')).join('');
+  return `<div class="cc-stats-sub cc-stats-karte cc-stats-welt">`
+    + `🌍 ${s.governments}🏛️ &nbsp;·&nbsp; ${s.ranks} Länder &nbsp;·&nbsp; 💰 ${_wfmt(s.invested)} inv.`
+    + (s.myBld.length ? ` &nbsp;·&nbsp; 🏗️ ${s.myBld.length} ${bldIcons}` : '')
+    + (s.perDay > 0 ? ` &nbsp;·&nbsp; +${_wfmt(s.perDay)}/Tag` : '')
+    + `</div>`;
+}
+
+// Offen/Zu-Zustand der Welt-Akkordeons — überlebt den Refresh nach Kauf/Aktion
+let _worldAccOpen = { stats: true, gallery: false, devs: false };
+
+// ── Ausführliches Welt-Statistik-Panel ───────────────────────────────────────
+function _renderWeltStatistik(investments, byCountry, member, taxStats, users) {
+  const list = (users || []).map(u => ({ u, s: worldStatsForMember(investments, byCountry, u.id) }))
+    .filter(x => x.s.ranks || x.s.myBld.length)
+    .sort((a, b) => (b.s.governments - a.s.governments) || (b.s.invested - a.s.invested) || (b.s.perDay - a.s.perDay));
+  if (!list.length) return `
+    <details class="cc-world-acc" data-acc="stats"${_worldAccOpen.stats ? ' open' : ''}><summary>📊 Welt-Statistik</summary>
+      <p class="cc-world-empty">Noch keine Welt-Aktivität in der Gruppe. Investiere als Erster!</p></details>
+    <details class="cc-world-acc" data-acc="gallery"${_worldAccOpen.gallery ? ' open' : ''}><summary>🏛️ Länder &amp; Gebäude</summary>
+      <p class="cc-world-empty">Noch keine Gebäude weltweit.</p></details>`;
+
+  const hasTax = !!(taxStats && Object.keys(taxStats).length);
+
+  const rows = list.map(({ u, s }) => {
+    const govFlags = Object.entries(s.rankMap).filter(([, r]) => r === 1)
+      .map(([cid]) => (_worldById(cid) ? _worldById(cid).flag : '')).join('');
+    const t = (taxStats || {})[u.id] || {};
+    const mine = u.id === member.id ? ' cc-world-mine' : '';
+    return `<div class="cc-wstat-row${mine}">
+      <div class="cc-wstat-name">${_esc2(u.name)} <span class="cc-wstat-flags">${govFlags}</span></div>
+      <div class="cc-wstat-cells">
+        <span title="Regierungen">🏛️ ${s.governments}</span>
+        <span title="Länder mit Einfluss">🗺️ ${s.ranks}</span>
+        <span title="investiert gesamt">💰 ${_wfmt(s.invested)}</span>
+        <span title="errichtete Gebäude">🏗️ ${s.myBld.length}</span>
+        <span title="Welt-Einkommen / Tag">📈 +${_wfmt(s.perDay)}</span>
+        ${hasTax ? `<span class="cc-wstat-tax" title="Steuern erhalten (Woche · gesamt)">🪙 ${_wfmt(t.received_7d || 0)}·${_wfmt(t.received_total || 0)}</span>` : ''}
+        ${hasTax ? `<span class="cc-wstat-tax" title="Steuern gezahlt (Woche · gesamt)">💸 ${_wfmt(t.paid_7d || 0)}·${_wfmt(t.paid_total || 0)}</span>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+
+  const nameOf = (id) => { const u = (users || []).find(x => x.id === id); return u ? u.name : '—'; };
+  const gallery = WORLD_COUNTRIES.map(c => {
+    const blds = (byCountry || {})[c.id] || [];
+    const govId = worldGovernorId(investments, c.id);
+    if (!blds.length && !govId) return '';
+    const items = blds.map(b => {
+      const d = worldBuildingDef(c.id, b.building_id);
+      return d ? `<span class="cc-wgal-b" title="${_esc2(d.name)}${b.level === 2 ? ' · Lvl 2' : ''} · erbaut: ${_esc2(nameOf(b.member_id))}">${d.icon}${b.level === 2 ? '²' : ''}</span>` : '';
+    }).join('');
+    return `<div class="cc-wgal-row">
+      <span class="cc-wgal-flag">${c.flag}</span>
+      <span class="cc-wgal-name">${_esc2(c.name)}${govId ? ` <em>👑 ${_esc2(nameOf(govId))}</em>` : ''}</span>
+      <span class="cc-wgal-blds">${items || '<span class="cc-wgal-none">—</span>'}</span>
+    </div>`;
+  }).filter(Boolean).join('');
+
+  const taxHint = hasTax ? '' : `<p class="cc-world-taxhint">🪙 Steuer-Statistik aktiv nach SQL-Migration <code>19d_world_tax_log</code>.</p>`;
+
+  return `
+    <details class="cc-world-acc" data-acc="stats"${_worldAccOpen.stats ? ' open' : ''}><summary>📊 Welt-Statistik</summary>
+      <div class="cc-wstat-list">${rows}</div>
+      ${taxHint}
+    </details>
+    <details class="cc-world-acc" data-acc="gallery"${_worldAccOpen.gallery ? ' open' : ''}><summary>🏛️ Länder &amp; Gebäude</summary>
+      <div class="cc-wgal">${gallery || '<p class="cc-world-empty">Noch keine Gebäude weltweit.</p>'}</div>
+    </details>`;
+}
+
+// ── Entwicklungen (kaufbare Welt-Boni / Analysen) ─────────────────────────────
+const WORLD_DEVS = [
+  { id: 'spionage',       icon: '🔍', name: 'Spionage-Netzwerk', cost: 200, desc: 'Deckt günstigste & teuerste Länder, den besten Bauplatz und das am leichtesten zu erobernde Land auf.' },
+  { id: 'investor',       icon: '🔭', name: 'Investor-Analyse',  cost: 400, desc: 'Zeigt, wo noch Gebäude frei sind und wo der höchste Ertrag wartet.' },
+  { id: 'garde_akademie', icon: '🛡️', name: 'Garde-Akademie',    cost: 400, desc: '+10 % auf alle deine Welt-Einkommen (Einfluss & Gebäude).' },
+  { id: 'steuerberater',  icon: '💼', name: 'Steuerberater',     cost: 300, desc: 'Halbiert deine Bausteuer beim Bauen in fremden Ländern (20 % → 10 %).' },
+  { id: 'boerse',         icon: '💹', name: 'Kaffeebörse-Zugang', cost: 300, desc: 'Schaltet die Kaffeebörse frei: CC anlegen und täglich Dividende kassieren.' },
+  { id: 'soeldner',       icon: '⚔️', name: 'Söldner-Kontakt',   cost: 300, desc: 'Schaltet Sabotage frei: lege fremde Regenten in einem Land für einige Tage lahm.' },
+];
+
+// Söldner-Sabotage: Kosten pro Einsatz + Dauer
+const SABOTAGE_COST = 80;
+const SABOTAGE_DAYS = 3;
+
+// ── Kaffeebörse (PvE-Fonds) ──────────────────────────────────────────────────
+const FUND_MAX = 20000;
+function _todayKeyW() { return (typeof _todayKey === 'function') ? _todayKey() : new Date().toISOString().slice(0, 10); }
+function _fundHash(str) {
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return (h >>> 0) / 4294967296;
+}
+// Deterministische Tagesrendite je Spieler (0,5 %–1,7 %), kein Reroll durch Reload
+function _fundRate(memberId) {
+  return Math.round((0.005 + 0.012 * _fundHash(_todayKeyW() + ':' + memberId)) * 1000) / 1000;
+}
+function _fundOf(member) {
+  const f = member && member.map_data && member.map_data.worldDev && member.map_data.worldDev.fund;
+  return { principal: (f && f.principal) || 0, lastDiv: (f && f.lastDiv) || '' };
+}
+
+function _spionageInfo(investments, byCountry, member) {
+  const tops = WORLD_COUNTRIES.map(c => ({ c, top: worldTopInvest(investments, c.id) }));
+  const withInv = tops.filter(x => x.top > 0);
+  const cheapestCountry = (withInv.length ? withInv : tops).slice().sort((a, b) => a.top - b.top)[0];
+  const dearestCountry  = tops.slice().sort((a, b) => b.top - a.top)[0];
+  let cb = null; // bester (günstigster) freier Bauplatz
+  for (const c of WORLD_COUNTRIES) for (const d of worldFreeBuildings(c.id, byCountry)) if (!cb || d.cost < cb.d.cost) cb = { c, d };
+  const { rankMap } = worldRanksForMember(investments, member.id);
+  let cc = null; // leichteste Eroberung (kleinste Lücke zu Rang 1)
+  for (const c of WORLD_COUNTRIES) {
+    if (rankMap[c.id] === 1) continue;
+    const top  = worldTopInvest(investments, c.id);
+    const mine = (investments || []).filter(w => w.country_id === c.id && w.member_id === member.id)
+      .reduce((s, w) => s + (Number(w.total_invested) || 0), 0);
+    const gap = Math.max(WORLD_MIN_INVEST, Math.floor(top - mine) + 1);
+    if (!cc || gap < cc.gap) cc = { c, gap };
+  }
+  return { cheapestCountry, dearestCountry, cb, cc };
+}
+
+function _investorInfo(byCountry) {
+  const free = WORLD_COUNTRIES.map(c => ({ c, defs: worldFreeBuildings(c.id, byCountry) })).filter(x => x.defs.length);
+  let best = null; // höchster Ertrag unter freien Bauplätzen (perDay + perCup·5 als Heuristik)
+  for (const c of WORLD_COUNTRIES) for (const d of worldFreeBuildings(c.id, byCountry)) {
+    const y = (d.perDay || 0) + (d.perCup || 0) * 5;
+    if (!best || y > best.y) best = { c, d, y };
+  }
+  return { free, best };
+}
+
+function _renderWeltEntwicklungen(member, investments, byCountry) {
+  const owned = (member.map_data && member.map_data.worldDev) || {};
+  const cards = WORLD_DEVS.map(dev => {
+    if (!owned[dev.id]) {
+      return `<div class="cc-wdev">
+        <div class="cc-wdev-head"><span>${dev.icon} <strong>${_esc2(dev.name)}</strong></span>
+          <button class="cc-build-btn cc-world-bbtn" data-world-dev="${dev.id}">${dev.cost} 🫘</button></div>
+        <p class="cc-wdev-desc">${_esc2(dev.desc)}</p>
+      </div>`;
+    }
+    let body = '';
+    if (dev.id === 'spionage') {
+      const i = _spionageInfo(investments, byCountry, member);
+      const line = (lbl, c, val) => `<li>${lbl}: <strong>${c ? c.flag + ' ' + _esc2(c.name) : '—'}</strong>${val != null ? ` <span class="cc-wdev-val">${val}</span>` : ''}</li>`;
+      body = `<ul class="cc-wdev-info">
+        ${line('💸 Günstigstes Land (wenig Konkurrenz)', i.cheapestCountry && i.cheapestCountry.c, i.cheapestCountry ? `Spitze ${_wfmt(i.cheapestCountry.top)} CC` : null)}
+        ${line('💎 Teuerstes Land', i.dearestCountry && i.dearestCountry.c, i.dearestCountry ? `Spitze ${_wfmt(i.dearestCountry.top)} CC` : null)}
+        ${line('🏗️ Bester freier Bauplatz', i.cb && i.cb.c, i.cb ? `${i.cb.d.icon} ${_esc2(i.cb.d.name)} · ${i.cb.d.cost} CC` : null)}
+        ${line('⚔️ Leichteste Eroberung', i.cc && i.cc.c, i.cc ? `${i.cc.gap} CC zu Rang 1` : '— (du regierst überall)')}
+      </ul>`;
+    } else if (dev.id === 'investor') {
+      const i = _investorInfo(byCountry);
+      const freeList = i.free.slice(0, 6).map(x => `${x.c.flag} ${x.defs.length}`).join(' &nbsp; ') || '—';
+      body = `<ul class="cc-wdev-info">
+        <li>🏝️ Freie Bauplätze: <strong>${freeList}</strong></li>
+        <li>💰 Höchster Ertrag frei: <strong>${i.best ? i.best.c.flag + ' ' + _esc2(i.best.d.name) : '—'}</strong>${i.best ? ` <span class="cc-wdev-val">${i.best.d.perDay ? '+' + i.best.d.perDay + '/Tag' : '+' + i.best.d.perCup + '/Tasse'} · ${i.best.d.cost} CC</span>` : ''}</li>
+      </ul>`;
+    } else if (dev.id === 'garde_akademie') {
+      body = `<p class="cc-wdev-desc">🛡️ +10 % auf alle Welt-Einkommen aktiv (Einfluss &amp; Gebäude).</p>`;
+    } else if (dev.id === 'steuerberater') {
+      body = `<p class="cc-wdev-desc">💼 Deine Bausteuer ist halbiert: <strong>10 %</strong> statt 20 % beim Bauen in fremden Ländern.</p>`;
+    } else if (dev.id === 'soeldner') {
+      body = `<p class="cc-wdev-desc">⚔️ Sabotage freigeschaltet: öffne ein Land mit fremdem Regenten — dort kannst du ihn für ${SABOTAGE_DAYS} Tage lahmlegen (${SABOTAGE_COST} 🫘).</p>`;
+    } else if (dev.id === 'boerse') {
+      body = _renderBoerse(member);
+    }
+    return `<div class="cc-wdev cc-wdev-owned">
+      <div class="cc-wdev-head"><span>${dev.icon} <strong>${_esc2(dev.name)}</strong> <em>✓ aktiv</em></span></div>
+      ${body}
+    </div>`;
+  }).join('');
+  return `<details class="cc-world-acc" data-acc="devs"${_worldAccOpen.devs ? ' open' : ''}><summary>🔬 Entwicklungen</summary>
+    <div class="cc-wdev-list">${cards}</div></details>`;
+}
+
+// Klapp-Zustände merken, damit sie einen Refresh (nach Kauf/Aktion) überleben
+function _wireAccordions() {
+  document.querySelectorAll('#cc-world-stats details[data-acc], #cc-world-devs details[data-acc]')
+    .forEach(d => { d.ontoggle = () => { _worldAccOpen[d.dataset.acc] = d.open; }; });
+}
+
+async function _handleBuyWorldDev(member, dev) {
+  let left;
+  try { left = await DB.spendCoins(member.id, dev.cost); }
+  catch (e) { showToast(e.message || 'Kauf fehlgeschlagen', 'error'); return; }
+  if (left === null || left === undefined) { showToast('Nicht genug CoffeeCoins!', 'error'); return; }
+  const md = { ...(member.map_data || {}) };
+  md.worldDev = { ...(md.worldDev || {}), [dev.id]: true };
+  try { await DB.updateMapData(member.id, md); } catch (e) { console.warn('worldDev save:', e); }
+  if (currentUserData) currentUserData.map_data = md;
+  member.map_data = md;
+  showToast(`${dev.icon} ${dev.name} freigeschaltet!`, 'success');
+  try { await DB.postMessage(`${member.name} schaltet die Entwicklung ${dev.icon} ${dev.name} frei! 🌍`, member.name); } catch (e) {}
+  await _worldRefreshTab(member);
+}
+
+// Welt-Tab komplett neu aufbauen (nach Kauf/Entwicklung), ohne Länder-Panel
+async function _worldRefreshTab(member) {
+  try {
+    appData = await DB.fetchData();
+    const um = appData.users.find(u => u.id === member.id);
+    if (um) { currentUserData = { ...currentUserData, ...um }; if (typeof _updateHeaderCoins === 'function') _updateHeaderCoins(um); }
+  } catch (e) {}
+  const el = document.getElementById('imp-content');
+  if (el) { el.innerHTML = ''; await _buildWeltkarte(currentUserData || member, el); }
+}
+
+// ── Kaffeebörse: Panel + Aktionen (nutzt spend_coins / add_coins / save_map_data) ─
+function _renderBoerse(member) {
+  const f = _fundOf(member);
+  const rate = _fundRate(member.id);
+  const div = Math.floor(f.principal * rate);
+  const claimed = f.lastDiv === _todayKeyW();
+  const room = Math.max(0, FUND_MAX - f.principal);
+  return `<div class="cc-boerse">
+    <div class="cc-boerse-stat">
+      <span>📦 Angelegt: <strong>${_wfmt(f.principal)} CC</strong></span>
+      <span>📈 Heute: <strong>${(rate * 100).toFixed(1)} %</strong> → ${_wfmt(div)} CC</span>
+    </div>
+    <div class="cc-boerse-actions">
+      <input type="number" id="cc-fund-amount" min="1" step="10" placeholder="CC (max ${room})">
+      <button class="cc-build-btn cc-world-bbtn" data-fund-deposit="1">Einzahlen</button>
+    </div>
+    <div class="cc-boerse-actions">
+      <button class="cc-build-btn cc-world-bbtn" data-fund-dividend="1"${(claimed || div < 1) ? ' disabled' : ''}>${claimed ? '✓ Dividende heute' : '💰 Dividende ' + _wfmt(div) + ' 🫘'}</button>
+      <button class="cc-build-btn cc-world-bbtn" data-fund-withdraw="1"${f.principal < 1 ? ' disabled' : ''}>Auszahlen</button>
+    </div>
+    <p class="cc-wdev-desc">Rendite schwankt täglich (0,5–1,7 %), einmal pro Tag einsammelbar. Max. ${_wfmt(FUND_MAX)} CC.</p>
+  </div>`;
+}
+
+async function _saveFund(member, fund, logEntries) {
+  const md = { ...(member.map_data || {}) };
+  md.worldDev = { ...(md.worldDev || {}), fund };
+  let toSave = md;
+  if (logEntries && typeof DB.appendTodayLog === 'function') {
+    try { toSave = DB.appendTodayLog(md, logEntries); } catch (e) { toSave = md; }
+  }
+  try { await DB.updateMapData(member.id, toSave); } catch (e) { console.warn('Fonds-Save:', e); }
+  if (currentUserData) currentUserData.map_data = toSave;
+  member.map_data = toSave;
+}
+
+async function _handleFundDeposit(member) {
+  const input = document.getElementById('cc-fund-amount');
+  const amount = Math.floor(parseFloat(input && input.value || '0'));
+  if (!amount || amount < 1) { showToast('Betrag eingeben!', 'error'); return; }
+  const f = _fundOf(member);
+  if (f.principal + amount > FUND_MAX) { showToast(`Max. ${_wfmt(FUND_MAX)} CC im Fonds.`, 'error'); return; }
+  let left;
+  try { left = await DB.spendCoins(member.id, amount); }
+  catch (e) { showToast(e.message || 'Fehlgeschlagen', 'error'); return; }
+  if (left === null || left === undefined) { showToast('Nicht genug CoffeeCoins!', 'error'); return; }
+  await _saveFund(member, { principal: f.principal + amount, lastDiv: f.lastDiv });
+  showToast(`💹 ${amount} CC angelegt.`, 'success');
+  await _worldRefreshTab(member);
+}
+
+async function _handleFundWithdraw(member) {
+  const f = _fundOf(member);
+  if (f.principal < 1) return;
+  try { await DB.addCoins(member.id, f.principal); }
+  catch (e) { showToast(e.message || 'Fehlgeschlagen', 'error'); return; }
+  showToast(`💹 ${_wfmt(f.principal)} CC ausgezahlt.`, 'success');
+  await _saveFund(member, { principal: 0, lastDiv: f.lastDiv });
+  await _worldRefreshTab(member);
+}
+
+async function _handleFundDividend(member) {
+  const f = _fundOf(member);
+  const today = _todayKeyW();
+  if (f.lastDiv === today) { showToast('Dividende heute schon kassiert.', 'error'); return; }
+  const div = Math.floor(f.principal * _fundRate(member.id));
+  if (div < 1) { showToast('Noch keine Dividende — lege mehr an.', 'error'); return; }
+  try { await DB.addCoins(member.id, div); }
+  catch (e) { showToast(e.message || 'Fehlgeschlagen', 'error'); return; }
+  await _saveFund(member, { principal: f.principal, lastDiv: today }, [{ label: '💹 Börsen-Dividende', amount: div }]);
+  showToast(`💹 ${div} CC Dividende!`, 'success');
+  await _worldRefreshTab(member);
+}
+
+// ── Söldner-Sabotage (im Länder-Sheet) ───────────────────────────────────────
+async function _handleSabotage(country, member, governor) {
+  let res;
+  try { res = await DB.castSabotage(member.id, governor.member_id, country.id, SABOTAGE_COST, SABOTAGE_DAYS); }
+  catch (e) { showToast(e.message || 'Sabotage fehlgeschlagen', 'error'); return; }
+  if (res?.error === 'insufficient_coins') { showToast('Nicht genug CoffeeCoins!', 'error'); return; }
+  if (res?.error === 'already_active')     { showToast('Hier läuft bereits eine Sabotage.', 'error'); return; }
+  if (res?.error === 'self')               { showToast('Du kannst dich nicht selbst sabotieren.', 'error'); return; }
+  if (!res?.ok) { showToast('Sabotage fehlgeschlagen', 'error'); return; }
+  showToast(`⚔️ Söldner sabotieren ${country.flag} ${country.name}!`, 'success');
+  try { await DB.postMessage(`${member.name} schickt Söldner nach ${country.flag} ${country.name} — ${governor.member_name} verliert dort ${SABOTAGE_DAYS} Tage Einkommen! ⚔️`, member.name); } catch (e) {}
   await _worldRefreshAndReopen(country, member);
 }
