@@ -221,13 +221,54 @@ function _buildForschungsbaum(research) {
   return html;
 }
 
+// Banner mit allen aktiven Gruppen-Boni (Tasse/Passiv/Schritte/Schatz)
+function _kassePerksBanner(perks) {
+  const parts = [];
+  if (perks.perCup   > 0) parts.push(`<strong>+${perks.perCup} CC/Tasse</strong>`);
+  if (perks.perDay   > 0) parts.push(`<strong>+${perks.perDay} CC passiv/Tag</strong>`);
+  if (perks.steps    > 0) parts.push(`<strong>+${perks.steps} Karten-Schritte/Tag</strong>`);
+  if (perks.treasure > 0) parts.push(`<strong>+${Math.round(perks.treasure * 100)}% Schatzausbeute</strong>`);
+  if (!parts.length) return '';
+  return `<div class="cc-kasse-perks">🎁 Aktive Gruppen-Boni für ALLE: ${parts.join(' · ')}</div>`;
+}
+
+// Fortschrittsanzeige der wöchentlichen Gruppen-Challenge
+function _kasseWeeklyChallenge() {
+  if (typeof WEEKLY_CHALLENGE === 'undefined' || typeof isoWeekKey !== 'function') return '';
+  const wk = isoWeekKey();
+  let progress = 0;
+  for (const [date, d] of Object.entries(appData?.dailyStats || {})) {
+    if (isoWeekKey(date) === wk) progress += (d.total || 0);
+  }
+  const goal = WEEKLY_CHALLENGE.goalCups;
+  const done = progress >= goal;
+  const pct  = Math.min(100, Math.round((progress / goal) * 100));
+  return `<div class="cc-goal ${done ? 'cc-goal-done' : ''}" style="margin-bottom:16px">
+    <div class="cc-goal-head">
+      <span class="cc-goal-icon">${WEEKLY_CHALLENGE.icon}</span>
+      <span class="cc-goal-name">Wochen-Challenge</span>
+      <span class="cc-goal-cost">+${WEEKLY_CHALLENGE.reward} CC für alle</span>
+    </div>
+    <p class="cc-goal-desc">${_esc2(WEEKLY_CHALLENGE.label)}</p>
+    ${done
+      ? '<p class="cc-goal-done-lbl">✓ Diese Woche geschafft!</p>'
+      : `<div class="cc-progress-bar"><div class="cc-progress-fill" style="width:${pct}%"></div></div>
+         <p class="cc-progress-pct">${progress} / ${goal} Tassen (${pct}%)</p>`}
+  </div>`;
+}
+
 // ── Kaffee-Kasse ──────────────────────────────────────────────────────────────
 async function _buildKasse(member) {
   if (typeof KASSE_GOALS === 'undefined') return '';
+  // Selbstheilend: erreichte Ziele freischalten (still, ohne Chat-Post — der läuft nur beim Einzahlen)
+  try { await DB.syncTreasuryGoals(); } catch (e) {}
   let treasury = { balance: 0, contributions: {}, unlocked_goals: {} };
   try { treasury = await DB.fetchTreasury(); } catch (e) {}
 
   const myContrib = parseFloat((treasury.contributions || {})[member.id]) || 0;
+  const perks   = (typeof treasuryGroupPerks === 'function') ? treasuryGroupPerks(treasury) : { perCup: 0, perDay: 0 };
+  const topId   = (typeof treasuryTopContributor === 'function') ? treasuryTopContributor(treasury, (appData?.users || []).map(u => u.id)) : null;
+  const topUser = topId && appData?.users ? appData.users.find(u => u.id === topId) : null;
   let html = `
     <div class="cc-kasse-header">
       <div class="cc-kasse-balance">
@@ -236,7 +277,10 @@ async function _buildKasse(member) {
         <span style="font-size:.8rem;color:var(--muted)"> GC Gruppenstand</span>
       </div>
       <p class="cc-kasse-mycontrib">Dein Beitrag: <strong>${_fmtCoins(myContrib)} GC</strong></p>
+      ${topUser ? `<p class="cc-kasse-mycontrib">🎗️ Größter Wohltäter: <strong>${_esc2(topUser.name)}</strong></p>` : ''}
     </div>
+    ${_kassePerksBanner(perks)}
+    ${_kasseWeeklyChallenge()}
     <div class="cc-kasse-contribute">
       <input type="number" id="kasse-input" min="1" max="9999" placeholder="CC einzahlen…" style="width:120px">
       <button class="btn-primary" data-contribute="kasse" style="padding:8px 16px;font-size:.82rem">🏛️ Einzahlen</button>
@@ -270,7 +314,23 @@ function _buildImperiumStats() {
   const _wInv = (appData.worldInvestments) || [];
   const _wByCountry = (typeof worldBuildingsByCountry === 'function') ? worldBuildingsByCountry(appData.worldBuildings || []) : {};
 
-  let html = '<div class="cc-stats-list">';
+  // ── Gruppenkasse-Übersicht (Stand, aktive Boni, Wohltäter) ───────────────────
+  const _tr     = appData.treasury || { balance: 0, contributions: {}, unlocked_goals: {} };
+  const _perks  = (typeof treasuryGroupPerks === 'function') ? treasuryGroupPerks(_tr) : { perCup: 0, perDay: 0 };
+  const _topId  = (typeof treasuryTopContributor === 'function') ? treasuryTopContributor(_tr, users.map(u => u.id)) : null;
+  const _topU   = _topId ? users.find(u => u.id === _topId) : null;
+  const _perkStr = [
+    _perks.perCup   > 0 ? `+${_perks.perCup} CC/Tasse` : '',
+    _perks.perDay   > 0 ? `+${_perks.perDay} CC passiv/Tag` : '',
+    _perks.steps    > 0 ? `+${_perks.steps} Schritte/Tag` : '',
+    _perks.treasure > 0 ? `+${Math.round(_perks.treasure * 100)}% Schatz` : '',
+  ].filter(Boolean).join(' · ') || 'noch keine — fülle die Kasse!';
+  let html = `<div class="cc-stats-kasse">
+      <div class="cc-stats-kasse-row"><span>🏛️ Gruppenkasse</span><strong>${_fmtCoins(_tr.balance)} GC</strong></div>
+      <div class="cc-stats-kasse-row"><span>🎁 Aktive Gruppen-Boni</span><strong>${_perkStr}</strong></div>
+      ${_topU ? `<div class="cc-stats-kasse-row"><span>🎗️ Größter Wohltäter</span><strong>${_esc2(_topU.name)}</strong></div>` : ''}
+    </div>`;
+  html += '<div class="cc-stats-list">';
   for (const u of users) {
     const score   = typeof calcResearchScore  === 'function' ? calcResearchScore(u.research   || {}) : 0;
     const perDay  = typeof calcResearchPerDay === 'function' ? calcResearchPerDay(u.research  || {}) : 0;
@@ -505,6 +565,18 @@ async function _handleContribute(_, member) {
   if (!amount || amount < 1) { showToast('Betrag eingeben!', 'error'); return; }
   try {
     const result = await DB.contributeToTreasury(member.id, amount);
+    // Einzahlungs-Meldung in den Gruppen-Chat
+    try {
+      await DB.postMessage(`🏛️ ${_esc2(member.name)} hat ${_fmtCoins(amount)} CC in die Gruppenkasse eingezahlt! (Stand: ${_fmtCoins(result.treasury_balance)} GC)`, member.name);
+    } catch (e) { console.warn('Chat-Post (Einzahlung) fehlgeschlagen:', e); }
+    // Erreichte Gruppen-Ziele freischalten + im Chat verkünden
+    try {
+      const newly = await DB.syncTreasuryGoals();
+      for (const g of newly) {
+        await DB.postMessage(`${g.icon} Gruppen-Ziel erreicht: „${g.name}"! ${g.desc} — gilt ab jetzt für alle.`, member.name);
+      }
+      if (newly.length) showToast(`${newly[0].icon} Gruppen-Ziel freigeschaltet: ${newly[0].name}!`, 'success');
+    } catch (e) { console.warn('syncTreasuryGoals fehlgeschlagen:', e); }
     appData = await DB.fetchData();
     const updatedMember = appData.users.find(u => u.id === member.id);
     if (updatedMember) currentUserData = { ...currentUserData, ...updatedMember };
@@ -705,7 +777,7 @@ function _karteWorldSeed() {
 
 // Aktualisiert nur die Text/Bar-Elemente — kein DOM-Rebuild
 function _karteUpdateHUD(state) {
-  const stepsMax  = karteStepsAllowed(state.mapData);
+  const stepsMax  = karteStepsAllowed(state.mapData, state.research);
   const stepsUsed = karteStepsUsed(state.mapData);
   const stepsLeft = Math.max(0, stepsMax - stepsUsed);
   const pos       = kartePos(state.mapData);
@@ -753,11 +825,17 @@ function _buildKarte(member, el) {
   const initPos = kartePos(mapData);
   const state = {
     mapData,
+    research: member.research || {}, // für Forschungs-Tier-Schritte/Schatz-Bonus
     memberCoins: member.coins || 0,
     vpX: Math.max(0, Math.min(KARTE_WORLD - _COLS, initPos.x - Math.floor(_COLS / 2))),
     vpY: Math.max(0, Math.min(KARTE_WORLD - _ROWS, initPos.y - Math.floor(_ROWS / 2))),
   };
   const seed  = _karteWorldSeed();
+
+  // Gruppenkasse-Schritte-Bonus (Ziel „Gruppen-Wanderwege") für die Schritt-Berechnung setzen
+  if (typeof karteSetGroupSteps === 'function' && typeof treasuryGroupPerks === 'function') {
+    karteSetGroupSteps(treasuryGroupPerks(appData?.treasury).steps);
+  }
 
   // Fertiggestellte Baustellen seit dem letzten Öffnen melden (einmalig, done-Flag)
   const _justDone = Object.entries(state.mapData.buildings || {})
@@ -788,7 +866,7 @@ function _buildKarte(member, el) {
   }
 
   // ── DOM einmalig aufbauen ──────────────────────────────────────────────
-  const stepsMax0  = karteStepsAllowed(state.mapData);
+  const stepsMax0  = karteStepsAllowed(state.mapData, state.research);
   const stepsUsed0 = karteStepsUsed(state.mapData);
   const stepsLeft0 = Math.max(0, stepsMax0 - stepsUsed0);
   const extraB0    = karteExtraStepsBought(state.mapData);
@@ -854,7 +932,7 @@ function _buildKarte(member, el) {
   `;
 
   const canvas = document.getElementById('cc-karte-canvas');
-  if (canvas) karteRender(canvas, state.mapData, seed, state.vpX, state.vpY);
+  if (canvas) karteRender(canvas, state.mapData, seed, state.vpX, state.vpY, state.research);
 
   // Kauf-Button Handler
   document.getElementById('cc-karte-buy-steps')?.addEventListener('click', async () => {
@@ -869,7 +947,7 @@ function _buildKarte(member, el) {
     showToast('✅ +5 Schritte freigeschaltet!', 'success');
     _karteUpdateHUD(state);
     const c = document.getElementById('cc-karte-canvas');
-    if (c) karteRender(c, state.mapData, seed, state.vpX, state.vpY);
+    if (c) karteRender(c, state.mapData, seed, state.vpX, state.vpY, state.research);
   });
 
   // Upgrade-Kauf Handler
@@ -920,7 +998,7 @@ function _buildKarte(member, el) {
     const nvY = Math.max(0, Math.min(KARTE_WORLD - _ROWS, _startVpY - dyT));
     if (nvX !== state.vpX || nvY !== state.vpY) {
       state.vpX = nvX; state.vpY = nvY;
-      karteRender(canvas, state.mapData, seed, state.vpX, state.vpY);
+      karteRender(canvas, state.mapData, seed, state.vpX, state.vpY, state.research);
     }
   });
 
@@ -928,7 +1006,7 @@ function _buildKarte(member, el) {
     if (_moved) return; // war ein Wischen, kein Tippen
     const { tx, ty } = _tileFromEvent(e);
     // 1) Betretbares (angrenzendes, unerkundetes) Feld → Schritt
-    if (karteCanStep(tx, ty, state.mapData)) {
+    if (karteCanStep(tx, ty, state.mapData, state.research)) {
       await _handleKarteStep(tx, ty, member, state, seed, _COLS, _ROWS, _MARGIN);
       return;
     }
@@ -964,9 +1042,12 @@ async function _handleKarteStep(tx, ty, member, state, seed, COLS, ROWS, MARGIN)
   const hasBart      = !!_getBestItemInSlot('look', upg);
   const sensorFactor = sensorItem?.key === 'truffle_nose' ? 2.2 : sensorItem ? 1.5 : 1.0;
 
+  const _grpTreasure = (typeof treasuryGroupPerks === 'function') ? treasuryGroupPerks(appData?.treasury).treasure : 0;
+  const ccFactor = (1 + 0.25 * ((typeof completedResearchTiers === 'function') ? completedResearchTiers(member.research) : 0)) * (1 + _grpTreasure);
   const { newMapData, treasure, event } = karteExploreTile(tx, ty, state.mapData, seed, {
     treasureFactor: sensorFactor,
     backpackBoost:  bagItem?.key === 'backpack',
+    ccFactor,
   });
   state.mapData = newMapData;
 
@@ -1096,7 +1177,7 @@ async function _handleKarteStep(tx, ty, member, state, seed, COLS, ROWS, MARGIN)
 
   // Canvas smooth neu zeichnen mit stabilem Viewport
   const canvas = document.getElementById('cc-karte-canvas');
-  if (canvas) karteRender(canvas, state.mapData, seed, state.vpX, state.vpY);
+  if (canvas) karteRender(canvas, state.mapData, seed, state.vpX, state.vpY, state.research);
 
   _karteUpdateHUD(state);
 }
@@ -1132,7 +1213,7 @@ async function _handleKarteUpgrade(key, cost, member, state, seed) {
 
   // Canvas neu rendern (Kompass ändert Fog-Rendering)
   const canvas = document.getElementById('cc-karte-canvas');
-  if (canvas) karteRender(canvas, state.mapData, seed, state.vpX, state.vpY);
+  if (canvas) karteRender(canvas, state.mapData, seed, state.vpX, state.vpY, state.research);
   _karteUpdateHUD(state);
 }
 
@@ -1279,7 +1360,7 @@ async function _handleKarteBuild(buildingKey, ax, ay, member, state, seed) {
   } catch (e) { console.warn('Chat-Broadcast (Bau) Fehler:', e); }
 
   const canvas = document.getElementById('cc-karte-canvas');
-  if (canvas) karteRender(canvas, state.mapData, seed, state.vpX, state.vpY);
+  if (canvas) karteRender(canvas, state.mapData, seed, state.vpX, state.vpY, state.research);
   _karteUpdateHUD(state);
 }
 

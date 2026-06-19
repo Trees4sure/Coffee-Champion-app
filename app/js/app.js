@@ -96,6 +96,34 @@ async function claimPassiveAndRefresh(force = false) {
       showToast(`⚙️ +${earned} CC passives Einkommen`, 'success');
     }
   } catch (e) { console.warn('Passiv-Einlösung fehlgeschlagen:', e.message); }
+  dailyGroupTasks(); // Tagesabgabe + Wochen-Challenge (selbst idempotent pro Tag/Woche)
+}
+
+// Gruppen-Tagesaufgaben: 1%-Tagesabgabe der Top-3-Verdiener + kollektive Wochen-Challenge.
+// Beide DB-Funktionen sind über Datum/ISO-Woche idempotent — mehrfaches Aufrufen ist harmlos.
+async function dailyGroupTasks() {
+  if (!currentUser?.id) return;
+  let changed = false;
+  try {
+    const levy = await DB.applyDailyLevy();
+    if (levy && levy.levied > 0) {
+      changed = true;
+      try {
+        const who = levy.details.map(d => `${d.name} (${d.amt} CC)`).join(', ');
+        await DB.postMessage(`🏛️ Tagesabgabe: Top-Verdiener ${who} führen zusammen ${levy.levied} CC an die Gruppenkasse ab. (Stand: ${levy.newBalance} GC)`, 'Gruppenkasse');
+      } catch (e) {}
+      try { await DB.syncTreasuryGoals(); } catch (e) {}
+    }
+  } catch (e) { console.warn('Tagesabgabe fehlgeschlagen:', e.message); }
+  try {
+    const wc = await DB.checkWeeklyChallenge(appData?.dailyStats || {});
+    if (wc && wc.justCompleted) {
+      changed = true;
+      try { await DB.postMessage(`${WEEKLY_CHALLENGE.icon} Wochen-Challenge geschafft: „${WEEKLY_CHALLENGE.label}"! Alle erhalten +${wc.reward} CC. ☕`, 'Gruppenkasse'); } catch (e) {}
+      showToast(`${WEEKLY_CHALLENGE.icon} Wochen-Challenge geschafft! +${wc.reward} CC`, 'success');
+    }
+  } catch (e) { console.warn('Wochen-Challenge fehlgeschlagen:', e.message); }
+  if (changed) { try { await refreshData(); } catch (e) {} }
 }
 
 function showNamePicker(users) {
@@ -349,6 +377,10 @@ function renderLeaderboard() {
   const podium = document.getElementById('podium');
   const container = document.getElementById('leaderboard-table');
   if (!container) return;
+  // „Wohltäter" = größter Einzahler in die Gruppenkasse
+  const benefactorId = (typeof treasuryTopContributor === 'function')
+    ? treasuryTopContributor(appData?.treasury, leaderboardData.map(u => u.id)) : null;
+  const benefactorBadge = (u) => (benefactorId && u.id === benefactorId) ? ' <span class="wohltaeter-badge" title="Größter Einzahler in die Gruppenkasse">🎗️ Wohltäter</span>' : '';
   const top3 = leaderboardData.slice(0, 3);
   const podiumOrder = [top3[1], top3[0], top3[2]];
   const podiumPos   = ['silver','gold','bronze'];
@@ -357,13 +389,13 @@ function renderLeaderboard() {
       <div class="podium-rank">${['🥈','🥇','🥉'][i]}</div>
       <div class="podium-name">${_esc2(u.cosmetics?.avatar || '☕')} ${_esc(u.name)}</div>
       <div class="podium-cups">${u.totalCups} ☕</div>
-      <div class="podium-title">${_esc(DB.getTitle(u.totalCups))}${_esc(_zusatztitelSuffix(u))}</div>
+      <div class="podium-title">${_esc(DB.getTitle(u.totalCups))}${_esc(_zusatztitelSuffix(u))}${benefactorBadge(u)}</div>
     </div>` : '<div class="podium-place podium-empty"></div>').join('');
   container.innerHTML = `<table>
     <thead><tr><th>#</th><th>Name</th><th>Titel</th><th>Tassen</th></tr></thead>
     <tbody>${leaderboardData.map((u, i) => `
       <tr class="${u.id === currentUser?.id ? 'own-row' : ''}">
-        <td>${i + 1}</td><td>${_esc2(u.cosmetics?.avatar || '☕')} ${_esc(u.name)}</td>
+        <td>${i + 1}</td><td>${_esc2(u.cosmetics?.avatar || '☕')} ${_esc(u.name)}${benefactorBadge(u)}</td>
         <td class="title-cell">${_esc(DB.getTitle(u.totalCups))}${_esc(_zusatztitelSuffix(u))}</td>
         <td>${u.totalCups}</td>
       </tr>`).join('')}

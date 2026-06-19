@@ -197,14 +197,78 @@ function getSeasonThemeId(seasonId) {
   return SEASON_THEMES[month]?.id || null;
 }
 
-// ── Kaffee-Kasse Ziele ────────────────────────────────────────────────────────
+// ── Kaffee-Kasse Ziele (Gruppen-Effekte) ──────────────────────────────────────
+// Werden automatisch freigeschaltet, sobald der Kassenstand die Kosten erreicht
+// (DB.syncTreasuryGoals). Der Effekt wirkt DAUERHAFT für ALLE Gruppenmitglieder und
+// fließt in jede Tasse (perCup) bzw. das Passiv-Einkommen (perDay) ein — siehe
+// treasuryGroupPerks() + Anwendung in db.js addCups / _checkAndClaimPassive.
 const KASSE_GOALS = [
-  { id: 'gruppenroester',  icon: '☕', name: 'Gruppenröster',           cost: 500,   desc: 'Alle +5 CC/Tasse für einen Monat' },
-  { id: 'biogarten_grp',   icon: '🌿', name: 'Gemeinsamer Biogarten',   cost: 800,   desc: 'Dauerhaft alle +50 CC passiv/Tag' },
-  { id: 'team_espresso',   icon: '🏆', name: 'Team-Espresso-Maschine',  cost: 1500,  desc: 'Alle +15 CC/Tasse für 2 Monate + Gruppen-Spruch-Pack' },
-  { id: 'kaffeereise_grp', icon: '🌍', name: 'Kaffeereise für alle',    cost: 5000,  desc: 'Saison-Bonus ×2 + Badge in der Hall of Fame' },
-  { id: 'wbc',             icon: '🏅', name: 'World Barista Championship', cost: 10000, desc: 'Prestige-Titel + ewiger Gruppen-Eintrag' },
+  { id: 'gruppenroester',  icon: '☕', name: 'Gemeinschafts-Röster',     cost: 500,   effect: { perCup: 0.5 },          desc: 'Alle Mitglieder dauerhaft +0,5 CC pro Tasse' },
+  { id: 'wanderwege',      icon: '👣', name: 'Gruppen-Wanderwege',       cost: 1000,  effect: { steps: 2 },             desc: 'Alle Mitglieder dauerhaft +2 Karten-Schritte/Tag' },
+  { id: 'biogarten_grp',   icon: '🌿', name: 'Gemeinsamer Biogarten',    cost: 1500,  effect: { perDay: 8 },            desc: 'Alle Mitglieder dauerhaft +8 CC passiv/Tag' },
+  { id: 'schatzarchiv',    icon: '🗺️', name: 'Schatzkarten-Archiv',      cost: 3000,  effect: { treasure: 0.25 },       desc: 'Schatzausbeute aller Mitglieder +25%' },
+  { id: 'team_espresso',   icon: '🏆', name: 'Team-Espresso-Maschine',   cost: 4000,  effect: { perCup: 1 },            desc: 'Alle Mitglieder dauerhaft +1 CC pro Tasse extra' },
+  { id: 'kaffeereise_grp', icon: '🌍', name: 'Kaffeereise für alle',     cost: 8000,  effect: { perDay: 25 },           desc: 'Alle Mitglieder dauerhaft +25 CC passiv/Tag' },
+  { id: 'wbc',             icon: '🏅', name: 'World Barista Championship', cost: 15000, effect: { perCup: 2, perDay: 40 }, desc: 'Endstufe: alle +2 CC/Tasse UND +40 CC passiv/Tag' },
 ];
+
+// Aggregierte Gruppen-Boni aus allen freigeschalteten Kassen-Zielen.
+// treasury = { balance, contributions, unlocked_goals }
+function treasuryGroupPerks(treasury) {
+  const out = { perCup: 0, perDay: 0, steps: 0, treasure: 0 };
+  const unlocked = (treasury && treasury.unlocked_goals) || {};
+  for (const g of KASSE_GOALS) {
+    if (unlocked[g.id] && g.effect) {
+      out.perCup   += g.effect.perCup   || 0;
+      out.perDay   += g.effect.perDay   || 0;
+      out.steps    += g.effect.steps    || 0;
+      out.treasure += g.effect.treasure || 0;
+    }
+  }
+  out.perCup   = Math.round(out.perCup * 100) / 100;
+  out.perDay   = Math.round(out.perDay * 100) / 100;
+  out.treasure = Math.round(out.treasure * 100) / 100;
+  return out;
+}
+// ── Wöchentliche Gruppen-Challenge (kollektiv) ───────────────────────────────
+// Belohnt gemeinsame Aktivität (nicht nur Einzahlen): Fortschritt = Summe ALLER
+// Gruppen-Tassen der laufenden ISO-Woche. Bei Erreichen bekommt JEDES Mitglied die
+// Belohnung — einmalig pro Woche, idempotent über treasury.unlocked_goals[week_<key>].
+const WEEKLY_CHALLENGE = { goalCups: 100, reward: 50, icon: '🎯', label: 'Gemeinsam 100 Tassen diese Woche' };
+
+function isoWeekKey(d) {
+  const date = new Date(Date.UTC(
+    (d ? new Date(d) : new Date()).getFullYear(),
+    (d ? new Date(d) : new Date()).getMonth(),
+    (d ? new Date(d) : new Date()).getDate()
+  ));
+  const dayNum = (date.getUTCDay() + 6) % 7;       // Mo=0 … So=6
+  date.setUTCDate(date.getUTCDate() - dayNum + 3); // Donnerstag dieser Woche
+  const firstThursday = new Date(Date.UTC(date.getUTCFullYear(), 0, 4));
+  const week = 1 + Math.round(((date - firstThursday) / 86400000 - 3 + ((firstThursday.getUTCDay() + 6) % 7)) / 7);
+  return `${date.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
+}
+
+// Liste der aktiven Gruppen-Effekte (für Anzeige in Statistik / Kasse-Tab)
+function treasuryActiveGoals(treasury) {
+  const unlocked = (treasury && treasury.unlocked_goals) || {};
+  return KASSE_GOALS.filter(g => unlocked[g.id]);
+}
+// ID des Mitglieds mit der höchsten Gesamteinzahlung („Wohltäter") — null bei leer.
+// validIds (optional): nur diese IDs zählen → schließt gelöschte Ex-Mitglieder aus,
+// deren Beiträge als Altlast im JSONB verbleiben (sonst gewinnt ein „Geist").
+function treasuryTopContributor(treasury, validIds) {
+  const c = (treasury && treasury.contributions) || {};
+  const valid = validIds ? new Set(validIds) : null;
+  let bestId = null, best = 0;
+  for (const [id, amt] of Object.entries(c)) {
+    if (id.startsWith('_')) continue;          // reservierte Meta-Keys (z.B. _levy) überspringen
+    if (valid && !valid.has(id)) continue;     // nur aktuelle Mitglieder
+    const v = parseFloat(amt) || 0;
+    if (v > best) { best = v; bestId = id; }
+  }
+  return best > 0 ? bestId : null;
+}
 
 // ── Cosmetics ────────────────────────────────────────────────────────────────
 const COSMETIC_THEMES = [
@@ -281,6 +345,7 @@ function calcResearchPerCup(research) {
   if (research.ki_kaffee_genie) bonus *= 3;
   if (research.weltreise)      bonus *= 1.5;
   if (research.weltkonzern)    bonus *= 3;
+  bonus *= tierBonusMult(research); // +25% je vollständig abgeschlossenem Tier
   return Math.round(bonus * 100) / 100;
 }
 
@@ -296,7 +361,26 @@ function calcResearchPerDay(research) {
   if (research.bio_zertifikat) bonus *= 1.2;
   if (research.weltkonzern)    bonus *= 3;
   if (research.weltreise)      bonus *= 1.5;
+  bonus *= tierBonusMult(research); // +25% je vollständig abgeschlossenem Tier
   return Math.round(bonus * 100) / 100;
+}
+
+// ── Tier-Abschluss-Bonus ────────────────────────────────────────────────────────
+// Wer ALLE Items eines Tiers besitzt, bekommt +25% auf alle Forschungs-Effekte
+// (perCup + perDay). Kumulativ: T1+T2+T3 voll = +75% → ×1.75. Macht das Komplettieren
+// eines Tiers lohnend und beschleunigt den (sonst als zäh empfundenen) CC-Aufbau.
+function completedResearchTiers(research) {
+  if (!research) return 0;
+  const items = getAllResearchItems();
+  let n = 0;
+  for (let t = 1; t <= 5; t++) {
+    const tierItems = items.filter(i => i.tier === t);
+    if (tierItems.length && tierItems.every(i => research[i.id])) n++;
+  }
+  return n;
+}
+function tierBonusMult(research) {
+  return 1 + 0.25 * completedResearchTiers(research);
 }
 
 // ── Quellen-Aufschlüsselung (für „Heute erhalten" — Transparenz/Lerneffekt) ──────
@@ -322,6 +406,8 @@ function researchPerCupMultipliers(research) {
   if (research?.ki_kaffee_genie) m.push('KI-Genie ×3');
   if (research?.weltreise)       m.push('Weltreise ×1.5');
   if (research?.weltkonzern)     m.push('Weltkonzern ×3');
+  const ct = completedResearchTiers(research);
+  if (ct > 0) m.push(`Tier-Bonus +${ct * 25}%`);
   return m;
 }
 function researchPerDayMultipliers(research) {
@@ -329,6 +415,8 @@ function researchPerDayMultipliers(research) {
   if (research?.bio_zertifikat) m.push('Bio +20%');
   if (research?.weltreise)      m.push('Weltreise ×1.5');
   if (research?.weltkonzern)    m.push('Weltkonzern ×3');
+  const ct = completedResearchTiers(research);
+  if (ct > 0) m.push(`Tier-Bonus +${ct * 25}%`);
   return m;
 }
 // Detail-Strings für das Tages-Log

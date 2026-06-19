@@ -99,17 +99,19 @@ const DB = (() => {
 
   // Passiv-Einkommen anteilig nach Forschung / Gebäude / Welt-Einfluss aufschlüsseln,
   // jeweils mit Quellen-Detail (woraus es entsteht — für „Heute erhalten").
-  function _passiveLogEntries(member, passiveEarned, worldRankMap, worldByCountry) {
+  function _passiveLogEntries(member, passiveEarned, worldRankMap, worldByCountry, groupPerDay) {
     const rPerDay = (typeof calcResearchPerDay === 'function') ? calcResearchPerDay(member.research || {}) : 0;
     const bPerDay = (typeof calcBuildingPerDay === 'function') ? calcBuildingPerDay(member.map_data?.buildings || {}) : 0;
     const wRank   = (worldRankMap && typeof calcWorldPerDay === 'function') ? calcWorldPerDay(worldRankMap) : 0;
     const wBld    = (worldRankMap && typeof calcWorldBuildingPerDay === 'function') ? calcWorldBuildingPerDay(worldRankMap, worldByCountry) : 0;
     const wPerDay = wRank + wBld;
-    const tot = rPerDay + bPerDay + wPerDay;
+    const gPerDay = groupPerDay || 0;
+    const tot = rPerDay + bPerDay + wPerDay + gPerDay;
     if (tot <= 0) return [{ label: '⚙️ Passiv-Einkommen', amount: passiveEarned }];
     const bShare = Math.round(passiveEarned * (bPerDay / tot) * 100) / 100;
     const wShare = Math.round(passiveEarned * (wPerDay / tot) * 100) / 100;
-    const rShare = Math.round((passiveEarned - bShare - wShare) * 100) / 100;
+    const gShare = Math.round(passiveEarned * (gPerDay / tot) * 100) / 100;
+    const rShare = Math.round((passiveEarned - bShare - wShare - gShare) * 100) / 100;
     const wDetail = [
       (typeof worldPerDayDetail === 'function') ? worldPerDayDetail(worldRankMap) : '',
       (typeof worldBuildingPerDayDetail === 'function') ? worldBuildingPerDayDetail(worldRankMap, worldByCountry) : '',
@@ -118,6 +120,7 @@ const DB = (() => {
     if (rShare > 0) out.push({ label: '⚙️ Forschung (passiv)', amount: rShare, detail: (typeof researchPerDayDetail === 'function') ? researchPerDayDetail(member.research) : '' });
     if (bShare > 0) out.push({ label: '🏗️ Gebäude-Einkommen',  amount: bShare, detail: (typeof buildingPerDayDetail === 'function') ? buildingPerDayDetail(member.map_data?.buildings || {}) : '' });
     if (wShare > 0) out.push({ label: '🌍 Welt-Einfluss',       amount: wShare, detail: wDetail });
+    if (gShare > 0) out.push({ label: '🏛️ Gruppenkasse (passiv)', amount: gShare, detail: `+${gPerDay} CC/Tag für alle` });
     return out;
   }
 
@@ -147,7 +150,7 @@ const DB = (() => {
 
   // ── Daten laden ──────────────────────────────────────────────────────────────
   async function fetchData() {
-    const [m, ds, s, h, wi, wb] = await Promise.all([
+    const [m, ds, s, h, wi, wb, tr] = await Promise.all([
       _sb.from('members').select('*').eq('group_id', _groupId).order('total_cups', { ascending: false }),
       _sb.from('daily_stats').select('*').eq('group_id', _groupId).order('date', { ascending: false }).limit(90),
       _sb.from('seasons').select('*').eq('group_id', _groupId).order('season_id', { ascending: false }),
@@ -155,6 +158,7 @@ const DB = (() => {
       // Welt-Daten (Phase 1.5): liefern {data:null,error} falls noch nicht migriert → []. Kein Reject.
       _sb.from('world_investments').select('member_id, country_id, total_invested, garde_purchased').eq('group_id', _groupId),
       _sb.from('world_buildings').select('member_id, country_id, building_id, level').eq('group_id', _groupId),
+      _sb.from('group_treasury').select('balance, contributions, unlocked_goals').eq('group_id', _groupId).maybeSingle(),
     ]);
     return {
       users: (m.data || []).map(normalizeUser),
@@ -163,6 +167,7 @@ const DB = (() => {
       halloffame: h.data || {},
       worldInvestments: wi.data || [],
       worldBuildings: wb.data || [],
+      treasury: tr.data || { balance: 0, contributions: {}, unlocked_goals: {} },
       entries: []
     };
   }
@@ -191,6 +196,15 @@ const DB = (() => {
   // Garde-Akademie-Entwicklung (+10% auf alle Welt-Einkommen) — aus map_data.worldDev
   function _gardeMult(member) {
     return (member && member.map_data && member.map_data.worldDev && member.map_data.worldDev.garde_akademie) ? 1.1 : 1;
+  }
+
+  // Gruppenkasse-Boni (perCup/perDay) aus freigeschalteten Gruppen-Zielen — robust,
+  // {perCup:0,perDay:0} falls Tabelle/Helfer fehlt. Wirkt für ALLE Mitglieder gleich.
+  async function _fetchGroupPerks() {
+    try {
+      const t = await fetchTreasury();
+      return (typeof treasuryGroupPerks === 'function') ? treasuryGroupPerks(t) : { perCup: 0, perDay: 0 };
+    } catch (e) { return { perCup: 0, perDay: 0 }; }
   }
 
   // Aktive Sabotagen GEGEN diesen Member (Set von country_id) — {} bei fehlender Tabelle
@@ -239,7 +253,8 @@ const DB = (() => {
     const _gm = _gardeMult(member);
     const worldPerDay = Math.round(((typeof calcWorldPerDay === 'function') ? calcWorldPerDay(rankMap) : 0) * _gm * 100) / 100;
     const worldBldPerDay = Math.round(((typeof calcWorldBuildingPerDay === 'function') ? calcWorldBuildingPerDay(rankMap, byCountry) : 0) * _gm * 100) / 100;
-    const perDay = researchPerDay + buildingPerDay + worldPerDay + worldBldPerDay;
+    const groupPerDay = (await _fetchGroupPerks()).perDay || 0; // Gruppenkasse-Passiv für alle
+    const perDay = researchPerDay + buildingPerDay + worldPerDay + worldBldPerDay + groupPerDay;
     if (perDay <= 0) return 0;
 
     const cosm = member.cosmetics || {};
@@ -275,9 +290,10 @@ const DB = (() => {
       const worldByCountry = Object.keys(worldRankMap).length ? await _fetchWorldBuildingsByCountry() : {};
       const earned = await _checkAndClaimPassive(memberId, member, worldRankMap, worldByCountry);
       if (earned > 0) {
-        // Tages-Log (Forschung / Gebäude / Welt anteilig + Quellen-Detail) — Fehler nicht eskalieren
+        // Tages-Log (Forschung / Gebäude / Welt / Gruppenkasse anteilig + Quellen-Detail) — Fehler nicht eskalieren
         try {
-          const md = appendTodayLog(member.map_data, _passiveLogEntries(member, earned, worldRankMap, worldByCountry));
+          const gPerDay = (await _fetchGroupPerks()).perDay || 0;
+          const md = appendTodayLog(member.map_data, _passiveLogEntries(member, earned, worldRankMap, worldByCountry, gPerDay));
           await updateMapData(memberId, md);
         } catch (e) { console.warn('Passiv-Log konnte nicht gespeichert werden:', e); }
       }
@@ -385,6 +401,9 @@ const DB = (() => {
                       + (typeof calcWorldBuildingPerCup === 'function' ? calcWorldBuildingPerCup(worldRankMap, worldByCountry) : 0))
                       * _gardeMult(member)) * 100) / 100;
     const worldBonus = Math.round(amount * worldPerCup * 100) / 100;
+    // Gruppenkasse-Bonus pro Tasse (freigeschaltete Gruppen-Ziele) — wirkt für alle gleich
+    const groupPerks = await _fetchGroupPerks();
+    const groupBonus = Math.round(amount * (groupPerks.perCup || 0) * 100) / 100;
     let achCoinTotal = 0;
     for (const a of allNew) achCoinTotal += (a.coinReward || 0);
 
@@ -410,7 +429,7 @@ const DB = (() => {
       if (newStreak >= 100 && newStreak % 100 === 0)                    streakBonus = 2000;
     }
 
-    let totalCoins = baseCoins + morningBonus + researchBonus + worldBonus + achCoinTotal + streakBonus;
+    let totalCoins = baseCoins + morningBonus + researchBonus + worldBonus + groupBonus + achCoinTotal + streakBonus;
 
     if (totalCoins > 0) {
       const { error: coinErr } = await _sb.rpc('add_coins', { p_member_id: memberId, p_amount: totalCoins });
@@ -436,12 +455,15 @@ const DB = (() => {
           ? `${amount}× à ${worldPerCup}/Tasse · ${worldPerCupDetail(worldRankMap)}` : '';
         logEntries.push({ label: '🌍 Welt-Einfluss', amount: worldBonus, detail });
       }
+      if (groupBonus > 0) {
+        logEntries.push({ label: '🏛️ Gruppenkasse', amount: groupBonus, detail: `${amount}× à ${groupPerks.perCup}/Tasse (Gruppen-Effekt)` });
+      }
       for (const a of allNew) {
         if (a?.coinReward) logEntries.push({ label: `🏆 ${a.name || a.id}`, amount: a.coinReward });
       }
       if (streakBonus > 0) logEntries.push({ label: `🔥 Streak ${newStreak}`, amount: streakBonus });
       if (passiveEarned > 0) {
-        for (const e of _passiveLogEntries(member, passiveEarned, worldRankMap, worldByCountry)) logEntries.push(e);
+        for (const e of _passiveLogEntries(member, passiveEarned, worldRankMap, worldByCountry, groupPerks.perDay)) logEntries.push(e);
       }
 
       if (logEntries.length) {
@@ -483,6 +505,102 @@ const DB = (() => {
     if (error) throw new Error(error.message);
     if (data?.error) throw new Error(data.error === 'insufficient_coins' ? 'Nicht genug CoffeeCoins' : data.error);
     return data;
+  }
+
+  // ── Tagesabgabe (00:01-Logik) ────────────────────────────────────────────────
+  // Die Top-3-Verdiener führen je 1 % ihres AKTUELLEN Guthabens an die Gruppenkasse
+  // ab. Einmal pro Tag, idempotent über contributions._levy = Datum (reservierter
+  // Key, vom Wohltäter-Helfer ignoriert). Clientseitig getriggert beim ersten
+  // App-Aufruf des Tages (kein Cron). Ergebnis → Chat-Meldung in app.js.
+  async function applyDailyLevy() {
+    try {
+      const day = today();
+      const t = await fetchTreasury();
+      const contribs = { ...(t.contributions || {}) };
+      if (contribs._levy === day) return null; // heute bereits erledigt
+      // Tagessperre sofort setzen (minimiert Doppelläufe paralleler Clients)
+      contribs._levy = day;
+      await _sb.from('group_treasury').upsert(
+        { group_id: _groupId, balance: parseFloat(t.balance) || 0, contributions: contribs, unlocked_goals: t.unlocked_goals || {} },
+        { onConflict: 'group_id' }
+      );
+      // Top 3 nach Guthaben
+      const { data: members } = await _sb.from('members')
+        .select('id, name, coins').eq('group_id', _groupId)
+        .order('coins', { ascending: false }).limit(3);
+      const payers = (members || []).filter(m => (parseFloat(m.coins) || 0) > 0);
+      if (!payers.length) return null;
+      let levied = 0;
+      const details = [];
+      for (const m of payers) {
+        const amt = Math.round((parseFloat(m.coins) || 0) * 0.01 * 100) / 100;
+        if (amt < 0.01) continue;
+        const left = await spendCoins(m.id, amt);
+        if (left === null || left === undefined) continue; // unerwartet nicht genug — überspringen
+        levied = Math.round((levied + amt) * 100) / 100;
+        contribs[m.id] = Math.round(((parseFloat(contribs[m.id]) || 0) + amt) * 100) / 100;
+        details.push({ name: m.name, amt });
+      }
+      if (levied <= 0) return null;
+      const newBalance = Math.round(((parseFloat(t.balance) || 0) + levied) * 100) / 100;
+      await _sb.from('group_treasury').update({ balance: newBalance, contributions: contribs }).eq('group_id', _groupId);
+      return { levied, details, newBalance };
+    } catch (e) { console.warn('applyDailyLevy fehlgeschlagen:', e.message); return null; }
+  }
+
+  // ── Wochen-Challenge prüfen + bei Erreichen alle belohnen ─────────────────────
+  // dailyStats = appData.dailyStats ({ 'YYYY-MM-DD': { total } }). Idempotent über
+  // treasury.unlocked_goals['week_<isoKey>']. Gibt Fortschritt + ggf. justCompleted.
+  async function checkWeeklyChallenge(dailyStats) {
+    if (typeof WEEKLY_CHALLENGE === 'undefined' || typeof isoWeekKey !== 'function') return null;
+    try {
+      const wk      = isoWeekKey();
+      const rewardK = `week_${wk}`;
+      // Fortschritt: Summe aller Gruppen-Tassen der laufenden ISO-Woche
+      let progress = 0;
+      for (const [date, d] of Object.entries(dailyStats || {})) {
+        if (isoWeekKey(date) === wk) progress += (d.total || 0);
+      }
+      const goal = WEEKLY_CHALLENGE.goalCups;
+      const t = await fetchTreasury();
+      const unlocked = { ...(t.unlocked_goals || {}) };
+      if (unlocked[rewardK]) return { progress, goal, done: true, justCompleted: false };
+      if (progress < goal) return { progress, goal, done: false, justCompleted: false };
+      // Erreicht → beanspruchen (idempotent) und alle belohnen
+      unlocked[rewardK] = { at: new Date().toISOString() };
+      await _sb.from('group_treasury').upsert(
+        { group_id: _groupId, balance: parseFloat(t.balance) || 0, contributions: t.contributions || {}, unlocked_goals: unlocked },
+        { onConflict: 'group_id' }
+      );
+      const { data: members } = await _sb.from('members').select('id').eq('group_id', _groupId);
+      for (const m of (members || [])) {
+        try { await _sb.rpc('add_coins', { p_member_id: m.id, p_amount: WEEKLY_CHALLENGE.reward }); } catch (e) {}
+      }
+      return { progress, goal, done: true, justCompleted: true, reward: WEEKLY_CHALLENGE.reward };
+    } catch (e) { console.warn('checkWeeklyChallenge fehlgeschlagen:', e.message); return null; }
+  }
+
+  // Erreichte Gruppen-Ziele freischalten (Kassenstand ≥ Kosten). Idempotent, ohne neue SQL —
+  // schreibt unlocked_goals direkt (RLS USING(true), GRANT UPDATE wie bei pinned_message/cosmetics).
+  // Gibt die NEU freigeschalteten Ziele zurück (für Chat-Meldung). Stand bleibt erhalten (kein Abzug):
+  // die Ziele sind Meilensteine, deren Effekt dauerhaft für alle gilt.
+  async function syncTreasuryGoals() {
+    if (typeof KASSE_GOALS === 'undefined') return [];
+    try {
+      const t = await fetchTreasury();
+      const unlocked = { ...(t.unlocked_goals || {}) };
+      const newly = [];
+      for (const g of KASSE_GOALS) {
+        if (!unlocked[g.id] && (parseFloat(t.balance) || 0) >= g.cost) {
+          unlocked[g.id] = { at: new Date().toISOString() };
+          newly.push(g);
+        }
+      }
+      if (newly.length) {
+        await _sb.from('group_treasury').update({ unlocked_goals: unlocked }).eq('group_id', _groupId);
+      }
+      return newly;
+    } catch (e) { console.warn('syncTreasuryGoals fehlgeschlagen:', e.message); return []; }
   }
 
   // ── Forschungsbaum-Kauf ──────────────────────────────────────────────────────
@@ -895,7 +1013,8 @@ const DB = (() => {
     fetchMessages, postMessage,
     getPinnedMessage, setPinnedMessage, clearPinnedMessage,
     // Neu:
-    spendCoins, fetchTreasury, contributeToTreasury,
+    spendCoins, fetchTreasury, contributeToTreasury, syncTreasuryGoals,
+    applyDailyLevy, checkWeeklyChallenge,
     purchaseResearchItem, saveCosmetics,
     updateMapData, addCoins, appendTodayLog, claimPassive,
     investInCountry, fetchCountryStandings, fetchAllWorldInvestments,

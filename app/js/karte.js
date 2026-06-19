@@ -16,6 +16,11 @@ const KARTE_RESPAWN_MS  = 7 * 24 * 3600_000;
 const KARTE_TREASURE_P  = 0.30;
 const KARTE_EVENT_CHANCE = 0.20;
 
+// Gruppenkasse-Bonus auf die Karten-Schritte (freigeschaltetes Ziel „Gruppen-Wanderwege").
+// Wird vor dem Rendern via karteSetGroupSteps() aus appData.treasury gesetzt — gilt für alle.
+let _karteGroupSteps = 0;
+function karteSetGroupSteps(n) { _karteGroupSteps = n || 0; }
+
 // ── Schatz-Bibliothek ─────────────────────────────────────────────────────────
 const KARTE_TREASURES = [
   { emoji:'🥟', name:'Maultaschen vom Vortag',         cc:5,  quote:'Kalt, aber die Kantine war geschlossen. Survival at its finest.' },
@@ -468,7 +473,7 @@ function _tomorrowKey() {
   return d.toLocaleDateString('de-DE');
 }
 
-function karteStepsAllowed(mapData) {
+function karteStepsAllowed(mapData, research) {
   const upg      = mapData?.upgrades || {};
   const bestFeet = _getBestItemInSlot('feet', upg);
   const footBonus = bestFeet?.key === 'trail_runner' ? 4 : bestFeet ? 2 : 0;
@@ -484,7 +489,9 @@ function karteStepsAllowed(mapData) {
         .filter(e => e.type === 'step_malus' && e.expires === today)
         .reduce((s, e) => s + (e.amount || 0), 0);
   const buildStep = calcBuildingStepBonus(mapData?.buildings);
-  return Math.max(1, KARTE_BASE_STEPS + footBonus + extra + stepBonus + buildStep - stepMalus);
+  // Forschungs-Tier-Bonus: +10 Schritte je vollständig abgeschlossenem Tier
+  const tierStep  = (typeof completedResearchTiers === 'function') ? completedResearchTiers(research) * 10 : 0;
+  return Math.max(1, KARTE_BASE_STEPS + footBonus + extra + stepBonus + buildStep + tierStep + _karteGroupSteps - stepMalus);
 }
 
 function karteExtraStepsBought(mapData) {
@@ -496,8 +503,8 @@ function karteStepsUsed(mapData) {
   return mapData.steps_today || 0;
 }
 
-function karteStepsLeft(mapData) {
-  return Math.max(0, karteStepsAllowed(mapData) - karteStepsUsed(mapData));
+function karteStepsLeft(mapData, research) {
+  return Math.max(0, karteStepsAllowed(mapData, research) - karteStepsUsed(mapData));
 }
 
 // ── Positions- und Erkundungs-Logik ──────────────────────────────────────────
@@ -509,8 +516,8 @@ function karteIsExplored(x, y, mapData) {
   return !!(mapData?.explored?.[`${x},${y}`]);
 }
 
-function karteCanStep(tx, ty, mapData) {
-  if (karteStepsLeft(mapData) <= 0) return false;
+function karteCanStep(tx, ty, mapData, research) {
+  if (karteStepsLeft(mapData, research) <= 0) return false;
   if (karteIsExplored(tx, ty, mapData)) return false;
   if (tx < 0 || tx >= KARTE_WORLD || ty < 0 || ty >= KARTE_WORLD) return false;
   if ((mapData?.blocked || {})[`${tx},${ty}`] === _todayKey()) return false; // Tier blockiert das Feld heute
@@ -528,6 +535,8 @@ function karteExploreTile(tx, ty, mapData, worldSeed, opts) {
   // Sensor-Item: Schatz-Faktor (1.0 = normal, 1.5 = Schatzgespür, 2.2 = Trüffelnase)
   const treasureFactor = opts?.treasureFactor ?? 1.0;
   const treasureP      = KARTE_TREASURE_P * treasureFactor;
+  // Forschungs-Tier-Bonus auf den Schatz-CC-Wert (+25% je vollem Tier)
+  const ccFactor       = opts?.ccFactor ?? 1.0;
 
   // activeEffects: nur nicht-abgelaufene behalten
   const effects     = (mapData?.activeEffects || []).filter(e =>
@@ -567,6 +576,9 @@ function karteExploreTile(tx, ty, mapData, worldSeed, opts) {
         }
         newActiveEffects = newActiveEffects.filter(e => e !== boostEffect);
       }
+
+      // Tier-Bonus zuletzt anwenden (auf den ggf. schon geboosteten Wert)
+      if (ccFactor !== 1.0) cc = Math.round(cc * ccFactor);
 
       treasure = { ...KARTE_TREASURES[idx], cc };
       newTreasures[`${tx},${ty}`] = { i: idx, ts: now, round };
@@ -620,7 +632,7 @@ function karteExploreTile(tx, ty, mapData, worldSeed, opts) {
 }
 
 // ── Canvas-Rendering ──────────────────────────────────────────────────────────
-function karteRender(canvas, mapData, worldSeed, vpX, vpY) {
+function karteRender(canvas, mapData, worldSeed, vpX, vpY, research) {
   const ctx = canvas.getContext('2d');
   const W = canvas.width;
   const H = canvas.height;
@@ -708,7 +720,7 @@ function karteRender(canvas, mapData, worldSeed, vpX, vpY) {
         }
 
         // Highlight: angrenzend, betretbar
-        if (inBounds && karteCanStep(wx, wy, mapData)) {
+        if (inBounds && karteCanStep(wx, wy, mapData, research)) {
           ctx.fillStyle = 'rgba(212,175,55,0.15)';
           ctx.fillRect(px, py, T, T);
           ctx.strokeStyle = 'rgba(212,175,55,0.6)';
