@@ -237,8 +237,8 @@ const DB = (() => {
     const rankMap = worldRankMap || await _fetchWorldRankMap(memberId);
     const byCountry = worldByCountry || (Object.keys(rankMap).length ? await _fetchWorldBuildingsByCountry() : {});
     const _gm = _gardeMult(member);
-    const worldPerDay = ((typeof calcWorldPerDay === 'function') ? calcWorldPerDay(rankMap) : 0) * _gm;
-    const worldBldPerDay = ((typeof calcWorldBuildingPerDay === 'function') ? calcWorldBuildingPerDay(rankMap, byCountry) : 0) * _gm;
+    const worldPerDay = Math.round(((typeof calcWorldPerDay === 'function') ? calcWorldPerDay(rankMap) : 0) * _gm * 100) / 100;
+    const worldBldPerDay = Math.round(((typeof calcWorldBuildingPerDay === 'function') ? calcWorldBuildingPerDay(rankMap, byCountry) : 0) * _gm * 100) / 100;
     const perDay = researchPerDay + buildingPerDay + worldPerDay + worldBldPerDay;
     if (perDay <= 0) return 0;
 
@@ -381,9 +381,9 @@ const DB = (() => {
     // Welt-Einfluss-Bonus pro Tasse (eigene Länder-Ränge + rangabhängige Land-Gebäude) — robust, 0 falls Backend fehlt
     const worldRankMap = await _fetchWorldRankMap(memberId);
     const worldByCountry = Object.keys(worldRankMap).length ? await _fetchWorldBuildingsByCountry() : {};
-    const worldPerCup = ((typeof calcWorldPerCup === 'function' ? calcWorldPerCup(worldRankMap) : 0)
+    const worldPerCup = Math.round((((typeof calcWorldPerCup === 'function' ? calcWorldPerCup(worldRankMap) : 0)
                       + (typeof calcWorldBuildingPerCup === 'function' ? calcWorldBuildingPerCup(worldRankMap, worldByCountry) : 0))
-                      * _gardeMult(member);
+                      * _gardeMult(member)) * 100) / 100;
     const worldBonus = Math.round(amount * worldPerCup * 100) / 100;
     let achCoinTotal = 0;
     for (const a of allNew) achCoinTotal += (a.coinReward || 0);
