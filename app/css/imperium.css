@@ -51,6 +51,13 @@
 #view-imperium {
   overflow-x: hidden;
 }
+/* Auf Smartphones das .view-Seitenpadding der Imperium-Ansicht entfernen:
+   Header/Tabs/#imp-content bringen ihr eigenes Padding mit — das stapelte sich
+   und drückte breite Kinder (Karten-Canvas, Tab-Leiste) rechts aus dem unter
+   overflow-x:hidden sichtbaren Bereich. Inhalt nutzt jetzt die volle Breite. */
+@media (max-width: 480px) {
+  #view-imperium { padding-left: 0; padding-right: 0; }
+}
 .imperium-header {
   padding: 14px 16px 10px;
   border-bottom: 1px solid rgba(255,255,255,.08);
@@ -184,6 +191,21 @@
 .cc-kasse-balance   { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
 .cc-kasse-bal-val   { font-size: 1.2rem; font-weight: 700; color: #9FE1CB; }
 .cc-kasse-mycontrib { font-size: .78rem; color: rgba(255,255,255,.45); margin: 0; }
+.cc-kasse-perks {
+  background: rgba(159,225,203,.10); border: 1px solid rgba(159,225,203,.30);
+  border-radius: 8px; padding: 8px 12px; margin-bottom: 14px;
+  font-size: .82rem; line-height: 1.5; color: rgba(255,255,255,.85);
+}
+.cc-kasse-perks strong { color: #9FE1CB; }
+.cc-stats-kasse {
+  background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.10);
+  border-radius: 8px; padding: 10px 12px; margin-bottom: 12px;
+}
+.cc-stats-kasse-row {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: .82rem; padding: 3px 0; color: rgba(255,255,255,.7);
+}
+.cc-stats-kasse-row strong { color: #9FE1CB; }
 .cc-kasse-contribute { display: flex; gap: 8px; margin-bottom: 16px; align-items: center; flex-wrap: wrap; }
 .cc-kasse-contribute input { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.15); border-radius: 8px; padding: 8px 10px; color: inherit; font-size: .84rem; flex: 1; min-width: 80px; }
 
@@ -333,7 +355,7 @@
   touch-action: none;
 }
 
-@media (max-width: 360px) {
+@media (max-width: 480px) {
   .cc-karte-canvas { width: 100%; height: auto; }
 }
 

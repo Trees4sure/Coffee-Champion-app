@@ -510,4 +510,20 @@ nav::-webkit-scrollbar { display: none; }
      CoffeeCoins-Feature #header-coins als neues erstes Kind eingefügt wird —
      :first-child würde sonst das CC-Badge statt den Nutzernamen verstecken. */
   .header-right > div:has(#header-username) { display: none; }
+  /* Mehr nutzbare Breite auf schmalen Smartphones: seitliches Padding der Views
+     reduzieren (16px → 8px). Holt rechts abgeschnittene Inhalte zurück in den
+     sichtbaren Bereich, ohne die Inhalte asymmetrisch nach links zu schieben. */
+  .view { padding-left: 8px; padding-right: 8px; }
+  /* Sicherheitsnetz gegen horizontales Überlaufen einzelner breiter Elemente */
+  .view table { width: 100%; }
+}
+
+/* „Wohltäter"-Abzeichen (größter Einzahler in die Gruppenkasse) in der Rangliste */
+.wohltaeter-badge {
+  display: inline-block;
+  background: var(--gold-dim, #6b5418);
+  color: var(--cream, #f4ecd8);
+  font-size: 0.66rem; font-weight: 700;
+  padding: 1px 6px; border-radius: 10px; margin-left: 4px;
+  white-space: nowrap; vertical-align: middle;
 }
