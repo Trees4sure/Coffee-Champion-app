@@ -168,7 +168,12 @@ nav::-webkit-scrollbar { display: none; }
 .nav-btn.hidden { display: none; }
 
 /* ── View Container ────────────────────────────────────────────────────────── */
-.views { flex: 1; overflow: hidden; position: relative; }
+/* min-width:0 ist entscheidend: .views ist ein Grid-Item von #app-screen.
+   Ohne min-width:0 gilt der Grid-Default min-width:auto, sodass ein einzelnes
+   breites Kind (Tabelle, Eingabezeile, Karten-Canvas) die Spur über die
+   Viewport-Breite hinausdrückt — #app-screen (overflow:hidden, an den Viewport
+   gepinnt) schneidet das dann rechts ab, während links nur das Padding bleibt. */
+.views { flex: 1; min-width: 0; overflow: hidden; position: relative; }
 .view { display: none; height: 100%; overflow-y: auto; padding: 16px; }
 .view.active { display: block; }
 
@@ -188,7 +193,7 @@ nav::-webkit-scrollbar { display: none; }
 .btn-quick:active { transform: scale(.96); }
 .custom-row { display: flex; gap: 8px; margin-top: 10px; }
 .custom-row input {
-  flex: 1; background: var(--bg3); border: 1px solid var(--border); border-radius: 6px;
+  flex: 1; min-width: 0; background: var(--bg3); border: 1px solid var(--border); border-radius: 6px;
   color: var(--cream); padding: 8px 12px;
 }
 .custom-row input:focus { outline: none; border-color: var(--gold); }
@@ -220,7 +225,7 @@ nav::-webkit-scrollbar { display: none; }
 .preset-btn:hover { border-color: var(--gold); color: var(--gold); }
 .pinnwand-custom-row { display: flex; gap: 8px; }
 .pinnwand-custom-row input {
-  flex: 1; background: var(--bg3); border: 1px solid var(--border); border-radius: 6px;
+  flex: 1; min-width: 0; background: var(--bg3); border: 1px solid var(--border); border-radius: 6px;
   color: var(--cream); padding: 7px 12px; font-size: 0.85rem;
 }
 .pinnwand-custom-row input:focus { outline: none; border-color: var(--gold); }

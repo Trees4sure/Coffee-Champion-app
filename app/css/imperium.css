@@ -207,7 +207,7 @@
 }
 .cc-stats-kasse-row strong { color: #9FE1CB; }
 .cc-kasse-contribute { display: flex; gap: 8px; margin-bottom: 16px; align-items: center; flex-wrap: wrap; }
-.cc-kasse-contribute input { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.15); border-radius: 8px; padding: 8px 10px; color: inherit; font-size: .84rem; flex: 1; min-width: 80px; }
+.cc-kasse-contribute input { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.15); border-radius: 8px; padding: 8px 10px; color: inherit; font-size: .84rem; flex: 1; min-width: 0; }
 
 .cc-goal       { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; }
 .cc-goal-done  { border-color: rgba(157,225,203,.35); background: rgba(157,225,203,.06); }
