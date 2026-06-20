@@ -76,6 +76,8 @@ function showApp() {
   switchView('rangliste');
   // Passives Einkommen beim App-Start einlösen (entkoppelt von Tassen)
   claimPassiveAndRefresh();
+  // Gehalts-Snapshot für das 💰 Gehalts-Chart (DB-seitig idempotent pro Tag)
+  if (currentUser?.id) DB.recordSalarySnapshot(currentUser.id);
 }
 
 // Passives Einkommen einlösen und bei Gutschrift Anzeige aktualisieren.
@@ -498,6 +500,12 @@ function chartOptions(indexAxis = 'x') {
 
 async function renderStats() {
   if (!appData) return;
+  if (auswPeriod === 'gehalt') {
+    document.getElementById('btn-period-prev').disabled = true;
+    document.getElementById('btn-period-next').disabled = true;
+    renderGehalt();
+    return;
+  }
   const info = getPeriodInfo();
   document.getElementById('period-label').textContent = info.label;
   document.getElementById('btn-period-prev').disabled = false;
@@ -506,6 +514,49 @@ async function renderStats() {
   if (auswPeriod === 'monat') await renderMonat(info);
   else if (auswPeriod === 'quartal') renderQuartal(info);
   else renderJahr(info);
+}
+
+// 💰 Gehalts-Verlauf: passives Tages-Gehalt der Top-5-Mitglieder über Zeit (Liniendiagramm).
+// Datenquelle = map_data.salaryHistory (täglicher Snapshot, baut sich ab Einführung auf).
+function renderGehalt() {
+  document.getElementById('chart-main-title').textContent = '💰 Tages-Gehalt (passiv) – Verlauf';
+  document.getElementById('period-label').textContent = 'Gehalts-Entwicklung';
+  const top5 = leaderboardData.slice(0, 5);
+  const histOf = u => ((appData.users.find(x => x.id === u.id) || u).map_data?.salaryHistory) || [];
+
+  // Datums-Achse = Vereinigung aller Snapshot-Tage der Top-5
+  const dateSet = new Set();
+  top5.forEach(u => histOf(u).forEach(h => dateSet.add(h.d)));
+  const labels = [...dateSet].sort();
+
+  if (!labels.length) {
+    if (charts.main) { charts.main.destroy(); charts.main = null; }
+    document.getElementById('period-summary').innerHTML =
+      '<p style="color:var(--muted);padding:18px;text-align:center">📈 Noch keine Gehaltsdaten vorhanden.<br>Der Verlauf baut sich ab jetzt täglich auf — schau morgen wieder vorbei!</p>';
+    return;
+  }
+
+  const datasets = top5.map((u, i) => {
+    const map = {}; histOf(u).forEach(h => { map[h.d] = h.day; });
+    return {
+      label: u.name,
+      data: labels.map(d => (d in map ? map[d] : null)),
+      spanGaps: true, borderColor: COLORS[i], backgroundColor: COLORS[i] + '33',
+      borderWidth: 2, tension: 0.25, pointRadius: 2, fill: false
+    };
+  });
+  if (charts.main) charts.main.destroy();
+  charts.main = new Chart(document.getElementById('chart-main').getContext('2d'), {
+    type: 'line', data: { labels: labels.map(d => d.slice(5)), datasets }, options: chartOptions()
+  });
+
+  document.getElementById('period-summary').innerHTML = `
+    <table><thead><tr><th>Name</th><th>💰 CC/Tag</th><th>☕ CC/Tasse</th><th>🪙 Guthaben</th></tr></thead><tbody>
+    ${top5.map(u => {
+      const h = histOf(u); const last = h[h.length - 1] || {};
+      return `<tr class="${u.id === currentUser?.id ? 'winner-row' : ''}"><td>${_esc(u.name)}</td><td>${last.day ?? '–'}</td><td>${last.cup ?? '–'}</td><td>${last.coins ?? '–'}</td></tr>`;
+    }).join('')}
+    </tbody></table>`;
 }
 
 async function renderMonat(info) {

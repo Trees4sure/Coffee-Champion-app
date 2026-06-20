@@ -30,6 +30,18 @@ const WORLD_COUNTRIES = [
 
 const WORLD_MIN_INVEST = 25;
 
+// ── Balancing 2026-06-20: Welt-Rang-Erträge spürbar anheben ─────────────────────
+// Die Rang-Slot-Erträge waren zu niedrig (≈0,4/Tasse), um die Weltkarte attraktiv zu
+// machen. Multiplikator wird EINMALIG beim Laden in die Tabelle gebacken, damit jede
+// Lesestelle (Panel-Anzeige, „Heute erhalten"-Detail UND der Verdienst-Calc) denselben
+// Wert sieht — kein Auseinanderlaufen von angezeigtem und tatsächlichem Ertrag.
+const WORLD_SLOT_CUP_MULT = 3.5;   // 0,4 → 1,4 /Tasse
+const WORLD_SLOT_DAY_MULT = 2.5;   // Tageserträge moderater angehoben
+for (const _c of WORLD_COUNTRIES) for (const _s of _c.slots) {
+  _s.perCup = Math.round((_s.perCup || 0) * WORLD_SLOT_CUP_MULT * 100) / 100;
+  _s.perDay = Math.round((_s.perDay || 0) * WORLD_SLOT_DAY_MULT * 100) / 100;
+}
+
 function _worldById(id)   { return WORLD_COUNTRIES.find(c => c.id === id) || null; }
 function _worldByIso(iso) { return WORLD_COUNTRIES.find(c => c.iso === iso) || null; }
 function _worldSlot(country, rank) { return country?.slots.find(s => s.rank === rank) || null; }
@@ -100,6 +112,18 @@ const WORLD_BUILDINGS = {
   australia:  [{id:'australia_c',name:'Flat-White-Stand',icon:'🥛',cost:35,perCup:0.1,perDay:0},{id:'australia_a',name:'Melbourne-Café-Kette',icon:'🦘',cost:80,perCup:0,perDay:3},{id:'australia_b',name:'Flat-White-Export',icon:'🚢',cost:70,perCup:0.2,perDay:0},{id:'australia_d',name:'Barista-Hauptstadt',icon:'🏙️',cost:170,perCup:0.5,perDay:0}],
   russia:     [{id:'russia_c',name:'Datscha-Kaffee',icon:'🛖',cost:35,perCup:0,perDay:1},{id:'russia_a',name:'Sibirisches Kaffeehaus',icon:'❄️',cost:70,perCup:0,perDay:3},{id:'russia_b',name:'Import-Depot',icon:'📦',cost:60,perCup:0,perDay:2},{id:'russia_d',name:'Transsib-Handelsnetz',icon:'🚂',cost:175,perCup:0,perDay:5}],
 };
+
+// ── Balancing 2026-06-20: Welt-Gebäude auf Minimap-Niveau heben ─────────────────
+// Ein komplett ausgebautes Land soll sich wie die Minimap-Gebäude lohnen — Ziel:
+// vollständig (alle 4 Gebäude, L2) ≥ +10 CC/Tasse für den Rang-1-Halter. Kosten
+// bleiben unverändert; nur der Ertrag wird einmalig in die Tabelle gebacken (eine
+// Quelle der Wahrheit für Anzeige + Calc).
+const WORLD_BLD_CUP_MULT = 8;
+const WORLD_BLD_DAY_MULT = 5;
+for (const _arr of Object.values(WORLD_BUILDINGS)) for (const _b of _arr) {
+  _b.perCup = Math.round((_b.perCup || 0) * WORLD_BLD_CUP_MULT * 100) / 100;
+  _b.perDay = Math.round((_b.perDay || 0) * WORLD_BLD_DAY_MULT * 100) / 100;
+}
 
 function worldBuildingDef(countryId, buildingId) {
   return (WORLD_BUILDINGS[countryId] || []).find(b => b.id === buildingId) || null;

@@ -89,6 +89,20 @@ const RESEARCH_COMBOS = [
   { id: 'welthandelslizenz',   name: 'Welthandels-Lizenz', icon: '🌍', requires: ['kaffeesamen','wasserquelle','handmuehle','ton','toepferei','fahrradkurier','kompost','kaffee_buch'], cost: 200, perCup: 0, perDay: 0, special: 'unlock_world', desc: 'Schaltet die 🌍 Weltkarte frei — alle Tier-1-Forschungen nötig' },
 ];
 
+// ── Balancing 2026-06-20 (v2): pro Tasse ab Tier 2 knapper ───────────────────────
+// „Eher knapp, dann investiert man klüger" — Tassen sollen nur ein moderater Zuschlag
+// sein (Sparen + Investitionswahl zählen), nicht der Haupt-Reichtumsmotor. T1 bleibt
+// komplett unangetastet. Multiplikativ gebacken → die unterschiedlichen Item-Boni
+// (gewollte Vielfalt) bleiben relativ erhalten, und Anzeige (Forschungsbaum/Tages-Log)
+// = Verdienst, weil jede Lesestelle dieselben Item-Werte sieht.
+const RESEARCH_CUP_SCALE_T2PLUS = 0.30;
+for (const _p of Object.values(RESEARCH_PATHS)) for (const _it of _p.items) {
+  if (_it.tier >= 2 && _it.perCup) _it.perCup = Math.max(0.1, Math.round(_it.perCup * RESEARCH_CUP_SCALE_T2PLUS * 10) / 10);
+}
+for (const _c of RESEARCH_COMBOS) {
+  if (_c.perCup) _c.perCup = Math.max(0.1, Math.round(_c.perCup * RESEARCH_CUP_SCALE_T2PLUS * 10) / 10);
+}
+
 // ── Tier-Namen ────────────────────────────────────────────────────────────────
 const TIER_NAMES = {
   1: { name: 'Anfänger',      color: '#E1F5EE', border: '#9FE1CB', text: '#04342C' },
@@ -361,7 +375,8 @@ function calcResearchPerDay(research) {
   if (research.bio_zertifikat) bonus *= 1.2;
   if (research.weltkonzern)    bonus *= 3;
   if (research.weltreise)      bonus *= 1.5;
-  bonus *= tierBonusMult(research); // +25% je vollständig abgeschlossenem Tier
+  bonus *= tierBonusMult(research);     // +25% je vollständig abgeschlossenem Tier
+  bonus += tierFlatPerDay(research);    // flacher Abschluss-Bonus (front-loaded, NICHT multipliziert)
   return Math.round(bonus * 100) / 100;
 }
 
@@ -381,6 +396,24 @@ function completedResearchTiers(research) {
 }
 function tierBonusMult(research) {
   return 1 + 0.25 * completedResearchTiers(research);
+}
+
+// ── Flacher Gehalts-Bonus je VOLLSTÄNDIG abgeschlossenem Tier ────────────────────
+// Bewusst FRONT-LOADED (T1 am höchsten): im frühen Spiel existiert kaum passives
+// Einkommen, der +25%-Multiplikator wirkt dort auf fast Null — dieser flache CC/Tag-
+// Bonus gibt einen absoluten Boden und macht die Entwicklungen (200–400 CC) erreichbar.
+// Späte Tiers bringen über Item-Werte + Multiplikator ohnehin viel, daher tapert er aus.
+// Wird NICHT vom Tier-Multiplikator erfasst (separater Abschluss-Bonus, kein Item-Ertrag).
+const TIER_FLAT_PERDAY = { 1: 20, 2: 5, 3: 4, 4: 2, 5: 1 };
+function tierFlatPerDay(research) {
+  if (!research) return 0;
+  const items = getAllResearchItems();
+  let sum = 0;
+  for (let t = 1; t <= 5; t++) {
+    const tierItems = items.filter(i => i.tier === t);
+    if (tierItems.length && tierItems.every(i => research[i.id])) sum += TIER_FLAT_PERDAY[t] || 0;
+  }
+  return sum;
 }
 
 // ── Quellen-Aufschlüsselung (für „Heute erhalten" — Transparenz/Lerneffekt) ──────
@@ -431,7 +464,10 @@ function researchPerCupDetail(research, amount, perCupRate) {
 function researchPerDayDetail(research) {
   const src = researchPerDaySources(research).map(s => `${s.icon} ${s.name} +${s.perDay}/Tag`).join(', ');
   const mul = researchPerDayMultipliers(research);
-  return src + (mul.length ? ` · ${mul.join(', ')}` : '');
+  const flat = tierFlatPerDay(research);
+  let d = src + (mul.length ? ` · ${mul.join(', ')}` : '');
+  if (flat > 0) d += `${d ? ' · ' : ''}🎖️ Tier-Abschluss +${flat}/Tag`;
+  return d;
 }
 
 function isComboAutoUnlocked(comboId, research) {

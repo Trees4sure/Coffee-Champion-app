@@ -306,6 +306,45 @@ const DB = (() => {
     }
   }
 
+  // ── Gehalts-Snapshot (für das 💰 Gehalts-Liniendiagramm) ─────────────────────
+  // Speichert höchstens 1×/Tag den aktuellen Verdienst (passives Tages-Gehalt +
+  // pro-Tasse-Ertrag + Guthaben) in map_data.salaryHistory. Kein Schema-Change
+  // (JSONB existiert). Idempotent pro Datum: überschreibt den heutigen Eintrag mit
+  // dem aktuellsten Stand, hält max. 120 Tage vor. Schreibt über die save_map_data-RPC
+  // (nicht per direktem .update() — das gab beim Karten-Feature 401-Fehler).
+  async function recordSalarySnapshot(memberId) {
+    if (!memberId) return;
+    try {
+      const { data: raw } = await _sb.from('members').select('*').eq('id', memberId).single();
+      if (!raw) return;
+      const member   = normalizeUser(raw);
+      const research  = member.research || {};
+      const rankMap   = await _fetchWorldRankMap(memberId);
+      const byCountry = Object.keys(rankMap).length ? await _fetchWorldBuildingsByCountry() : {};
+      const gm        = _gardeMult(member);
+      const perks     = await _fetchGroupPerks();
+
+      const resDay = (typeof calcResearchPerDay === 'function')      ? calcResearchPerDay(research) : 0;
+      const bldDay = (typeof calcBuildingPerDay === 'function')      ? calcBuildingPerDay(member.map_data?.buildings || {}) : 0;
+      const wDay   = (typeof calcWorldPerDay === 'function')         ? calcWorldPerDay(rankMap) * gm : 0;
+      const wbDay  = (typeof calcWorldBuildingPerDay === 'function') ? calcWorldBuildingPerDay(rankMap, byCountry) * gm : 0;
+      const perDay = Math.round((resDay + bldDay + wDay + wbDay + (perks.perDay || 0)) * 100) / 100;
+
+      const resCup = (typeof calcResearchPerCup === 'function')      ? calcResearchPerCup(research) : 0;
+      const wCup   = (typeof calcWorldPerCup === 'function')         ? calcWorldPerCup(rankMap) * gm : 0;
+      const wbCup  = (typeof calcWorldBuildingPerCup === 'function') ? calcWorldBuildingPerCup(rankMap, byCountry) * gm : 0;
+      const perCup = Math.round((resCup + wCup + wbCup + (perks.perCup || 0)) * 100) / 100;
+
+      const d     = today();
+      const hist  = Array.isArray(member.map_data?.salaryHistory) ? member.map_data.salaryHistory.slice() : [];
+      const entry = { d, day: perDay, cup: perCup, coins: Math.round(member.coins || 0) };
+      const idx   = hist.findIndex(h => h.d === d);
+      if (idx >= 0) hist[idx] = entry; else hist.push(entry);
+      const md = { ...(member.map_data || {}), salaryHistory: hist.slice(-120) };
+      await updateMapData(memberId, md);
+    } catch (e) { console.warn('Gehalts-Snapshot fehlgeschlagen:', e.message); }
+  }
+
   // ── Tassen eintragen ─────────────────────────────────────────────────────────
   async function addCups(memberId, amount) {
     amount = parseInt(amount);
@@ -1016,7 +1055,7 @@ const DB = (() => {
     spendCoins, fetchTreasury, contributeToTreasury, syncTreasuryGoals,
     applyDailyLevy, checkWeeklyChallenge,
     purchaseResearchItem, saveCosmetics,
-    updateMapData, addCoins, appendTodayLog, claimPassive,
+    updateMapData, addCoins, appendTodayLog, claimPassive, recordSalarySnapshot,
     investInCountry, fetchCountryStandings, fetchAllWorldInvestments,
     fetchAllWorldBuildings, buildWorldStructure, buyGarde, fetchTaxStats,
     castSabotage, fetchSabotages,
