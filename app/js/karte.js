@@ -215,11 +215,34 @@ const KARTE_BUILDINGS = [
   { key:'verpackungsfabrik',emoji:'🏭', name:'Verpackungsfabrik',path:'Weg',          terrain:'PATH',     w:2, h:2,                                cost:1200,  days:5, perDay:20 },
   { key:'logistikzentrum',  emoji:'🏗️', name:'Logistikzentrum',  path:'Weg',          terrain:'PATH',     w:3, h:3,                                cost:3000,  days:7, perDay:35 },
   // ── Sonderbau (überall) ──
-  { key:'aussichtsturm',    emoji:'🗼', name:'Aussichtsturm',    path:'Sonderbau',    terrain:'ANY',                                               cost:150,   days:1, perDay:0, fogRadius:1 },
+  { key:'aussichtsturm',    emoji:'🗼', name:'Aussichtsturm',    path:'Sonderbau',    terrain:'ANY',                                               cost:200,   days:1, perDay:0, stepBonus:2, fogRadius:2 },
 ];
 
 function karteBuildingDef(key) {
   return KARTE_BUILDINGS.find(b => b.key === key) || null;
+}
+
+// Anzahl der Gebäude des Spielers (Anker-Einträge, inkl. im Bau).
+function karteBuildingCount(mapData) {
+  return Object.keys(mapData?.buildings || {}).length;
+}
+
+// Anzahl der EIGENEN Gebäude eines bestimmten Typs (für die per-Typ-Eskalation).
+function karteBuildingCountOfType(mapData, type) {
+  let n = 0;
+  const blds = mapData?.buildings || {};
+  for (const k in blds) { if (blds[k] && blds[k].type === type) n++; }
+  return n;
+}
+
+// Eskalierende Baukosten — PRO GEBÄUDE-TYP: jeder weitere Bau DESSELBEN Typs
+// verteuert sich geometrisch (×BUILD_COST_GROWTH je vorhandenem Exemplar dieses Typs).
+// Ein noch nie gebauter Typ kostet die Basis. Bremst das Zuspammen eines Typs, ohne
+// dass ungebaute Gebäude teuer wirken. Zählt nur die EIGENEN Bauten (member.map_data).
+const BUILD_COST_GROWTH = 1.25;
+function karteBuildCost(def, mapData) {
+  if (!def) return 0;
+  return Math.round((def.cost || 0) * Math.pow(BUILD_COST_GROWTH, karteBuildingCountOfType(mapData, def.key)));
 }
 
 // Restzeit bis Fertigstellung, menschlich gerundet (Stunden statt ganzer Tagesblöcke).

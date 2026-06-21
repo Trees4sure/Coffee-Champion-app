@@ -216,17 +216,93 @@ function getSeasonThemeId(seasonId) {
 // (DB.syncTreasuryGoals). Der Effekt wirkt DAUERHAFT für ALLE Gruppenmitglieder und
 // fließt in jede Tasse (perCup) bzw. das Passiv-Einkommen (perDay) ein — siehe
 // treasuryGroupPerks() + Anwendung in db.js addCups / _checkAndClaimPassive.
+// Jedes Ziel ist einer Kassen-Stufe (level) zugeordnet und wird erst kaufbar/
+// freischaltbar, wenn die Gruppe diese Stufe erreicht hat (treasuryLevel, s.u.).
 const KASSE_GOALS = [
-  { id: 'gruppenroester',  icon: '☕', name: 'Gemeinschafts-Röster',     cost: 500,   effect: { perCup: 0.5 },          desc: 'Alle Mitglieder dauerhaft +0,5 CC pro Tasse' },
-  { id: 'wanderwege',      icon: '👣', name: 'Gruppen-Wanderwege',       cost: 1000,  effect: { steps: 2 },             desc: 'Alle Mitglieder dauerhaft +2 Karten-Schritte/Tag' },
-  { id: 'biogarten_grp',   icon: '🌿', name: 'Gemeinsamer Biogarten',    cost: 1500,  effect: { perDay: 8 },            desc: 'Alle Mitglieder dauerhaft +8 CC passiv/Tag' },
-  { id: 'schatzarchiv',    icon: '🗺️', name: 'Schatzkarten-Archiv',      cost: 3000,  effect: { treasure: 0.25 },       desc: 'Schatzausbeute aller Mitglieder +25%' },
-  { id: 'team_espresso',   icon: '🏆', name: 'Team-Espresso-Maschine',   cost: 4000,  effect: { perCup: 1 },            desc: 'Alle Mitglieder dauerhaft +1 CC pro Tasse extra' },
-  { id: 'kaffeereise_grp', icon: '🌍', name: 'Kaffeereise für alle',     cost: 8000,  effect: { perDay: 25 },           desc: 'Alle Mitglieder dauerhaft +25 CC passiv/Tag' },
-  { id: 'wbc',             icon: '🏅', name: 'World Barista Championship', cost: 15000, effect: { perCup: 2, perDay: 40 }, desc: 'Endstufe: alle +2 CC/Tasse UND +40 CC passiv/Tag' },
+  // ── Stufe 1 — Kaffeeküche ──
+  { id: 'gruppenroester',  level: 1, icon: '☕', name: 'Gemeinschafts-Röster',     cost: 500,   effect: { perCup: 0.5 },            desc: 'Alle Mitglieder dauerhaft +0,5 CC pro Tasse' },
+  { id: 'wanderwege',      level: 1, icon: '👣', name: 'Gruppen-Wanderwege',       cost: 1000,  effect: { steps: 2 },               desc: 'Alle Mitglieder dauerhaft +2 Karten-Schritte/Tag' },
+  // ── Stufe 2 — Rösterei ──
+  { id: 'biogarten_grp',   level: 2, icon: '🌿', name: 'Gemeinsamer Biogarten',    cost: 1500,  effect: { perDay: 8 },              desc: 'Alle Mitglieder dauerhaft +8 CC passiv/Tag' },
+  { id: 'schatzarchiv',    level: 2, icon: '🗺️', name: 'Schatzkarten-Archiv',      cost: 3000,  effect: { treasure: 0.25 },         desc: 'Schatzausbeute aller Mitglieder +25%' },
+  // ── Stufe 3 — Plantage ──
+  { id: 'team_espresso',   level: 3, icon: '🏆', name: 'Team-Espresso-Maschine',   cost: 4000,  effect: { perCup: 1 },              desc: 'Alle Mitglieder dauerhaft +1 CC pro Tasse extra' },
+  { id: 'kaffeereise_grp', level: 3, icon: '🌍', name: 'Kaffeereise für alle',     cost: 8000,  effect: { perDay: 25 },             desc: 'Alle Mitglieder dauerhaft +25 CC passiv/Tag' },
+  // ── Stufe 4 — Handelshaus ──
+  { id: 'handelskontor',   level: 4, icon: '⚓', name: 'Gemeinsames Handelskontor', cost: 12000, effect: { perDay: 35 },            desc: 'Alle Mitglieder dauerhaft +35 CC passiv/Tag' },
+  { id: 'barista_uni',     level: 4, icon: '🎓', name: 'Barista-Universität',      cost: 18000, effect: { perCup: 1.5 },            desc: 'Alle Mitglieder dauerhaft +1,5 CC pro Tasse' },
+  // ── Stufe 5 — Kaffee-Imperium ──
+  { id: 'wbc',             level: 5, icon: '🏅', name: 'World Barista Championship', cost: 28000, effect: { perCup: 2, perDay: 40 },  desc: 'Alle +2 CC/Tasse UND +40 CC passiv/Tag' },
+  { id: 'kaffeesatellit',  level: 5, icon: '🛰️', name: 'Kaffee-Satellit',          cost: 50000, effect: { perDay: 100, treasure: 0.5 }, desc: 'Endstufe: alle +100 CC passiv/Tag UND +50% Schatzausbeute' },
 ];
 
-// Aggregierte Gruppen-Boni aus allen freigeschalteten Kassen-Zielen.
+// ── Kassen-Stufen (1–5) ───────────────────────────────────────────────────────
+// Die Stufe richtet sich nach den KUMULATIVEN Gesamt-Einzahlungen (Summe aller
+// contributions, ohne reservierte _-Keys) und sinkt nie — auch wenn die Kasse fürs
+// Freischalten von Zielen geleert wird. Jede Stufe schaltet (a) neue Gruppen-Ziele
+// frei und gewährt (b) einen dauerhaften Stufen-Bonus für ALLE Mitglieder (perk),
+// der — kumulativ über alle erreichten Stufen — in treasuryGroupPerks einfließt.
+// Zusätzliche frische Mechaniken: ab Stufe 2 doppelte Wochen-Challenge-Belohnung
+// (challengeMult), ab Stufe 4 Spar-Zins auf den Kassenstand (interest, in db.js
+// applyDailyLevy angewandt).
+const KASSE_LEVELS = [
+  { level: 1, threshold: 0,     name: 'Kaffeeküche',     icon: '🥄', perk: {},                              mechanic: 'Basis-Gruppenziele freigeschaltet' },
+  { level: 2, threshold: 2000,  name: 'Rösterei',        icon: '⚙️', perk: { perCup: 0.5 }, challengeMult: 2, mechanic: 'Wochen-Challenge-Belohnung ×2 · +0,5 CC/Tasse für alle' },
+  { level: 3, threshold: 6000,  name: 'Plantage',        icon: '🌱', perk: { perDay: 10, steps: 2 },        mechanic: 'Gruppen-Dividende +10 CC passiv/Tag · +2 Karten-Schritte für alle' },
+  { level: 4, threshold: 15000, name: 'Handelshaus',     icon: '🏛️', perk: { perCup: 0.5, perDay: 20 }, interest: 0.01, mechanic: 'Spar-Zins: Kasse +1 %/Tag · +0,5 CC/Tasse · +20 CC passiv/Tag' },
+  { level: 5, threshold: 40000, name: 'Kaffee-Imperium', icon: '👑', perk: { perCup: 1, perDay: 40, treasure: 0.25 }, interest: 0.02, mechanic: 'Endstufe: Spar-Zins 2 %/Tag · +1 CC/Tasse · +40 CC passiv/Tag · +25 % Schatz' },
+];
+
+// Summe aller echten Einzahlungen (reservierte _-Keys wie _levy ignorieren).
+function treasuryTotalContributed(treasury) {
+  const c = (treasury && treasury.contributions) || {};
+  let sum = 0;
+  for (const k in c) { if (k[0] !== '_') sum += parseFloat(c[k]) || 0; }
+  return Math.round(sum * 100) / 100;
+}
+
+// Aktuelle Stufeninfo: erreichte Stufe + Fortschritt zur nächsten.
+function treasuryLevelInfo(treasury) {
+  const total = treasuryTotalContributed(treasury);
+  let cur = KASSE_LEVELS[0];
+  for (const l of KASSE_LEVELS) { if (total >= l.threshold) cur = l; }
+  const next = KASSE_LEVELS.find(l => l.level === cur.level + 1) || null;
+  const base = cur.threshold;
+  const pct  = next ? Math.min(100, Math.round(((total - base) / (next.threshold - base)) * 100)) : 100;
+  return { level: cur.level, name: cur.name, icon: cur.icon, mechanic: cur.mechanic, cur, next, total, pct };
+}
+
+// Kumulative Stufen-Boni (alle Stufen ≤ aktueller Stufe).
+function treasuryLevelPerks(treasury) {
+  const out = { perCup: 0, perDay: 0, steps: 0, treasure: 0 };
+  const lvl = treasuryLevelInfo(treasury).level;
+  for (const l of KASSE_LEVELS) {
+    if (l.level <= lvl && l.perk) {
+      out.perCup   += l.perk.perCup   || 0;
+      out.perDay   += l.perk.perDay   || 0;
+      out.steps    += l.perk.steps    || 0;
+      out.treasure += l.perk.treasure || 0;
+    }
+  }
+  return out;
+}
+
+// Wochen-Challenge-Multiplikator (höchster erreichter), Spar-Zinssatz (höchster erreichter).
+function treasuryChallengeMult(treasury) {
+  const lvl = treasuryLevelInfo(treasury).level;
+  let m = 1; for (const l of KASSE_LEVELS) { if (l.level <= lvl && l.challengeMult) m = Math.max(m, l.challengeMult); }
+  return m;
+}
+function treasuryInterestRate(treasury) {
+  const lvl = treasuryLevelInfo(treasury).level;
+  let r = 0; for (const l of KASSE_LEVELS) { if (l.level <= lvl && l.interest) r = Math.max(r, l.interest); }
+  return r;
+}
+
+// Aggregierte Gruppen-Boni aus freigeschalteten Kassen-Zielen UND erreichten Stufen.
+// Beides fließt in dieselbe perCup/perDay/steps/treasure-Summe → alle bestehenden
+// Anwendungsstellen (addCups, Passiv-Einlösung, Karte, Gehalts-Snapshot) bekommen
+// die Stufen-Boni automatisch, ohne neue Verkabelung.
 // treasury = { balance, contributions, unlocked_goals }
 function treasuryGroupPerks(treasury) {
   const out = { perCup: 0, perDay: 0, steps: 0, treasure: 0 };
@@ -239,6 +315,11 @@ function treasuryGroupPerks(treasury) {
       out.treasure += g.effect.treasure || 0;
     }
   }
+  const lp = treasuryLevelPerks(treasury);
+  out.perCup   += lp.perCup;
+  out.perDay   += lp.perDay;
+  out.steps    += lp.steps;
+  out.treasure += lp.treasure;
   out.perCup   = Math.round(out.perCup * 100) / 100;
   out.perDay   = Math.round(out.perDay * 100) / 100;
   out.treasure = Math.round(out.treasure * 100) / 100;

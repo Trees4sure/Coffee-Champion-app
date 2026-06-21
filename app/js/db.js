@@ -307,42 +307,90 @@ const DB = (() => {
   }
 
   // ── Gehalts-Snapshot (für das 💰 Gehalts-Liniendiagramm) ─────────────────────
-  // Speichert höchstens 1×/Tag den aktuellen Verdienst (passives Tages-Gehalt +
-  // pro-Tasse-Ertrag + Guthaben) in map_data.salaryHistory. Kein Schema-Change
-  // (JSONB existiert). Idempotent pro Datum: überschreibt den heutigen Eintrag mit
-  // dem aktuellsten Stand, hält max. 120 Tage vor. Schreibt über die save_map_data-RPC
+  // Misst den aktuellen Verdienst (passives Tages-Gehalt aus allen Quellen +
+  // pro-Tasse-Ertrag + Guthaben) und legt ihn in map_data.salaryHistory ab. Kein
+  // Schema-Change (JSONB existiert). Statt 1×/Tag jetzt im 5h-Raster: pro 5h-Bucket
+  // höchstens ein Punkt (idempotent — ein erneuter Lauf im selben Fenster überschreibt
+  // den Bucket), max. 120 Punkte (~25 Tage). Schreibt über die save_map_data-RPC
   // (nicht per direktem .update() — das gab beim Karten-Feature 401-Fehler).
+  const SALARY_BUCKET_MS = 5 * 60 * 60 * 1000; // 5h-Raster
+
+  function _salaryBucket(ts) {
+    return Math.floor((ts || Date.now()) / SALARY_BUCKET_MS) * SALARY_BUCKET_MS;
+  }
+
+  // Verdienst eines (bereits normalisierten) Members berechnen. byCountry + perks sind
+  // gruppenweit identisch → einmal vorab laden und durchreichen spart Queries beim
+  // Snapshotten aller Mitglieder. rankMap ist pro Member (Welt-Ränge/Sabotage).
+  async function _computeSalary(member, byCountry, perks) {
+    const research  = member.research || {};
+    const rankMap   = await _fetchWorldRankMap(member.id);
+    const bc        = byCountry || (Object.keys(rankMap).length ? await _fetchWorldBuildingsByCountry() : {});
+    const pk        = perks || await _fetchGroupPerks();
+    const gm        = _gardeMult(member);
+
+    const resDay = (typeof calcResearchPerDay === 'function')      ? calcResearchPerDay(research) : 0;
+    const bldDay = (typeof calcBuildingPerDay === 'function')      ? calcBuildingPerDay(member.map_data?.buildings || {}) : 0;
+    const wDay   = (typeof calcWorldPerDay === 'function')         ? calcWorldPerDay(rankMap) * gm : 0;
+    const wbDay  = (typeof calcWorldBuildingPerDay === 'function') ? calcWorldBuildingPerDay(rankMap, bc) * gm : 0;
+    const perDay = Math.round((resDay + bldDay + wDay + wbDay + (pk.perDay || 0)) * 100) / 100;
+
+    const resCup = (typeof calcResearchPerCup === 'function')      ? calcResearchPerCup(research) : 0;
+    const wCup   = (typeof calcWorldPerCup === 'function')         ? calcWorldPerCup(rankMap) * gm : 0;
+    const wbCup  = (typeof calcWorldBuildingPerCup === 'function') ? calcWorldBuildingPerCup(rankMap, bc) * gm : 0;
+    const perCup = Math.round((resCup + wCup + wbCup + (pk.perCup || 0)) * 100) / 100;
+
+    return { day: perDay, cup: perCup, coins: Math.round(member.coins || 0) };
+  }
+
+  // Snapshot-Punkt schreiben — liest map_data UNMITTELBAR vor dem Write frisch und
+  // merged nur salaryHistory darauf. So kann das Snapshotten fremder Mitglieder keine
+  // zeitgleiche map_data-Änderung (Schatzfund, Bau, Karten-Fortschritt) überschreiben:
+  // das Write-Fenster schrumpft auf einen RPC. 5h-Bucket, idempotent (überschreibt den
+  // laufenden Bucket), Legacy-{d:'YYYY-MM-DD'} wird über Mitternacht auf ts gemappt, max 120.
+  async function _writeSalaryPoint(memberId, sal) {
+    const { data: fresh } = await _sb.from('members').select('map_data').eq('id', memberId).single();
+    const md0    = (fresh && fresh.map_data) || {};
+    const bucket = _salaryBucket();
+    const tsOf   = h => h.ts || (h.d ? new Date(h.d + 'T00:00:00').getTime() : 0);
+    const hist   = Array.isArray(md0.salaryHistory) ? md0.salaryHistory.slice() : [];
+    const entry  = { ts: bucket, day: sal.day, cup: sal.cup, coins: sal.coins };
+    const idx    = hist.findIndex(h => tsOf(h) === bucket);
+    if (idx >= 0) hist[idx] = entry; else hist.push(entry);
+    await updateMapData(memberId, { ...md0, salaryHistory: hist.slice(-120) });
+  }
+
   async function recordSalarySnapshot(memberId) {
     if (!memberId) return;
     try {
       const { data: raw } = await _sb.from('members').select('*').eq('id', memberId).single();
       if (!raw) return;
-      const member   = normalizeUser(raw);
-      const research  = member.research || {};
-      const rankMap   = await _fetchWorldRankMap(memberId);
-      const byCountry = Object.keys(rankMap).length ? await _fetchWorldBuildingsByCountry() : {};
-      const gm        = _gardeMult(member);
-      const perks     = await _fetchGroupPerks();
-
-      const resDay = (typeof calcResearchPerDay === 'function')      ? calcResearchPerDay(research) : 0;
-      const bldDay = (typeof calcBuildingPerDay === 'function')      ? calcBuildingPerDay(member.map_data?.buildings || {}) : 0;
-      const wDay   = (typeof calcWorldPerDay === 'function')         ? calcWorldPerDay(rankMap) * gm : 0;
-      const wbDay  = (typeof calcWorldBuildingPerDay === 'function') ? calcWorldBuildingPerDay(rankMap, byCountry) * gm : 0;
-      const perDay = Math.round((resDay + bldDay + wDay + wbDay + (perks.perDay || 0)) * 100) / 100;
-
-      const resCup = (typeof calcResearchPerCup === 'function')      ? calcResearchPerCup(research) : 0;
-      const wCup   = (typeof calcWorldPerCup === 'function')         ? calcWorldPerCup(rankMap) * gm : 0;
-      const wbCup  = (typeof calcWorldBuildingPerCup === 'function') ? calcWorldBuildingPerCup(rankMap, byCountry) * gm : 0;
-      const perCup = Math.round((resCup + wCup + wbCup + (perks.perCup || 0)) * 100) / 100;
-
-      const d     = today();
-      const hist  = Array.isArray(member.map_data?.salaryHistory) ? member.map_data.salaryHistory.slice() : [];
-      const entry = { d, day: perDay, cup: perCup, coins: Math.round(member.coins || 0) };
-      const idx   = hist.findIndex(h => h.d === d);
-      if (idx >= 0) hist[idx] = entry; else hist.push(entry);
-      const md = { ...(member.map_data || {}), salaryHistory: hist.slice(-120) };
-      await updateMapData(memberId, md);
+      const sal = await _computeSalary(normalizeUser(raw));
+      await _writeSalaryPoint(memberId, sal);
     } catch (e) { console.warn('Gehalts-Snapshot fehlgeschlagen:', e.message); }
+  }
+
+  // ALLE Gruppenmitglieder snapshotten — damit das Gehalts-Chart die ganze Gruppe
+  // abbildet, nicht nur, wer die App zuletzt geöffnet hat. Clientseitig auf 1×/5h-Bucket
+  // gedrosselt (_lastSalaryAllBucket); die Bucket-Idempotenz im Datensatz fängt parallele
+  // Clients zusätzlich ab. Gruppenweite Daten (byCountry/perks) werden einmal geladen.
+  let _lastSalaryAllBucket = 0;
+  async function recordSalarySnapshotsAll() {
+    const bucket = _salaryBucket();
+    if (_lastSalaryAllBucket === bucket) return; // in diesem 5h-Fenster schon gelaufen
+    _lastSalaryAllBucket = bucket;
+    try {
+      const { data: rows } = await _sb.from('members').select('*').eq('group_id', _groupId);
+      if (!rows || !rows.length) { _lastSalaryAllBucket = 0; return; }
+      const byCountry = await _fetchWorldBuildingsByCountry();
+      const perks     = await _fetchGroupPerks();
+      for (const raw of rows) {
+        try {
+          const sal = await _computeSalary(normalizeUser(raw), byCountry, perks);
+          await _writeSalaryPoint(raw.id, sal);
+        } catch (e) { /* einzelnes Mitglied überspringen, Lauf nicht abbrechen */ }
+      }
+    } catch (e) { console.warn('Gehalts-Snapshots (alle) fehlgeschlagen:', e.message); _lastSalaryAllBucket = 0; }
   }
 
   // ── Tassen eintragen ─────────────────────────────────────────────────────────
@@ -547,10 +595,14 @@ const DB = (() => {
   }
 
   // ── Tagesabgabe (00:01-Logik) ────────────────────────────────────────────────
-  // Die Top-3-Verdiener führen je 1 % ihres AKTUELLEN Guthabens an die Gruppenkasse
-  // ab. Einmal pro Tag, idempotent über contributions._levy = Datum (reservierter
-  // Key, vom Wohltäter-Helfer ignoriert). Clientseitig getriggert beim ersten
-  // App-Aufruf des Tages (kein Cron). Ergebnis → Chat-Meldung in app.js.
+  // JEDES Mitglied führt LEVY_RATE seines GESAMTEN Tageseinkommens an die Gruppenkasse
+  // ab — Tageseinkommen = passives Einkommen/Tag aus allen Quellen (Forschung/Welt/
+  // Gebäude/Gruppenkasse) + heutige Tassen × (2 Basis-CC + perCup-Boni). So skaliert die
+  // Abgabe mit der tatsächlichen Leistung statt mit dem Guthaben (Sparer werden nicht
+  // bestraft, Vielverdiener tragen mehr). Gedeckelt aufs Guthaben (nie Minus). Einmal
+  // pro Tag, idempotent über contributions._levy = Datum (reservierter Key, vom
+  // Wohltäter-Helfer ignoriert). Clientseitig getriggert (kein Cron). → Chat in app.js.
+  const LEVY_RATE = 0.05; // 5 % des Tageseinkommens
   async function applyDailyLevy() {
     try {
       const day = today();
@@ -563,27 +615,44 @@ const DB = (() => {
         { group_id: _groupId, balance: parseFloat(t.balance) || 0, contributions: contribs, unlocked_goals: t.unlocked_goals || {} },
         { onConflict: 'group_id' }
       );
-      // Top 3 nach Guthaben
-      const { data: members } = await _sb.from('members')
-        .select('id, name, coins').eq('group_id', _groupId)
-        .order('coins', { ascending: false }).limit(3);
-      const payers = (members || []).filter(m => (parseFloat(m.coins) || 0) > 0);
-      if (!payers.length) return null;
+      const { data: rows } = await _sb.from('members').select('*').eq('group_id', _groupId);
+      if (!rows || !rows.length) return null;
+      // Gruppenweite Daten + heutige Tassen einmal laden
+      const byCountry = await _fetchWorldBuildingsByCountry();
+      const perks     = await _fetchGroupPerks();
+      const { data: ds } = await _sb.from('daily_stats').select('stats')
+        .eq('group_id', _groupId).eq('date', day).maybeSingle();
+      const cupsMap = (ds && ds.stats) || {};
+
       let levied = 0;
       const details = [];
-      for (const m of payers) {
-        const amt = Math.round((parseFloat(m.coins) || 0) * 0.01 * 100) / 100;
-        if (amt < 0.01) continue;
-        const left = await spendCoins(m.id, amt);
-        if (left === null || left === undefined) continue; // unerwartet nicht genug — überspringen
-        levied = Math.round((levied + amt) * 100) / 100;
-        contribs[m.id] = Math.round(((parseFloat(contribs[m.id]) || 0) + amt) * 100) / 100;
-        details.push({ name: m.name, amt });
+      for (const raw of rows) {
+        try {
+          const member    = normalizeUser(raw);
+          const sal       = await _computeSalary(member, byCountry, perks); // {day,cup,coins}
+          const cupsToday = cupsMap[member.id] || 0;
+          // Tageseinkommen = passiv/Tag + heutige Tassen × (Basis 2 CC + perCup-Boni)
+          const income    = Math.round((sal.day + cupsToday * (2 + sal.cup)) * 100) / 100;
+          let amt = Math.round(income * LEVY_RATE * 100) / 100;
+          if (amt < 0.01) continue;
+          const bal = parseFloat(member.coins) || 0;
+          if (amt > bal) amt = Math.round(bal * 100) / 100; // aufs Guthaben deckeln, nie Minus
+          if (amt < 0.01) continue;
+          const left = await spendCoins(member.id, amt);
+          if (left === null || left === undefined) continue; // unerwartet nicht genug — überspringen
+          levied = Math.round((levied + amt) * 100) / 100;
+          contribs[member.id] = Math.round(((parseFloat(contribs[member.id]) || 0) + amt) * 100) / 100;
+          details.push({ name: member.name, amt });
+        } catch (e) { /* einzelnes Mitglied überspringen */ }
       }
-      if (levied <= 0) return null;
-      const newBalance = Math.round(((parseFloat(t.balance) || 0) + levied) * 100) / 100;
+      // Spar-Zins der Kassen-Stufe (ab Stufe 4) auf den Kassenstand VOR Abgabe —
+      // einmal pro Tag (gleiche Tagessperre wie die Abgabe). Wächst den Gruppenstand.
+      const rate = (typeof treasuryInterestRate === 'function') ? treasuryInterestRate(t) : 0;
+      const interest = rate > 0 ? Math.round((parseFloat(t.balance) || 0) * rate * 100) / 100 : 0;
+      if (levied <= 0 && interest <= 0) return null;
+      const newBalance = Math.round(((parseFloat(t.balance) || 0) + levied + interest) * 100) / 100;
       await _sb.from('group_treasury').update({ balance: newBalance, contributions: contribs }).eq('group_id', _groupId);
-      return { levied, details, newBalance };
+      return { levied, details, rate: LEVY_RATE, interest, interestRate: rate, newBalance };
     } catch (e) { console.warn('applyDailyLevy fehlgeschlagen:', e.message); return null; }
   }
 
@@ -611,11 +680,14 @@ const DB = (() => {
         { group_id: _groupId, balance: parseFloat(t.balance) || 0, contributions: t.contributions || {}, unlocked_goals: unlocked },
         { onConflict: 'group_id' }
       );
+      // Belohnung × Kassen-Stufen-Multiplikator (ab Stufe 2 doppelt)
+      const mult   = (typeof treasuryChallengeMult === 'function') ? treasuryChallengeMult(t) : 1;
+      const reward = Math.round(WEEKLY_CHALLENGE.reward * mult);
       const { data: members } = await _sb.from('members').select('id').eq('group_id', _groupId);
       for (const m of (members || [])) {
-        try { await _sb.rpc('add_coins', { p_member_id: m.id, p_amount: WEEKLY_CHALLENGE.reward }); } catch (e) {}
+        try { await _sb.rpc('add_coins', { p_member_id: m.id, p_amount: reward }); } catch (e) {}
       }
-      return { progress, goal, done: true, justCompleted: true, reward: WEEKLY_CHALLENGE.reward };
+      return { progress, goal, done: true, justCompleted: true, reward, mult };
     } catch (e) { console.warn('checkWeeklyChallenge fehlgeschlagen:', e.message); return null; }
   }
 
@@ -628,8 +700,11 @@ const DB = (() => {
     try {
       const t = await fetchTreasury();
       const unlocked = { ...(t.unlocked_goals || {}) };
+      // Nur Ziele bis zur aktuell erreichten Kassen-Stufe sind freischaltbar
+      const curLevel = (typeof treasuryLevelInfo === 'function') ? treasuryLevelInfo(t).level : 99;
       const newly = [];
       for (const g of KASSE_GOALS) {
+        if ((g.level || 1) > curLevel) continue; // Stufe noch nicht erreicht
         if (!unlocked[g.id] && (parseFloat(t.balance) || 0) >= g.cost) {
           unlocked[g.id] = { at: new Date().toISOString() };
           newly.push(g);
@@ -1055,7 +1130,7 @@ const DB = (() => {
     spendCoins, fetchTreasury, contributeToTreasury, syncTreasuryGoals,
     applyDailyLevy, checkWeeklyChallenge,
     purchaseResearchItem, saveCosmetics,
-    updateMapData, addCoins, appendTodayLog, claimPassive, recordSalarySnapshot,
+    updateMapData, addCoins, appendTodayLog, claimPassive, recordSalarySnapshot, recordSalarySnapshotsAll,
     investInCountry, fetchCountryStandings, fetchAllWorldInvestments,
     fetchAllWorldBuildings, buildWorldStructure, buyGarde, fetchTaxStats,
     castSabotage, fetchSabotages,

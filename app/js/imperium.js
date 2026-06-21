@@ -222,6 +222,25 @@ function _buildForschungsbaum(research) {
 }
 
 // Banner mit allen aktiven Gruppen-Boni (Tasse/Passiv/Schritte/Schatz)
+// Stufen-Banner der Gruppenkasse (Stufe X/5, frische Mechanik, Fortschritt zur nächsten Stufe)
+function _kasseLevelBanner(treasury) {
+  if (typeof treasuryLevelInfo !== 'function') return '';
+  const info = treasuryLevelInfo(treasury);
+  const nextTxt = info.next
+    ? `Nächste Stufe: ${info.next.icon} ${_esc2(info.next.name)} bei ${info.next.threshold.toLocaleString('de-DE')} GC Gesamt-Einzahlungen`
+    : '🏆 Höchste Stufe erreicht!';
+  const bar = info.next
+    ? `<div class="cc-progress-bar"><div class="cc-progress-fill" style="width:${info.pct}%"></div></div>
+       <p class="cc-progress-pct">${_fmtCoins(info.total)} / ${info.next.threshold.toLocaleString('de-DE')} GC Gesamt-Einzahlungen (${info.pct}%)</p>`
+    : '';
+  return `<div class="cc-kasse-level">
+    <div class="cc-kasse-level-head"><span class="cc-kasse-level-badge">${info.icon} Stufe ${info.level}/5 · ${_esc2(info.name)}</span></div>
+    <p class="cc-kasse-level-mech">${_esc2(info.mechanic)}</p>
+    <p class="cc-kasse-level-next">${nextTxt}</p>
+    ${bar}
+  </div>`;
+}
+
 function _kassePerksBanner(perks) {
   const parts = [];
   if (perks.perCup   > 0) parts.push(`<strong>+${perks.perCup} CC/Tasse</strong>`);
@@ -279,6 +298,7 @@ async function _buildKasse(member) {
       <p class="cc-kasse-mycontrib">Dein Beitrag: <strong>${_fmtCoins(myContrib)} GC</strong></p>
       ${topUser ? `<p class="cc-kasse-mycontrib">🎗️ Größter Wohltäter: <strong>${_esc2(topUser.name)}</strong></p>` : ''}
     </div>
+    ${_kasseLevelBanner(treasury)}
     ${_kassePerksBanner(perks)}
     ${_kasseWeeklyChallenge()}
     <div class="cc-kasse-contribute">
@@ -287,10 +307,12 @@ async function _buildKasse(member) {
     </div>
     <div class="section-title" style="margin:16px 0 8px">Gruppen-Ziele</div>`;
 
+  const curLevel = (typeof treasuryLevelInfo === 'function') ? treasuryLevelInfo(treasury).level : 99;
   for (const goal of KASSE_GOALS) {
-    const unlocked  = !!(treasury.unlocked_goals || {})[goal.id];
-    const pct       = Math.min(100, Math.round((treasury.balance / goal.cost) * 100));
-    html += `<div class="cc-goal ${unlocked ? 'cc-goal-done' : ''}">
+    const unlocked    = !!(treasury.unlocked_goals || {})[goal.id];
+    const levelLocked = (goal.level || 1) > curLevel;
+    const pct         = Math.min(100, Math.round((treasury.balance / goal.cost) * 100));
+    html += `<div class="cc-goal ${unlocked ? 'cc-goal-done' : ''} ${levelLocked ? 'cc-goal-locked' : ''}">
       <div class="cc-goal-head">
         <span class="cc-goal-icon">${goal.icon}</span>
         <span class="cc-goal-name">${_esc2(goal.name)}</span>
@@ -299,8 +321,10 @@ async function _buildKasse(member) {
       <p class="cc-goal-desc">${_esc2(goal.desc)}</p>
       ${unlocked
         ? '<p class="cc-goal-done-lbl">✓ Erreicht!</p>'
-        : `<div class="cc-progress-bar"><div class="cc-progress-fill" style="width:${pct}%"></div></div>
-           <p class="cc-progress-pct">${pct}% (${_fmtCoins(treasury.balance)} / ${goal.cost.toLocaleString('de-DE')} GC)</p>`}
+        : levelLocked
+          ? `<p class="cc-goal-locked-lbl">🔒 Ab Kassen-Stufe ${goal.level} freischaltbar</p>`
+          : `<div class="cc-progress-bar"><div class="cc-progress-fill" style="width:${pct}%"></div></div>
+             <p class="cc-progress-pct">${pct}% (${_fmtCoins(treasury.balance)} / ${goal.cost.toLocaleString('de-DE')} GC)</p>`}
     </div>`;
   }
   return html;
@@ -325,8 +349,10 @@ function _buildImperiumStats() {
     _perks.steps    > 0 ? `+${_perks.steps} Schritte/Tag` : '',
     _perks.treasure > 0 ? `+${Math.round(_perks.treasure * 100)}% Schatz` : '',
   ].filter(Boolean).join(' · ') || 'noch keine — fülle die Kasse!';
+  const _lvl = (typeof treasuryLevelInfo === 'function') ? treasuryLevelInfo(_tr) : null;
   let html = `<div class="cc-stats-kasse">
       <div class="cc-stats-kasse-row"><span>🏛️ Gruppenkasse</span><strong>${_fmtCoins(_tr.balance)} GC</strong></div>
+      ${_lvl ? `<div class="cc-stats-kasse-row"><span>${_lvl.icon} Kassen-Stufe</span><strong>${_lvl.level}/5 · ${_esc2(_lvl.name)}</strong></div>` : ''}
       <div class="cc-stats-kasse-row"><span>🎁 Aktive Gruppen-Boni</span><strong>${_perkStr}</strong></div>
       ${_topU ? `<div class="cc-stats-kasse-row"><span>🎗️ Größter Wohltäter</span><strong>${_esc2(_topU.name)}</strong></div>` : ''}
     </div>`;
@@ -1083,8 +1109,7 @@ async function _handleKarteStep(tx, ty, member, state, seed, COLS, ROWS, MARGIN)
       );
     } catch (e) { console.warn('Chat-Broadcast Fehler:', e); }
     const displayTreasure = bartBonus ? { ...treasure, cc: totalCC } : treasure;
-    _showKarteDiscovery(displayTreasure);
-    showToast(`${treasure.emoji} ${treasure.name} entdeckt! +${totalCC} CC`, 'success');
+    _showKarteDiscovery(displayTreasure); // nicht-blockierendes Auto-Popup (kein zusätzlicher Toast)
   } else if (event) {
     const eff = event.effect;
     let bonusCC   = 0;
@@ -1162,8 +1187,7 @@ async function _handleKarteStep(tx, ty, member, state, seed, COLS, ROWS, MARGIN)
       }
     }
 
-    _showKarteEvent(event, noteText);
-    showToast(event.emoji + ' ' + event.name + (noteText ? ' — ' + noteText : ''), 'success');
+    _showKarteEvent(event, noteText); // nicht-blockierendes Auto-Popup (kein zusätzlicher Toast)
   }
 
   // Viewport nur an Rändern verschieben (Spieler läuft sichtbar übers Canvas)
@@ -1217,11 +1241,38 @@ async function _handleKarteUpgrade(key, cost, member, state, seed) {
   _karteUpdateHUD(state);
 }
 
-function _showKarteDiscovery(treasure) {
+// ── Karten-Popups: Modal (mit Buttons) vs. Auto (Entdeckung/Ereignis) ──────────
+// Entdeckungs-/Ereignis-Meldungen sollen das Weitergehen NICHT blockieren: kein
+// "Weiter"-Button, nicht-blockierende Overlay (pointer-events:none → Taps gehen
+// direkt aufs Canvas zum nächsten Feld) und Auto-Ausblenden nach kurzer Zeit.
+let _kartePopupTimer = null;
+
+// Modal-Popup (Bau-Menü / Gebäude-Info) — räumt einen evtl. laufenden Auto-Timer ab
+// und stellt sicher, dass das Overlay wieder blockierend ist (kein --auto).
+function _karteModalPopup() {
+  const popup = document.getElementById('cc-karte-popup');
+  if (!popup) return null;
+  if (_kartePopupTimer) { clearTimeout(_kartePopupTimer); _kartePopupTimer = null; }
+  popup.classList.remove('hidden', 'cc-karte-popup--auto');
+  return popup;
+}
+
+// Auto-Popup — nicht-blockierend, verschwindet nach ms von selbst.
+function _karteAutoPopup(innerHTML, ms = 2600) {
   const popup = document.getElementById('cc-karte-popup');
   if (!popup) return;
-  popup.classList.remove('hidden');
-  popup.innerHTML = `
+  if (_kartePopupTimer) { clearTimeout(_kartePopupTimer); _kartePopupTimer = null; }
+  popup.className = 'cc-karte-popup cc-karte-popup--auto';
+  popup.innerHTML = innerHTML;
+  _kartePopupTimer = setTimeout(() => {
+    const p = document.getElementById('cc-karte-popup');
+    if (p) { p.classList.add('hidden'); p.classList.remove('cc-karte-popup--auto'); }
+    _kartePopupTimer = null;
+  }, ms);
+}
+
+function _showKarteDiscovery(treasure) {
+  _karteAutoPopup(`
     <div class="cc-karte-popup-inner">
       <div class="cc-karte-popup-hdr">✦ ENTDECKUNG!</div>
       <div class="cc-karte-popup-body">
@@ -1232,43 +1283,42 @@ function _showKarteDiscovery(treasure) {
           <span class="cc-karte-popup-cc">+${treasure.cc} 🫘 CC</span>
         </div>
       </div>
-      <button class="cc-karte-popup-close"
-        onclick="document.getElementById('cc-karte-popup').classList.add('hidden')">
-        Weiter →
-      </button>
     </div>
-  `;
+  `);
 }
 
 // ── Gebäude-Bau ───────────────────────────────────────────────────────────────
 function _buildingEffectLabel(b) {
   if (b.perDay)    return `+${b.perDay} CC/Tag`;
   if (b.harbor)    return '1% aller Forschungskäufe der Gruppe';
-  if (b.stepBonus) return `+${b.stepBonus} Schritt/Tag`;
+  if (b.stepBonus) return `+${b.stepBonus} Schritt${b.stepBonus > 1 ? 'e' : ''}/Tag`;
   if (b.fogRadius) return 'Deckt Nebel im Umkreis auf';
   return '';
 }
 
 function _showKarteBuildMenu(options, cx, cy, member, state, seed) {
-  const popup = document.getElementById('cc-karte-popup');
+  const popup = _karteModalPopup();
   if (!popup) return;
-  popup.classList.remove('hidden');
   const rows = options.map(({ def, ax, ay }) => {
-    const afford = (state.memberCoins || 0) >= def.cost;
+    const cost   = (typeof karteBuildCost === 'function') ? karteBuildCost(def, state.mapData) : def.cost;
+    const afford = (state.memberCoins || 0) >= cost;
+    const ownedType = (typeof karteBuildingCountOfType === 'function') ? karteBuildingCountOfType(state.mapData, def.key) : 0;
     const w = def.w || 1, h = def.h || 1;
     const size = (w > 1 || h > 1) ? ` · ${w}×${h}` : '';
+    const ownedNote = ownedType > 0 ? ` · du hast ${ownedType}×` : '';
     return `<div class="cc-build-opt">
       <span class="cc-build-emoji">${def.emoji}</span>
       <div class="cc-build-info">
         <strong>${_esc2(def.name)}${size}</strong>
-        <span class="cc-build-eff">${_buildingEffectLabel(def)} · fertig in ${def.days} Tag${def.days > 1 ? 'en' : ''}</span>
+        <span class="cc-build-eff">${_buildingEffectLabel(def)} · fertig in ${def.days} Tag${def.days > 1 ? 'en' : ''}${ownedNote}</span>
       </div>
-      <button class="cc-build-btn" data-build="${def.key}" data-ax="${ax}" data-ay="${ay}" ${afford ? '' : 'disabled'}>${afford ? 'Bauen' : 'zu wenig'} · ${def.cost} 🫘</button>
+      <button class="cc-build-btn" data-build="${def.key}" data-ax="${ax}" data-ay="${ay}" ${afford ? '' : 'disabled'}>${afford ? 'Bauen' : 'zu wenig'} · ${cost} 🫘</button>
     </div>`;
   }).join('');
   popup.innerHTML = `
     <div class="cc-karte-popup-inner">
       <div class="cc-karte-popup-hdr">🏗️ HIER BAUEN &nbsp;(${cx}, ${cy})</div>
+      <p class="cc-build-hint">📈 Jeder weitere Bau desselben Typs kostet mehr</p>
       <div class="cc-build-list">${rows}</div>
       <button class="cc-karte-popup-close"
         onclick="document.getElementById('cc-karte-popup').classList.add('hidden')">
@@ -1285,7 +1335,7 @@ function _showKarteBuildMenu(options, cx, cy, member, state, seed) {
 }
 
 function _showKarteBuildingInfo(b) {
-  const popup = document.getElementById('cc-karte-popup');
+  const popup = _karteModalPopup();
   if (!popup) return;
   const def = karteBuildingDef(b.type);
   if (!def) return;
@@ -1333,7 +1383,8 @@ async function _handleKarteBuild(buildingKey, ax, ay, member, state, seed) {
     showToast('Hier kann nicht (mehr) gebaut werden.', 'error');
     return;
   }
-  const newCoins = await DB.spendCoins(member.id, def.cost);
+  const cost = (typeof karteBuildCost === 'function') ? karteBuildCost(def, state.mapData) : def.cost;
+  const newCoins = await DB.spendCoins(member.id, cost);
   if (newCoins === null) { showToast('Nicht genug CoffeeCoins!', 'error'); return; }
 
   state.memberCoins = newCoins;
@@ -1365,10 +1416,7 @@ async function _handleKarteBuild(buildingKey, ax, ay, member, state, seed) {
 }
 
 function _showKarteEvent(event, noteText) {
-  const popup = document.getElementById('cc-karte-popup');
-  if (!popup) return;
-  popup.classList.remove('hidden');
-  popup.innerHTML = `
+  _karteAutoPopup(`
     <div class="cc-karte-popup-inner">
       <div class="cc-karte-popup-hdr cc-karte-popup-hdr--event">⚡ EREIGNIS!</div>
       <div class="cc-karte-popup-body">
@@ -1379,10 +1427,6 @@ function _showKarteEvent(event, noteText) {
           ${noteText ? '<span class="cc-karte-popup-cc">' + _esc2(noteText) + '</span>' : ''}
         </div>
       </div>
-      <button class="cc-karte-popup-close"
-        onclick="document.getElementById('cc-karte-popup').classList.add('hidden')">
-        Weiter →
-      </button>
     </div>
-  `;
+  `);
 }

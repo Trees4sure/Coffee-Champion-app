@@ -76,8 +76,10 @@ function showApp() {
   switchView('rangliste');
   // Passives Einkommen beim App-Start einlösen (entkoppelt von Tassen)
   claimPassiveAndRefresh();
-  // Gehalts-Snapshot für das 💰 Gehalts-Chart (DB-seitig idempotent pro Tag)
-  if (currentUser?.id) DB.recordSalarySnapshot(currentUser.id);
+  // Gehalts-Snapshots für das 💰 Gehalts-Chart: alle Gruppenmitglieder im 5h-Raster
+  // (clientseitig auf 1×/5h-Bucket gedrosselt, Bucket-idempotent). So zeigt der Verlauf
+  // die ganze Gruppe — nicht nur, wer die App zuletzt geöffnet hat.
+  if (currentUser?.id) DB.recordSalarySnapshotsAll();
 }
 
 // Passives Einkommen einlösen und bei Gutschrift Anzeige aktualisieren.
@@ -108,11 +110,18 @@ async function dailyGroupTasks() {
   let changed = false;
   try {
     const levy = await DB.applyDailyLevy();
-    if (levy && levy.levied > 0) {
+    if (levy && (levy.levied > 0 || levy.interest > 0)) {
       changed = true;
       try {
+        const pct = Math.round((levy.rate || 0.05) * 100);
+        const zins = levy.interest > 0
+          ? ` 💰 Spar-Zins (${Math.round((levy.interestRate || 0) * 100)} %/Tag): +${levy.interest} GC.`
+          : '';
         const who = levy.details.map(d => `${d.name} (${d.amt} CC)`).join(', ');
-        await DB.postMessage(`🏛️ Tagesabgabe: Top-Verdiener ${who} führen zusammen ${levy.levied} CC an die Gruppenkasse ab. (Stand: ${levy.newBalance} GC)`, 'Gruppenkasse');
+        const abgabe = levy.levied > 0
+          ? `Tagesabgabe (${pct} % vom Tageseinkommen): ${who} führen zusammen ${levy.levied} CC an die Gruppenkasse ab.`
+          : 'Tagesabgabe: heute kein Einkommen abzuführen.';
+        await DB.postMessage(`🏛️ ${abgabe}${zins} (Stand: ${levy.newBalance} GC)`, 'Gruppenkasse');
       } catch (e) {}
       try { await DB.syncTreasuryGoals(); } catch (e) {}
     }
@@ -173,6 +182,8 @@ async function refreshData() {
   } catch (e) { console.warn('Refresh fehlgeschlagen:', e.message); }
   // Passives Einkommen für lange offene Sessions (intern auf 15 Min / 1 Std gedrosselt)
   claimPassiveAndRefresh();
+  // Gehalts-Snapshot im 5h-Raster auch bei langen Sessions (Bucket-gedrosselt, idempotent)
+  if (currentUser?.id) DB.recordSalarySnapshotsAll();
 }
 
 // ── Nachrichten ───────────────────────────────────────────────────────────────
@@ -523,37 +534,41 @@ function renderGehalt() {
   document.getElementById('period-label').textContent = 'Gehalts-Entwicklung';
   const top5 = leaderboardData.slice(0, 5);
   const histOf = u => ((appData.users.find(x => x.id === u.id) || u).map_data?.salaryHistory) || [];
+  // ts pro Eintrag — neue Einträge haben ts (5h-Bucket), alte nur d (Datum → Mitternacht)
+  const tsOf = h => h.ts || (h.d ? new Date(h.d + 'T00:00:00').getTime() : 0);
 
-  // Datums-Achse = Vereinigung aller Snapshot-Tage der Top-5
-  const dateSet = new Set();
-  top5.forEach(u => histOf(u).forEach(h => dateSet.add(h.d)));
-  const labels = [...dateSet].sort();
+  // Zeit-Achse = Vereinigung aller Snapshot-Zeitpunkte der Top-5
+  const tsSet = new Set();
+  top5.forEach(u => histOf(u).forEach(h => { const t = tsOf(h); if (t) tsSet.add(t); }));
+  const stamps = [...tsSet].sort((a, b) => a - b);
 
-  if (!labels.length) {
+  if (!stamps.length) {
     if (charts.main) { charts.main.destroy(); charts.main = null; }
     document.getElementById('period-summary').innerHTML =
-      '<p style="color:var(--muted);padding:18px;text-align:center">📈 Noch keine Gehaltsdaten vorhanden.<br>Der Verlauf baut sich ab jetzt täglich auf — schau morgen wieder vorbei!</p>';
+      '<p style="color:var(--muted);padding:18px;text-align:center">📈 Noch keine Gehaltsdaten vorhanden.<br>Der Verlauf baut sich ab jetzt alle 5 Stunden auf — schau später wieder vorbei!</p>';
     return;
   }
 
+  const fmt = t => { const d = new Date(t); return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }) + ' ' + String(d.getHours()).padStart(2, '0') + 'h'; };
   const datasets = top5.map((u, i) => {
-    const map = {}; histOf(u).forEach(h => { map[h.d] = h.day; });
+    const map = {}; histOf(u).forEach(h => { const t = tsOf(h); if (t) map[t] = h.day; });
     return {
       label: u.name,
-      data: labels.map(d => (d in map ? map[d] : null)),
+      data: stamps.map(t => (t in map ? map[t] : null)),
       spanGaps: true, borderColor: COLORS[i], backgroundColor: COLORS[i] + '33',
       borderWidth: 2, tension: 0.25, pointRadius: 2, fill: false
     };
   });
   if (charts.main) charts.main.destroy();
   charts.main = new Chart(document.getElementById('chart-main').getContext('2d'), {
-    type: 'line', data: { labels: labels.map(d => d.slice(5)), datasets }, options: chartOptions()
+    type: 'line', data: { labels: stamps.map(fmt), datasets }, options: chartOptions()
   });
 
   document.getElementById('period-summary').innerHTML = `
     <table><thead><tr><th>Name</th><th>💰 CC/Tag</th><th>☕ CC/Tasse</th><th>🪙 Guthaben</th></tr></thead><tbody>
     ${top5.map(u => {
-      const h = histOf(u); const last = h[h.length - 1] || {};
+      const sorted = histOf(u).slice().sort((a, b) => tsOf(a) - tsOf(b));
+      const last = sorted[sorted.length - 1] || {};
       return `<tr class="${u.id === currentUser?.id ? 'winner-row' : ''}"><td>${_esc(u.name)}</td><td>${last.day ?? '–'}</td><td>${last.cup ?? '–'}</td><td>${last.coins ?? '–'}</td></tr>`;
     }).join('')}
     </tbody></table>`;
