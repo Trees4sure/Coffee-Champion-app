@@ -209,8 +209,21 @@
 .cc-kasse-contribute { display: flex; gap: 8px; margin-bottom: 16px; align-items: center; flex-wrap: wrap; }
 .cc-kasse-contribute input { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.15); border-radius: 8px; padding: 8px 10px; color: inherit; font-size: .84rem; flex: 1; min-width: 0; }
 
+/* Kassen-Stufen-Banner */
+.cc-kasse-level {
+  background: linear-gradient(135deg, rgba(212,175,55,.18), rgba(212,175,55,.05));
+  border: 1px solid rgba(212,175,55,.4); border-radius: 10px;
+  padding: 10px 12px; margin-bottom: 14px;
+}
+.cc-kasse-level-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.cc-kasse-level-badge { font-size: .95rem; font-weight: 700; color: #FAC775; }
+.cc-kasse-level-mech { font-size: .78rem; color: rgba(255,255,255,.7); margin: 0 0 6px; line-height: 1.45; }
+.cc-kasse-level-next { font-size: .72rem; color: rgba(255,255,255,.45); margin: 0 0 4px; }
+
 .cc-goal       { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; }
 .cc-goal-done  { border-color: rgba(157,225,203,.35); background: rgba(157,225,203,.06); }
+.cc-goal-locked { opacity: .5; border-style: dashed; }
+.cc-goal-locked-lbl { font-size: 11px; color: rgba(255,255,255,.4); margin: 4px 0 0; }
 .cc-goal-head  { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
 .cc-goal-icon  { font-size: 20px; }
 .cc-goal-name  { font-size: 13px; font-weight: 600; flex: 1; }
@@ -431,6 +444,18 @@
 }
 
 .cc-karte-popup.hidden { display: none; }
+
+/* Auto-Popup (Entdeckung/Ereignis): nicht-blockierend — Taps gehen direkt aufs
+   Canvas zum nächsten Feld; verschwindet von selbst (kein "Weiter"-Button). */
+.cc-karte-popup--auto { pointer-events: none; background: transparent; }
+.cc-karte-popup--auto .cc-karte-popup-inner {
+  pointer-events: none;
+  box-shadow: 0 8px 32px rgba(0,0,0,.7);
+  animation: kartePopupIn .2s ease;
+}
+
+/* Hinweis im Bau-Menü, dass die Preise pro Gebäude steigen */
+.cc-build-hint { font-size: 11px; color: rgba(212,175,55,.75); margin: 0 0 8px; }
 
 @keyframes kartePopupIn {
   from { opacity: 0; transform: translateY(20px); }

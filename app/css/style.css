@@ -117,6 +117,14 @@ input  { font-family: inherit; font-size: inherit; }
 /* ── App Layout ────────────────────────────────────────────────────────────── */
 #app-screen {
   display: grid; grid-template-rows: auto 1fr auto;
+  /* grid-template-columns: minmax(0,1fr) ist entscheidend gegen das systemische
+     "rechts abgeschnitten / links Padding"-Problem: ohne explizite Spalte bekommt
+     der Grid eine implizite auto-Spalte, die auf max-content wächst — ein einzelnes
+     breites Kind (Tabelle, Podium, lange nowrap-Zeile, Welt-Einfluss-Text) dehnt die
+     Spalte über die Viewport-Breite, und #app-screen (overflow:hidden, an den Viewport
+     gepinnt) klippt rechts. Ein .views{min-width:0} begrenzt nur die Item-Mindestbreite,
+     NICHT die Track-Breite. minmax(0,1fr) fixiert die Spalte auf die Container-Breite. */
+  grid-template-columns: minmax(0, 1fr);
   height: 100vh; overflow: hidden; position: absolute; inset: 0;
 }
 #app-screen.hidden { display: none; }
