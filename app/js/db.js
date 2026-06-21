@@ -348,16 +348,38 @@ const DB = (() => {
   // zeitgleiche map_data-Änderung (Schatzfund, Bau, Karten-Fortschritt) überschreiben:
   // das Write-Fenster schrumpft auf einen RPC. 5h-Bucket, idempotent (überschreibt den
   // laufenden Bucket), Legacy-{d:'YYYY-MM-DD'} wird über Mitternacht auf ts gemappt, max 120.
+  // Gestufte Auflösung, damit die GESAMTE Spielzeit erhalten bleibt (nicht nur ein
+  // rollender Ausschnitt), ohne dass die History unbegrenzt wächst:
+  //   < 3 Tage  : alle 5h-Punkte (Feindetail)
+  //   3–30 Tage : 1 Punkt/Tag   (jüngster des Tages)
+  //   > 30 Tage : 1 Punkt/Woche (jüngster der Woche)
+  // Ergebnis: ~90 Punkte/Jahr, voller Langzeit-Trend + aktuelles Detail. Safety-Cap 400.
+  function _salaryTsOf(h) { return h.ts || (h.d ? new Date(h.d + 'T00:00:00').getTime() : 0); }
+  function _pruneSalaryHistory(hist, nowTs) {
+    const now = nowTs || Date.now();
+    const DAY = 86400000;
+    const sorted = (hist || []).filter(h => _salaryTsOf(h) > 0).sort((a, b) => _salaryTsOf(a) - _salaryTsOf(b));
+    const recent = [];
+    const buckets = new Map(); // key → Punkt; aufsteigend sortiert → behält den jüngsten je Bucket
+    for (const h of sorted) {
+      const ts = _salaryTsOf(h);
+      const age = now - ts;
+      if (age < 3 * DAY) { recent.push(h); continue; }
+      const key = age < 30 * DAY ? 'd' + Math.floor(ts / DAY) : 'w' + Math.floor(ts / (7 * DAY));
+      buckets.set(key, h);
+    }
+    return [...buckets.values(), ...recent].sort((a, b) => _salaryTsOf(a) - _salaryTsOf(b)).slice(-400);
+  }
+
   async function _writeSalaryPoint(memberId, sal) {
     const { data: fresh } = await _sb.from('members').select('map_data').eq('id', memberId).single();
     const md0    = (fresh && fresh.map_data) || {};
     const bucket = _salaryBucket();
-    const tsOf   = h => h.ts || (h.d ? new Date(h.d + 'T00:00:00').getTime() : 0);
     const hist   = Array.isArray(md0.salaryHistory) ? md0.salaryHistory.slice() : [];
     const entry  = { ts: bucket, day: sal.day, cup: sal.cup, coins: sal.coins };
-    const idx    = hist.findIndex(h => tsOf(h) === bucket);
+    const idx    = hist.findIndex(h => _salaryTsOf(h) === bucket);
     if (idx >= 0) hist[idx] = entry; else hist.push(entry);
-    await updateMapData(memberId, { ...md0, salaryHistory: hist.slice(-120) });
+    await updateMapData(memberId, { ...md0, salaryHistory: _pruneSalaryHistory(hist) });
   }
 
   async function recordSalarySnapshot(memberId) {
