@@ -186,7 +186,7 @@ const DB = (() => {
       total_cups: 0, is_admin: isAdmin,
       join_date: today(), last_active: today(),
       achievements: {}, active_days: [], season_cups: {},
-      coins: 0, research: {}, cosmetics: {}
+      coins: 50, research: {}, cosmetics: {}  // Willkommens-Startkapital (gegen die Anfangs-Durststrecke)
     }).select().single();
     if (error) throw new Error(error.message);
     await ensureSeason();
@@ -306,6 +306,60 @@ const DB = (() => {
     }
   }
 
+  // ── Täglicher Login-Bonus ────────────────────────────────────────────────────
+  // Eskaliert mit der Login-Serie (loginBonusFor in research.js), gedeckelt. Idempotent
+  // pro Tag über map_data.loginBonus = { lastDate, streak }. Kein Cron — beim App-Start
+  // eingelöst. Gibt { reward, streak } oder 0 (heute schon eingelöst / Fehler) zurück.
+  async function claimLoginBonus(memberId) {
+    if (!memberId) return 0;
+    try {
+      const { data: raw } = await _sb.from('members').select('map_data').eq('id', memberId).single();
+      const md  = (raw && raw.map_data) || {};
+      const lb  = md.loginBonus || {};
+      const day = today();
+      if (lb.lastDate === day) return 0; // heute bereits eingelöst
+      const y = new Date(); y.setDate(y.getDate() - 1);
+      const yStr   = y.toISOString().slice(0, 10);
+      const streak = (lb.lastDate === yStr) ? ((lb.streak || 0) + 1) : 1; // Lücke → Serie startet neu
+      const reward = (typeof loginBonusFor === 'function') ? loginBonusFor(streak) : Math.min(5 + (streak - 1) * 2, 25);
+      await _sb.rpc('add_coins', { p_member_id: memberId, p_amount: reward });
+      const md2 = appendTodayLog({ ...md, loginBonus: { lastDate: day, streak } },
+                    [{ label: `📅 Login-Bonus (Tag ${streak})`, amount: reward }]);
+      await updateMapData(memberId, md2);
+      return { reward, streak };
+    } catch (e) { console.warn('Login-Bonus fehlgeschlagen:', e.message); return 0; }
+  }
+
+  // ── Kaffee-Tagesaufgabe einlösen (Goodwill) ──────────────────────────────────
+  // Eine rotierende Aufgabe je 3-Tage-Periode (currentDailyTask in research.js).
+  // Idempotent pro Periode über map_data.taskClaims[periodKey]. Reine Ehrensache —
+  // die Gruppe kontrolliert sich selbst. Bringt zusätzlich CC in Umlauf.
+  async function claimDailyTask(memberId, periodKey, taskId, reward) {
+    if (!memberId || !periodKey) return { error: 'bad_args' };
+    try {
+      const { data: raw } = await _sb.from('members').select('map_data, name').eq('id', memberId).single();
+      const md     = (raw && raw.map_data) || {};
+      const claims = { ...(md.taskClaims || {}) };
+      if (claims[periodKey]) return { already: true };
+      claims[periodKey] = { taskId, at: new Date().toISOString() };
+      // alte Perioden beschneiden (nur die letzten ~12 behalten)
+      const keys = Object.keys(claims).sort();
+      while (keys.length > 12) delete claims[keys.shift()];
+      const amt = Math.max(0, parseFloat(reward) || 0);
+      if (amt > 0) await _sb.rpc('add_coins', { p_member_id: memberId, p_amount: amt });
+      const md2 = appendTodayLog({ ...md, taskClaims: claims },
+                    [{ label: '✨ Kaffee-Aufgabe', amount: amt }]);
+      await updateMapData(memberId, md2);
+      // Erst bei ERFÜLLUNG in den Chat posten (nicht beim Login) — Name + Aufgabe.
+      try {
+        const t = (typeof currentDailyTask === 'function') ? currentDailyTask(undefined, memberId).task : null;
+        const desc = t ? `${t.icon} ${t.text}` : 'ihre Kaffee-Aufgabe';
+        await postMessage(`✅ ${raw?.name || 'Jemand'} hat die Kaffee-Aufgabe erfüllt: ${desc} (+${amt} CC)`, 'Kaffee-Aufgabe');
+      } catch (e) { /* Chat-Fehler darf die Gutschrift nicht beeinträchtigen */ }
+      return { ok: true, reward: amt };
+    } catch (e) { console.warn('Tagesaufgabe fehlgeschlagen:', e.message); return { error: e.message }; }
+  }
+
   // ── Gehalts-Snapshot (für das 💰 Gehalts-Liniendiagramm) ─────────────────────
   // Misst den aktuellen Verdienst (passives Tages-Gehalt aus allen Quellen +
   // pro-Tasse-Ertrag + Guthaben) und legt ihn in map_data.salaryHistory ab. Kein
@@ -340,7 +394,15 @@ const DB = (() => {
     const wbCup  = (typeof calcWorldBuildingPerCup === 'function') ? calcWorldBuildingPerCup(rankMap, bc) * gm : 0;
     const perCup = Math.round((resCup + wCup + wbCup + (pk.perCup || 0)) * 100) / 100;
 
-    return { day: perDay, cup: perCup, coins: Math.round(member.coins || 0) };
+    // Realisiertes Gesamteinkommen HEUTE (alle Quellen: Tassen, Schätze, Forschung,
+    // Welt, Login, Aufgaben …) aus dem Tages-Log — so erfasst der Verlauf nicht nur
+    // das passive Einkommen, sondern was tatsächlich reinkam.
+    const tl    = member.map_data && member.map_data.todayLog;
+    const gross = (tl && tl.date === today())
+      ? Math.round((tl.entries || []).reduce((s, e) => s + (e.amount > 0 ? e.amount : 0), 0) * 100) / 100
+      : 0;
+
+    return { day: perDay, cup: perCup, coins: Math.round(member.coins || 0), gross };
   }
 
   // Snapshot-Punkt schreiben — liest map_data UNMITTELBAR vor dem Write frisch und
@@ -376,7 +438,7 @@ const DB = (() => {
     const md0    = (fresh && fresh.map_data) || {};
     const bucket = _salaryBucket();
     const hist   = Array.isArray(md0.salaryHistory) ? md0.salaryHistory.slice() : [];
-    const entry  = { ts: bucket, day: sal.day, cup: sal.cup, coins: sal.coins };
+    const entry  = { ts: bucket, day: sal.day, cup: sal.cup, coins: sal.coins, gross: sal.gross };
     const idx    = hist.findIndex(h => _salaryTsOf(h) === bucket);
     if (idx >= 0) hist[idx] = entry; else hist.push(entry);
     await updateMapData(memberId, { ...md0, salaryHistory: _pruneSalaryHistory(hist) });
@@ -428,13 +490,24 @@ const DB = (() => {
     const { data: rawMember, error: mErr } = await _sb.from('members').select('*').eq('id', memberId).single();
     if (mErr || !rawMember) throw new Error('Mitglied nicht gefunden');
 
-    // Tageslimit prüfen: max. 15 Tassen pro Person und Tag
+    // Tageslimit prüfen: normal 15 Tassen/Tag — aber wenn gestern >6 Tassen getrunken
+    // wurden, ist heute eine Koffein-Red-Flag aktiv (map_data.caffeineFlag === heute) → max. 3.
     const { data: todayStats } = await _sb.from('daily_stats').select('*')
       .eq('group_id', _groupId).eq('date', dateStr).maybeSingle();
     const alreadyToday = (todayStats?.stats || {})[memberId] || 0;
-    if (alreadyToday + amount > 15) {
-      throw new Error(`Tageslimit erreicht: heute bereits ${alreadyToday} von 15 Tassen erfasst.`);
+    const caffeineActive = rawMember.map_data?.caffeineFlag === dateStr;
+    const dailyMax = caffeineActive ? 3 : 15;
+    if (alreadyToday + amount > dailyMax) {
+      throw new Error(caffeineActive
+        ? `🚩 Koffein-Limit aktiv: wegen zu viel Koffein gestern heute nur ${dailyMax} Tassen (bereits ${alreadyToday} erfasst).`
+        : `Tageslimit erreicht: heute bereits ${alreadyToday} von ${dailyMax} Tassen erfasst.`);
     }
+    // Red-Flag für MORGEN: wer heute mit diesem Eintrag über 6 Tassen kommt, wird morgen
+    // auf 3 gedrosselt (einmal pro Tag setzen, nicht bei jeder weiteren Tasse neu).
+    const personalToday = alreadyToday + amount;
+    const tomorrowStr   = new Date(Date.parse(dateStr + 'T00:00:00Z') + 86400000).toISOString().slice(0, 10);
+    const caffeineRedFlag = personalToday > 6 && rawMember.map_data?.caffeineFlag !== tomorrowStr;
+    const caffeineMsg = (caffeineRedFlag && typeof caffeineFlagMsg === 'function') ? caffeineFlagMsg(personalToday) : '';
 
     const member    = normalizeUser(rawMember);
     const activeDays = [...(member.activeDays || [])];
@@ -445,9 +518,12 @@ const DB = (() => {
     const newStreak    = calcStreak(activeDays);
     const newMaxStreak = Math.max(member.maxStreak, newStreak);
     const seasonCups   = { ...member.seasonCups, [monthStr]: (member.seasonCups[monthStr] || 0) + amount };
+
     const updatedMember = { ...member, totalCups: newTotal, currentStreak: newStreak, maxStreak: newMaxStreak, seasonCups, activeDays };
 
-    // Achievements prüfen
+    // Achievements prüfen — neue Einsteiger-Achievements werden für Bestandsspieler beim
+    // nächsten Eintrag regulär freigeschaltet UND ausgezahlt (bewusst kein Grandfathering:
+    // alle sollen profitieren, fair + bringt zusätzlich CC in Umlauf).
     const { unlocked: inputUnlocked, newAch: inputAch } = checkInputAchievements(amount, hour, updatedMember);
     const milestoneUnlocked = checkAchievements(updatedMember, inputAch);
     const allNew = [...inputUnlocked, ...milestoneUnlocked].filter(Boolean);
@@ -482,6 +558,22 @@ const DB = (() => {
     const newDayTotal = (todayStats?.total || 0) + amount;
     const newStats    = { ...(todayStats?.stats || {}), [memberId]: ((todayStats?.stats || {})[memberId] || 0) + amount };
     await _sb.from('daily_stats').upsert({ group_id: _groupId, date: dateStr, total: newDayTotal, stats: newStats }, { onConflict: 'group_id,date' });
+
+    // 25 Tassen/Woche (pro Person) → witziger „spende mal echten Kaffee"-Aufruf im Chat
+    // (einmal pro ISO-Woche, idempotent über map_data.coffeeDonateWeek). Reiner Gag/Goodwill.
+    let donateGag = false;
+    const isoWk = (typeof isoWeekKey === 'function') ? isoWeekKey(dateStr) : null;
+    if (isoWk && rawMember.map_data?.coffeeDonateWeek !== isoWk) {
+      try {
+        const d = new Date(dateStr + 'T00:00:00Z');
+        const dow = (d.getUTCDay() + 6) % 7; // Mo=0
+        const monday = new Date(d.getTime() - dow * 86400000).toISOString().slice(0, 10);
+        const { data: weekRows } = await _sb.from('daily_stats').select('stats')
+          .eq('group_id', _groupId).gte('date', monday).lte('date', dateStr);
+        const weekCups = (weekRows || []).reduce((s, r) => s + ((r.stats || {})[memberId] || 0), 0);
+        donateGag = weekCups >= 25;
+      } catch (e) { donateGag = false; }
+    }
 
     // Hall of Fame
     const { data: hof } = await _sb.from('hall_of_fame').select('*').eq('group_id', _groupId).maybeSingle();
@@ -548,6 +640,12 @@ const DB = (() => {
     // Passiv-Einkommen prüfen (Welt-Ränge + Gebäude wiederverwenden, kein Doppel-Fetch)
     const passiveEarned = await _checkAndClaimPassive(memberId, member, worldRankMap, worldByCountry);
 
+    // 🚩 Koffein-Strafe an die Gruppenkasse — einmal beim Überschreiten von 6 Tassen.
+    // Maßvoll (max. 15 CC) und aufs verfügbare Guthaben gedeckelt (nie Minus).
+    const caffeinePenalty = caffeineRedFlag
+      ? Math.min(15, Math.max(0, Math.floor((member.coins || 0) + totalCoins)))
+      : 0;
+
     // Tages-Log aktualisieren (woher kamen die Coins?) — Fehler hier dürfen den Tassen-Eintrag nicht blockieren
     try {
       const logEntries = [];
@@ -571,20 +669,55 @@ const DB = (() => {
         if (a?.coinReward) logEntries.push({ label: `🏆 ${a.name || a.id}`, amount: a.coinReward });
       }
       if (streakBonus > 0) logEntries.push({ label: `🔥 Streak ${newStreak}`, amount: streakBonus });
+      if (caffeinePenalty > 0) logEntries.push({ label: '🚩 Koffein-Strafe → Gruppenkasse', amount: -caffeinePenalty });
       if (passiveEarned > 0) {
         for (const e of _passiveLogEntries(member, passiveEarned, worldRankMap, worldByCountry, groupPerks.perDay)) logEntries.push(e);
       }
 
-      if (logEntries.length) {
-        const newMapData = appendTodayLog(member.map_data, logEntries);
-        await updateMapData(memberId, newMapData);
-      }
+      let md = member.map_data || {};
+      if (logEntries.length) md = appendTodayLog(md, logEntries);
+      if (caffeineRedFlag)   md = { ...md, caffeineFlag: tomorrowStr }; // morgen Drosselung auf 3
+      if (donateGag)         md = { ...md, coffeeDonateWeek: isoWk };   // Wochen-Gag 1×/Woche
+      if (logEntries.length || caffeineRedFlag || donateGag) await updateMapData(memberId, md);
     } catch (e) { console.warn('Tages-Log konnte nicht gespeichert werden:', e); }
+
+    // 🚩 Koffein-Red-Flag: Strafe an die Gruppenkasse + witzige Chat-Ankündigung (einmal)
+    let caffeinePaid = 0;
+    if (caffeineRedFlag) {
+      if (caffeinePenalty > 0) {
+        try {
+          const left = await spendCoins(memberId, caffeinePenalty);
+          if (left !== null && left !== undefined) {
+            // Strafe in die Gruppenkasse: Balance erhöhen, unter reserviertem _-Key (zählt
+            // NICHT als „Wohltäter"-Beitrag und nicht zur Kassen-Stufe — ist ja eine Strafe).
+            const t = await fetchTreasury();
+            const contribs = { ...(t.contributions || {}) };
+            contribs._penalties = Math.round(((parseFloat(contribs._penalties) || 0) + caffeinePenalty) * 100) / 100;
+            const newBal = Math.round(((parseFloat(t.balance) || 0) + caffeinePenalty) * 100) / 100;
+            await _sb.from('group_treasury').upsert(
+              { group_id: _groupId, balance: newBal, contributions: contribs, unlocked_goals: t.unlocked_goals || {} },
+              { onConflict: 'group_id' });
+            caffeinePaid = caffeinePenalty;
+          }
+        } catch (e) { console.warn('Koffein-Strafe fehlgeschlagen:', e.message); }
+      }
+      const strafe = caffeinePaid > 0
+        ? ` 💸 Strafe: ${caffeinePaid} CC in die Gruppenkasse — alle müssen darunter leiden, wenn du zu zappelig bist!`
+        : '';
+      try { await postMessage(`🚩 ${member.name}: ${caffeineMsg}${strafe}`, 'Koffein-Polizei'); } catch (e) {}
+    }
+
+    // ☕ 25 Tassen/Woche → witziger „echten Kaffee spenden"-Aufruf im Chat (1×/Woche, Goodwill)
+    if (donateGag) {
+      try { await postMessage(`☕ ${member.name}: 25 Tassen die Woche — da musst du mal neuen Kaffee spenden! (in echt 😉)`, 'Kaffee-Kasse'); } catch (e) {}
+    }
 
     // Rückgabe: Array mit Achievement-Popups + Coin-Info als Eigenschaft
     allNew.coinsEarned   = totalCoins;
     allNew.passiveEarned = passiveEarned;
     allNew.morning       = morningBonus > 0;
+    allNew.caffeineRedFlag = caffeineRedFlag ? caffeineMsg : null;
+    allNew.caffeinePenalty = caffeinePaid; // tatsächlich an die Gruppenkasse abgeführte Strafe
     return allNew;
   }
 
@@ -1153,6 +1286,7 @@ const DB = (() => {
     applyDailyLevy, checkWeeklyChallenge,
     purchaseResearchItem, saveCosmetics,
     updateMapData, addCoins, appendTodayLog, claimPassive, recordSalarySnapshot, recordSalarySnapshotsAll,
+    claimLoginBonus, claimDailyTask,
     investInCountry, fetchCountryStandings, fetchAllWorldInvestments,
     fetchAllWorldBuildings, buildWorldStructure, buyGarde, fetchTaxStats,
     castSabotage, fetchSabotages,

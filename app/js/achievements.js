@@ -1,6 +1,12 @@
 const ACHIEVEMENTS = [
   { id: 'first_cup',   icon: '☕', name: 'Erste Tasse',     desc: 'Erste Tasse erfasst',               coinReward: 10,    condition: u => u.totalCups >= 1     },
+  // ── Leichte Einsteiger-Erfolge (gegen die Anfangs-Durststrecke, front-loaded) ──
+  { id: 'cups_3',      icon: '🥄', name: 'Aufgewärmt',     desc: '3 Tassen erreicht',                 coinReward: 15,    condition: u => u.totalCups >= 3     },
+  { id: 'streak_3',    icon: '📆', name: 'Dranbleiber',    desc: '3 Werktage in Folge aktiv',         coinReward: 30,    condition: u => u.maxStreak >= 3     },
+  { id: 'first_research', icon: '🔬', name: 'Erste Forschung', desc: 'Erstes Forschungs-Item gekauft', coinReward: 20, condition: u => Object.keys(u.research || {}).length >= 1 },
+  { id: 'saver_100',   icon: '🪙', name: 'Sparschwein',    desc: '100 CoffeeCoins angespart',         coinReward: 25,    condition: u => (u.coins || 0) >= 100 },
   { id: 'cups_10',     icon: '🫘', name: '10 Tassen',       desc: '10 Tassen erreicht',                coinReward: 20,    condition: u => u.totalCups >= 10    },
+  { id: 'cups_25',     icon: '🎟️', name: 'Stammkunde',     desc: '25 Tassen erreicht',                coinReward: 30,    condition: u => u.totalCups >= 25    },
   { id: 'cups_50',     icon: '🏅', name: '50 Tassen',       desc: '50 Tassen erreicht',                coinReward: 50,    condition: u => u.totalCups >= 50    },
   { id: 'cups_100',    icon: '💯', name: '100 Tassen',      desc: '100 Tassen erreicht',               coinReward: 100,   condition: u => u.totalCups >= 100   },
   { id: 'cups_250',    icon: '⚔️', name: '250 Tassen',      desc: '250 Tassen erreicht',               coinReward: 200,   condition: u => u.totalCups >= 250   },

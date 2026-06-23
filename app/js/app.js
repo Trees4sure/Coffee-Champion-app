@@ -10,13 +10,30 @@ function showToast(msg, type = 'info') {
   setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 400); }, 3200);
 }
 
+// Achievement-Popups werden in einer Warteschlange NACHEINANDER gezeigt. Vorher
+// überschrieben sich gleichzeitig freigeschaltete Achievements (gemeinsames Element +
+// gemeinsamer Timeout) → man sah nur das letzte kurz aufblitzen. Genau das passiert beim
+// ersten Eintrag nach einem Update, wenn mehrere neue Achievements auf einmal fallen.
+let _achQueue = [];
+let _achBusy  = false;
 function showAchievementPopup(ach) {
+  if (!ach) return;
+  _achQueue.push(ach);
+  if (!_achBusy) _drainAchQueue();
+}
+function _drainAchQueue() {
   const p = document.getElementById('achievement-popup');
-  p.querySelector('.ach-icon').textContent = ach.icon;
-  p.querySelector('.ach-name').textContent = ach.name;
-  p.querySelector('.ach-desc').textContent = ach.desc;
+  if (!p || !_achQueue.length) { _achBusy = false; return; }
+  _achBusy = true;
+  const ach = _achQueue.shift();
+  p.querySelector('.ach-icon').textContent = ach.icon || '🏆';
+  p.querySelector('.ach-name').textContent = ach.name || '';
+  p.querySelector('.ach-desc').textContent = ach.desc || '';
   p.classList.add('show');
-  setTimeout(() => p.classList.remove('show'), 3500);
+  setTimeout(() => {
+    p.classList.remove('show');
+    setTimeout(_drainAchQueue, 400); // kurze Lücke, dann das nächste
+  }, 2600);
 }
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -100,6 +117,14 @@ async function claimPassiveAndRefresh(force = false) {
       showToast(`⚙️ +${earned} CC passives Einkommen`, 'success');
     }
   } catch (e) { console.warn('Passiv-Einlösung fehlgeschlagen:', e.message); }
+  // Täglicher Login-Bonus (idempotent pro Tag, eskaliert mit der Login-Serie)
+  try {
+    const lb = await DB.claimLoginBonus(currentUser.id);
+    if (lb && lb.reward) {
+      await refreshData();
+      showToast(`📅 +${lb.reward} CC Login-Bonus (Tag ${lb.streak})`, 'success');
+    }
+  } catch (e) { console.warn('Login-Bonus fehlgeschlagen:', e.message); }
   dailyGroupTasks(); // Tagesabgabe + Wochen-Challenge (selbst idempotent pro Tag/Woche)
 }
 
@@ -108,6 +133,8 @@ async function claimPassiveAndRefresh(force = false) {
 async function dailyGroupTasks() {
   if (!currentUser?.id) return;
   let changed = false;
+  // (Die Kaffee-Aufgabe wird NICHT beim Login angekündigt, sondern erst bei Erfüllung
+  //  über DB.claimDailyTask in den Chat gepostet.)
   try {
     const levy = await DB.applyDailyLevy();
     if (levy && (levy.levied > 0 || levy.interest > 0)) {
@@ -330,6 +357,7 @@ async function registerNewUser() {
     currentUser = { id: newUser.id, name: newUser.name };
     currentUserData = newUser;
     showApp();
+    showToast('☕ Willkommen! Du startest mit +50 CC Startkapital.', 'success');
   } catch (e) { showToast(e.message, 'error'); btn.disabled = false; }
 }
 
@@ -357,6 +385,12 @@ async function quickAdd(amount) {
     }
     if (newAch.passiveEarned > 0) {
       setTimeout(() => showToast(`🌿 +${newAch.passiveEarned.toFixed(1)} CC passiv`, 'info'), 1200);
+    }
+    if (newAch.caffeineRedFlag) {
+      setTimeout(() => showToast(newAch.caffeineRedFlag, 'error'), 1800);
+    }
+    if (newAch.caffeinePenalty > 0) {
+      setTimeout(() => showToast(`💸 −${newAch.caffeinePenalty} CC Koffein-Strafe → Gruppenkasse`, 'error'), 2400);
     }
     // Header-Coins nach Reload aktualisieren
     const hc = document.getElementById('header-coins');
@@ -465,6 +499,8 @@ function renderProfile() {
     }
   }
 
+  renderDailyTask(u);
+
   document.getElementById('achievements-grid').innerHTML = ACHIEVEMENTS.map(a => `
     <div class="achievement-card ${u.achievements?.[a.id] ? 'unlocked' : 'locked'}" title="${_esc(a.desc)}">
       <div class="ach-icon-sm">${a.icon}</div>
@@ -474,6 +510,55 @@ function renderProfile() {
   document.getElementById('season-cups').textContent = (u.seasonCups || {})[seasonId] || 0;
   const rank = leaderboardData.findIndex(x => x.id === currentUser.id) + 1;
   document.getElementById('season-rank').textContent = rank || '—';
+}
+
+// ✨ Kaffee-Aufgabe der Tage (rotiert alle 3 Tage). Wird dynamisch ins Profil injiziert
+// (kein index.html-Edit). Einlösen ist Goodwill — Kontrolle liegt in der Gruppe.
+function renderDailyTask(u) {
+  if (typeof currentDailyTask !== 'function') return;
+  const { period, task } = currentDailyTask(undefined, u.id); // persönliche Aufgabe je Mitglied
+  const periodKey = 'p' + period;
+  let sec = document.getElementById('daily-task-section');
+  if (!sec) {
+    sec = document.createElement('div');
+    sec.id = 'daily-task-section';
+    sec.className = 'progress-section';
+    const achSec = document.getElementById('achievements-grid')?.closest('.progress-section');
+    if (achSec && achSec.parentNode) achSec.parentNode.insertBefore(sec, achSec);
+    else return; // Profil-DOM (noch) nicht da
+  }
+  const claimed = !!(u.map_data?.taskClaims?.[periodKey]);
+  sec.innerHTML = `
+    <div class="section-title">✨ Kaffee-Aufgabe der Tage</div>
+    <div class="daily-task-card${claimed ? ' done' : ''}">
+      <div class="dt-icon">${task.icon}</div>
+      <div class="dt-body">
+        <div class="dt-text">${_esc(task.text)}</div>
+        <div class="dt-meta">Belohnung: +${task.reward} CC · 🤝 Ehrensache, Kontrolle in der Gruppe</div>
+      </div>
+      ${claimed
+        ? '<span class="dt-done">✓ erledigt</span>'
+        : '<button class="btn-primary dt-btn" id="dt-claim">Erledigt – einlösen</button>'}
+    </div>`;
+  if (!claimed) {
+    const btn = document.getElementById('dt-claim');
+    if (btn) btn.onclick = async () => {
+      btn.disabled = true;
+      try {
+        const r = await DB.claimDailyTask(currentUser.id, periodKey, task.id, task.reward);
+        if (r?.ok) {
+          await refreshData();
+          showToast(`✨ +${r.reward} CC – Aufgabe erfüllt!`, 'success');
+          renderProfile();
+        } else if (r?.already) {
+          showToast('Diese Aufgabe ist für die laufende Periode schon erledigt.', 'info');
+          renderProfile();
+        } else {
+          showToast('Konnte nicht einlösen.', 'error'); btn.disabled = false;
+        }
+      } catch (e) { showToast(e.message, 'error'); btn.disabled = false; }
+    };
+  }
 }
 
 // ── Auswertung ────────────────────────────────────────────────────────────────
@@ -527,51 +612,73 @@ async function renderStats() {
   else renderJahr(info);
 }
 
-// 💰 Gehalts-Verlauf: passives Tages-Gehalt der Top-5-Mitglieder über Zeit (Liniendiagramm).
-// Datenquelle = map_data.salaryHistory (täglicher Snapshot, baut sich ab Einführung auf).
+// 💰 Einkommens-Verlauf der Top-5-Mitglieder (Liniendiagramm). Zeigt das realisierte
+// GESAMT-Tageseinkommen (alle Quellen: Tassen, Schätze, Forschung, Welt, Login, Aufgaben),
+// solange dafür Snapshot-Daten (gross) vorliegen — sonst Fallback auf passives Tagesgehalt.
+// Datenquelle = map_data.salaryHistory (5h-Snapshot, baut sich ab Einführung auf).
 function renderGehalt() {
-  document.getElementById('chart-main-title').textContent = '💰 Tages-Gehalt (passiv) – Verlauf';
   document.getElementById('period-label').textContent = 'Gehalts-Entwicklung';
   const top5 = leaderboardData.slice(0, 5);
   const histOf = u => ((appData.users.find(x => x.id === u.id) || u).map_data?.salaryHistory) || [];
-  // ts pro Eintrag — neue Einträge haben ts (5h-Bucket), alte nur d (Datum → Mitternacht)
-  const tsOf = h => h.ts || (h.d ? new Date(h.d + 'T00:00:00').getTime() : 0);
+  const tsOf   = h => h.ts || (h.d ? new Date(h.d + 'T00:00:00').getTime() : 0);
+  const dayKey = t => { const d = new Date(t); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); };
 
-  // Zeit-Achse = Vereinigung aller Snapshot-Zeitpunkte der Top-5
-  const tsSet = new Set();
-  top5.forEach(u => histOf(u).forEach(h => { const t = tsOf(h); if (t) tsSet.add(t); }));
-  const stamps = [...tsSet].sort((a, b) => a - b);
+  // Realisiertes Einkommen heute (gesamt) — live aus dem Tages-Log jedes Mitglieds.
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const grossToday = u => {
+    const tl = (appData.users.find(x => x.id === u.id) || u).map_data?.todayLog;
+    if (!tl || tl.date !== todayKey) return 0;
+    return Math.round((tl.entries || []).reduce((s, e) => s + (e.amount > 0 ? e.amount : 0), 0) * 100) / 100;
+  };
 
-  if (!stamps.length) {
+  // Metrik: realisiertes Gesamteinkommen (gross), wenn irgendwo vorhanden — sonst passiv (day).
+  const hasGross = top5.some(u => histOf(u).some(h => h.gross != null));
+  const metric   = hasGross ? 'gross' : 'day';
+  document.getElementById('chart-main-title').textContent =
+    hasGross ? '💰 Einkommen/Tag (gesamt) – Verlauf' : '💰 Tages-Gehalt (passiv) – Verlauf';
+
+  // Tagesweise gruppieren → je Tag der höchste Wert (bei gross = Tagesendstand, da kumulativ).
+  const daySet = new Set();
+  top5.forEach(u => histOf(u).forEach(h => { const t = tsOf(h); if (t) daySet.add(dayKey(t)); }));
+  const days = [...daySet].sort();
+
+  if (!days.length) {
     if (charts.main) { charts.main.destroy(); charts.main = null; }
     document.getElementById('period-summary').innerHTML =
       '<p style="color:var(--muted);padding:18px;text-align:center">📈 Noch keine Gehaltsdaten vorhanden.<br>Der Verlauf baut sich ab jetzt alle 5 Stunden auf — schau später wieder vorbei!</p>';
     return;
   }
 
-  const fmt = t => { const d = new Date(t); return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }) + ' ' + String(d.getHours()).padStart(2, '0') + 'h'; };
   const datasets = top5.map((u, i) => {
-    const map = {}; histOf(u).forEach(h => { const t = tsOf(h); if (t) map[t] = h.day; });
+    const m = {};
+    histOf(u).forEach(h => {
+      const t = tsOf(h); if (!t) return;
+      const v = h[metric]; if (v == null) return;
+      const k = dayKey(t); m[k] = Math.max(k in m ? m[k] : -Infinity, v);
+    });
     return {
       label: u.name,
-      data: stamps.map(t => (t in map ? map[t] : null)),
+      data: days.map(k => (k in m ? m[k] : null)),
       spanGaps: true, borderColor: COLORS[i], backgroundColor: COLORS[i] + '33',
       borderWidth: 2, tension: 0.25, pointRadius: 2, fill: false
     };
   });
+  const labels = days.map(k => { const p = k.split('-'); return p[2] + '.' + p[1]; });
   if (charts.main) charts.main.destroy();
   charts.main = new Chart(document.getElementById('chart-main').getContext('2d'), {
-    type: 'line', data: { labels: stamps.map(fmt), datasets }, options: chartOptions()
+    type: 'line', data: { labels, datasets }, options: chartOptions()
   });
 
   document.getElementById('period-summary').innerHTML = `
-    <table><thead><tr><th>Name</th><th>💰 CC/Tag</th><th>☕ CC/Tasse</th><th>🪙 Guthaben</th></tr></thead><tbody>
+    <table><thead><tr><th>Name</th><th>📈 Heute gesamt</th><th>💰 /Tag passiv</th><th>☕ /Tasse</th><th>🪙 Guthaben</th></tr></thead><tbody>
     ${top5.map(u => {
       const sorted = histOf(u).slice().sort((a, b) => tsOf(a) - tsOf(b));
       const last = sorted[sorted.length - 1] || {};
-      return `<tr class="${u.id === currentUser?.id ? 'winner-row' : ''}"><td>${_esc(u.name)}</td><td>${last.day ?? '–'}</td><td>${last.cup ?? '–'}</td><td>${last.coins ?? '–'}</td></tr>`;
+      const gt = grossToday(u);
+      return `<tr class="${u.id === currentUser?.id ? 'winner-row' : ''}"><td>${_esc(u.name)}</td><td>${gt > 0 ? _fmtCoins(gt) : '–'}</td><td>${last.day ?? '–'}</td><td>${last.cup ?? '–'}</td><td>${last.coins ?? '–'}</td></tr>`;
     }).join('')}
-    </tbody></table>`;
+    </tbody></table>
+    <p style="color:var(--muted);font-size:.72rem;padding:6px 4px 0">📈 „Heute gesamt" = alle heute realisierten CC (Tassen, Schätze, Forschung, Welt, Login, Aufgaben). Der Verlauf zeigt das Gesamteinkommen pro Tag, sobald genug Snapshots vorliegen.</p>`;
 }
 
 async function renderMonat(info) {

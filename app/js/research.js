@@ -344,6 +344,84 @@ function isoWeekKey(d) {
   return `${date.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
 }
 
+// ── Kaffee-Tagesaufgaben (Goodwill, Kontrolle in der Gruppe) ─────────────────
+// Eine rotierende Aufgabe je 3-Tage-Periode. Belohnt „schönes" Kaffeetrinken und
+// bindet auch Nicht-Kaffeetrinker ein (Aufgaben sind allgemein gehalten). Reine
+// Ehrensache — keine technische Kontrolle, die Gruppe reguliert sich selbst.
+// Bringt zusätzlich CC in Umlauf und füllt die Anfangs-Durststrecke.
+const DAILY_TASKS = [
+  { id: 'latte',     icon: '🥛', text: 'Bereite dir einen Latte Macchiato vom Feinsten!',                 reward: 15 },
+  { id: 'espresso',  icon: '☕', text: 'Genieße einen echten italienischen Espresso.',                    reward: 10 },
+  { id: 'eiskaffee', icon: '🧊', text: 'Heute mal eisgekühlt – bereite dir einen Eiskaffee zu!',          reward: 10 },
+  { id: 'schenken',  icon: '🤝', text: 'Such dir einen Kollegen und schenke ihm eine Tasse Kaffee ein.',  reward: 10 },
+  { id: 'cappu',     icon: '🎨', text: 'Zaubere einen Cappuccino mit Latte-Art-Herz.',                    reward: 15 },
+  { id: 'tee',       icon: '🍵', text: 'Kein Kaffee-Fan? Brüh dir einen guten Tee und stoß mit an!',      reward: 10 },
+  { id: 'filter',    icon: '💧', text: 'Nimm dir Zeit für einen handgefilterten Pour-Over.',              reward: 12 },
+  { id: 'flat',      icon: '🥚', text: 'Probiere einen Flat White – samtig statt schaumig.',              reward: 12 },
+  { id: 'tasse_neu', icon: '🫖', text: 'Trink heute aus deiner schönsten Tasse.',                         reward: 8  },
+  { id: 'pause',     icon: '🌿', text: 'Mach eine bewusste 5-Minuten-Kaffeepause ohne Bildschirm.',       reward: 10 },
+  { id: 'mokka',     icon: '🕌', text: 'Wage dich an einen orientalischen Mokka.',                        reward: 15 },
+  { id: 'cortado',   icon: '🥃', text: 'Bestell oder mach dir einen Cortado.',                            reward: 12 },
+  { id: 'kalt_brew', icon: '🫗', text: 'Setze einen Cold Brew an (12 h Geduld!).',                        reward: 15 },
+  { id: 'gewuerz',   icon: '🌰', text: 'Verfeinere deinen Kaffee mit einer Prise Zimt oder Kardamom.',    reward: 10 },
+  { id: 'runde',     icon: '👥', text: 'Frag die Runde: „Wer braucht einen Kaffee?" und mach welche.',    reward: 15 },
+  { id: 'doppio',    icon: '⚡', text: 'Doppio gefällig? Zwei Shots Espresso als Wachmacher.',            reward: 12 },
+  { id: 'affogato',  icon: '🍨', text: 'Gönn dir ein Affogato – Espresso über Vanilleeis.',               reward: 15 },
+  { id: 'dalgona',   icon: '🥄', text: 'Schlag dir einen Dalgona-Kaffee (cremige Hauben-Challenge).',     reward: 15 },
+  { id: 'cold_foam', icon: '☁️', text: 'Cold Brew mit selbstgemachtem Cold Foam toppen.',                 reward: 15 },
+  { id: 'ohne_zucker',icon:'🚫', text: 'Heute mal komplett ohne Zucker – schmeck die Bohne pur.',          reward: 8  },
+  { id: 'draussen',  icon: '🌳', text: 'Trink deinen Kaffee draußen an der frischen Luft.',               reward: 10 },
+  { id: 'langsam',   icon: '🐢', text: 'Trink eine Tasse bewusst langsam in 10 Minuten.',                 reward: 10 },
+  { id: 'wiener',    icon: '👑', text: 'Eine Wiener Melange für den Hauch von Kaffeehaus.',               reward: 12 },
+  { id: 'macchiato', icon: '🎩', text: 'Espresso Macchiato mit kleiner Schaumhaube.',                     reward: 12 },
+  { id: 'milchschaum',icon:'🫧', text: 'Übe Milchschaum, bis er richtig cremig steht.',                   reward: 12 },
+  { id: 'ristretto', icon: '🔻', text: 'Ein konzentrierter Ristretto – kurz und intensiv.',              reward: 12 },
+  { id: 'lungo',     icon: '📏', text: 'Ein gestreckter Lungo für lange Genuss-Momente.',                 reward: 10 },
+  { id: 'kompliment',icon: '💬', text: 'Mach jemandem beim Kaffeeholen ein ehrliches Kompliment.',        reward: 12 },
+  { id: 'neue_sorte',icon: '🌍', text: 'Probiere eine Bohnensorte, die du noch nie hattest.',             reward: 15 },
+  { id: 'wasser',    icon: '🚰', text: 'Barista-Geheimtipp: ein Glas Wasser VOR dem Kaffee.',             reward: 8  },
+  { id: 'kuchen',    icon: '🍰', text: 'Perfektes Paar: Kaffee + ein Stück Kuchen.',                      reward: 12 },
+  { id: 'blind',     icon: '🙈', text: 'Mini-Blindverkostung: errate die Sorte mit geschlossenen Augen.', reward: 15 },
+  { id: 'kollegin',  icon: '🗣️', text: 'Frag eine:n Kolleg:in nach dem Lieblingskaffee und probier ihn.', reward: 12 },
+  { id: 'teamrunde', icon: '🎉', text: 'Organisiere eine spontane 5-Minuten-Kaffeerunde im Team.',        reward: 15 },
+  { id: 'zimt',      icon: '🌰', text: 'Verfeinere mit einer Prise Zimt oder einer Zimtstange als Rührer.',reward: 10 },
+  { id: 'fenster',   icon: '🪟', text: 'Trink die erste Tasse am Fenster mit Blick nach draußen.',        reward: 8  },
+];
+// 3-Tage-Periode, an die Epoche ausgerichtet → für alle Clients gleich.
+function dailyTaskPeriod(ts) { return Math.floor((ts || Date.now()) / (3 * 86400000)); }
+// Stabiler String-Hash (für die personalisierte Aufgaben-Auswahl).
+function _taskHash(s) { let h = 0; for (let i = 0; i < (s || '').length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return Math.abs(h); }
+// Personalisierte Tages-Challenge: jedes Mitglied bekommt — abhängig von memberId —
+// eine ANDERE Aufgabe (witziger als für alle dieselbe), rotiert je 3-Tage-Periode.
+// Ohne memberId (Fallback) die periodenbasierte Standard-Aufgabe.
+function currentDailyTask(ts, memberId) {
+  const period = dailyTaskPeriod(ts);
+  const idx = (period + (memberId ? _taskHash(memberId) : 0)) % DAILY_TASKS.length;
+  return { period, task: DAILY_TASKS[idx] };
+}
+
+// ── 🚩 Koffein-Red-Flag (>6 Tassen/Tag → morgen max. 3 erlaubt) ──────────────
+// Witzige, leicht überdrehte Sprüche. {n} = heutige Tassenzahl.
+const CAFFEINE_FLAG_MSGS = [
+  'Wow, {n} Tassen?! Dein Herzschlag hat jetzt einen eigenen Techno-Beat. 🚩 Morgen nur 3 Tassen erlaubt!',
+  '{n} Tassen — die Kaffeemaschine hat um Asyl gebeten. 🚩 Koffein-Diät: morgen maximal 3!',
+  'Bei {n} Tassen kannst du die Zeit sehen. ⚡ Morgen Drosselung auf 3 Tassen, Speedy.',
+  'Der Betriebsarzt hat angerufen. 🩺 Nach {n} Tassen gilt morgen: 3 Tassen, kein Tropfen mehr!',
+  '{n} Tassen?! Du blinzelst nicht mehr, du flackerst. 🚩 Morgen nur 3 — gönn deinem Puls eine Pause.',
+  'Koffein-Overflow erkannt ({n} Tassen). ☕💥 Sicherheitsabschaltung: morgen max. 3 Tassen.',
+  'Mit {n} Tassen hörst du Farben. 🌈 Morgen Limit 3, dann wird auch das Tageslicht wieder normal.',
+  '{n} Tassen — selbst der Kaffee sagt „jetzt reicht\'s". 🚩 Morgen: 3 Tassen Höchststrafe.',
+];
+function caffeineFlagMsg(cups) {
+  return CAFFEINE_FLAG_MSGS[Math.floor(Math.random() * CAFFEINE_FLAG_MSGS.length)].replace('{n}', cups);
+}
+
+// ── Täglicher Login-Bonus (eskaliert mit der Login-Serie, gedeckelt) ─────────
+// Hält im frühen Spiel bei der Stange, während das passive Einkommen erst hochläuft.
+function loginBonusFor(streak) {
+  return Math.min(5 + Math.max(0, (streak || 1) - 1) * 2, 25); // Tag 1=5 … ab Tag 11=25
+}
+
 // Liste der aktiven Gruppen-Effekte (für Anzeige in Statistik / Kasse-Tab)
 function treasuryActiveGoals(treasury) {
   const unlocked = (treasury && treasury.unlocked_goals) || {};
