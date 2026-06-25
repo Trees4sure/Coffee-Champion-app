@@ -91,12 +91,16 @@ function showApp() {
   startPolling();
   DB.getPinnedMessage().then(renderPinnwand);
   switchView('rangliste');
-  // Passives Einkommen beim App-Start einlösen (entkoppelt von Tassen)
-  claimPassiveAndRefresh();
+  // Kaffee-Quiz: am 1./15. ggf. Einladungs-Modal zeigen (nur wenn noch nicht gespielt).
+  if (typeof Quiz !== 'undefined') Quiz.checkAndMaybePopup();
+  // Passives Einkommen beim App-Start einlösen (entkoppelt von Tassen). Der
+  // Gehalts-Snapshot läuft ERST danach (verkettet), nicht parallel: sein map_data-Write
+  // (`{...md0, salaryHistory}`) würde sonst den frisch von claimPassive geschriebenen
+  // Passiv-Eintrag im Tages-Log überschreiben (Read-modify-write-Clobber).
   // Gehalts-Snapshots für das 💰 Gehalts-Chart: alle Gruppenmitglieder im 5h-Raster
   // (clientseitig auf 1×/5h-Bucket gedrosselt, Bucket-idempotent). So zeigt der Verlauf
   // die ganze Gruppe — nicht nur, wer die App zuletzt geöffnet hat.
-  if (currentUser?.id) DB.recordSalarySnapshotsAll();
+  claimPassiveAndRefresh().then(() => { if (currentUser?.id) DB.recordSalarySnapshotsAll(); });
 }
 
 // Passives Einkommen einlösen und bei Gutschrift Anzeige aktualisieren.
@@ -106,25 +110,26 @@ async function claimPassiveAndRefresh(force = false) {
   // Drosselung: höchstens alle 15 Min einen DB-Versuch (Server begrenzt ohnehin auf 1×/Std)
   if (!force && Date.now() - _lastPassiveAttempt < 15 * 60 * 1000) return;
   _lastPassiveAttempt = Date.now();
-  try {
-    const earned = await DB.claimPassive(currentUser.id);
-    if (earned > 0) {
-      await refreshData();
-      const hc = document.getElementById('header-coins');
-      if (hc && currentUserData?.coins !== undefined) {
-        hc.innerHTML = `<span style="font-size:11px">🫘</span>${Math.floor(currentUserData.coins)}`;
-      }
-      showToast(`⚙️ +${earned} CC passives Einkommen`, 'success');
-    }
-  } catch (e) { console.warn('Passiv-Einlösung fehlgeschlagen:', e.message); }
+  // Passiv- UND Login-Bonus-Gutschrift NACHEINANDER einlösen — beide schreiben einen
+  // Tages-Log-Eintrag ins map_data (claimPassive den Passiv-, claimLoginBonus den
+  // Login-Eintrag; claimLoginBonus liest dabei das von claimPassive aktualisierte
+  // map_data frisch). ERST danach ein einziges refreshData. So kann kein zwischendurch
+  // ausgelöster Refresh/Snapshot den gerade geschriebenen Passiv-Eintrag clobbern.
+  let earned = 0, lb = 0;
+  try { earned = await DB.claimPassive(currentUser.id); }
+  catch (e) { console.warn('Passiv-Einlösung fehlgeschlagen:', e.message); }
   // Täglicher Login-Bonus (idempotent pro Tag, eskaliert mit der Login-Serie)
-  try {
-    const lb = await DB.claimLoginBonus(currentUser.id);
-    if (lb && lb.reward) {
-      await refreshData();
-      showToast(`📅 +${lb.reward} CC Login-Bonus (Tag ${lb.streak})`, 'success');
+  try { lb = await DB.claimLoginBonus(currentUser.id); }
+  catch (e) { console.warn('Login-Bonus fehlgeschlagen:', e.message); }
+  if (earned > 0 || (lb && lb.reward)) {
+    try { await refreshData(); } catch (e) {}
+    const hc = document.getElementById('header-coins');
+    if (hc && currentUserData?.coins !== undefined) {
+      hc.innerHTML = `<span style="font-size:11px">🫘</span>${Math.floor(currentUserData.coins)}`;
     }
-  } catch (e) { console.warn('Login-Bonus fehlgeschlagen:', e.message); }
+    if (earned > 0) showToast(`⚙️ +${earned} CC passives Einkommen`, 'success');
+    if (lb && lb.reward) showToast(`📅 +${lb.reward} CC Login-Bonus (Tag ${lb.streak})`, 'success');
+  }
   dailyGroupTasks(); // Tagesabgabe + Wochen-Challenge (selbst idempotent pro Tag/Woche)
 }
 
@@ -207,10 +212,10 @@ async function refreshData() {
     const el = document.getElementById('last-refreshed');
     if (el) el.textContent = 'Aktualisiert: ' + new Date().toLocaleTimeString('de-DE', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
   } catch (e) { console.warn('Refresh fehlgeschlagen:', e.message); }
-  // Passives Einkommen für lange offene Sessions (intern auf 15 Min / 1 Std gedrosselt)
-  claimPassiveAndRefresh();
-  // Gehalts-Snapshot im 5h-Raster auch bei langen Sessions (Bucket-gedrosselt, idempotent)
-  if (currentUser?.id) DB.recordSalarySnapshotsAll();
+  // Passives Einkommen für lange offene Sessions (intern auf 15 Min / 1 Std gedrosselt).
+  // Snapshot verkettet DANACH (nicht parallel), sonst clobbert sein map_data-Write den
+  // frisch geschriebenen Passiv-Eintrag im Tages-Log. Bucket-gedrosselt, idempotent.
+  claimPassiveAndRefresh().then(() => { if (currentUser?.id) DB.recordSalarySnapshotsAll(); });
 }
 
 // ── Nachrichten ───────────────────────────────────────────────────────────────
@@ -510,6 +515,7 @@ function renderProfile() {
   document.getElementById('season-cups').textContent = (u.seasonCups || {})[seasonId] || 0;
   const rank = leaderboardData.findIndex(x => x.id === currentUser.id) + 1;
   document.getElementById('season-rank').textContent = rank || '—';
+  if (typeof Quiz !== 'undefined') Quiz.renderProfileSection(u);
 }
 
 // ✨ Kaffee-Aufgabe der Tage (rotiert alle 3 Tage). Wird dynamisch ins Profil injiziert
@@ -837,6 +843,7 @@ function renderHallOfFame() {
   const cl = _ccLeader(users, _ccCosmCount);
   const il = _ccLeader(users, _ccWorldInvested);
   const gl = _ccLeader(users, _ccGovernments);
+  const ql = _ccLeader(users, u => u.cosmetics?.quiz?.ciq || 0);
 
   const cards = [
     { icon: '☕', label: 'Meiste Tassen',      val: hof.max_cups_value,       name: hof.max_cups_name },
@@ -848,6 +855,7 @@ function renderHallOfFame() {
     { icon: '🔬', label: 'Top-Forschung',      val: rl.val != null ? `${rl.val.toLocaleString('de-DE')} CC` : null, name: rl.name },
     { icon: '✦', label: 'Meiste Schätze',      val: tl.val, name: tl.name },
     { icon: '🎨', label: 'Meiste Cosmetics',   val: cl.val, name: cl.name },
+    { icon: '🧠', label: 'Höchster Kaffee-IQ', val: ql.val != null ? `${ql.val} CIQ` : null, name: ql.name },
     { icon: '🌍', label: 'Größter Weltinvestor', val: il.val != null ? `${il.val.toLocaleString('de-DE')} CC` : null, name: il.name },
     { icon: '🏛️', label: 'Meiste Regierungen', val: gl.val, name: gl.name },
   ];
@@ -870,6 +878,7 @@ function renderSeasons() {
       <div class="season-dates">${s.start_date} – ${s.end_date}</div>
       <div class="season-winner">${s.winner_name ? `🏆 ${_esc(s.winner_name)} (${s.winner_cups} Tassen)` : 'Noch kein Sieger'}</div>
     </div>`).join('') || '<p class="empty-hint">Noch keine Saisons.</p>';
+  if (typeof Quiz !== 'undefined') Quiz.renderSeasonsSection();
 }
 
 // ── Admin ─────────────────────────────────────────────────────────────────────

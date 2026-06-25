@@ -293,7 +293,13 @@ const DB = (() => {
         // Tages-Log (Forschung / Gebäude / Welt / Gruppenkasse anteilig + Quellen-Detail) — Fehler nicht eskalieren
         try {
           const gPerDay = (await _fetchGroupPerks()).perDay || 0;
-          const md = appendTodayLog(member.map_data, _passiveLogEntries(member, earned, worldRankMap, worldByCountry, gPerDay));
+          // map_data UNMITTELBAR vor dem Write frisch lesen und nur todayLog mergen:
+          // sonst überschreibt ein zeitgleicher Gehalts-Snapshot (recordSalarySnapshotsAll
+          // läuft ebenfalls bei showApp) den eben angehängten Passiv-Eintrag — und umgekehrt.
+          // Das Write-Fenster schrumpft so auf einen RPC (wie in _writeSalaryPoint).
+          const { data: fresh } = await _sb.from('members').select('map_data').eq('id', memberId).single();
+          const md = appendTodayLog((fresh && fresh.map_data) || member.map_data,
+            _passiveLogEntries(member, earned, worldRankMap, worldByCountry, gPerDay));
           await updateMapData(memberId, md);
         } catch (e) { console.warn('Passiv-Log konnte nicht gespeichert werden:', e); }
       }
@@ -1379,6 +1385,41 @@ const DB = (() => {
     } catch (e) { console.warn('Eigene-Tasse-Anteil fehlgeschlagen:', e.message); return 0; }
   }
 
+  // ── Kaffee-Quiz (CIQ) ──────────────────────────────────────────────────────
+  // Aller Quiz-Zugriff läuft über SECURITY-DEFINER-RPCs (Antwortschlüssel ist für
+  // anon nicht lesbar). Jede Funktion gibt die RPC-Nutzdaten zurück oder {error}.
+  async function quizStatus(memberId) {
+    if (!memberId || !_groupId) return { error: 'no_session' };
+    const { data, error } = await _sb.rpc('quiz_status', { p_member_id: memberId, p_group_id: _groupId });
+    if (error) return { error: error.message };
+    return data || {};
+  }
+  async function quizStart(memberId) {
+    if (!memberId || !_groupId) return { error: 'no_session' };
+    const { data, error } = await _sb.rpc('quiz_start', { p_member_id: memberId, p_group_id: _groupId });
+    if (error) return { error: error.message };
+    return data || {};
+  }
+  async function quizAnswer(attemptId, questionId, chosen, ms) {
+    const { data, error } = await _sb.rpc('quiz_answer', {
+      p_attempt_id: attemptId, p_question_id: questionId,
+      p_chosen: chosen, p_ms: ms,
+    });
+    if (error) return { error: error.message };
+    return data || {};
+  }
+  async function quizFinalize(attemptId) {
+    const { data, error } = await _sb.rpc('quiz_finalize', { p_attempt_id: attemptId });
+    if (error) return { error: error.message };
+    return data || {};
+  }
+  async function quizGroupReveal(periodId) {
+    if (!_groupId) return { error: 'no_session' };
+    const { data, error } = await _sb.rpc('quiz_group_reveal', { p_group_id: _groupId, p_period_id: periodId });
+    if (error) return { error: error.message };
+    return data || {};
+  }
+
   return {
     init, setGroup, createGroup, joinGroup,
     fetchData, registerUser, addCups, closeSeason,
@@ -1397,5 +1438,6 @@ const DB = (() => {
     investInCountry, fetchCountryStandings, fetchAllWorldInvestments,
     fetchAllWorldBuildings, buildWorldStructure, buyGarde, fetchTaxStats,
     castSabotage, fetchSabotages,
+    quizStatus, quizStart, quizAnswer, quizFinalize, quizGroupReveal,
   };
 })();
