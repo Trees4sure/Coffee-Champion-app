@@ -540,3 +540,82 @@ nav::-webkit-scrollbar { display: none; }
   padding: 1px 6px; border-radius: 10px; margin-left: 4px;
   white-space: nowrap; vertical-align: middle;
 }
+
+/* ── Kaffee-Quiz (CIQ) ──────────────────────────────────────────────────────── */
+#quiz-modal { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; }
+#quiz-modal.hidden { display: none; }
+.quiz-backdrop { position: absolute; inset: 0; background: #000000cc; backdrop-filter: blur(3px); }
+.quiz-box { position: relative; width: min(440px, 92vw); max-height: 88vh; overflow-y: auto; }
+.quiz-card {
+  background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: var(--shadow); padding: 22px 20px; color: var(--cream); text-align: center;
+}
+.quiz-emoji { font-size: 2.4rem; margin-bottom: 6px; }
+.quiz-card h2 { margin: 4px 0 10px; color: var(--gold); font-family: 'Orbitron', sans-serif; font-size: 1.3rem; }
+.quiz-card p { font-size: 0.9rem; line-height: 1.45; margin: 6px 0; }
+.quiz-hint { color: var(--muted); font-size: 0.78rem; }
+.quiz-cta { width: 100%; margin-top: 14px; }
+.quiz-link-btn { background: none; border: none; color: var(--muted); font-size: 0.8rem; margin-top: 10px; cursor: pointer; }
+
+/* Frage */
+.quiz-q { text-align: left; }
+.quiz-q-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.quiz-q-num { color: var(--gold); font-weight: 700; font-size: 0.82rem; }
+.quiz-q-theme { color: var(--muted); font-size: 0.72rem; flex: 1; text-align: center; }
+.quiz-timer {
+  min-width: 30px; text-align: center; font-weight: 800; color: var(--cream);
+  background: var(--bg4); border: 1px solid var(--border); border-radius: 8px; padding: 2px 8px; font-size: 0.9rem;
+}
+.quiz-timer-bar { height: 5px; background: var(--bg4); border-radius: 4px; overflow: hidden; margin-bottom: 14px; }
+.quiz-timer-fill { height: 100%; width: 100%; background: linear-gradient(90deg, var(--gold), var(--red)); }
+.quiz-q-text { font-size: 1.02rem; font-weight: 600; line-height: 1.4; margin-bottom: 14px; color: var(--cream); }
+.quiz-opts { display: flex; flex-direction: column; gap: 9px; }
+.quiz-opt {
+  text-align: left; padding: 12px 14px; border-radius: 9px; font-size: 0.9rem;
+  background: var(--bg4); border: 1px solid var(--border); color: var(--cream); cursor: pointer;
+  transition: background .12s, border-color .12s;
+}
+.quiz-opt:hover:not(:disabled) { border-color: var(--gold-dim); }
+.quiz-opt:disabled { cursor: default; opacity: 0.92; }
+.quiz-opt.chosen   { border-color: var(--gold); }
+.quiz-opt.correct  { background: #1d3a26; border-color: var(--green); color: #d7f5e2; }
+.quiz-opt.wrong    { background: #3a1d1d; border-color: var(--red); color: #f5d7d7; }
+
+/* Feedback */
+.quiz-feedback { margin-top: 14px; }
+.quiz-feedback.hidden { display: none; }
+.quiz-fb-head { font-weight: 800; font-size: 1rem; margin-bottom: 4px; }
+.quiz-fb-head.ok { color: var(--green); }
+.quiz-fb-head.no { color: var(--red); }
+.quiz-fb-expl { font-size: 0.84rem; color: var(--cream); line-height: 1.4; }
+
+/* Ergebnis */
+.quiz-result .quiz-reward { color: var(--gold); font-weight: 800; font-size: 1.05rem; }
+
+/* Profil: Kaffee-IQ */
+.quiz-ciq-big { font-family: 'Orbitron', sans-serif; font-size: 2rem; font-weight: 900; color: var(--gold); }
+.quiz-ciq-big span { font-size: 0.9rem; color: var(--muted); font-weight: 600; }
+.quiz-hist { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
+.quiz-hist-row { display: flex; justify-content: space-between; font-size: 0.8rem; color: var(--cream); border-bottom: 1px dotted var(--border); padding: 3px 0; }
+
+/* Saisons: Auswertung + CIQ-Board */
+.quiz-reveal-note { color: var(--gold); font-size: 0.82rem; margin-bottom: 8px; font-weight: 600; }
+.quiz-matrix-wrap { overflow-x: auto; }
+.quiz-matrix { width: 100%; border-collapse: collapse; font-size: 0.74rem; }
+.quiz-matrix th, .quiz-matrix td { padding: 4px 5px; text-align: center; border-bottom: 1px solid var(--border); }
+.quiz-matrix th { color: var(--muted); font-weight: 600; }
+.quiz-matrix .qz-name { text-align: left; color: var(--cream); white-space: nowrap; }
+.quiz-matrix .qz-score { color: var(--gold); font-weight: 700; }
+.quiz-matrix .qz-ok { color: var(--green); }
+.quiz-matrix .qz-no { color: var(--red); }
+.quiz-matrix .qz-miss { color: var(--muted); }
+.quiz-solutions { margin-top: 12px; }
+.quiz-solutions summary { cursor: pointer; color: var(--gold); font-size: 0.82rem; }
+.quiz-sol { margin: 10px 0; padding-bottom: 8px; border-bottom: 1px dotted var(--border); }
+.quiz-sol-q { font-size: 0.84rem; color: var(--cream); }
+.quiz-sol-ans { font-size: 0.82rem; color: var(--green); margin: 3px 0; }
+.quiz-sol-expl { font-size: 0.78rem; color: var(--muted); }
+.quiz-ciq-board { width: 100%; border-collapse: collapse; margin-top: 6px; }
+.quiz-ciq-board td { padding: 5px 6px; border-bottom: 1px solid var(--border); font-size: 0.84rem; color: var(--cream); }
+.quiz-ciq-board .qz-rank { width: 32px; }
+.quiz-ciq-board .qz-score { text-align: right; color: var(--gold); font-weight: 700; }
