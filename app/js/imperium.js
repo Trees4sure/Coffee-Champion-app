@@ -914,7 +914,8 @@ function _buildKarte(member, el) {
       const owned = !!(state.mapData?.upgrades?.[u.key]) ||
         (u.key === 'walking_boots' && state.mapData?.upgrades?.boots) ||
         (u.key === 'coffee_nose'   && state.mapData?.upgrades?.nose);
-      const superseded = owned && bestOwned0 && bestOwned0.key !== u.key;
+      const STACK_SLOTS = ['feet', 'bag'];
+      const superseded = owned && bestOwned0 && bestOwned0.key !== u.key && !STACK_SLOTS.includes(slot);
       const actionHtml = owned
         ? '<div class="cc-karte-upg-status">' + (superseded ? '⬆️ Ersetzt' : '✅ Aktiv') + '</div>'
         : '<button class="cc-karte-upg-buy" data-upg="' + u.key + '" data-cost="' + u.cost + '">' + u.cost + ' 🫘</button>';
@@ -1064,15 +1065,14 @@ async function _handleKarteStep(tx, ty, member, state, seed, COLS, ROWS, MARGIN)
   const prevMapData  = state.mapData;
   const upg          = state.mapData?.upgrades || {};
   const sensorItem   = _getBestItemInSlot('sensor', upg);
-  const bagItem      = _getBestItemInSlot('bag',    upg);
-  const hasBart      = !!_getBestItemInSlot('look', upg);
+  const hasBart      = !!upg.barista_bart;            // look-Slot hat nur ein Item
   const sensorFactor = sensorItem?.key === 'truffle_nose' ? 2.2 : sensorItem ? 1.5 : 1.0;
 
   const _grpTreasure = (typeof treasuryGroupPerks === 'function') ? treasuryGroupPerks(appData?.treasury).treasure : 0;
   const ccFactor = (1 + 0.25 * ((typeof completedResearchTiers === 'function') ? completedResearchTiers(member.research) : 0)) * (1 + _grpTreasure);
   const { newMapData, treasure, event } = karteExploreTile(tx, ty, state.mapData, seed, {
     treasureFactor: sensorFactor,
-    backpackBoost:  bagItem?.key === 'backpack',
+    backpackBoost:  !!upg.backpack,
     ccFactor,
   });
   state.mapData = newMapData;
@@ -1097,6 +1097,10 @@ async function _handleKarteStep(tx, ty, member, state, seed, COLS, ROWS, MARGIN)
     try {
       await DB.addCoins(member.id, totalCC);
     } catch (e) { console.warn('add_coins Fehler:', e); }
+    // Barista Bart: jeder ANDERE Mitspieler mit Bart erhält +1 CC pro Schatzfund
+    if (typeof DB.payBaristaBartGroup === 'function') {
+      DB.payBaristaBartGroup(member.id).catch(() => {});
+    }
     try {
       state.mapData = DB.appendTodayLog(state.mapData, [{ label: `🗺️ ${treasure.name}`, amount: totalCC }]);
       currentUserData = { ...(currentUserData || {}), map_data: state.mapData };
@@ -1179,8 +1183,12 @@ async function _handleKarteStep(tx, ty, member, state, seed, COLS, ROWS, MARGIN)
         currentUserData = { ...(currentUserData || {}), coins: state.memberCoins };
         _updateHeaderCoins({ coins: state.memberCoins });
         try { await DB.spendCoins(member.id, pay); } catch (e) { console.warn('cc_penalty Fehler:', e); }
+        // Malus fließt in die Gruppenkasse (wie die Koffein-Strafe)
         try {
-          state.mapData = DB.appendTodayLog(state.mapData, [{ label: `${event.emoji} ${event.name}`, amount: -pay }]);
+          if (typeof DB.addPenaltyToTreasury === 'function') await DB.addPenaltyToTreasury(pay);
+        } catch (e) { console.warn('Malus → Gruppenkasse Fehler:', e); }
+        try {
+          state.mapData = DB.appendTodayLog(state.mapData, [{ label: `${event.emoji} ${event.name} → Gruppenkasse`, amount: -pay }]);
           currentUserData = { ...(currentUserData || {}), map_data: state.mapData };
           await DB.updateMapData(member.id, state.mapData);
         } catch (e) { console.warn('Tages-Log (Strafe) Fehler:', e); }

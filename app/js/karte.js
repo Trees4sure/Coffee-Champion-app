@@ -142,18 +142,19 @@ const KARTE_EVENTS = [
 ];
 
 // ── RPG Items (Slot-System) ──────────────────────────────────────────────────
-// Slot-Tier: gleicher Slot → höheres Tier hat Vorrang, kein Stacking
+// feet + bag STACKEN (T2 verstärkt T1, ersetzt es nicht).
+// sensor + nav bleiben best-tier (höchstes Tier gewinnt, kein Stacking).
 // Backward-compat: alter key 'boots' → 'walking_boots', 'nose' → 'coffee_nose'
 const KARTE_ITEMS = [
   { key: 'walking_boots', slot: 'feet',   tier: 1, emoji: '👟', name: 'Wanderschuhe', cost:  50, desc: '+2 Schritte/Tag' },
-  { key: 'trail_runner',  slot: 'feet',   tier: 2, emoji: '🥾', name: 'Trailrunner',   cost: 150, desc: '+4 Schritte/Tag' },
+  { key: 'trail_runner',  slot: 'feet',   tier: 2, emoji: '🥾', name: 'Trailrunner',   cost: 150, desc: '+4 Schritte extra (mit Wanderschuhe +6)' },
   { key: 'coffee_nose',   slot: 'sensor', tier: 1, emoji: '🔍', name: 'Schatzgespür', cost:  80, desc: 'Schatz-Chance +50%' },
   { key: 'truffle_nose',  slot: 'sensor', tier: 2, emoji: '🐽', name: 'Trüffelnase',   cost: 200, desc: 'Schatz-Chance +120%' },
-  { key: 'compass',       slot: 'nav',    tier: 1, emoji: '🧭', name: 'Kompass',       cost: 120, desc: '1 Feld durch Nebel' },
-  { key: 'old_map',       slot: 'nav',    tier: 2, emoji: '🗺️', name: 'Alte Karte',    cost: 300, desc: '2 Felder + ✦ durch Nebel' },
+  { key: 'compass',       slot: 'nav',    tier: 1, emoji: '🧭', name: 'Kompass',       cost: 120, desc: '2 Felder durch Nebel' },
+  { key: 'old_map',       slot: 'nav',    tier: 2, emoji: '🗺️', name: 'Alte Karte',    cost: 300, desc: '5 Felder + ✦ durch Nebel' },
   { key: 'thermos',       slot: 'bag',    tier: 1, emoji: '☕', name: 'Thermos',       cost:  60, desc: 'Event-Malus ignorieren' },
-  { key: 'backpack',      slot: 'bag',    tier: 2, emoji: '🎒', name: 'Rucksack',      cost: 150, desc: 'Respawn-Felder +25% Schatz' },
-  { key: 'barista_bart',  slot: 'look',   tier: 1, emoji: '🧔', name: 'Barista Bart',  cost: 250, desc: '+1 CC je Schatzfund' },
+  { key: 'backpack',      slot: 'bag',    tier: 2, emoji: '🎒', name: 'Rucksack',      cost: 150, desc: '+25% CC je Schatzfund' },
+  { key: 'barista_bart',  slot: 'look',   tier: 1, emoji: '🧔', name: 'Barista Bart',  cost: 350, desc: '+1 CC je Gruppen-Schatzfund' },
 ];
 
 const KARTE_SLOT_NAMES = {
@@ -498,16 +499,19 @@ function _tomorrowKey() {
 
 function karteStepsAllowed(mapData, research) {
   const upg      = mapData?.upgrades || {};
-  const bestFeet = _getBestItemInSlot('feet', upg);
-  const footBonus = bestFeet?.key === 'trail_runner' ? 4 : bestFeet ? 2 : 0;
+  // Füße STACKEN: Wanderschuhe +2, Trailrunner +4 extra (zusammen +6)
+  const ownsBoots = !!(upg.walking_boots || upg.boots);
+  const ownsTrail = !!upg.trail_runner;
+  const footBonus = (ownsBoots ? 2 : 0) + (ownsTrail ? 4 : 0);
   const extra     = mapData?.steps_extra_date === _todayKey() ? KARTE_EXTRA_STEPS : 0;
-  const hasBag    = !!_getBestItemInSlot('bag', upg);
+  // Thermos (eigener Bag-Effekt) ignoriert Schritt-Mali — NUR Thermos, nicht Rucksack
+  const hasThermos = !!upg.thermos;
   const today     = _todayKey();
   const effects   = mapData?.activeEffects || [];
   const stepBonus = effects
     .filter(e => e.type === 'step_bonus' && e.expires === today)
     .reduce((s, e) => s + (e.amount || 0), 0);
-  const stepMalus = hasBag ? 0
+  const stepMalus = hasThermos ? 0
     : effects
         .filter(e => e.type === 'step_malus' && e.expires === today)
         .reduce((s, e) => s + (e.amount || 0), 0);
@@ -586,23 +590,24 @@ function karteExploreTile(tx, ty, mapData, worldSeed, opts) {
       const idx   = karteTreasureIndex(tx, ty, worldSeed, round);
       let cc      = KARTE_TREASURES[idx].cc;
 
-      // Rucksack: Respawn-Felder geben +1 CC Bonus
-      if (opts?.backpackBoost && isRespawn) cc += 1;
-
       // Aktiven Boost-Effect anwenden und verbrauchen
       if (boostEffect) {
         if (boostEffect.type === 'treasure_boost') {
-          cc = Math.round(cc * (boostEffect.factor || 2));
+          cc = cc * (boostEffect.factor || 2);
         } else if (boostEffect.type === 'cc_multiplier') {
           const mult = Math.floor(Math.random() * ((boostEffect.max || 6) - (boostEffect.min || 1) + 1)) + (boostEffect.min || 1);
-          cc = Math.round(cc * mult);
+          cc = cc * mult;
         }
         newActiveEffects = newActiveEffects.filter(e => e !== boostEffect);
       }
 
-      // Tier-Bonus zuletzt anwenden (auf den ggf. schon geboosteten Wert)
-      if (ccFactor !== 1.0) cc = Math.round(cc * ccFactor);
+      // Rucksack: +25% CC auf JEDEN Schatzfund (eigener Bag-Effekt)
+      if (opts?.backpackBoost) cc = cc * 1.25;
 
+      // Forschungs-Tier-/Gruppen-Bonus zuletzt anwenden
+      if (ccFactor !== 1.0) cc = cc * ccFactor;
+
+      cc = Math.round(cc);
       treasure = { ...KARTE_TREASURES[idx], cc };
       newTreasures[`${tx},${ty}`] = { i: idx, ts: now, round };
     }
@@ -670,7 +675,7 @@ function karteRender(canvas, mapData, worldSeed, vpX, vpY, research) {
 
   // Item-Effekte im Renderer
   const navItem           = _getBestItemInSlot('nav',  upg);
-  const navRadius         = navItem?.key === 'old_map' ? 2 : navItem ? 1 : 0;
+  const navRadius         = navItem?.key === 'old_map' ? 5 : navItem ? 2 : 0;
   const showTreasureInFog = navItem?.key === 'old_map';
   const hasBart           = !!_getBestItemInSlot('look', upg);
 

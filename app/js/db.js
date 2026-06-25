@@ -636,6 +636,8 @@ const DB = (() => {
       const { error: coinErr } = await _sb.rpc('add_coins', { p_member_id: memberId, p_amount: totalCoins });
       if (coinErr) { console.error('add_coins fehlgeschlagen:', coinErr.message); totalCoins = 0; }
     }
+    // Eigene Tasse: alle ANDEREN Mitspieler mit der Kombo erhalten +1 CC pro 10 Tassen
+    payEigeneTasseGroup(memberId, amount).catch(() => {});
 
     // Passiv-Einkommen prüfen (Welt-Ränge + Gebäude wiederverwenden, kein Doppel-Fetch)
     const passiveEarned = await _checkAndClaimPassive(memberId, member, worldRankMap, worldByCountry);
@@ -644,6 +646,16 @@ const DB = (() => {
     // Maßvoll (max. 15 CC) und aufs verfügbare Guthaben gedeckelt (nie Minus).
     const caffeinePenalty = caffeineRedFlag
       ? Math.min(15, Math.max(0, Math.floor((member.coins || 0) + totalCoins)))
+      : 0;
+
+    // 📅 Wochenend-Abgabe: Wer am Wochenende Tassen sammelt, muss GENAU den Betrag, den
+    // er für diese Tassen bekommen hat (Basis + Boni pro Tasse, ohne Meilenstein-/Streak-CC),
+    // an die Gruppenkasse abgeben → Tassen sammeln am Wochenende lohnt sich netto nicht.
+    // Aufs verfügbare Guthaben gedeckelt (nie Minus, berücksichtigt eine evtl. Koffein-Strafe).
+    const isWeekend = (now.getDay() === 0 || now.getDay() === 6); // So=0, Sa=6 (Ortszeit)
+    const weekendCupIncome = Math.round((baseCoins + morningBonus + researchBonus + worldBonus + groupBonus) * 100) / 100;
+    const weekendLevy = isWeekend
+      ? Math.round(Math.max(0, Math.min(weekendCupIncome, (member.coins || 0) + totalCoins - caffeinePenalty)) * 100) / 100
       : 0;
 
     // Tages-Log aktualisieren (woher kamen die Coins?) — Fehler hier dürfen den Tassen-Eintrag nicht blockieren
@@ -670,6 +682,7 @@ const DB = (() => {
       }
       if (streakBonus > 0) logEntries.push({ label: `🔥 Streak ${newStreak}`, amount: streakBonus });
       if (caffeinePenalty > 0) logEntries.push({ label: '🚩 Koffein-Strafe → Gruppenkasse', amount: -caffeinePenalty });
+      if (weekendLevy > 0)     logEntries.push({ label: '📅 Wochenend-Abgabe → Gruppenkasse', amount: -weekendLevy });
       if (passiveEarned > 0) {
         for (const e of _passiveLogEntries(member, passiveEarned, worldRankMap, worldByCountry, groupPerks.perDay)) logEntries.push(e);
       }
@@ -705,6 +718,24 @@ const DB = (() => {
         ? ` 💸 Strafe: ${caffeinePaid} CC in die Gruppenkasse — alle müssen darunter leiden, wenn du zu zappelig bist!`
         : '';
       try { await postMessage(`🚩 ${member.name}: ${caffeineMsg}${strafe}`, 'Koffein-Polizei'); } catch (e) {}
+    }
+
+    // 📅 Wochenend-Abgabe: genau der Tassen-Betrag wandert in die Gruppenkasse + lustige Mahnung
+    if (isWeekend && weekendLevy > 0) {
+      try {
+        const left = await spendCoins(memberId, weekendLevy);
+        if (left !== null && left !== undefined) {
+          await addPenaltyToTreasury(weekendLevy); // unter _penalties-Key (kein Wohltäter/keine Kassen-Stufe)
+          const WEEKEND_MSGS = [
+            'Wochenende! Der Kaffee läuft dir nicht weg — gönn dir mal eine Pause. ☕😴',
+            'Am Wochenende wird nicht gegrindet, Kollege!',
+            'Work-Life-Balance! Wochenend-Tassen teilst du gefälligst mit der Gruppe.',
+            'Samstags-/Sonntagskaffee ist Luxus — den spendierst du der Gruppenkasse!'
+          ];
+          const spruch = WEEKEND_MSGS[Math.floor(Math.random() * WEEKEND_MSGS.length)];
+          try { await postMessage(`📅 ${member.name}: ${spruch} 💸 ${weekendLevy} CC wandern dafür in die Gruppenkasse!`, 'Work-Life-Balance-Polizei'); } catch (e) {}
+        }
+      } catch (e) { console.warn('Wochenend-Abgabe fehlgeschlagen:', e.message); }
     }
 
     // ☕ 25 Tassen/Woche → witziger „echten Kaffee spenden"-Aufruf im Chat (1×/Woche, Goodwill)
@@ -758,8 +789,12 @@ const DB = (() => {
   // pro Tag, idempotent über contributions._levy = Datum (reservierter Key, vom
   // Wohltäter-Helfer ignoriert). Clientseitig getriggert (kein Cron). → Chat in app.js.
   const LEVY_RATE = 0.05; // 5 % des Tageseinkommens
+  const LEVY_HOUR = 18;   // erst ab 18 Uhr (Ortszeit) abrechnen — dann ist das Tageseinkommen erbracht
   async function applyDailyLevy() {
     try {
+      // Tagesabgabe erst am Abend: vorher ist das Tageseinkommen noch nicht erbracht.
+      // Kein Cron → läuft beim ersten App-Aufruf ab 18 Uhr; vor 18 Uhr passiert nichts.
+      if (new Date().getHours() < LEVY_HOUR) return null;
       const day = today();
       const t = await fetchTreasury();
       const contribs = { ...(t.contributions || {}) };
@@ -1273,6 +1308,77 @@ const DB = (() => {
     }).eq('id', _groupId);
   }
 
+  // ── Barista-Bart-Anteil ──────────────────────────────────────────────────────
+  // Jeder ANDERE Mitspieler mit gekauftem Barista Bart erhält +1 CC, wenn irgendwer
+  // einen Schatz findet (der Finder bekommt seinen +1 weiterhin lokal in imperium.js).
+  // Nutzt add_coins + save_map_data wie der Handelshafen-Anteil — keine neue RPC nötig.
+  async function payBaristaBartGroup(finderId) {
+    try {
+      const { data: members } = await _sb.from('members')
+        .select('id, map_data').eq('group_id', _groupId);
+      let count = 0;
+      for (const m of (members || [])) {
+        if (m.id === finderId) continue;            // Finder bekommt seinen Bonus lokal
+        const upg = m.map_data?.upgrades || {};
+        if (!upg.barista_bart) continue;
+        await _sb.rpc('add_coins', { p_member_id: m.id, p_amount: 1 });
+        try {
+          const ml = appendTodayLog(m.map_data, [{ label: '🧔 Barista-Bart-Anteil', amount: 1 }]);
+          await _sb.rpc('save_map_data', { p_member_id: m.id, p_map_data: ml });
+        } catch (e) { /* Log-Fehler nicht eskalieren */ }
+        count++;
+      }
+      return count;
+    } catch (e) { console.warn('Barista-Bart-Anteil fehlgeschlagen:', e.message); return 0; }
+  }
+
+  // ── Karten-Malus an die Gruppenkasse ─────────────────────────────────────────
+  // Verlorene CC aus Karten-Events (cc_penalty: Strafzoll/Bußgeld) fließen in die
+  // Gruppenkasse — analog zur Koffein-Strafe. Unter reserviertem _penalties-Key:
+  // zählt NICHT als „Wohltäter"-Beitrag und NICHT zur Kassen-Stufe. Die CC werden
+  // zuvor in imperium.js per spendCoins vom Member abgezogen; hier nur die Kasse erhöhen.
+  async function addPenaltyToTreasury(amount) {
+    const amt = Math.round((parseFloat(amount) || 0) * 100) / 100;
+    if (amt <= 0) return 0;
+    try {
+      const t = await fetchTreasury();
+      const contribs = { ...(t.contributions || {}) };
+      contribs._penalties = Math.round(((parseFloat(contribs._penalties) || 0) + amt) * 100) / 100;
+      const newBal = Math.round(((parseFloat(t.balance) || 0) + amt) * 100) / 100;
+      await _sb.from('group_treasury').upsert(
+        { group_id: _groupId, balance: newBal, contributions: contribs, unlocked_goals: t.unlocked_goals || {} },
+        { onConflict: 'group_id' });
+      return amt;
+    } catch (e) { console.warn('Karten-Malus → Gruppenkasse fehlgeschlagen:', e.message); return 0; }
+  }
+
+  // Eigene-Tasse-Anteil (group_cup_1)
+  // Wer die Forschungs-Kombo eigene_tasse besitzt, erhaelt +1 CC pro 10 Tassen
+  // die ANDERE Mitspieler eintragen. Fire-and-forget aus addCups.
+  // finderId = Member der gerade Tassen eingetragen hat (bekommt KEINEN Anteil).
+  async function payEigeneTasseGroup(finderId, amount) {
+    const cups = parseInt(amount) || 0;
+    if (cups <= 0) return 0;
+    const bonus = Math.floor(cups / 10); // +1 CC pro 10 Tassen, abgerundet
+    if (bonus <= 0) return 0;
+    try {
+      const { data: members } = await _sb.from('members')
+        .select('id, research, map_data').eq('group_id', _groupId);
+      let count = 0;
+      for (const m of (members || [])) {
+        if (m.id === finderId) continue;
+        if (!(m.research || {}).eigene_tasse) continue;
+        await _sb.rpc('add_coins', { p_member_id: m.id, p_amount: bonus });
+        try {
+          const ml = appendTodayLog(m.map_data, [{ label: '+' + cups + ' Tassen (Eigene Tasse)', amount: bonus }]);
+          await _sb.rpc('save_map_data', { p_member_id: m.id, p_map_data: ml });
+        } catch (e) {}
+        count++;
+      }
+      return count;
+    } catch (e) { console.warn('Eigene-Tasse-Anteil fehlgeschlagen:', e.message); return 0; }
+  }
+
   return {
     init, setGroup, createGroup, joinGroup,
     fetchData, registerUser, addCups, closeSeason,
@@ -1286,6 +1392,7 @@ const DB = (() => {
     applyDailyLevy, checkWeeklyChallenge,
     purchaseResearchItem, saveCosmetics,
     updateMapData, addCoins, appendTodayLog, claimPassive, recordSalarySnapshot, recordSalarySnapshotsAll,
+    payBaristaBartGroup, addPenaltyToTreasury, payEigeneTasseGroup,
     claimLoginBonus, claimDailyTask,
     investInCountry, fetchCountryStandings, fetchAllWorldInvestments,
     fetchAllWorldBuildings, buildWorldStructure, buyGarde, fetchTaxStats,

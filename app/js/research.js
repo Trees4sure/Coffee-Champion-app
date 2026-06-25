@@ -78,7 +78,7 @@ const RESEARCH_PATHS = {
 
 // ── Kombinations-Freischaltungen ─────────────────────────────────────────────
 const RESEARCH_COMBOS = [
-  { id: 'eigene_tasse',        name: 'Eigene Tasse',       icon: '🍵', requires: ['handmuehle','ton','toepferei'],                    cost: 0,   perCup: 0,  perDay: 0,   special: 'group_cup_1',      desc: '+1 CC pro 10 Mitspieler-Tassen' },
+  { id: 'eigene_tasse',        name: 'Eigene Tasse',       icon: '🍵', requires: ['handmuehle','ton','toepferei'],                    cost: 0,   perCup: 0,  perDay: 0,   special: 'group_cup_1',      desc: '+1 CC je 10 Tassen anderer Mitspieler (automatisch)' },
   { id: 'kaffeepflanze',       name: 'Kaffeepflanze',      icon: '🌱', requires: ['kaffeesamen','wasserquelle'],                       cost: 120, perCup: 0.8,perDay: 0,   special: '',                 desc: 'Rabatt: 120 statt 300 CC' },
   { id: 'fahrende_roesterei',  name: 'Fahrende Rösterei',  icon: '🚐', requires: ['kaffeemobil','roestmaschine'],                      cost: 0,   perCup: 0,  perDay: 20,  special: 'cosmetic_roaster', desc: '+20 CC/Tag + Spezial-Avatar' },
   { id: 'bio_zertifikat',      name: 'Bio-Zertifikat',     icon: '🌿', requires: ['kaffeegarten','biogarten','kompost'],               cost: 0,   perCup: 0,  perDay: 0,   special: 'global_plus20',    desc: 'ALLE CC dauerhaft +20%' },
