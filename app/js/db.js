@@ -246,8 +246,12 @@ const DB = (() => {
   // ── Passiv-Einkommen prüfen und gutschreiben ─────────────────────────────────
   // worldRankMap optional durchreichen, um Doppel-Fetch zu sparen.
   async function _checkAndClaimPassive(memberId, member, worldRankMap, worldByCountry) {
-    const researchPerDay = (typeof calcResearchPerDay === 'function') ? calcResearchPerDay(member.research || {}) : 0;
-    const buildingPerDay = (typeof calcBuildingPerDay === 'function') ? calcBuildingPerDay(member.map_data?.buildings || {}) : 0;
+    const _cosmP = member.cosmetics || {};
+    let researchPerDay = (typeof calcResearchPerDay === 'function') ? calcResearchPerDay(member.research || {}) : 0;
+    let buildingPerDay = (typeof calcBuildingPerDay === 'function') ? calcBuildingPerDay(member.map_data?.buildings || {}) : 0;
+    // 🧠 CIQ: Bohnen-Verständnis (+10% Forschung-Passiv), Großröster (+20% Gebäude-Passiv)
+    if (typeof ciqResearchPassiveMult === 'function') researchPerDay = Math.round(researchPerDay * ciqResearchPassiveMult(_cosmP) * 100) / 100;
+    if (typeof ciqBuildingPassiveMult === 'function') buildingPerDay = Math.round(buildingPerDay * ciqBuildingPassiveMult(_cosmP) * 100) / 100;
     const rankMap = worldRankMap || await _fetchWorldRankMap(memberId);
     const byCountry = worldByCountry || (Object.keys(rankMap).length ? await _fetchWorldBuildingsByCountry() : {});
     const _gm = _gardeMult(member);
@@ -319,7 +323,7 @@ const DB = (() => {
   async function claimLoginBonus(memberId) {
     if (!memberId) return 0;
     try {
-      const { data: raw } = await _sb.from('members').select('map_data').eq('id', memberId).single();
+      const { data: raw } = await _sb.from('members').select('map_data, cosmetics').eq('id', memberId).single();
       const md  = (raw && raw.map_data) || {};
       const lb  = md.loginBonus || {};
       const day = today();
@@ -327,7 +331,9 @@ const DB = (() => {
       const y = new Date(); y.setDate(y.getDate() - 1);
       const yStr   = y.toISOString().slice(0, 10);
       const streak = (lb.lastDate === yStr) ? ((lb.streak || 0) + 1) : 1; // Lücke → Serie startet neu
-      const reward = (typeof loginBonusFor === 'function') ? loginBonusFor(streak) : Math.min(5 + (streak - 1) * 2, 25);
+      let reward = (typeof loginBonusFor === 'function') ? loginBonusFor(streak) : Math.min(5 + (streak - 1) * 2, 25);
+      // 🧠 CIQ Wachmacher: Login-Bonus ×2
+      if (typeof ciqRewardMult === 'function') reward = Math.round(reward * ciqRewardMult((raw && raw.cosmetics) || {}));
       await _sb.rpc('add_coins', { p_member_id: memberId, p_amount: reward });
       const md2 = appendTodayLog({ ...md, loginBonus: { lastDate: day, streak } },
                     [{ label: `📅 Login-Bonus (Tag ${streak})`, amount: reward }]);
@@ -343,7 +349,7 @@ const DB = (() => {
   async function claimDailyTask(memberId, periodKey, taskId, reward) {
     if (!memberId || !periodKey) return { error: 'bad_args' };
     try {
-      const { data: raw } = await _sb.from('members').select('map_data, name').eq('id', memberId).single();
+      const { data: raw } = await _sb.from('members').select('map_data, name, cosmetics').eq('id', memberId).single();
       const md     = (raw && raw.map_data) || {};
       const claims = { ...(md.taskClaims || {}) };
       if (claims[periodKey]) return { already: true };
@@ -351,7 +357,9 @@ const DB = (() => {
       // alte Perioden beschneiden (nur die letzten ~12 behalten)
       const keys = Object.keys(claims).sort();
       while (keys.length > 12) delete claims[keys.shift()];
-      const amt = Math.max(0, parseFloat(reward) || 0);
+      let amt = Math.max(0, parseFloat(reward) || 0);
+      // 🧠 CIQ Wachmacher: Tagesaufgaben-Belohnung ×2
+      if (typeof ciqRewardMult === 'function') amt = Math.round(amt * ciqRewardMult((raw && raw.cosmetics) || {}));
       if (amt > 0) await _sb.rpc('add_coins', { p_member_id: memberId, p_amount: amt });
       const md2 = appendTodayLog({ ...md, taskClaims: claims },
                     [{ label: '✨ Kaffee-Aufgabe', amount: amt }]);
@@ -501,8 +509,14 @@ const DB = (() => {
     const { data: todayStats } = await _sb.from('daily_stats').select('*')
       .eq('group_id', _groupId).eq('date', dateStr).maybeSingle();
     const alreadyToday = (todayStats?.stats || {})[memberId] || 0;
-    const caffeineActive = rawMember.map_data?.caffeineFlag === dateStr;
-    const dailyMax = caffeineActive ? 3 : 15;
+    const _cosm  = rawMember.cosmetics || {};
+    const _nowMs = now.getTime();
+    // 🧠 CIQ: Koffein-Toleranz macht immun gegen die Red-Flag-Drosselung; Schwarzbrenner hebt das Limit auf.
+    const _redFlagImmune = (typeof ciqRedFlagImmune === 'function') && ciqRedFlagImmune(_cosm, _nowMs);
+    const caffeineActive = !_redFlagImmune && rawMember.map_data?.caffeineFlag === dateStr;
+    let dailyMax = caffeineActive ? 3 : 15;
+    if (!caffeineActive && typeof ciqDailyMax === 'function') dailyMax = ciqDailyMax(_cosm, _nowMs);
+    else if (caffeineActive && typeof ciqActive === 'function' && ciqActive(_cosm, 'schwarzbrenner', _nowMs)) dailyMax = 9999;
     if (alreadyToday + amount > dailyMax) {
       throw new Error(caffeineActive
         ? `🚩 Koffein-Limit aktiv: wegen zu viel Koffein gestern heute nur ${dailyMax} Tassen (bereits ${alreadyToday} erfasst).`
@@ -512,7 +526,7 @@ const DB = (() => {
     // auf 3 gedrosselt (einmal pro Tag setzen, nicht bei jeder weiteren Tasse neu).
     const personalToday = alreadyToday + amount;
     const tomorrowStr   = new Date(Date.parse(dateStr + 'T00:00:00Z') + 86400000).toISOString().slice(0, 10);
-    const caffeineRedFlag = personalToday > 6 && rawMember.map_data?.caffeineFlag !== tomorrowStr;
+    const caffeineRedFlag = personalToday > 6 && !_redFlagImmune && rawMember.map_data?.caffeineFlag !== tomorrowStr;
     const caffeineMsg = (caffeineRedFlag && typeof caffeineFlagMsg === 'function') ? caffeineFlagMsg(personalToday) : '';
 
     const member    = normalizeUser(rawMember);
@@ -636,7 +650,18 @@ const DB = (() => {
       if (newStreak >= 100 && newStreak % 100 === 0)                    streakBonus = 2000;
     }
 
-    let totalCoins = baseCoins + morningBonus + researchBonus + worldBonus + groupBonus + achCoinTotal + streakBonus;
+    // 🧠 CIQ-Fähigkeiten: zusätzliche CC auf diesen Tassen-Eintrag (Gedächtnis/Espresso/Schwarm/Erntehelfer/Schwarzbrenner)
+    let ciqBonus = 0, ciqDetail = '';
+    if (typeof ciqCupBonus === 'function') {
+      const _activeMembers = Object.keys(newStats || {}).length;
+      const _blds = member.map_data?.buildings || {};
+      const _buildingCount = Object.values(_blds).filter(b => b && (b.completesAt || 0) <= _nowMs).length;
+      const _ctx = { cupIncome: baseCoins + morningBonus + researchBonus + worldBonus + groupBonus, amount, activeMembers: _activeMembers, buildingCount: _buildingCount, now: _nowMs };
+      ciqBonus = ciqCupBonus(_cosm, _ctx);
+      if (ciqBonus > 0 && typeof ciqCupBonusDetail === 'function') ciqDetail = ciqCupBonusDetail(_cosm, _ctx);
+    }
+
+    let totalCoins = baseCoins + morningBonus + researchBonus + worldBonus + groupBonus + achCoinTotal + streakBonus + ciqBonus;
 
     if (totalCoins > 0) {
       const { error: coinErr } = await _sb.rpc('add_coins', { p_member_id: memberId, p_amount: totalCoins });
@@ -687,6 +712,7 @@ const DB = (() => {
         if (a?.coinReward) logEntries.push({ label: `🏆 ${a.name || a.id}`, amount: a.coinReward });
       }
       if (streakBonus > 0) logEntries.push({ label: `🔥 Streak ${newStreak}`, amount: streakBonus });
+      if (ciqBonus > 0)    logEntries.push({ label: '🧠 CIQ-Fähigkeit', amount: ciqBonus, detail: ciqDetail });
       if (caffeinePenalty > 0) logEntries.push({ label: '🚩 Koffein-Strafe → Gruppenkasse', amount: -caffeinePenalty });
       if (weekendLevy > 0)     logEntries.push({ label: '📅 Wochenend-Abgabe → Gruppenkasse', amount: -weekendLevy });
       if (passiveEarned > 0) {
@@ -923,7 +949,7 @@ const DB = (() => {
     if (!item && !combo) throw new Error('Item nicht gefunden');
 
     const target = item || combo;
-    const cost   = target.cost || 0;
+    let cost     = target.cost || 0;
 
     const { data: raw } = await _sb.from('members')
       .select('coins, research, cosmetics').eq('id', memberId).single();
@@ -931,6 +957,9 @@ const DB = (() => {
 
     const research = raw.research || {};
     if (research[itemId]) throw new Error('Bereits freigeschaltet');
+
+    // 🔬 CIQ Forscherdrang: −15 % auf den Forschungs-Kaufpreis
+    if (cost > 0 && typeof ciqResearchCostMult === 'function') cost = Math.max(1, Math.round(cost * ciqResearchCostMult(raw.cosmetics || {})));
 
     // Voraussetzungen prüfen — für Kombos UND normale Items mit requires.
     // Gated nur Neukäufe; bereits besessene Items bleiben unberührt (target ist hier noch nicht owned).
@@ -1000,6 +1029,38 @@ const DB = (() => {
       .eq('id', memberId);
     if (error) throw new Error(error.message);
     return cosmetics;
+  }
+
+  // ── 🧠 CIQ-Fähigkeit kaufen/aktivieren (Phase A: nur eigene Perks) ────────────
+  // Validiert CIQ-Schwelle + CC + Doppelaktivierung clientnah, zieht CC via spend_coins
+  // ab und schreibt den Perk nach cosmetics.ciq_perks (dauerhaft → {at}, zeitlich → {active_until}).
+  // Fremdeffekte/PvP sind NICHT hier (Phase B/C, serverseitige RPCs). pending-Perks werden abgelehnt.
+  async function buyCiqPerk(memberId, perkId) {
+    const def = (typeof CIQ_PERKS !== 'undefined') ? CIQ_PERKS.find(p => p.id === perkId) : null;
+    if (!def) return { error: 'unknown' };
+    if (def.pending) return { error: 'pending' };
+    const { data: raw } = await _sb.from('members').select('coins, cosmetics').eq('id', memberId).single();
+    if (!raw) return { error: 'not_found' };
+    const cosm  = raw.cosmetics || {};
+    const ciq   = (typeof ciqGetCiq === 'function') ? ciqGetCiq(cosm) : 0;
+    if (ciq < (def.ciq || 0)) return { error: 'not_enough_ciq', needed: def.ciq, have: ciq };
+    const perks = { ...(cosm.ciq_perks || {}) };
+    const now   = Date.now();
+    if (def.type === 'permanent' && perks[perkId]) return { error: 'already_owned' };
+    if (def.type === 'timed' && perks[perkId]?.active_until && new Date(perks[perkId].active_until).getTime() > now)
+      return { error: 'already_active' };
+    if ((def.cc || 0) > 0) {
+      const { data: newCoins, error } = await _sb.rpc('spend_coins', { p_member_id: memberId, p_amount: def.cc });
+      if (error) return { error: error.message };
+      if (newCoins === null || newCoins === undefined) return { error: 'not_enough_cc' };
+    }
+    perks[perkId] = (def.type === 'timed')
+      ? { active_until: new Date(now + (def.durationH || 24) * 3600000).toISOString() }
+      : { at: new Date().toISOString() };
+    const newCosm = { ...cosm, ciq_perks: perks };
+    const { error: upErr } = await _sb.from('members').update({ cosmetics: newCosm }).eq('id', memberId);
+    if (upErr) return { error: upErr.message };
+    return { ok: true, cosmetics: newCosm };
   }
 
   // ── Saison abschließen ───────────────────────────────────────────────────────
@@ -1186,7 +1247,9 @@ const DB = (() => {
   }
 
   // ── Nachrichten ──────────────────────────────────────────────────────────────
-  async function fetchMessages(limit = 40) {
+  // Limit höher (120), damit die clientseitige Aufteilung in 💬 Chat / 📰 News
+  // (nach System-Absendername, siehe app.js) für BEIDE Streams genug Material hat.
+  async function fetchMessages(limit = 120) {
     const { data } = await _sb.from('messages')
       .select('*').eq('group_id', _groupId)
       .order('created_at', { ascending: false }).limit(limit);
@@ -1431,7 +1494,7 @@ const DB = (() => {
     // Neu:
     spendCoins, fetchTreasury, contributeToTreasury, syncTreasuryGoals,
     applyDailyLevy, checkWeeklyChallenge,
-    purchaseResearchItem, saveCosmetics,
+    purchaseResearchItem, saveCosmetics, buyCiqPerk,
     updateMapData, addCoins, appendTodayLog, claimPassive, recordSalarySnapshot, recordSalarySnapshotsAll,
     payBaristaBartGroup, addPenaltyToTreasury, payEigeneTasseGroup,
     claimLoginBonus, claimDailyTask,

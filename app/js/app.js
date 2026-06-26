@@ -219,22 +219,71 @@ async function refreshData() {
 }
 
 // ── Nachrichten ───────────────────────────────────────────────────────────────
+// System-/Automaten-Absender → landen im 📰 News-Stream statt im persönlichen 💬 Chat.
+// (Klassifizierung über den Absendernamen — keine Schema-Änderung nötig. Künftige
+// CIQ-Broadcasts einfach unter einem dieser Namen posten, dann landen sie automatisch in News.)
+const CC_NEWS_SENDERS = new Set([
+  'Gruppenkasse', 'Kaffee-Aufgabe', 'Koffein-Polizei', 'Work-Life-Balance-Polizei', 'Kaffee-Kasse',
+  'Büro-Krieg', 'CIQ-Labor', 'Förderstelle', 'Anonymer Tipp', 'Kaffee-Markt',
+]);
+function _isNewsMsg(m) { return CC_NEWS_SENDERS.has(m.member_name); }
+let _msgTab = 'chat';
+
+// Sub-Tab-Leiste (💬 Chat / 📰 News) einmalig in den Chat-View injizieren (kein index.html-Edit).
+function ensureMsgTabs() {
+  const view = document.getElementById('view-nachrichten');
+  if (!view || document.getElementById('msg-tabbar')) return;
+  const bar = document.createElement('div');
+  bar.id = 'msg-tabbar';
+  bar.className = 'msg-tabbar';
+  bar.innerHTML = `
+    <button class="msg-tab active" data-mtab="chat">💬 Chat</button>
+    <button class="msg-tab" data-mtab="news">📰 News</button>`;
+  view.insertBefore(bar, view.firstChild);
+  bar.querySelectorAll('.msg-tab').forEach(b => b.onclick = () => {
+    _msgTab = b.dataset.mtab;
+    bar.querySelectorAll('.msg-tab').forEach(x => x.classList.toggle('active', x === b));
+    renderMessages();
+  });
+}
+
 async function renderMessages() {
-  const list = document.getElementById('messages-list');
+  ensureMsgTabs();
+  const list    = document.getElementById('messages-list');
+  const inputBar = document.querySelector('#view-nachrichten .messages-input-bar');
+  // Composer nur im Chat zeigen — News ist nur-lesen
+  if (inputBar) inputBar.style.display = (_msgTab === 'news') ? 'none' : '';
   list.innerHTML = '<div class="msg-empty">Lade…</div>';
-  const msgs = await DB.fetchMessages();
-  if (!msgs.length) { list.innerHTML = '<div class="msg-empty">☕ Noch keine Nachrichten. Schreib als Erster!</div>'; return; }
-  list.innerHTML = msgs.map(m => {
-    const own  = m.member_name === currentUser?.name;
+  const all = await DB.fetchMessages();
+  const msgs = all.filter(m => _msgTab === 'news' ? _isNewsMsg(m) : !_isNewsMsg(m));
+  if (!msgs.length) {
+    list.innerHTML = `<div class="msg-empty">${_msgTab === 'news'
+      ? '📰 Noch keine News. Hier landen automatische Meldungen (Kasse, Polizei, Aufgaben …).'
+      : '☕ Noch keine Nachrichten. Schreib als Erster!'}</div>`;
+    return;
+  }
+  const fmtMeta = (m) => {
     const time = new Date(m.created_at).toLocaleTimeString('de-DE', { hour:'2-digit', minute:'2-digit' });
     const date = new Date(m.created_at).toLocaleDateString('de-DE', { day:'2-digit', month:'2-digit' });
-    const now  = new Date(); const mDate = new Date(m.created_at);
-    const showDate = now.toDateString() !== mDate.toDateString();
-    return `<div class="msg-item ${own ? 'own' : 'other'}">
-      <div class="msg-bubble">${_esc(m.message)}</div>
-      <div class="msg-meta">${own ? '' : `${_esc(m.member_name)} · `}${showDate ? date + ' ' : ''}${time}</div>
-    </div>`;
-  }).join('');
+    const showDate = new Date().toDateString() !== new Date(m.created_at).toDateString();
+    return `${showDate ? date + ' ' : ''}${time}`;
+  };
+  if (_msgTab === 'news') {
+    list.innerHTML = msgs.map(m => `
+      <div class="news-item">
+        <div class="news-sender">${_esc(m.member_name)}</div>
+        <div class="news-body">${_esc(m.message)}</div>
+        <div class="news-time">${fmtMeta(m)}</div>
+      </div>`).join('');
+  } else {
+    list.innerHTML = msgs.map(m => {
+      const own = m.member_name === currentUser?.name;
+      return `<div class="msg-item ${own ? 'own' : 'other'}">
+        <div class="msg-bubble">${_esc(m.message)}</div>
+        <div class="msg-meta">${own ? '' : `${_esc(m.member_name)} · `}${fmtMeta(m)}</div>
+      </div>`;
+    }).join('');
+  }
   list.scrollTop = list.scrollHeight;
 }
 
@@ -452,6 +501,87 @@ function renderLeaderboard() {
         <td>${u.totalCups}</td>
       </tr>`).join('')}
     </tbody></table>`;
+  ensureRegelwerk();
+}
+
+// ── Regelwerk / Spickzettel (unten in der Rangliste, einmal injiziert) ──────────
+function ensureRegelwerk() {
+  const host = document.getElementById('view-rangliste');
+  if (!host || document.getElementById('cc-regelwerk')) return;
+  const sec = (icon, title, body) =>
+    `<details class="cc-rw-item"><summary>${icon} ${title}</summary><div class="cc-rw-body">${body}</div></details>`;
+  const wrap = document.createElement('div');
+  wrap.id = 'cc-regelwerk';
+  wrap.className = 'cc-regelwerk';
+  wrap.innerHTML = `
+    <div class="cc-rw-hero">
+      <div class="cc-rw-hero-title">☕📖 Das große Coffee-Champion-Regelwerk</div>
+      <div class="cc-rw-hero-sub">Kleiner Durchhänger? Kaffee leer, Motivation auch? Dann gönn dir die
+      Coffee-Champion-Ship — <b>hier gibst du's dir richtig.</b> Alles vom ersten Schluck bis zum
+      Kaffee-Imperium. Aufklappen, schlürfen, dominieren. 😏</div>
+    </div>
+    <div class="cc-rw-list">
+    ${sec('☕', 'Tassen & CoffeeCoins (CC)', `
+      Jede eingetragene Tasse bringt dir <b>Basis-CC</b> — die Hauptwährung deines Aufstiegs.
+      Forschung, Schätze, Boni & Co. legen ordentlich drauf.<br>
+      <span class="cc-rw-hl">Tageslimit:</span> normal bis zu <b>15 Tassen/Tag</b>. Wer's übertreibt,
+      lernt die Koffein-Polizei kennen (siehe ganz unten 🚩).<br>
+      <span class="cc-rw-hl">Profi-Tipp:</span> Im Profil-Tab unter „☕ Heute erhalten" siehst du genau,
+      woher jeder CC kam. Keine Geheimniskrämerei.`)}
+    ${sec('🔥', 'Die Serie (Streak)', `
+      Trag <b>jeden Tag</b> mindestens eine Tasse ein und deine Serie wächst.
+      Bei <b>5 · 20 · 100</b> Tagen gibt's fette Meilenstein-Boni obendrauf.
+      Ein Tag Pause = Serie reißt. Disziplin schmeckt bitter, zahlt sich aber aus.`)}
+    ${sec('🏆', 'Achievements', `
+      Über 20 Abzeichen warten — erste Tasse, Sparfuchs, Forscher, Serien-Held …
+      Jedes schaltet sich automatisch frei und wirft <b>CC</b> ab.
+      Neueinsteiger kassieren die Einsteiger-Achievements gleich beim Loslegen.`)}
+    ${sec('🧠', 'Kaffee-Quiz & Kaffee-IQ (CIQ)', `
+      Am <b>1.</b> und <b>15.</b> jedes Monats öffnet das Quiz: 10 Fragen, 15 Sekunden pro Frage,
+      Sofort-Feedback. Pro Treffer <b>+4 CC</b> und <b>+1 CIQ</b>.<br>
+      <span class="cc-rw-hl">CIQ ist dein Köpfchen-Score</span> — er sinkt nie und ist die Eintrittskarte
+      für die schlauen (und fiesen 😈) CIQ-Fähigkeiten. Wer klug ist, soll's auch spüren.`)}
+    ${sec('🗺️', 'Die Karte: Schätze, Items & Events', `
+      Erkunde die Pixel-Karte mit täglichen Schritten und stolpere über <b>Büro-Schätze</b> (CC!).<br>
+      <span class="cc-rw-hl">RPG-Items</span> in 5 Slots verstärken dich: Schuhe stapeln Schritte
+      (Wanderschuhe +2 & Trailrunner = <b>+6</b>), Rucksack gibt <b>×1,25 CC</b> auf jeden Fund,
+      Thermos trotzt Pannen, Trüffelnase findet mehr, der Barista-Bart 🧔 kassiert bei Gruppen-Funden mit.<br>
+      <span class="cc-rw-hl">Zufalls-Events</span> würzen den Tag: mal Segen, mal Streich.`)}
+    ${sec('🏗️', 'Gebäude & Passiv-Einkommen', `
+      Auf erkundetem, gleichem Terrain baust du <b>Gebäude</b> (1×1 bis 3×3) — die werfen
+      <b>Einkommen ab, während du nichts tust</b>. Bauzeit läuft in Echtzeit, kein Klick nötig.
+      Passives Einkommen sammelt sich (gedeckelt auf ein paar Tage), also schau ab und zu rein.
+      Der Handelshafen ⚓ schneidet sogar bei fremden Forschungskäufen mit.`)}
+    ${sec('🔬', 'Forschung', `
+      Im Imperium-Tab wächst dein <b>Forschungsbaum</b> (5 Tiers). Items geben CC pro Tasse
+      <i>und</i> pro Tag. Höhere Tiers brauchen Voraussetzungen — erst die Basis, dann der Luxus.
+      <b>Jedes voll abgeschlossene Tier</b> verstärkt alle Forschungs-Effekte.`)}
+    ${sec('🌍', 'Weltkarte', `
+      Mit der <b>Welthandels-Lizenz</b> (Forschung) öffnet sich die Welt: investiere CC in G20-Länder,
+      verdränge die Konkurrenz und sichere dir <b>Regierung, Baurecht & Erträge</b>.
+      Baue Landes-Strukturen, halte Rang 1 — Rang 2 & 3 zahlen dir sogar Steuer. Kaffee-Imperialismus, charmant.`)}
+    ${sec('💰', 'Gruppenkasse & Stufen', `
+      Zahl freiwillig in die <b>Gruppenkasse</b> ein — gemeinsam erreicht ihr 5 Kassen-Stufen,
+      die neue Ziele & dauerhafte Perks für <i>alle</i> freischalten (Dividende, Spar-Zins …).<br>
+      <span class="cc-rw-hl">🎗️ Wohltäter:</span> Der größte Einzahler trägt sichtbar die Krone.
+      Jeder steuert <b>5 % seines Tageseinkommens</b> als Tagesabgabe bei (ab 18 Uhr).
+      Wöchentliche Gruppen-Challenges geben's allen zurück.`)}
+    ${sec('📅', 'Tägliche Belohnungen', `
+      <b>Willkommensbonus</b> für Neue (+50 CC), <b>Login-Bonus</b>, der mit deiner Login-Serie wächst,
+      und <b>persönliche Tagesaufgaben</b> (Latte trinken, Kollegen Kaffee schenken …) für extra CC.
+      Reine Ehrensache — die Gruppe schaut zu. 😇`)}
+    ${sec('🚩', 'Die dunkle Seite: Koffein-Polizei & Wochenende', `
+      Mehr als <b>6 Tassen an einem Tag</b>? Am nächsten Tag drosselt dich die Koffein-Polizei auf 3 —
+      plus eine kleine Strafe in die Gruppenkasse (und einen frechen Spruch im Chat).<br>
+      <span class="cc-rw-hl">Wochenend-Abgabe:</span> Wer Sa/So grinden will, spendet den Tassen-Ertrag
+      an die Kasse. Work-Life-Balance-Polizei grüßt. Karten-Pannen wandern ebenfalls in die Kasse.`)}
+    ${sec('🎗️', 'Titel & Ruhm', `
+      Dein Titel wächst mit den Tassen, dazu kommen <b>Zusatztitel</b> aus Cosmetics.
+      Die <b>Hall of Fame</b> und der druckbare <b>Poster</b> verewigen die Champions in vielen Kategorien —
+      Vermögen, Karte, Gebäude, Forschung, Schätze, Welt. Ruhm hält länger als Crema.`)}
+    </div>
+    <div class="cc-rw-foot">Noch Fragen? Trink einen Kaffee. Kommt von allein. ☕</div>`;
+  host.appendChild(wrap);
 }
 
 // Zusatztitel (aus Cosmetics) als Suffix für die Titel-Anzeige — leer wenn keiner aktiv.
@@ -505,6 +635,7 @@ function renderProfile() {
   }
 
   renderDailyTask(u);
+  renderCiqPerks(u);
 
   document.getElementById('achievements-grid').innerHTML = ACHIEVEMENTS.map(a => `
     <div class="achievement-card ${u.achievements?.[a.id] ? 'unlocked' : 'locked'}" title="${_esc(a.desc)}">
@@ -565,6 +696,103 @@ function renderDailyTask(u) {
       } catch (e) { showToast(e.message, 'error'); btn.disabled = false; }
     };
   }
+}
+
+// 🧠 CIQ-Fähigkeiten — dynamisch ins Profil injiziert (kein index.html-Edit).
+// CIQ (cosmetics.quiz.ciq) ist die Schwelle, bezahlt wird mit CC. Plan: plans/2026-06-26-ciq-faehigkeiten-plan.md
+function renderCiqPerks(u) {
+  if (typeof CIQ_PERKS === 'undefined') return;
+  const cosm = u.cosmetics || {};
+  const ciq  = (typeof ciqGetCiq === 'function') ? ciqGetCiq(cosm) : 0;
+  const perks = cosm.ciq_perks || {};
+  const now  = Date.now();
+  // Voraussetzungs-Check (nur was in Phase A relevant ist)
+  const incomeBuildings = Object.values(u.map_data?.buildings || {}).filter(b => b && (b.completesAt || 0) <= now).length;
+  const condMet = (def) => {
+    if (def.id === 'grossroester' || def.id === 'bautraeger_lizenz') return incomeBuildings >= 1;
+    if (def.id === 'handelsattache') return !!(u.research && u.research.welthandelslizenz);
+    return true;
+  };
+
+  let sec = document.getElementById('ciq-perks-section');
+  if (!sec) {
+    sec = document.createElement('div');
+    sec.id = 'ciq-perks-section';
+    sec.className = 'progress-section';
+    const achSec = document.getElementById('achievements-grid')?.closest('.progress-section');
+    if (achSec && achSec.parentNode) achSec.parentNode.insertBefore(sec, achSec);
+    else return;
+  }
+
+  const cards = CIQ_PERKS.map(def => {
+    const owned   = !!perks[def.id]?.at;
+    const timed   = def.type === 'timed';
+    const active  = timed && perks[def.id]?.active_until && new Date(perks[def.id].active_until).getTime() > now;
+    const reachable = ciq >= (def.ciq || 0);
+    const ok      = condMet(def);
+    let stateCls = 'locked', actionHtml = '';
+    if (def.pending) {
+      stateCls = 'pending';
+      actionHtml = `<span class="ciq-state ciq-soon">🔜 bald verfügbar</span>`;
+    } else if (owned) {
+      stateCls = 'owned';
+      actionHtml = `<span class="ciq-state ciq-on">✓ dauerhaft aktiv</span>`;
+    } else if (active) {
+      stateCls = 'owned';
+      const until = new Date(perks[def.id].active_until);
+      const hrs = Math.max(1, Math.round((until.getTime() - now) / 3600000));
+      actionHtml = `<span class="ciq-state ciq-on">⏳ aktiv – noch ~${hrs} h</span>`;
+    } else if (!reachable) {
+      actionHtml = `<span class="ciq-state ciq-lock">🔒 ab CIQ ${def.ciq}</span>`;
+    } else if (!ok) {
+      actionHtml = `<span class="ciq-state ciq-lock">🔒 ${_esc(def.condText || 'Voraussetzung fehlt')}</span>`;
+    } else {
+      stateCls = 'buyable';
+      actionHtml = `<button class="btn-primary ciq-buy" data-perk="${def.id}">Kaufen · ${def.cc} 🫘</button>`;
+    }
+    const meta = [];
+    if (timed) meta.push(`⏱️ ${def.durationH >= 24 ? (def.durationH / 24) + ' Tage' : def.durationH + ' h'}`);
+    else meta.push('♾️ dauerhaft');
+    meta.push(`🧠 CIQ ${def.ciq}`);
+    return `
+      <div class="ciq-card ciq-${stateCls}">
+        <div class="ciq-head"><span class="ciq-icon">${def.tier} ${def.icon}</span>
+          <span class="ciq-name">${_esc(def.name)}</span></div>
+        <div class="ciq-desc">${_esc(def.desc)}</div>
+        <div class="ciq-foot"><span class="ciq-meta">${meta.join(' · ')}</span>${actionHtml}</div>
+      </div>`;
+  }).join('');
+
+  sec.innerHTML = `
+    <div class="section-title">🧠 CIQ-Fähigkeiten <span class="ciq-score">Dein Kaffee-IQ: ${Math.floor(ciq)}</span></div>
+    <div class="ciq-intro">Wer klug ist, soll's auch spüren. Quiz-Wissen (CIQ) schaltet Fähigkeiten frei — bezahlt wird mit 🫘. CIQ sinkt nie.</div>
+    <div class="ciq-grid">${cards}</div>`;
+
+  sec.querySelectorAll('.ciq-buy').forEach(btn => {
+    btn.onclick = async () => {
+      const perkId = btn.dataset.perk;
+      const def = CIQ_PERKS.find(p => p.id === perkId);
+      btn.disabled = true;
+      try {
+        const r = await DB.buyCiqPerk(currentUser.id, perkId);
+        if (r?.ok) {
+          await refreshData();
+          showToast(`🧠 „${def?.name || 'Fähigkeit'}" freigeschaltet!`, 'success');
+          renderProfile();
+        } else {
+          const msg = {
+            not_enough_ciq: `Dafür brauchst du CIQ ${def?.ciq}. Trink weniger, lern mehr. 🧠`,
+            not_enough_cc:  'Nicht genug CoffeeCoins.',
+            already_owned:  'Hast du schon dauerhaft.',
+            already_active: 'Läuft gerade noch – erst ablaufen lassen.',
+            pending:        'Diese Fähigkeit kommt bald.',
+          }[r?.error] || 'Konnte nicht freischalten.';
+          showToast(msg, r?.error === 'not_enough_cc' ? 'error' : 'info');
+          btn.disabled = false;
+        }
+      } catch (e) { showToast(e.message, 'error'); btn.disabled = false; }
+    };
+  });
 }
 
 // ── Auswertung ────────────────────────────────────────────────────────────────

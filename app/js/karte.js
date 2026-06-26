@@ -241,9 +241,12 @@ function karteBuildingCountOfType(mapData, type) {
 // Ein noch nie gebauter Typ kostet die Basis. Bremst das Zuspammen eines Typs, ohne
 // dass ungebaute Gebäude teuer wirken. Zählt nur die EIGENEN Bauten (member.map_data).
 const BUILD_COST_GROWTH = 1.25;
-function karteBuildCost(def, mapData) {
+function karteBuildCost(def, mapData, cosm) {
   if (!def) return 0;
-  return Math.round((def.cost || 0) * Math.pow(BUILD_COST_GROWTH, karteBuildingCountOfType(mapData, def.key)));
+  let c = Math.round((def.cost || 0) * Math.pow(BUILD_COST_GROWTH, karteBuildingCountOfType(mapData, def.key)));
+  // 🧠 CIQ Bauträger-Lizenz: −15 % auf Baukosten
+  if (cosm && typeof ciqActive === 'function' && ciqActive(cosm, 'bautraeger_lizenz')) c = Math.max(1, Math.round(c * 0.85));
+  return c;
 }
 
 // Restzeit bis Fertigstellung, menschlich gerundet (Stunden statt ganzer Tagesblöcke).
@@ -476,10 +479,13 @@ function _todayNum() {
   return parseInt(new Date().toISOString().slice(0, 10).replace(/-/g, ''), 10);
 }
 
-function karteEventSpot(x, y, worldSeed) {
+function karteEventSpot(x, y, worldSeed, chanceFactor) {
   const s = (((x * 73856093) ^ (y * 19349663) ^ _todayNum()) + worldSeed) >>> 0;
-  return _kRng(s)() < KARTE_EVENT_CHANCE;
+  return _kRng(s)() < KARTE_EVENT_CHANCE * (chanceFactor || 1);
 }
+
+// 🧠 CIQ Kaffeesatz-Leser: Event-Typen, die als „negativ" gelten und unterdrückt werden.
+const KARTE_NEGATIVE_EVENTS = new Set(['step_malus', 'cc_risk', 'cc_penalty', 'build_block', 'tile_block', 'storm_damage']);
 
 function karteEventIndex(x, y, worldSeed) {
   const r = _tileRng(x + _todayNum(), y + _todayNum(), 9999, worldSeed)();
@@ -612,10 +618,15 @@ function karteExploreTile(tx, ty, mapData, worldSeed, opts) {
       newTreasures[`${tx},${ty}`] = { i: idx, ts: now, round };
     }
   } else {
-    // Kein Schatz → Event-Check (20% Chance, täglich rotierend)
-    if (karteEventSpot(tx, ty, worldSeed)) {
+    // Kein Schatz → Event-Check (20% Chance, täglich rotierend; CIQ Glückssträhne erhöht die Chance)
+    if (karteEventSpot(tx, ty, worldSeed, opts?.eventChanceFactor)) {
       const idx = karteEventIndex(tx, ty, worldSeed);
-      event = KARTE_EVENTS[idx];
+      const cand = KARTE_EVENTS[idx];
+      // 🧠 CIQ Kaffeesatz-Leser: negative Events werden unterdrückt (kein Event statt Malus)
+      if (opts?.onlyPositiveEvents && KARTE_NEGATIVE_EVENTS.has(cand.effect.type)) {
+        // bewusst nichts setzen → event bleibt null, kein Malus
+      } else {
+      event = cand;
       const eff = event.effect;
       // Persistente Effects in activeEffects eintragen
       if (eff.type === 'step_bonus'    && eff.when === 'today')    newActiveEffects.push({ type: 'step_bonus',     amount: eff.amount,  expires: today    });
@@ -641,6 +652,7 @@ function karteExploreTile(tx, ty, mapData, worldSeed, opts) {
         if (target) { blds[target[0]] = { ...target[1], damaged: today }; newBuildings = blds; }
       }
       // cc_bonus, cc_random, cc_risk, cc_penalty → sofort in imperium.js ausgewertet, nicht hier gespeichert
+      } // Ende: Event wird angewandt (nicht von Kaffeesatz-Leser unterdrückt)
     }
   }
 

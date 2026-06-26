@@ -1069,11 +1069,19 @@ async function _handleKarteStep(tx, ty, member, state, seed, COLS, ROWS, MARGIN)
   const sensorFactor = sensorItem?.key === 'truffle_nose' ? 2.2 : sensorItem ? 1.5 : 1.0;
 
   const _grpTreasure = (typeof treasuryGroupPerks === 'function') ? treasuryGroupPerks(appData?.treasury).treasure : 0;
-  const ccFactor = (1 + 0.25 * ((typeof completedResearchTiers === 'function') ? completedResearchTiers(member.research) : 0)) * (1 + _grpTreasure);
+  // 🧠 CIQ Karten-Perks: Schatzgräber (+50% Schatz-CC), Glückssträhne (+30% Schatz-/Event-Chance), Kaffeesatz-Leser (nur positive Events)
+  const _cosm = member.cosmetics || {};
+  const _ciqSchatz = (typeof ciqActive === 'function') && ciqActive(_cosm, 'schatzgraeber');
+  const _ciqGlueck = (typeof ciqActive === 'function') && ciqActive(_cosm, 'gluecksstraehne');
+  const _ciqSatz   = (typeof ciqActive === 'function') && ciqActive(_cosm, 'kaffeesatz_leser');
+  let ccFactor = (1 + 0.25 * ((typeof completedResearchTiers === 'function') ? completedResearchTiers(member.research) : 0)) * (1 + _grpTreasure);
+  if (_ciqSchatz) ccFactor *= 1.5;
   const { newMapData, treasure, event } = karteExploreTile(tx, ty, state.mapData, seed, {
-    treasureFactor: sensorFactor,
+    treasureFactor: sensorFactor * (_ciqGlueck ? 1.3 : 1),
     backpackBoost:  !!upg.backpack,
     ccFactor,
+    eventChanceFactor: _ciqGlueck ? 1.3 : 1,
+    onlyPositiveEvents: _ciqSatz,
   });
   state.mapData = newMapData;
 
@@ -1308,7 +1316,7 @@ function _showKarteBuildMenu(options, cx, cy, member, state, seed) {
   const popup = _karteModalPopup();
   if (!popup) return;
   const rows = options.map(({ def, ax, ay }) => {
-    const cost   = (typeof karteBuildCost === 'function') ? karteBuildCost(def, state.mapData) : def.cost;
+    const cost   = (typeof karteBuildCost === 'function') ? karteBuildCost(def, state.mapData, member.cosmetics) : def.cost;
     const afford = (state.memberCoins || 0) >= cost;
     const ownedType = (typeof karteBuildingCountOfType === 'function') ? karteBuildingCountOfType(state.mapData, def.key) : 0;
     const w = def.w || 1, h = def.h || 1;
@@ -1391,7 +1399,7 @@ async function _handleKarteBuild(buildingKey, ax, ay, member, state, seed) {
     showToast('Hier kann nicht (mehr) gebaut werden.', 'error');
     return;
   }
-  const cost = (typeof karteBuildCost === 'function') ? karteBuildCost(def, state.mapData) : def.cost;
+  const cost = (typeof karteBuildCost === 'function') ? karteBuildCost(def, state.mapData, member.cosmetics) : def.cost;
   const newCoins = await DB.spendCoins(member.id, cost);
   if (newCoins === null) { showToast('Nicht genug CoffeeCoins!', 'error'); return; }
 

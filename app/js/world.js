@@ -45,6 +45,12 @@ for (const _c of WORLD_COUNTRIES) for (const _s of _c.slots) {
 function _worldById(id)   { return WORLD_COUNTRIES.find(c => c.id === id) || null; }
 function _worldByIso(iso) { return WORLD_COUNTRIES.find(c => c.iso === iso) || null; }
 function _worldSlot(country, rank) { return country?.slots.find(s => s.rank === rank) || null; }
+// 🧠 CIQ Handelsattaché: −15 % auf Welt-Struktur-Kosten (Anzeige UND Abbuchung).
+function _worldCost(member, base) {
+  if (member && typeof ciqActive === 'function' && ciqActive(member.cosmetics || {}, 'handelsattache'))
+    return Math.max(1, Math.round(base * 0.85));
+  return base;
+}
 
 // Boni aus eigener Rang-Position. rankMap = { countryId: rank }
 function calcWorldPerCup(rankMap) {
@@ -370,8 +376,8 @@ async function _openCountrySheet(country, member) {
     const base = def.perCup > 0 ? `+${def.perCup}/Tasse` : `+${def.perDay}/Tag`;
     const lvlTxt = level === 0 ? 'frei' : level === 2 ? 'Lvl 2' : 'Lvl 1';
     let btn;
-    if (level === 0 && canBuild)       btn = `<button class="cc-build-btn cc-world-bbtn" data-world-build="${def.id}">Bauen · ${def.cost} 🫘</button>`;
-    else if (level === 1 && canBuild)  btn = `<button class="cc-build-btn cc-world-bbtn" data-world-upgrade="${def.id}">Ausbau L2 · ${Math.round(def.cost * 0.5)} 🫘</button>`;
+    if (level === 0 && canBuild)       btn = `<button class="cc-build-btn cc-world-bbtn" data-world-build="${def.id}">Bauen · ${_worldCost(member, def.cost)} 🫘</button>`;
+    else if (level === 1 && canBuild)  btn = `<button class="cc-build-btn cc-world-bbtn" data-world-upgrade="${def.id}">Ausbau L2 · ${_worldCost(member, Math.round(def.cost * 0.5))} 🫘</button>`;
     else if (level === 0 && !canBuild) btn = `<span class="cc-world-blocked">🔒 Top 3 nötig</span>`;
     else                               btn = `<span class="cc-world-blocked">✓ ${lvlTxt}</span>`;
     return `<div class="cc-world-bld">
@@ -457,7 +463,7 @@ async function _worldRefreshAndReopen(country, member) {
 
 async function _handleBuildWorld(country, member, def) {
   let res;
-  try { res = await DB.buildWorldStructure(member.id, country.id, def.id, def.cost, false); }
+  try { res = await DB.buildWorldStructure(member.id, country.id, def.id, _worldCost(member, def.cost), false); }
   catch (e) { showToast(e.message || 'Bau fehlgeschlagen', 'error'); return; }
   if (res?.error === 'insufficient_coins') { showToast('Nicht genug CoffeeCoins!', 'error'); return; }
   if (res?.error === 'already_built')      { showToast('Schon gebaut.', 'error'); return; }
@@ -469,7 +475,7 @@ async function _handleBuildWorld(country, member, def) {
 }
 
 async function _handleUpgradeWorld(country, member, def) {
-  const cost = Math.round(def.cost * 0.5);
+  const cost = _worldCost(member, Math.round(def.cost * 0.5));
   let res;
   try { res = await DB.buildWorldStructure(member.id, country.id, def.id, cost, true); }
   catch (e) { showToast(e.message || 'Ausbau fehlgeschlagen', 'error'); return; }
