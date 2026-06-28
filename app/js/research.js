@@ -23,10 +23,10 @@ const RESEARCH_PATHS = {
       { id: 'handmuehle',     name: 'Handmühle',          icon: '⚙️', tier: 1, cost: 50,    perCup: 0.4, perDay: 0   },
       { id: 'thermometer',    name: 'Thermometer',        icon: '🌡️', tier: 2, cost: 150,   perCup: 0.6, perDay: 0   },
       { id: 'el_muehle',      name: 'Elektrische Mühle',  icon: '🔌', tier: 2, cost: 200,   perCup: 1.2, perDay: 0,   requires: ['handmuehle'] },
-      { id: 'siebtraeger',    name: 'Siebträger',         icon: '🫗', tier: 3, cost: 400,   perCup: 2.4, perDay: 5,   requires: ['el_muehle'] },
-      { id: 'roestmaschine',  name: 'Röstmaschine',       icon: '🔥', tier: 3, cost: 1200,  perCup: 5,   perDay: 10,   requires: ['siebtraeger'] },
-      { id: 'halbautomatik',  name: 'Halbautomatik',      icon: '🤖', tier: 4, cost: 2500,  perCup: 8,   perDay: 25,   requires: ['el_muehle','roestmaschine'] },
-      { id: 'iot_roester',    name: 'IoT-Röster',         icon: '📡', tier: 5, cost: 8000,  perCup: 10,   perDay: 150,   requires: ['halbautomatik'], special: 'technik_x2' },
+      { id: 'siebtraeger',    name: 'Siebträger',         icon: '🫗', tier: 3, cost: 400,   perCup: 2.4, perDay: 0,   requires: ['el_muehle'] },
+      { id: 'roestmaschine',  name: 'Röstmaschine',       icon: '🔥', tier: 3, cost: 1200,  perCup: 5,   perDay: 0,   requires: ['siebtraeger'] },
+      { id: 'halbautomatik',  name: 'Halbautomatik',      icon: '🤖', tier: 4, cost: 2500,  perCup: 8,   perDay: 0,   requires: ['el_muehle','roestmaschine'] },
+      { id: 'iot_roester',    name: 'IoT-Röster',         icon: '📡', tier: 5, cost: 8000,  perCup: 0,   perDay: 0,   requires: ['halbautomatik'], special: 'technik_x2' },
     ]
   },
   handwerk: {
@@ -35,8 +35,8 @@ const RESEARCH_PATHS = {
       { id: 'ton',            name: 'Ton',                icon: '🟤', tier: 1, cost: 40,    perCup: 0.2, perDay: 0   },
       { id: 'toepferei',      name: 'Töpferei-Werkzeug',  icon: '🏺', tier: 1, cost: 80,    perCup: 0.4, perDay: 0   },
       { id: 'kunstbuch',      name: 'Kunstbuch',          icon: '🎨', tier: 2, cost: 100,   perCup: 0.4, perDay: 0   },
-      { id: 'lim_edition',    name: 'Limitierte Edition', icon: '✨', tier: 3, cost: 600,   perCup: 0,   perDay: 10,   requires: ['kunstbuch'], special: 'ach_bonus_25' },
-      { id: 'kunstobjekt',    name: 'Kunstobjekt',        icon: '🗿', tier: 4, cost: 2500,  perCup: 0,   perDay: 25,   requires: ['lim_edition'], special: 'ach_bonus_50' },
+      { id: 'lim_edition',    name: 'Limitierte Edition', icon: '✨', tier: 3, cost: 600,   perCup: 0,   perDay: 0,   requires: ['kunstbuch'], special: 'ach_bonus_25' },
+      { id: 'kunstobjekt',    name: 'Kunstobjekt',        icon: '🗿', tier: 4, cost: 2500,  perCup: 0,   perDay: 0,   requires: ['lim_edition'], special: 'ach_bonus_50' },
     ]
   },
   mobilitaet: {
@@ -45,9 +45,9 @@ const RESEARCH_PATHS = {
       { id: 'fahrradkurier',  name: 'Fahrradkurier',      icon: '🚲', tier: 1, cost: 100,   perCup: 0.6, perDay: 0   },
       { id: 'rollwagen',      name: 'Kaffee-Rollwagen',   icon: '🛒', tier: 2, cost: 250,   perCup: 1.2, perDay: 0,   requires: ['fahrradkurier'] },
       { id: 'kaffeemobil',    name: 'Kaffeemobil',        icon: '🚐', tier: 2, cost: 450,   perCup: 2,   perDay: 0   },
-      { id: 'lieferwagen',    name: 'Lieferwagen',        icon: '🚚', tier: 3, cost: 1000,  perCup: 4.4, perDay: 5,   requires: ['kaffeemobil'] },
+      { id: 'lieferwagen',    name: 'Lieferwagen',        icon: '🚚', tier: 3, cost: 1000,  perCup: 4.4, perDay: 0,   requires: ['kaffeemobil'] },
       { id: 'lieferflotte',   name: 'Lieferflotte',       icon: '🚛', tier: 4, cost: 4000,  perCup: 11,  perDay: 50,  requires: ['lieferwagen'] },
-      { id: 'logistikzentrum',name: 'Logistikzentrum',    icon: '🏗️', tier: 5, cost: 12000, perCup: 40,  perDay: 300,   requires: ['lieferflotte'] },
+      { id: 'logistikzentrum',name: 'Logistikzentrum',    icon: '🏗️', tier: 5, cost: 12000, perCup: 40,  perDay: 0,   requires: ['lieferflotte'] },
     ]
   },
   natur: {
@@ -56,11 +56,11 @@ const RESEARCH_PATHS = {
       { id: 'kompost',        name: 'Kompost',            icon: '🍂', tier: 1, cost: 80,    perCup: 0.4, perDay: 0   },
       { id: 'kaffee_buch',    name: 'Kaffee-Buch',       icon: '📖', tier: 1, cost: 70,    perCup: 0.4, perDay: 0   },
       { id: 'biogarten',      name: 'Biogarten',          icon: '🌻', tier: 2, cost: 300,   perCup: 0,   perDay: 5,   requires: ['kaffeepflanze'] },
-      { id: 'barista_kurs',   name: 'Barista-Kurs',      icon: '🎓', tier: 2, cost: 250,   perCup: 5,   perDay: 10,   requires: ['kaffee_buch'], special: 'ach_bonus_25' },
+      { id: 'barista_kurs',   name: 'Barista-Kurs',      icon: '🎓', tier: 2, cost: 250,   perCup: 0,   perDay: 0,   requires: ['kaffee_buch'], special: 'ach_bonus_25' },
       { id: 'regenwasser',    name: 'Regenwasser-Anlage', icon: '🌧️', tier: 3, cost: 600,   perCup: 0,   perDay: 9   },
-      { id: 'sensorik',       name: 'Sensorik-Workshop',  icon: '👃', tier: 3, cost: 800,   perCup: 2,   perDay: 10,   special: 'unlock_title' },
-      { id: 'wildnis_camp',   name: 'Wildnis-Camp',      icon: '🏕️', tier: 4, cost: 2000,  perCup: 5,   perDay: 16,  special: 'cosmetic_zen' },
-      { id: 'weltreise',      name: 'Kaffee-Weltreise',  icon: '🧳', tier: 5, cost: 5000,  perCup: 10,   perDay: 200,   special: 'all_x1_5' },
+      { id: 'sensorik',       name: 'Sensorik-Workshop',  icon: '👃', tier: 3, cost: 800,   perCup: 0,   perDay: 0,   special: 'unlock_title' },
+      { id: 'wildnis_camp',   name: 'Wildnis-Camp',      icon: '🏕️', tier: 4, cost: 2000,  perCup: 0,   perDay: 16,  special: 'cosmetic_zen' },
+      { id: 'weltreise',      name: 'Kaffee-Weltreise',  icon: '🧳', tier: 5, cost: 5000,  perCup: 0,   perDay: 0,   special: 'all_x1_5' },
     ]
   },
   gastronomie: {
@@ -226,13 +226,13 @@ const KASSE_GOALS = [
   { id: 'biogarten_grp',   level: 2, icon: '🌿', name: 'Gemeinsamer Biogarten',    cost: 1500,  effect: { perDay: 8 },              desc: 'Alle Mitglieder dauerhaft +8 CC passiv/Tag' },
   { id: 'schatzarchiv',    level: 2, icon: '🗺️', name: 'Schatzkarten-Archiv',      cost: 3000,  effect: { treasure: 0.25 },         desc: 'Schatzausbeute aller Mitglieder +25%' },
   // ── Stufe 3 — Plantage ──
-  { id: 'team_espresso',   level: 3, icon: '🏆', name: 'Team-Espresso-Maschine',   cost: 4000,  effect: { perCup: 15 },              desc: 'Alle Mitglieder dauerhaft +15 CC pro Tasse extra' },
+  { id: 'team_espresso',   level: 3, icon: '🏆', name: 'Team-Espresso-Maschine',   cost: 4000,  effect: { perCup: 1 },              desc: 'Alle Mitglieder dauerhaft +1 CC pro Tasse extra' },
   { id: 'kaffeereise_grp', level: 3, icon: '🌍', name: 'Kaffeereise für alle',     cost: 8000,  effect: { perDay: 25 },             desc: 'Alle Mitglieder dauerhaft +25 CC passiv/Tag' },
   // ── Stufe 4 — Handelshaus ──
   { id: 'handelskontor',   level: 4, icon: '⚓', name: 'Gemeinsames Handelskontor', cost: 12000, effect: { perDay: 35 },            desc: 'Alle Mitglieder dauerhaft +35 CC passiv/Tag' },
-  { id: 'barista_uni',     level: 4, icon: '🎓', name: 'Barista-Universität',      cost: 18000, effect: { perCup: 75 },            desc: 'Alle Mitglieder dauerhaft +75 CC pro Tasse' },
+  { id: 'barista_uni',     level: 4, icon: '🎓', name: 'Barista-Universität',      cost: 18000, effect: { perCup: 1.5 },            desc: 'Alle Mitglieder dauerhaft +1,5 CC pro Tasse' },
   // ── Stufe 5 — Kaffee-Imperium ──
-  { id: 'wbc',             level: 5, icon: '🏅', name: 'World Barista Championship', cost: 28000, effect: { perCup: 30, perDay: 40 },  desc: 'Alle +30 CC/Tasse UND +40 CC passiv/Tag' },
+  { id: 'wbc',             level: 5, icon: '🏅', name: 'World Barista Championship', cost: 28000, effect: { perCup: 2, perDay: 40 },  desc: 'Alle +2 CC/Tasse UND +40 CC passiv/Tag' },
   { id: 'kaffeesatellit',  level: 5, icon: '🛰️', name: 'Kaffee-Satellit',          cost: 50000, effect: { perDay: 100, treasure: 0.5 }, desc: 'Endstufe: alle +100 CC passiv/Tag UND +50% Schatzausbeute' },
 ];
 
