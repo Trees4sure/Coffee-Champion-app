@@ -24,7 +24,7 @@ const ACHIEVEMENTS = [
   { id: 'early_bird',  icon: '🌅', name: 'Frühaufsteher',   desc: 'Vor 8 Uhr Tassen erfasst',          coinReward: 20,    condition: null },
   { id: 'night_owl',   icon: '🦉', name: 'Nachteule',       desc: 'Nach 22 Uhr Tassen erfasst',        coinReward: 20,    condition: null },
   { id: 'top1',        icon: '🥇', name: 'Spitzenreiter',   desc: 'Platz 1 in der Rangliste',          coinReward: 20,    condition: null },
-  { id: 'monthly_win', icon: '🏆', name: 'Monatssieger',    desc: 'Eine Saison gewonnen',               coinReward: 1000,  condition: u => (u.monthlyWins || 0) >= 1 },
+  { id: 'monthly_win', icon: '🏆', name: 'Monatssieger',    desc: 'Eine Saison gewonnen',               coinReward: 50,  condition: u => (u.monthlyWins || 0) >= 1 },
 ];
 
 function checkAchievements(userData, newAchievements = {}) {
