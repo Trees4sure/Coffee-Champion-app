@@ -550,18 +550,7 @@ const DB = (() => {
     const achievements = { ...(member.achievements || {}), ...inputAch };
     for (const a of milestoneUnlocked) achievements[a.id] = true;
 
-    // Top-1 Achievement: nur bei echter Konkurrenz (mind. 2 Mitglieder), nicht trivial beim ersten Eintrag
-    if (!achievements.top1) {
-      const { data: groupMembers } = await _sb.from('members').select('id, total_cups').eq('group_id', _groupId);
-      if ((groupMembers || []).length > 1) {
-        const othersMax = Math.max(0, ...groupMembers.filter(m => m.id !== memberId).map(m => m.total_cups || 0));
-        if (newTotal > othersMax) {
-          achievements.top1 = true;
-          const top1Ach = ACHIEVEMENTS.find(a => a.id === 'top1');
-          if (top1Ach) allNew.push(top1Ach);
-        }
-      }
-    }
+    // Ranglisten-Achievements werden bei Saison-Ende vergeben (nicht hier)
 
     // Member updaten (current_streak wird separat atomar via claim_streak_bonus gesetzt, s.u.)
     await _sb.from('members').update({
@@ -865,6 +854,11 @@ const DB = (() => {
           levied = Math.round((levied + amt) * 100) / 100;
           contribs[member.id] = Math.round(((parseFloat(contribs[member.id]) || 0) + amt) * 100) / 100;
           details.push({ name: member.name, amt });
+          // Today-Log: Abzug im Profil des Mitglieds sichtbar machen
+          try {
+            const updMd = appendTodayLog(member.map_data || {}, [{ label: '🏛️ Tagesabgabe → Kasse', amount: -amt }]);
+            await _sb.from('members').update({ map_data: updMd }).eq('id', member.id);
+          } catch (_le) { /* non-critical */ }
         } catch (e) { /* einzelnes Mitglied überspringen */ }
       }
       // Spar-Zins der Kassen-Stufe (ab Stufe 4) auf den Kassenstand VOR Abgabe —
@@ -1147,6 +1141,16 @@ const DB = (() => {
           { onConflict: 'group_id' }
         );
       }
+    }
+
+    // ── 5b. Platz 1/2/3: Achievements jede Saison neu vergeben ──────────────
+    let _rIdx = 0;
+    for (let i = 0; i < standings.length; i++) {
+      if (i > 0 && standings[i].sc !== standings[i - 1].sc) _rIdx = i;
+      const _achId = _rIdx === 0 ? 'top1' : _rIdx === 1 ? 'top2' : _rIdx === 2 ? 'top3' : null;
+      if (!_achId) continue;
+      const _mAch = { ...(standings[i].achievements || {}), [_achId]: true };
+      await _sb.from('members').update({ achievements: _mAch }).eq('id', standings[i].id);
     }
 
     // ── 6. Jahres-Champion neu berechnen ──────────────────────────────────────
@@ -1483,6 +1487,15 @@ const DB = (() => {
     return data || {};
   }
 
+  // ── Achievements direkt vergeben (z.B. für Dungeon-Erfolge) ─────────────────
+  async function grantAchievements(memberId, newAchs) {
+    const u = (typeof appData !== 'undefined' && appData?.users) ? appData.users.find(u => u.id === memberId) : null;
+    const merged = { ...(u?.achievements || {}), ...newAchs };
+    const { error } = await _sb.from('members').update({ achievements: merged }).eq('id', memberId);
+    if (error) throw new Error(error.message);
+    return merged;
+  }
+
   // ── Kaffee-Jagd Minigame ──────────────────────────────────────────────────
   async function startMinigame(memberId) {
     const { data, error } = await _sb.rpc('start_minigame', {
@@ -1531,6 +1544,7 @@ const DB = (() => {
     fetchAllWorldBuildings, buildWorldStructure, buyGarde, fetchTaxStats,
     castSabotage, fetchSabotages,
     quizStatus, quizStart, quizAnswer, quizFinalize, quizGroupReveal,
+    grantAchievements,
     startMinigame, claimMinigame, getMinigameStatus,
   };
 })();

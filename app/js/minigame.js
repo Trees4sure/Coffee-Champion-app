@@ -112,7 +112,7 @@ async function openDungeonMinigame(member, opts) {
   _jagdRenderResult(inner || overlay, Math.max(0, score), cc);
   await _sleep(3500);
   overlay.remove();
-  if (opts?.onComplete) opts.onComplete(cc);
+  if (opts?.onComplete) opts.onComplete(cc, Math.max(0, score));
 }
 
 // ── Hilfsfunktionen ───────────────────────────────────────────────────────────
@@ -149,7 +149,7 @@ function _jagdRenderResult(container, score, cc) {
   const netto = cc - 10;
   const nettoTxt = netto >= 0 ? `+${netto} CC Gewinn` : `${netto} CC`;
   const nettoCol = netto >= 0 ? 'var(--gold,#d4aa37)' : 'var(--muted,#8a7a5a)';
-  const perf = score >= 60 ? '🏆 Meisterklasse!' : score >= 30 ? '🌟 Gut gemacht!' : '☕ Nächstes Mal!';
+  const perf = score >= 100 ? '🏆 Meisterklasse!' : score >= 50 ? '🌟 Gut gemacht!' : '☕ Nächstes Mal!';
   container.innerHTML = `
     <div class="jagd-result">
       <div class="jagd-result-score">${score} Punkte</div>

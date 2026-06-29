@@ -200,10 +200,15 @@ const Quiz = (() => {
   // ── Anzeige-Helfer ───────────────────────────────────────────────────────────
   function _currentPeriod() {
     const d = new Date();
-    const half = d.getDate() >= 15 ? 2 : 1;
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${half}`;
+    const tmp = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    tmp.setUTCDate(tmp.getUTCDate() + 4 - (tmp.getUTCDay() || 7));
+    const yearStart = new Date(Date.UTC(tmp.getUTCFullYear(), 0, 1));
+    const week = Math.ceil(((tmp - yearStart) / 86400000 + 1) / 7);
+    return `${tmp.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
   }
   function _periodLabel(p) {
+    const wm = String(p).match(/^(\d{4})-W(\d{2})$/);
+    if (wm) return `KW ${parseInt(wm[2], 10)} / ${wm[1]}`;
     const [y, m, h] = String(p).split('-');
     const names = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
     return `${names[parseInt(m, 10) - 1] || m} ${y} (${h === '2' ? '2.' : '1.'} Hälfte)`;

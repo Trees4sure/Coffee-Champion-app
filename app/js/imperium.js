@@ -92,7 +92,11 @@ async function renderImperium() {
         <span class="imperium-coins-val">${_fmtCoins(member.coins)}</span>
         <span class="imperium-coins-lbl">CC</span>
         <span class="imperium-passive" id="imp-passive">+${_fmtCoins(
-          typeof calcResearchPerDay === 'function' ? calcResearchPerDay(research) : 0
+          (() => {
+            const rPD = typeof calcResearchPerDay === 'function' ? calcResearchPerDay(research) : 0;
+            const bPD = typeof calcBuildingPerDay === 'function' ? calcBuildingPerDay(member.map_data?.buildings || {}) : 0;
+            return Math.round((rPD + bPD) * 100) / 100;
+          })()
         )}/Tag</span>
       </div>
       <div class="imperium-score">
@@ -168,7 +172,11 @@ function _buildForschungsbaum(research) {
 
     for (const item of allTierItems) {
       const owned = !!research[item.id];
-      const bonus = item.perCup > 0 ? `+${item.perCup}/T` : item.perDay > 0 ? `+${item.perDay}/Tag` : item.special ? '✦' : '';
+      const _bp = [];
+      if (item.perCup > 0) _bp.push(`+${item.perCup} CC/T`);
+      if (item.perDay > 0) _bp.push(`+${item.perDay} CC/Tag`);
+      if (!_bp.length && item.special) _bp.push('✦');
+      const bonus = _bp.join(' · ');
       // Voraussetzungen: fehlende Items ermitteln (Namen aus normalen Items ODER Kombos)
       const missing = (item.requires || []).filter(r => !research[r]);
       const prereqOk = missing.length === 0;
@@ -330,6 +338,164 @@ async function _buildKasse(member) {
 }
 
 // ── Imperium Statistik ────────────────────────────────────────────────────────
+// ── Passiv-Einkommen Breakdown ────────────────────────────────────────────────
+function _buildPassivBreakdown(member) {
+  const research  = member.research       || {};
+  const buildings = member.map_data?.buildings || {};
+  const lines = [];
+
+  if (typeof getAllResearchItems === 'function') {
+    for (const item of getAllResearchItems()) {
+      if (!research[item.id] || !(item.perDay > 0)) continue;
+      lines.push({ icon: item.icon, label: item.name, value: item.perDay, type: 'research' });
+    }
+  }
+  if (typeof RESEARCH_COMBOS !== 'undefined') {
+    for (const combo of RESEARCH_COMBOS) {
+      if (!research[combo.id] || !(combo.perDay > 0)) continue;
+      lines.push({ icon: combo.icon, label: combo.name, value: combo.perDay, type: 'combo' });
+    }
+  }
+
+  const mults = [];
+  if (research.bio_zertifikat) mults.push('🌿 Bio-Zertifikat ×1,2');
+  if (research.weltkonzern)    mults.push('👑 Weltkonzern ×3');
+  if (research.weltreise)      mults.push('🧳 Weltreise ×1,5');
+
+  const now   = Date.now();
+  const today = new Date().toISOString().slice(0, 10);
+  for (const b of Object.values(buildings)) {
+    if (b.completesAt > now) continue;
+    if (b.damaged === today) continue;
+    const def = (typeof karteBuildingDef === 'function') ? karteBuildingDef(b.type) : null;
+    if (!def || !(def.perDay > 0)) continue;
+    lines.push({ icon: def.emoji, label: def.name, value: def.perDay, type: 'building' });
+  }
+
+  if (lines.length === 0 && mults.length === 0) return '';
+
+  const researchRaw = lines.filter(l => l.type !== 'building').reduce((s, l) => s + l.value, 0);
+  let researchFinal = researchRaw;
+  if (research.bio_zertifikat) researchFinal *= 1.2;
+  if (research.weltkonzern)    researchFinal *= 3;
+  if (research.weltreise)      researchFinal *= 1.5;
+  researchFinal = Math.round(researchFinal * 100) / 100;
+  const buildingTotal = lines.filter(l => l.type === 'building').reduce((s, l) => s + l.value, 0);
+  const total = Math.round((researchFinal + buildingTotal) * 100) / 100;
+
+  const rowHtml = lines.map(l => `
+    <div class="cc-passiv-row">
+      <span class="cc-passiv-icon">${l.icon}</span>
+      <span class="cc-passiv-label">${_esc2(l.label)}</span>
+      <span class="cc-passiv-val">+${_fmtCoins(l.value)}/Tag</span>
+    </div>`).join('');
+
+  const multHtml = mults.length ? `
+    <div class="cc-passiv-mults">${mults.map(m => `<span class="cc-passiv-mult">${m}</span>`).join('')}</div>` : '';
+
+  return `
+    <div class="cc-passiv-breakdown">
+      <button class="cc-passiv-toggle" onclick="this.parentElement.classList.toggle('open')">
+        ⚙️ +${_fmtCoins(total)} CC/Tag <span class="cc-passiv-arrow">▸</span>
+      </button>
+      <div class="cc-passiv-detail">
+        ${rowHtml}
+        ${multHtml}
+        <div class="cc-passiv-total">Gesamt: +${_fmtCoins(total)} CC/Tag</div>
+      </div>
+    </div>`;
+}
+
+// ── Forschungs-Heatmap ────────────────────────────────────────────────────────
+function _buildForschungsHeatmap(users) {
+  if (!users?.length || typeof RESEARCH_PATHS === 'undefined') return '';
+
+  const cols = users.map(u => ({
+    name:   u.name,
+    avatar: u.cosmetics?.avatar || '☕',
+    res:    u.research || {},
+  }));
+
+  function coverageBar(count, total) {
+    const pct  = total > 0 ? Math.round((count / total) * 100) : 0;
+    const fill = count === total       ? '#FAC775'
+               : count >= total * 0.6  ? '#c88a30'
+               : count >= total * 0.3  ? '#7a4a10'
+               : 'rgba(255,255,255,0.12)';
+    return `<div class="cc-hm-cov"><div class="cc-hm-cov-bar" style="width:${pct}%;background:${fill}"></div></div>
+            <span class="cc-hm-cov-num">${count}/${total}</span>`;
+  }
+
+  const header = `
+    <tr class="cc-hm-header">
+      <th class="cc-hm-th-item">Forschung</th>
+      ${cols.map(c => `<th class="cc-hm-th-player" title="${_esc2(c.name)}">
+        <span class="cc-hm-av">${c.avatar}</span>
+        <span class="cc-hm-pname">${_esc2(c.name.slice(0,5))}</span>
+      </th>`).join('')}
+      <th class="cc-hm-th-cov">Abdeckung</th>
+    </tr>`;
+
+  function pathRows(pathIcon, pathName, items) {
+    const headerRow = `<tr class="cc-hm-path-header">
+      <td colspan="${cols.length + 2}" class="cc-hm-path-label">${pathIcon} ${_esc2(pathName)}</td>
+    </tr>`;
+    const tierColors = { 1:'#9FE1CB', 2:'#FAC775', 3:'#EF9F27', 4:'#e07020', 5:'#BA7517' };
+    const itemRows = items.map(item => {
+      const count = cols.filter(c => !!c.res[item.id]).length;
+      const cells = cols.map(c => {
+        const owned = !!c.res[item.id];
+        return `<td class="cc-hm-td"><div class="cc-hm-cell ${owned ? 'cc-hm-owned' : ''}">${owned ? '✓' : ''}</div></td>`;
+      }).join('');
+      const tc = tierColors[item.tier] || '#888';
+      const tierBadge = item.tier
+        ? `<span class="cc-hm-tier" style="color:${tc};border-color:${tc}40">T${item.tier}</span>`
+        : `<span class="cc-hm-tier" style="color:#FAC775;border-color:#FAC77540">✦</span>`;
+      return `<tr class="cc-hm-row">
+        <td class="cc-hm-td-item"><div style="display:flex;align-items:center;gap:5px;white-space:nowrap">
+          <span class="cc-hm-icon">${item.icon}</span>
+          <span class="cc-hm-name">${_esc2(item.name)}</span>
+          ${tierBadge}
+        </div></td>
+        ${cells}
+        <td class="cc-hm-td-cov">${coverageBar(count, cols.length)}</td>
+      </tr>`;
+    }).join('');
+    return headerRow + itemRows;
+  }
+
+  let rows = '';
+  for (const [, path] of Object.entries(RESEARCH_PATHS)) {
+    rows += pathRows(path.icon, path.name, path.items);
+  }
+  if (typeof RESEARCH_COMBOS !== 'undefined' && RESEARCH_COMBOS.length) {
+    rows += pathRows('✦', 'Kombos', RESEARCH_COMBOS.map(c => ({ ...c, tier: null })));
+  }
+
+  const totalItems = Object.values(RESEARCH_PATHS).reduce((s, p) => s + p.items.length, 0)
+                   + ((typeof RESEARCH_COMBOS !== 'undefined') ? RESEARCH_COMBOS.length : 0);
+  const summaryRow = `<tr class="cc-hm-summary">
+    <td class="cc-hm-td-item" style="color:rgba(255,255,255,.5);font-size:10px;text-transform:uppercase;letter-spacing:.05em">Gesamt</td>
+    ${cols.map(c => {
+      const owned = Object.values(RESEARCH_PATHS).reduce((s, p) => s + p.items.filter(i => !!c.res[i.id]).length, 0)
+                  + ((typeof RESEARCH_COMBOS !== 'undefined') ? RESEARCH_COMBOS.filter(co => !!c.res[co.id]).length : 0);
+      const pct = Math.round((owned / totalItems) * 100);
+      return `<td class="cc-hm-td" style="text-align:center">
+        <div style="font-size:11px;font-weight:700;color:#FAC775">${owned}</div>
+        <div style="font-size:9px;color:rgba(255,255,255,.35)">${pct}%</div>
+      </td>`;
+    }).join('')}
+    <td></td>
+  </tr>`;
+
+  return `<div class="cc-hm-scroll">
+    <table class="cc-hm-table">
+      <thead>${header}</thead>
+      <tbody>${rows}${summaryRow}</tbody>
+    </table>
+  </div>`;
+}
+
 function _buildImperiumStats() {
   if (!appData?.users?.length) return '<p style="color:var(--muted);padding:16px">Keine Daten verfügbar</p>';
   const users = [...appData.users].sort((a,b) => (calcResearchScore(b.research||{}) - calcResearchScore(a.research||{})));
@@ -349,13 +515,29 @@ function _buildImperiumStats() {
     _perks.treasure > 0 ? `+${Math.round(_perks.treasure * 100)}% Schatz` : '',
   ].filter(Boolean).join(' · ') || 'noch keine — fülle die Kasse!';
   const _lvl = (typeof treasuryLevelInfo === 'function') ? treasuryLevelInfo(_tr) : null;
-  let html = `<div class="cc-stats-kasse">
+  let html = `<div class="cc-collapse-section">
+    <button class="cc-collapse-btn" onclick="this.parentElement.classList.toggle('open')">
+      🏛️ Gruppenübersicht <span class="cc-collapse-arrow">▸</span>
+    </button>
+    <div class="cc-collapse-body"><div class="cc-stats-kasse">
       <div class="cc-stats-kasse-row"><span>🏛️ Gruppenkasse</span><strong>${_fmtCoins(_tr.balance)} GC</strong></div>
       ${_lvl ? `<div class="cc-stats-kasse-row"><span>${_lvl.icon} Kassen-Stufe</span><strong>${_lvl.level}/5 · ${_esc2(_lvl.name)}</strong></div>` : ''}
       <div class="cc-stats-kasse-row"><span>🎁 Aktive Gruppen-Boni</span><strong>${_perkStr}</strong></div>
       ${_topU ? `<div class="cc-stats-kasse-row"><span>🎗️ Größter Wohltäter</span><strong>${_esc2(_topU.name)}</strong></div>` : ''}
+    </div></div>
+  </div>`;
+  // ── Dungeon-Rangliste + Spieler-Karten (aufklappbar) ────────────────────────
+  let _statsBody = '';
+  const _dungUsers = users.filter(u => (u.map_data?.dungeonStats?.count || 0) > 0);
+  if (_dungUsers.length > 0) {
+    const _dBest   = [..._dungUsers].sort((a,b) => (b.map_data.dungeonStats.bestScore||0) - (a.map_data.dungeonStats.bestScore||0))[0];
+    const _dActive = [..._dungUsers].sort((a,b) => (b.map_data.dungeonStats.count||0)     - (a.map_data.dungeonStats.count||0))[0];
+    _statsBody += `<div class="cc-stats-kasse" style="margin-top:10px">
+      <div class="cc-stats-kasse-row"><span>⚔️ Reaktionsstärkster</span><strong>${_esc2(_dBest.name)} · ${_dBest.map_data.dungeonStats.bestScore} Pkte.</strong></div>
+      <div class="cc-stats-kasse-row"><span>🏚️ Meiste Dungeons</span><strong>${_esc2(_dActive.name)} · ${_dActive.map_data.dungeonStats.count}×</strong></div>
     </div>`;
-  html += '<div class="cc-stats-list">';
+  }
+  _statsBody += '<div class="cc-stats-list">';
   for (const u of users) {
     const score   = typeof calcResearchScore  === 'function' ? calcResearchScore(u.research   || {}) : 0;
     const perDay  = typeof calcResearchPerDay === 'function' ? calcResearchPerDay(u.research  || {}) : 0;
@@ -391,7 +573,7 @@ function _buildImperiumStats() {
       if (e.type === 'cc_multiplier')  return '⚡×1–' + e.max + ' Schatz';
       return '';
     }).filter(Boolean).join(' · ');
-    html += `<div class="cc-stats-player">
+    _statsBody += `<div class="cc-stats-player">
       <div class="cc-stats-av">${avatar}</div>
       <div class="cc-stats-info">
         <div class="cc-stats-name">${_esc2(u.name)}</div>
@@ -402,6 +584,7 @@ function _buildImperiumStats() {
         </div>
         <div class="cc-stats-sub cc-stats-karte">
           🗺️ ${explCount} Felder &nbsp;·&nbsp; 🏆 ${trCount} Schätze
+          ${md.dungeonStats?.count ? `&nbsp;·&nbsp; ⚔️ ${md.dungeonStats.count}× (Best: ${md.dungeonStats.bestScore})` : ''}
           ${itemIcons ? '&nbsp;·&nbsp; ' + itemIcons : ''}
           ${effectLine ? '&nbsp;·&nbsp; <span class="cc-stats-effect">' + _esc2(effectLine) + '</span>' : ''}
         </div>
@@ -411,7 +594,25 @@ function _buildImperiumStats() {
       </div>
     </div>`;
   }
-  html += '</div>';
+  _statsBody += '</div>';
+
+  html += `<div class="cc-collapse-section">
+    <button class="cc-collapse-btn" onclick="this.parentElement.classList.toggle('open')">
+      👥 Spieler-Statistiken <span class="cc-collapse-arrow">▸</span>
+    </button>
+    <div class="cc-collapse-body">${_statsBody}</div>
+  </div>`;
+
+  const _hmContent = _buildForschungsHeatmap(appData.users);
+  if (_hmContent) {
+    html += `<div class="cc-collapse-section">
+      <button class="cc-collapse-btn" onclick="this.parentElement.classList.toggle('open')">
+        🔬 Forschungs-Heatmap <span class="cc-collapse-arrow">▸</span>
+      </button>
+      <div class="cc-collapse-body">${_hmContent}</div>
+    </div>`;
+  }
+
   return html;
 }
 
@@ -697,7 +898,8 @@ function renderCoinSection(member) {
         ${_coinBadge(member.coins, 'lg')}
         <div>
           <div class="cc-coins-amount">${_fmtCoins(member.coins)} CC</div>
-          <div class="cc-coins-passive">+${_fmtCoins(typeof calcResearchPerCup === 'function' ? calcResearchPerCup(member.research||{}) : 0)} CC/Tasse &nbsp;·&nbsp; +${_fmtCoins(typeof calcResearchPerDay === 'function' ? calcResearchPerDay(member.research||{}) : 0)} CC/Tag</div>
+          <div class="cc-coins-passive">+${_fmtCoins(typeof calcResearchPerCup === 'function' ? calcResearchPerCup(member.research||{}) : 0)} CC/Tasse</div>
+          ${_buildPassivBreakdown(member)}
         </div>
       </div>
       ${cafeName}
@@ -1348,18 +1550,50 @@ function _showDungeonModal(member, state, seed) {
         currentUserData = { ...(currentUserData || {}), coins: state.memberCoins };
         if (typeof _updateHeaderCoins === 'function') _updateHeaderCoins({ coins: state.memberCoins });
       },
-      onComplete: async (cc) => {
-        state.mapData = { ...state.mapData, dungeonAvailable: false, dungeonTile: null };
+      onComplete: async (cc, score) => {
+        // Dungeon-Stats aktualisieren
+        const prevStats = state.mapData.dungeonStats || { count: 0, bestScore: 0 };
+        const newStats  = { count: prevStats.count + 1, bestScore: Math.max(prevStats.bestScore || 0, score || 0) };
+        state.mapData = {
+          ...state.mapData,
+          dungeonAvailable: false, dungeonTile: null,
+          dungeonStats: newStats,
+        };
+        // Tages-Log
+        state.mapData = DB.appendTodayLog(state.mapData, [{ label: `⚔️ Dungeon (${score || 0} Pkt.)`, amount: cc }]);
         currentUserData = { ...(currentUserData || {}), map_data: state.mapData };
         await DB.updateMapData(member.id, state.mapData).catch(() => {});
+        // Coins
         if (cc > 0) {
           state.memberCoins = (state.memberCoins || 0) + cc;
           currentUserData = { ...(currentUserData || {}), coins: state.memberCoins };
           if (typeof _updateHeaderCoins === 'function') _updateHeaderCoins({ coins: state.memberCoins });
         }
+        // Canvas + HUD
         const cvs = document.getElementById('cc-karte-canvas');
         if (cvs) karteRender(cvs, state.mapData, seed, state.vpX, state.vpY, state.research);
         _karteUpdateHUD(state);
+        // Chat-Broadcast
+        try {
+          const ccTxt = cc > 0 ? ` (+${cc} 🫘)` : '';
+          await DB.postMessage(`⚔️ ${_esc2(member.name)} hat im Dungeon ${score || 0} Punkte gemacht${ccTxt}!`, member.name);
+        } catch (e) { /* non-critical */ }
+        // Dungeon-Achievements prüfen
+        try {
+          const existing = currentUserData?.achievements || {};
+          const toGrant = {};
+          if (!existing.dungeon_first  && newStats.count     >= 1)  toGrant.dungeon_first  = true;
+          if (!existing.dungeon_5      && newStats.count     >= 5)  toGrant.dungeon_5      = true;
+          if (!existing.dungeon_master && newStats.bestScore >= 60) toGrant.dungeon_master = true;
+          if (Object.keys(toGrant).length > 0) {
+            await DB.grantAchievements(member.id, toGrant);
+            currentUserData = { ...(currentUserData || {}), achievements: { ...existing, ...toGrant } };
+            for (const id of Object.keys(toGrant)) {
+              const ach = (typeof ACHIEVEMENTS !== 'undefined' ? ACHIEVEMENTS : []).find(a => a.id === id);
+              if (ach) showToast(`🏆 Achievement: ${ach.name}! (+${ach.coinReward} CC)`, 'success');
+            }
+          }
+        } catch (e) { /* non-critical */ }
       }
     });
   };

@@ -656,10 +656,10 @@ function karteExploreTile(tx, ty, mapData, worldSeed, opts) {
     }
   }
 
-  // Dungeon-Meilenstein: alle 15 erkundeten Felder
-  const exploredCount    = Object.keys(newExplored).length;
-  const dungeonMilestone = exploredCount > 0 && exploredCount % 15 === 0;
-  const dungeonUpdate    = dungeonMilestone
+  // Dungeon-Meilenstein: alle 15 eigenen Schritte (per Spieler, unabhängig von Gruppen-Tiles)
+  const myStepCount   = (mapData.myStepCount || 0) + 1;
+  const dungeonMilestone = myStepCount % 15 === 0;
+  const dungeonUpdate = dungeonMilestone
     ? { dungeonAvailable: true, dungeonTile: { x: tx, y: ty } }
     : {};
 
@@ -671,6 +671,7 @@ function karteExploreTile(tx, ty, mapData, worldSeed, opts) {
     activeEffects: newActiveEffects,
     steps_today:   stepsUsed + 1,
     steps_date:    today,
+    myStepCount:   myStepCount,
     ...(newBlocked   ? { blocked:   newBlocked }   : {}),
     ...(newBuildings ? { buildings: newBuildings } : {}),
     ...dungeonUpdate,

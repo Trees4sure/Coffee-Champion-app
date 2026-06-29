@@ -537,7 +537,7 @@ function ensureRegelwerk() {
       Jedes schaltet sich automatisch frei und wirft <b>CC</b> ab.
       Neueinsteiger kassieren die Einsteiger-Achievements gleich beim Loslegen.`)}
     ${sec('🧠', 'Kaffee-Quiz & Kaffee-IQ (CIQ)', `
-      Am <b>1.</b> und <b>15.</b> jedes Monats öffnet das Quiz: 10 Fragen, 15 Sekunden pro Frage,
+      Jeden <b>Mittwoch</b> öffnet das Quiz: 10 Fragen, 15 Sekunden pro Frage,
       Sofort-Feedback. Pro Treffer <b>+4 CC</b> und <b>+1 CIQ</b>.<br>
       <span class="cc-rw-hl">CIQ ist dein Köpfchen-Score</span> — er sinkt nie und ist die Eintrittskarte
       für die schlauen (und fiesen 😈) CIQ-Fähigkeiten. Wer klug ist, soll's auch spüren.`)}
@@ -766,7 +766,10 @@ function renderCiqPerks(u) {
   sec.innerHTML = `
     <div class="section-title">🧠 CIQ-Fähigkeiten <span class="ciq-score">Dein Kaffee-IQ: ${Math.floor(ciq)}</span></div>
     <div class="ciq-intro">Wer klug ist, soll's auch spüren. Quiz-Wissen (CIQ) schaltet Fähigkeiten frei — bezahlt wird mit 🫘. CIQ sinkt nie.</div>
-    <div class="ciq-grid">${cards}</div>`;
+    <button class="ciq-toggle-btn" onclick="this.classList.toggle('open');this.nextElementSibling.style.display=this.classList.contains('open')?'':'none'">
+      Fähigkeiten anzeigen <span class="ciq-toggle-arrow">▸</span>
+    </button>
+    <div class="ciq-grid" style="display:none">${cards}</div>`;
 
   sec.querySelectorAll('.ciq-buy').forEach(btn => {
     btn.onclick = async () => {
