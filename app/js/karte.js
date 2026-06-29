@@ -656,6 +656,13 @@ function karteExploreTile(tx, ty, mapData, worldSeed, opts) {
     }
   }
 
+  // Dungeon-Meilenstein: alle 15 erkundeten Felder
+  const exploredCount    = Object.keys(newExplored).length;
+  const dungeonMilestone = exploredCount > 0 && exploredCount % 15 === 0;
+  const dungeonUpdate    = dungeonMilestone
+    ? { dungeonAvailable: true, dungeonTile: { x: tx, y: ty } }
+    : {};
+
   const newMapData = {
     ...mapData,
     pos:           { x: tx, y: ty },
@@ -666,9 +673,10 @@ function karteExploreTile(tx, ty, mapData, worldSeed, opts) {
     steps_date:    today,
     ...(newBlocked   ? { blocked:   newBlocked }   : {}),
     ...(newBuildings ? { buildings: newBuildings } : {}),
+    ...dungeonUpdate,
   };
 
-  return { newMapData, treasure, event };
+  return { newMapData, treasure, event, dungeon: dungeonMilestone };
 }
 
 // ── Canvas-Rendering ──────────────────────────────────────────────────────────
@@ -680,8 +688,9 @@ function karteRender(canvas, mapData, worldSeed, vpX, vpY, research) {
   const COLS = Math.floor(W / T);
   const ROWS = Math.floor(H / T);
 
-  const pos      = kartePos(mapData);
-  const explored = mapData?.explored  || {};
+  const pos        = kartePos(mapData);
+  const explored   = mapData?.explored  || {};
+  const dungeonTile = mapData?.dungeonAvailable ? (mapData?.dungeonTile || null) : null;
   const treasures = mapData?.treasures || {};
   const upg      = mapData?.upgrades  || {};
 
@@ -812,6 +821,14 @@ function karteRender(canvas, mapData, worldSeed, vpX, vpY, research) {
         ctx.fillStyle = '#FAC775';
         ctx.font = `bold ${Math.floor(T * 0.75)}px sans-serif`;
         ctx.fillText('✦', px + 2, py + T - 2);
+      }
+
+      // ── Dungeon-Marker ──
+      if (dungeonTile && wx === dungeonTile.x && wy === dungeonTile.y) {
+        ctx.font = `${Math.floor(T * 0.7)}px sans-serif`;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
+        ctx.fillText('⚔️', px + 1, py + T - 2);
       }
 
       // ── Spieler-Charakter ──

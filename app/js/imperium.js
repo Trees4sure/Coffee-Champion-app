@@ -134,7 +134,6 @@ async function _renderImperiumTab(tab, member) {
   if (tab === 'welt')      { el.innerHTML = ''; _buildWeltkarte(member, el); return; }
   if (tab === 'stats')     el.innerHTML = _buildImperiumStats();
   if (tab === 'cosmetics') el.innerHTML = _buildCosmetics(member);
-
   // Event-Delegation für Kaufbuttons
   el.onclick = async (e) => {
     const btn = e.target.closest('[data-buy]');
@@ -1032,6 +1031,12 @@ function _buildKarte(member, el) {
   async function _onCanvasTap(e) {
     if (_moved) return; // war ein Wischen, kein Tippen
     const { tx, ty } = _tileFromEvent(e);
+    // 0) Dungeon-Marker angetippt → Dungeon-Modal öffnen
+    const _dt = state.mapData?.dungeonTile;
+    if (state.mapData?.dungeonAvailable && _dt && tx === _dt.x && ty === _dt.y) {
+      _showDungeonModal(member, state, seed);
+      return;
+    }
     // 1) Betretbares (angrenzendes, unerkundetes) Feld → Schritt
     if (karteCanStep(tx, ty, state.mapData, state.research)) {
       await _handleKarteStep(tx, ty, member, state, seed, _COLS, _ROWS, _MARGIN);
@@ -1076,7 +1081,7 @@ async function _handleKarteStep(tx, ty, member, state, seed, COLS, ROWS, MARGIN)
   const _ciqSatz   = (typeof ciqActive === 'function') && ciqActive(_cosm, 'kaffeesatz_leser');
   let ccFactor = (1 + 0.25 * ((typeof completedResearchTiers === 'function') ? completedResearchTiers(member.research) : 0)) * (1 + _grpTreasure);
   if (_ciqSchatz) ccFactor *= 1.5;
-  const { newMapData, treasure, event } = karteExploreTile(tx, ty, state.mapData, seed, {
+  const { newMapData, treasure, event, dungeon } = karteExploreTile(tx, ty, state.mapData, seed, {
     treasureFactor: sensorFactor * (_ciqGlueck ? 1.3 : 1),
     backpackBoost:  !!upg.backpack,
     ccFactor,
@@ -1220,6 +1225,9 @@ async function _handleKarteStep(tx, ty, member, state, seed, COLS, ROWS, MARGIN)
   if (canvas) karteRender(canvas, state.mapData, seed, state.vpX, state.vpY, state.research);
 
   _karteUpdateHUD(state);
+
+  // Dungeon-Meilenstein: Modal nach Canvas-Update anzeigen
+  if (dungeon) _showDungeonModal(member, state, seed);
 }
 
 async function _handleKarteUpgrade(key, cost, member, state, seed) {
@@ -1301,6 +1309,60 @@ function _showKarteDiscovery(treasure) {
       </div>
     </div>
   `);
+}
+
+// ── Dungeon-Modal ─────────────────────────────────────────────────────────────
+function _showDungeonModal(member, state, seed) {
+  const popup = _karteModalPopup();
+  if (!popup) return;
+  const canAfford = (state.memberCoins || 0) >= 10;
+  popup.innerHTML = `
+    <div class="cc-karte-popup-inner">
+      <div class="cc-karte-popup-hdr">⚔️ DUNGEON ENTDECKT!</div>
+      <div class="cc-karte-popup-body">
+        <span class="cc-karte-popup-emoji" style="font-size:2.2rem">🏚️</span>
+        <div class="cc-karte-popup-text">
+          <strong>Ein verlassenes Lager wartet auf dich!</strong>
+          <em>"Drinnen riecht es nach Kaffee… und Gefahr."</em>
+          <span class="cc-karte-popup-cc">Einsatz: 10 🫘 → Kasse · Auszahlung: 0–25 🫘</span>
+        </div>
+      </div>
+      <div class="cc-dungeon-btns">
+        ${canAfford
+          ? `<button class="jagd-btn" id="cc-dungeon-enter">⚔️ Betreten (10 🫘)</button>`
+          : `<div class="jagd-no-cc">Zu wenig CC — mind. 10 🫘 nötig</div>`}
+        <button class="cc-karte-popup-close"
+          onclick="document.getElementById('cc-karte-popup').classList.add('hidden')">
+          ⏳ Später
+        </button>
+      </div>
+    </div>`;
+
+  const enterBtn = popup.querySelector('#cc-dungeon-enter');
+  if (enterBtn) enterBtn.onclick = async () => {
+    document.getElementById('cc-karte-popup')?.classList.add('hidden');
+    if (typeof openDungeonMinigame !== 'function') return;
+    await openDungeonMinigame(member, {
+      onStake: () => {
+        state.memberCoins = Math.max(0, (state.memberCoins || 0) - 10);
+        currentUserData = { ...(currentUserData || {}), coins: state.memberCoins };
+        if (typeof _updateHeaderCoins === 'function') _updateHeaderCoins({ coins: state.memberCoins });
+      },
+      onComplete: async (cc) => {
+        state.mapData = { ...state.mapData, dungeonAvailable: false, dungeonTile: null };
+        currentUserData = { ...(currentUserData || {}), map_data: state.mapData };
+        await DB.updateMapData(member.id, state.mapData).catch(() => {});
+        if (cc > 0) {
+          state.memberCoins = (state.memberCoins || 0) + cc;
+          currentUserData = { ...(currentUserData || {}), coins: state.memberCoins };
+          if (typeof _updateHeaderCoins === 'function') _updateHeaderCoins({ coins: state.memberCoins });
+        }
+        const cvs = document.getElementById('cc-karte-canvas');
+        if (cvs) karteRender(cvs, state.mapData, seed, state.vpX, state.vpY, state.research);
+        _karteUpdateHUD(state);
+      }
+    });
+  };
 }
 
 // ── Gebäude-Bau ───────────────────────────────────────────────────────────────
