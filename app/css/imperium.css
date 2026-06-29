@@ -669,3 +669,140 @@
 }
 .cc-build-btn:disabled { opacity: .4; cursor: default; }
 .cc-build-btn:not(:disabled):hover { background: rgba(212,175,55,.3); }
+
+/* ── Kaffee-Jagd Minigame ──────────────────────────────────────────────────── */
+.jagd-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 0;
+}
+.jagd-legend {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+  font-size: 13px;
+  color: rgba(255,255,255,.65);
+}
+.jagd-bad { color: rgba(140,160,255,.9); }
+.jagd-first-week { color: #FAC775; font-size: .85em; }
+
+.jagd-preview {
+  width: 100%;
+  max-width: 620px;
+  background: rgba(17,5,0,.7);
+  border: 1px solid rgba(200,136,58,.2);
+  border-radius: 10px;
+  padding: 28px 24px;
+  text-align: center;
+}
+.jagd-preview-title {
+  font-size: 1.5em;
+  font-weight: 700;
+  color: var(--gold, #d4aa37);
+  margin-bottom: 8px;
+}
+.jagd-preview-sub {
+  font-size: .88em;
+  color: rgba(255,255,255,.5);
+}
+.jagd-cost-info {
+  font-size: .85em;
+  color: rgba(255,255,255,.55);
+  text-align: center;
+}
+.jagd-cost-info strong { color: rgba(255,255,255,.85); }
+.jagd-btn {
+  padding: 14px 32px;
+  background: linear-gradient(135deg, #c8883a, #a05a1a);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-size: 1.1em;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity .15s, transform .1s;
+}
+.jagd-btn:hover { opacity: .9; transform: translateY(-1px); }
+.jagd-btn:active { transform: translateY(0); }
+.jagd-btn:disabled { opacity: .45; cursor: default; transform: none; }
+.jagd-no-cc {
+  color: var(--muted, #8a7a5a);
+  font-size: .9em;
+  text-align: center;
+}
+.jagd-daily {
+  font-size: .8em;
+  color: rgba(255,255,255,.35);
+  letter-spacing: .03em;
+}
+
+/* ── Laufendes Spiel ── */
+.jagd-game-root { position: relative; width: 100%; }
+.jagd-hud {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 14px;
+  background: rgba(0,0,0,.55);
+  color: #f5d78e;
+  font-weight: 600;
+  font-size: 15px;
+  border-radius: 8px 8px 0 0;
+}
+.jagd-hud-lbl { font-size: 11px; opacity: .5; letter-spacing: .06em; }
+.jagd-tbar-wrap { height: 3px; background: rgba(255,255,255,.08); }
+#jagd-tbar {
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, #44ee88, #ffcc00, #ff5544);
+  transition: width .1s linear;
+}
+#jagd-cv {
+  display: block;
+  width: 100%;
+  cursor: crosshair;
+  border-radius: 0 0 8px 8px;
+}
+
+/* ── Ergebnis-Screen ── */
+.jagd-result {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 32px 16px;
+  text-align: center;
+}
+.jagd-result-score { font-size: 2.8em; font-weight: 700; color: #ffd700; }
+.jagd-result-cc    { font-size: 1.3em; color: var(--gold, #d4aa37); }
+.jagd-result-netto { font-size: .9em; }
+.jagd-result-msg   { font-size: .85em; color: var(--muted, #8a7a5a); }
+
+/* ── Dungeon-Overlay ── */
+.jagd-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(8,3,0,.93);
+  z-index: 5000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow-y: auto;
+  padding: 16px;
+}
+.jagd-overlay .jagd-wrap {
+  width: min(680px, 96vw);
+  max-height: 94vh;
+  overflow-y: auto;
+}
+/* Dungeon-Modal-Buttons im cc-karte-popup */
+.cc-dungeon-btns {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+}
