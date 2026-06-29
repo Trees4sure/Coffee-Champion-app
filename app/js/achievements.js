@@ -17,14 +17,20 @@ const ACHIEVEMENTS = [
   { id: 'cups_2500',   icon: '🔥', name: '2500 Tassen',     desc: '2500 Tassen erreicht',              coinReward: 2000,  condition: u => u.totalCups >= 2500  },
   { id: 'cups_5000',   icon: '🏆', name: '5000 Tassen',     desc: '5000 Tassen erreicht',              coinReward: 4000,  condition: u => u.totalCups >= 5000  },
   { id: 'streak_7',    icon: '📅', name: '7 Tage Serie',    desc: '7 Werktage in Folge aktiv',         coinReward: 100,   condition: u => u.maxStreak >= 7     },
-  { id: 'streak_30',   icon: '🗓️', name: '30 Tage Serie',   desc: '30 Werktage in Folge aktiv',        coinReward: 400,   condition: u => u.maxStreak >= 30    },
-  { id: 'streak_100',  icon: '💎', name: '100 Tage Serie',  desc: '100 Werktage in Folge aktiv',       coinReward: 2000,  condition: u => u.maxStreak >= 100   },
+  { id: 'streak_30',   icon: '🗓️', name: '30 Tage Serie',   desc: '30 Werktage in Folge aktiv',        coinReward: 300,   condition: u => u.maxStreak >= 30    },
+  { id: 'streak_100',  icon: '💎', name: '100 Tage Serie',  desc: '100 Werktage in Folge aktiv',       coinReward: 700,   condition: u => u.maxStreak >= 100   },
   { id: 'doppio',      icon: '🥤', name: 'Doppio-Meister',  desc: '10+ Tassen auf einmal erfasst',     coinReward: 20,    condition: null },
   { id: 'barista',     icon: '🎩', name: 'Barista',         desc: '5+ Tassen auf einmal erfasst',      coinReward: 10,    condition: null },
   { id: 'early_bird',  icon: '🌅', name: 'Frühaufsteher',   desc: 'Vor 8 Uhr Tassen erfasst',          coinReward: 20,    condition: null },
   { id: 'night_owl',   icon: '🦉', name: 'Nachteule',       desc: 'Nach 22 Uhr Tassen erfasst',        coinReward: 20,    condition: null },
-  { id: 'top1',        icon: '🥇', name: 'Spitzenreiter',   desc: 'Platz 1 in der Rangliste',          coinReward: 20,    condition: null },
-  { id: 'monthly_win', icon: '🏆', name: 'Monatssieger',    desc: 'Eine Saison gewonnen',               coinReward: 50,  condition: u => (u.monthlyWins || 0) >= 1 },
+  { id: 'top1',          icon: '🥇', name: 'Spitzenreiter',    desc: 'Platz 1 in der Rangliste',              coinReward: 20,   condition: null },
+  { id: 'top2',          icon: '🥈', name: 'Vize-Röster',      desc: 'Platz 2 in der Rangliste',              coinReward: 30,   condition: null },
+  { id: 'top3',          icon: '🥉', name: 'Dritter Mann',     desc: 'Platz 3 in der Rangliste',              coinReward: 10,   condition: null },
+  { id: 'monthly_win',  icon: '🏆', name: 'Monatssieger',     desc: 'Eine Saison gewonnen',                  coinReward: 50,   condition: u => (u.monthlyWins || 0) >= 1 },
+  // ── Kaffee-Dungeon ──
+  { id: 'dungeon_first',  icon: '⚔️',  name: 'Dungeon-Debütant', desc: 'Ersten Dungeon abgeschlossen',          coinReward: 25,   condition: u => (u.map_data?.dungeonStats?.count  || 0) >= 1  },
+  { id: 'dungeon_5',      icon: '🏚️', name: 'Dungeon-Veteran',  desc: '5 Dungeons abgeschlossen',              coinReward: 75,   condition: u => (u.map_data?.dungeonStats?.count  || 0) >= 5  },
+  { id: 'dungeon_master', icon: '🗡️', name: 'Dungeon-Meister',  desc: '60+ Punkte in einem Dungeon',           coinReward: 100,  condition: u => (u.map_data?.dungeonStats?.bestScore || 0) >= 100 },
 ];
 
 function checkAchievements(userData, newAchievements = {}) {
