@@ -1483,6 +1483,35 @@ const DB = (() => {
     return data || {};
   }
 
+  // ── Kaffee-Jagd Minigame ──────────────────────────────────────────────────
+  async function startMinigame(memberId) {
+    const { data, error } = await _sb.rpc('start_minigame', {
+      p_member_id: memberId,
+      p_group_id:  _groupId,
+    });
+    if (error) throw new Error(error.message);
+    return data; // { session_id } | { error, next_play? }
+  }
+
+  async function claimMinigame(sessionId, memberId, score, durationMs) {
+    const { data, error } = await _sb.rpc('claim_minigame', {
+      p_session_id:  sessionId,
+      p_member_id:   memberId,
+      p_score:       score,
+      p_duration_ms: durationMs,
+    });
+    if (error) throw new Error(error.message);
+    return data; // { coins_awarded, score } | { error }
+  }
+
+  async function getMinigameStatus(memberId) {
+    const { data, error } = await _sb.rpc('get_minigame_status', {
+      p_member_id: memberId,
+    });
+    if (error) throw new Error(error.message);
+    return data || {}; // { can_play, in_first_week, next_play, played_today, claimed, coins_awarded, score }
+  }
+
   return {
     init, setGroup, createGroup, joinGroup,
     fetchData, registerUser, addCups, closeSeason,
@@ -1502,5 +1531,6 @@ const DB = (() => {
     fetchAllWorldBuildings, buildWorldStructure, buyGarde, fetchTaxStats,
     castSabotage, fetchSabotages,
     quizStatus, quizStart, quizAnswer, quizFinalize, quizGroupReveal,
+    startMinigame, claimMinigame, getMinigameStatus,
   };
 })();
