@@ -30,7 +30,7 @@ const ACHIEVEMENTS = [
   // ── Kaffee-Dungeon ──
   { id: 'dungeon_first',  icon: '⚔️',  name: 'Dungeon-Debütant', desc: 'Ersten Dungeon abgeschlossen',          coinReward: 25,   condition: u => (u.map_data?.dungeonStats?.count  || 0) >= 1  },
   { id: 'dungeon_5',      icon: '🏚️', name: 'Dungeon-Veteran',  desc: '5 Dungeons abgeschlossen',              coinReward: 75,   condition: u => (u.map_data?.dungeonStats?.count  || 0) >= 5  },
-  { id: 'dungeon_master', icon: '🗡️', name: 'Dungeon-Meister',  desc: '60+ Punkte in einem Dungeon',           coinReward: 100,  condition: u => (u.map_data?.dungeonStats?.bestScore || 0) >= 100 },
+  { id: 'dungeon_master', icon: '🗡️', name: 'Dungeon-Meister',  desc: '100+ Punkte in einem Dungeon',           coinReward: 100,  condition: u => (u.map_data?.dungeonStats?.bestScore || 0) >= 100 },
 ];
 
 function checkAchievements(userData, newAchievements = {}) {
