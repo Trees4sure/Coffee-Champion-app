@@ -563,6 +563,10 @@ nav::-webkit-scrollbar { display: none; }
 /* ── Kaffee-Quiz (CIQ) ──────────────────────────────────────────────────────── */
 #quiz-modal { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; }
 #quiz-modal.hidden { display: none; }
+
+/* ── "Was ist neu"-Popup (nutzt dieselben .quiz-*-Bausteine, eigene ID) ──────── */
+#whats-new-modal { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; }
+#whats-new-modal.hidden { display: none; }
 .quiz-backdrop { position: absolute; inset: 0; background: #000000cc; backdrop-filter: blur(3px); }
 .quiz-box { position: relative; width: min(440px, 92vw); max-height: 88vh; overflow-y: auto; }
 .quiz-card {
@@ -714,3 +718,13 @@ nav::-webkit-scrollbar { display: none; }
 .ciq-state.ciq-lock { color: var(--muted); }
 .ciq-state.ciq-soon { color: var(--gold-dim); font-style: italic; }
 .ciq-buy { padding: 6px 12px; font-size: .78rem; }
+
+/* 🧠 CIQ-Angriffsfähigkeiten (Phase B, PvP) */
+.ciq-card.ciq-pvp { border-color: rgba(192,57,43,.45); }
+.ciq-card.ciq-pvp.ciq-buyable { border-color: rgba(192,57,43,.7); }
+.ciq-attack { padding: 6px 12px; font-size: .78rem; background: var(--red); border-color: var(--red); }
+.ciq-debuff-warning {
+  margin: 0 0 10px; padding: 8px 10px; border-radius: 8px;
+  background: rgba(192,57,43,.12); border: 1px solid rgba(192,57,43,.4);
+  font-size: .76rem; color: var(--cream); line-height: 1.5;
+}
