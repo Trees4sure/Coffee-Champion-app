@@ -7,13 +7,13 @@
 'use strict';
 
 const JAGD_ITEMS = [
-  { e:'☕', p:1,  sp:1.2, fr:.34, wv:false, sz:36 },
-  { e:'🫘', p:2,  sp:1.5, fr:.22, wv:false, sz:32 },
-  { e:'🫖', p:3,  sp:1.7, fr:.14, wv:true,  sz:38 },
-  { e:'💰', p:5,  sp:2.2, fr:.11, wv:false, sz:34 },
-  { e:'⭐', p:10, sp:3.0, fr:.04, wv:true,  sz:30 },
-  { e:'😴', p:-3, sp:0.9, fr:.09, wv:false, sz:38, bad:true },
-  { e:'🧊', p:-2, sp:1.3, fr:.06, wv:false, sz:32, bad:true },
+  { e:'☕', p:1,  sp:1.8, fr:.34, wv:false, sz:36 },
+  { e:'🫘', p:2,  sp:2.2, fr:.22, wv:false, sz:32 },
+  { e:'🫖', p:3,  sp:2.5, fr:.14, wv:true,  sz:38 },
+  { e:'💰', p:5,  sp:3, fr:.11, wv:false, sz:34 },
+  { e:'⭐', p:10, sp:4, fr:.04, wv:true,  sz:30 },
+  { e:'😴', p:-3, sp:1.4, fr:.09, wv:false, sz:38, bad:true },
+  { e:'🧊', p:-2, sp:1.9, fr:.06, wv:false, sz:32, bad:true },
 ];
 const _JAGD_TF = JAGD_ITEMS.reduce((s, t) => s + t.fr, 0);
 
@@ -306,7 +306,7 @@ function _jagdRunGame(overlay, isAborted) {
         if (p.life <= 0) { pops.splice(i, 1); continue; }
         cx.globalAlpha = p.life;
         cx.font = 'bold 24px system-ui,sans-serif';
-        cx.fillStyle = p.col; cx.shadowColor = p.col; cx.shadowBlur = 8;
+        cx.fillStyle = '#ffffff'; cx.shadowColor = p.col; cx.shadowBlur = 18;
         cx.fillText(p.txt, p.x, p.y);
         cx.shadowBlur = 0; cx.globalAlpha = 1;
       }
