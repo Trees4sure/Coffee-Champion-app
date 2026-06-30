@@ -160,3 +160,18 @@
 /* Sabotage */
 .cc-world-sabotage { margin-top: 4px; }
 .cc-sabotage-btn { background: #5a1a1a !important; border-color: #7a2a2a !important; color: #ffd9d9 !important; }
+
+/* Tier-Limit Hinweis im Country-Sheet */
+.cc-world-invest-locked {
+  margin: 10px 0;
+  padding: 10px 12px;
+  background: rgba(180, 60, 60, 0.15);
+  border: 1px solid rgba(180, 60, 60, 0.4);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 0.87rem;
+  line-height: 1.5;
+}
+.cc-world-invest-locked strong {
+  color: var(--cream);
+}
