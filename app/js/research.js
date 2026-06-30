@@ -716,6 +716,32 @@ const CIQ_PERKS = [
     desc: 'Baukosten aller Karten-Gebäude dauerhaft −15 %.' },
   { id: 'handelsattache', tier: '🔴', icon: '🛂', name: 'Handelsattaché', type: 'permanent', ciq: 50, cc: 400, condText: 'Weltkarte freigeschaltet',
     desc: 'Weltkarten-Strukturen dauerhaft −15 % CC.' },
+
+  // ── Angriffs-Perks (Phase B, PvP) — Plan: plans/PLAN_ciq_angriffe.md ──────────
+  // type 'attack'/'debuff': KEIN Selbstkauf wie oben — ein Klick löst sofort eine
+  // Wirkung gegen automatisch bestimmte Top-Spieler aus (DB.applyCiqAttack → RPC
+  // apply_ciq_attack, server-seitig). 'timed' bei diesen dreien = reiner Selbst-Buff,
+  // läuft über den bestehenden buyCiqPerk-Pfad wie die Perks oben (kein Ziel, kein PvP).
+  { id: 'informant',          tier: '🕵️', icon: '🕵️', name: 'Informant',          type: 'timed',  durationH: 12, ciq: 2,  cc: 5,
+    desc: '12 Stunden: exakte CC + letztes bekanntes Tageseinkommen aller Spieler einsehbar.' },
+  { id: 'steuerumgehung',     tier: '🧾', icon: '🧾', name: 'Steuerumgehung',     type: 'timed',  durationH: 24, ciq: 3,  cc: 15,
+    desc: 'Deine Tagesabgabe heute fällt komplett aus.' },
+  { id: 'kaffee_dieb',        tier: '🫘', icon: '🫘', name: 'Kaffeedieb',         type: 'attack',                ciq: 4,  cc: 20,
+    desc: 'Stiehl sofort 8 CC vom Spieler mit den meisten CC.' },
+  { id: 'steuer_pruefer',     tier: '🔍', icon: '🔍', name: 'Steuerprüfer',       type: 'debuff', durationH: 24, ciq: 5,  cc: 25,
+    desc: 'Der CC-Spitzenreiter zahlt 24 h lang die doppelte Tagesabgabe.' },
+  { id: 'schatz_raeuber',     tier: '💎', icon: '💎', name: 'Schatzräuber',       type: 'debuff', durationH: 48, ciq: 5,  cc: 25,
+    desc: 'Der nächste Kartenschatz des Zweitplatzierten geht zur Hälfte an dich (48 h Zeitfenster).' },
+  { id: 'karten_saboteur',    tier: '🚫', icon: '🚫', name: 'Kartensaboteur',     type: 'debuff', durationH: 24, ciq: 6,  cc: 30,
+    desc: 'Der CC-Spitzenreiter verliert heute 2 Karten-Schritte.' },
+  { id: 'tages_diebstahl',    tier: '💸', icon: '💸', name: 'Tagesdiebstahl',     type: 'attack',                ciq: 7,  cc: 35,
+    desc: 'Erhalte sofort 20 % des heutigen Tassen-Einkommens des Spitzenreiters.' },
+  { id: 'kaffee_pfluecker',   tier: '🌿', icon: '🌿', name: 'Kaffeepflücker',     type: 'attack',                ciq: 9,  cc: 50,
+    desc: 'Erhalte sofort 25 % des zuletzt erfassten passiven Tageseinkommens des Spitzenreiters.' },
+  { id: 'reputationsangriff', tier: '📉', icon: '📉', name: 'Reputationsangriff', type: 'debuff', durationH: 4,  ciq: 10, cc: 60,
+    desc: 'Die Top 3 (außer dir) verlieren 4 h lang je 10 % ihres Forschungs-CC/Tasse-Bonus.' },
+  { id: 'kaffee_kartell',     tier: '👑', icon: '👑', name: 'Kaffeekartell',      type: 'timed',  durationH: 1,  ciq: 12, cc: 100,
+    desc: '1 Stunde: alle eigenen CC-Einnahmen (Tassen + Passiv) verdoppelt.' },
 ];
 
 // CIQ-Punktestand eines Mitglieds (aus dem Quiz). Robust gegen fehlende Felder.
@@ -732,6 +758,25 @@ function ciqActive(cosm, id, nowTs) {
   return !!e.at;
 }
 function ciqDef(id) { return CIQ_PERKS.find(p => p.id === id) || null; }
+
+// ── CIQ-Angriffsfähigkeiten (Phase B): Fremdeffekte, die ANDERE einem auferlegt
+// haben. Leben in map_data.ciq_debuffs (Array — bewusst NICHT cosmetics, das sind
+// reine Fremdeffekte, kein eigener Besitz). Eintrag: { type, expires_at, from, amount?, steps_blocked? }
+function ciqDebuffEntry(mapData, type, nowTs) {
+  const list = (mapData && mapData.ciq_debuffs) || [];
+  const now  = nowTs || Date.now();
+  return list.find(d => d && d.type === type && new Date(d.expires_at).getTime() > now) || null;
+}
+function ciqDebuffActive(mapData, type, nowTs) { return !!ciqDebuffEntry(mapData, type, nowTs); }
+// Cooldown-Ablauf eines Angriffs-Perks für den ANGREIFER (map_data.ciq_attacks_log,
+// vom apply_ciq_attack-RPC gesetzt) — gibt den Zeitstempel zurück, ab dem der Perk
+// wieder einsetzbar ist, oder null wenn kein Cooldown aktiv ist.
+function ciqAttackCooldownUntil(mapData, perkId) {
+  const ts = mapData && mapData.ciq_attacks_log && mapData.ciq_attacks_log[perkId];
+  if (!ts) return null;
+  const until = new Date(ts).getTime() + 12 * 3600000;
+  return until > Date.now() ? until : null;
+}
 
 // ── Effekt-Helfer (in db.js angewandt) ───────────────────────────────────────
 // Tageslimit unter CIQ-Perks: Schwarzbrenner hebt es auf, Koffein-Toleranz hebt auf 20.
@@ -768,11 +813,13 @@ function ciqResearchPassiveMult(cosm, nowTs) { return ciqActive(cosm, 'bohnen_ve
 function ciqBuildingPassiveMult(cosm, nowTs) { return ciqActive(cosm, 'grossroester', nowTs) ? 1.20 : 1; }
 function ciqResearchCostMult(cosm, nowTs)    { return ciqActive(cosm, 'forscherdrang', nowTs) ? 0.85 : 1; }
 function ciqRewardMult(cosm, nowTs)          { return ciqActive(cosm, 'wachmacher', nowTs) ? 2 : 1; }
+function ciqKartellMult(cosm, nowTs)         { return ciqActive(cosm, 'kaffee_kartell', nowTs) ? 2 : 1; }
 
 // Für Node-Tests / spätere Module
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = Object.assign(module.exports || {}, {
     CIQ_PERKS, ciqGetCiq, ciqActive, ciqDef, ciqDailyMax, ciqRedFlagImmune,
     ciqCupBonus, ciqResearchPassiveMult, ciqBuildingPassiveMult, ciqResearchCostMult, ciqRewardMult,
+    ciqKartellMult, ciqDebuffEntry, ciqDebuffActive, ciqAttackCooldownUntil,
   });
 }

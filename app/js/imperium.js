@@ -108,6 +108,7 @@ async function renderImperium() {
       <button class="imp-tab active" data-tab="baum">🌳 Forschung</button>
       <button class="imp-tab" data-tab="karte">🗺️ Karte</button>
       <button class="imp-tab" data-tab="welt">🌍 Weltkarte</button>
+      <button class="imp-tab" data-tab="krieger">⚔️ Krieger</button>
       <button class="imp-tab" data-tab="stats">📊 Statistik</button>
       <button class="imp-tab" data-tab="kasse">🏛️ Kasse</button>
       <button class="imp-tab" data-tab="cosmetics">🎨 Cosmetics</button>
@@ -121,8 +122,8 @@ async function renderImperium() {
     if (!btn) return;
     document.querySelectorAll('.imp-tab').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    // Karte/Welt-Tab: immer aktuellsten Stand (currentUserData hat map_data/coins-Updates)
-    const freshMember = (btn.dataset.tab === 'karte' || btn.dataset.tab === 'welt') ? (currentUserData || member) : member;
+    // Karte/Welt/Krieger-Tab: immer aktuellsten Stand (currentUserData hat map_data/dungeon_data/coins-Updates)
+    const freshMember = (btn.dataset.tab === 'karte' || btn.dataset.tab === 'welt' || btn.dataset.tab === 'krieger') ? (currentUserData || member) : member;
     _renderImperiumTab(btn.dataset.tab, freshMember);
   });
 
@@ -138,6 +139,7 @@ async function _renderImperiumTab(tab, member) {
   if (tab === 'welt')      { el.innerHTML = ''; _buildWeltkarte(member, el); return; }
   if (tab === 'stats')     el.innerHTML = _buildImperiumStats();
   if (tab === 'cosmetics') el.innerHTML = _buildCosmetics(member);
+  if (tab === 'krieger')   { el.innerHTML = ''; _buildKrieger(member, el); return; }
   // Event-Delegation für Kaufbuttons
   el.onclick = async (e) => {
     const btn = e.target.closest('[data-buy]');
@@ -613,7 +615,37 @@ function _buildImperiumStats() {
     </div>`;
   }
 
+  const _krContent = _buildKriegerStats(appData.users);
+  if (_krContent) {
+    html += `<div class="cc-collapse-section">
+      <button class="cc-collapse-btn" onclick="this.parentElement.classList.toggle('open')">
+        ⚔️ Kaffee-Krieger <span class="cc-collapse-arrow">▸</span>
+      </button>
+      <div class="cc-collapse-body">${_krContent}</div>
+    </div>`;
+  }
+
   return html;
+}
+
+// Gruppen-Bestenliste Kaffee-Krieger (Statistik-Tab) — analog _buildForschungsHeatmap,
+// sortiert nach Stufe absteigend. null wenn niemand je gespielt hat (kein leerer Block).
+function _buildKriegerStats(users) {
+  if (typeof kriegerProgress !== 'function') return null;
+  const rows = (users || [])
+    .map(u => ({ u, dd: u.dungeon_data || {} }))
+    .filter(({ dd }) => (dd.level || 1) > 1 || (dd.wins || 0) > 0 || (dd.losses || 0) > 0)
+    .map(({ u, dd }) => ({ u, dd, prog: kriegerProgress(dd) }))
+    .sort((a, b) => b.prog.level - a.prog.level || b.prog.xp - a.prog.xp);
+  if (!rows.length) return null;
+
+  return rows.map(({ u, dd, prog }) => {
+    const ownedCount = Object.keys(dd.owned || {}).length;
+    return `<div class="cc-stats-kasse-row">
+      <span>⚔️ ${_esc2(u.name)} · Stufe ${prog.level}${prog.need ? ` (${prog.pct}%)` : ' (MAX)'}</span>
+      <strong>🏆 ${dd.wins || 0} · 💀 ${dd.losses || 0} · 🐉 ${dd.bossKills || 0} · 🎒 ${ownedCount}/24</strong>
+    </div>`;
+  }).join('');
 }
 
 function _buildResearchBars(research) {
@@ -1248,6 +1280,18 @@ function _buildKarte(member, el) {
     if (karteIsExplored(tx, ty, state.mapData)) {
       const cover = karteBuildingCovering(tx, ty, state.mapData.buildings || {});
       if (cover) { _showKarteBuildingInfo(cover.b); return; }
+
+      // 2b) Steckenbleib-Schutz: Wenn der Spieler aktuell KEINEN regulären Schritt mehr
+      // machen kann (alle 8 Nachbarn schon erkundet), hat freies Zurücklaufen Vorrang
+      // vor dem Bau-Menü — sonst verhindert ein bebaubares Nachbarfeld (der Normalfall!)
+      // das Zurücklaufen weiterhin permanent, weil unten der options.length-Branch zuerst
+      // greift. Im NICHT-feststeckenden Normalfall bleibt das Bau-Menü wie gewohnt Vorrang
+      // (kein Verlust der bisherigen "auf Nachbarfeld tippen → bauen"-UX).
+      if (karteCanWalkBack(tx, ty, state.mapData) && karteIsStuck(state.mapData, state.research)) {
+        await _handleKarteWalkBack(tx, ty, member, state, _COLS, _ROWS, _MARGIN);
+        return;
+      }
+
       const options = karteBuildableAt(tx, ty, state.mapData, seed);
       if (options.length) {
         if (karteIsBuildBlocked(state.mapData)) {
@@ -1255,8 +1299,42 @@ function _buildKarte(member, el) {
           return;
         }
         _showKarteBuildMenu(options, tx, ty, member, state, seed);
+        return;
+      }
+      // 3) Leeres, bereits erkundetes Nachbarfeld ohne Bau-Option → kostenlos dorthin
+      // zurücklaufen (kein Schrittverbrauch) — auch im Nicht-stuck-Fall, da hier sonst
+      // (wie vor diesem Fix) gar nichts passieren würde.
+      if (karteCanWalkBack(tx, ty, state.mapData)) {
+        await _handleKarteWalkBack(tx, ty, member, state, _COLS, _ROWS, _MARGIN);
       }
     }
+  }
+
+  // Kostenloses Zurücklaufen auf ein erkundetes Feld — kein Schritt-/DB-Explore-Aufruf,
+  // nur Position + Viewport + Render aktualisieren (Pendant zum Tail von _handleKarteStep).
+  async function _handleKarteWalkBack(tx, ty, member, state, COLS, ROWS, MARGIN) {
+    const prevMapData = state.mapData;
+    state.mapData = karteWalkBack(tx, ty, state.mapData);
+    try {
+      await DB.updateMapData(member.id, state.mapData);
+    } catch (e) {
+      state.mapData = prevMapData;
+      showToast('Konnte nicht zurücklaufen.', 'error');
+      return;
+    }
+    currentUserData = { ...(currentUserData || {}), map_data: state.mapData };
+
+    const pos  = kartePos(state.mapData);
+    const pvpX = pos.x - state.vpX;
+    const pvpY = pos.y - state.vpY;
+    if (pvpX < MARGIN)            state.vpX = Math.max(0, pos.x - MARGIN);
+    else if (pvpX > COLS - MARGIN - 1) state.vpX = Math.min(KARTE_WORLD - COLS, pos.x - (COLS - MARGIN - 1));
+    if (pvpY < MARGIN)            state.vpY = Math.max(0, pos.y - MARGIN);
+    else if (pvpY > ROWS - MARGIN - 1) state.vpY = Math.min(KARTE_WORLD - ROWS, pos.y - (ROWS - MARGIN - 1));
+
+    const canvas = document.getElementById('cc-karte-canvas');
+    if (canvas) karteRender(canvas, state.mapData, seed, state.vpX, state.vpY, state.research);
+    _karteUpdateHUD(state);
   }
 
   canvas?.addEventListener('pointerup', (e) => {
@@ -1304,7 +1382,18 @@ async function _handleKarteStep(tx, ty, member, state, seed, COLS, ROWS, MARGIN)
 
   if (treasure) {
     const bartBonus  = hasBart ? 1 : 0;
-    const totalCC    = treasure.cc + bartBonus;
+    let totalCC      = treasure.cc + bartBonus;
+    // 🧠 CIQ Schatzräuber (Fremd-Debuff, einmalig): die Hälfte des NÄCHSTEN Schatzfundes
+    // geht an den Angreifer — wird hier verbraucht (aus ciq_debuffs entfernt), nicht erst
+    // nach den 48h Ablauf.
+    const raubEntry = (typeof ciqDebuffEntry === 'function') ? ciqDebuffEntry(state.mapData, 'schatz_raeuber') : null;
+    let raubStolen = 0, raubFrom = null;
+    if (raubEntry) {
+      raubStolen = Math.round(totalCC * (raubEntry.amount || 0.5));
+      raubFrom   = raubEntry.from;
+      totalCC    = totalCC - raubStolen;
+      state.mapData = { ...state.mapData, ciq_debuffs: (state.mapData.ciq_debuffs || []).filter(d => d !== raubEntry) };
+    }
     // Optimistic UI update sofort
     state.memberCoins += totalCC;
     currentUserData = { ...(currentUserData || {}), coins: state.memberCoins };
@@ -1312,12 +1401,18 @@ async function _handleKarteStep(tx, ty, member, state, seed, COLS, ROWS, MARGIN)
     try {
       await DB.addCoins(member.id, totalCC);
     } catch (e) { console.warn('add_coins Fehler:', e); }
+    if (raubStolen > 0 && raubFrom) {
+      DB.addCoins(raubFrom, raubStolen).catch(() => {});
+      DB.postMessage(`💎 Ein Spitzel hat ${raubStolen} CC vom Schatzfund von ${_esc2(member.name)} abgezweigt!`, 'CIQ-Labor').catch(() => {});
+    }
     // Barista Bart: jeder ANDERE Mitspieler mit Bart erhält +1 CC pro Schatzfund
     if (typeof DB.payBaristaBartGroup === 'function') {
       DB.payBaristaBartGroup(member.id).catch(() => {});
     }
     try {
-      state.mapData = DB.appendTodayLog(state.mapData, [{ label: `🗺️ ${treasure.name}`, amount: totalCC }]);
+      const logEntries = [{ label: `🗺️ ${treasure.name}`, amount: totalCC }];
+      if (raubStolen > 0) logEntries.push({ label: '💎 Schatzräuber-Abzweig', amount: -raubStolen });
+      state.mapData = DB.appendTodayLog(state.mapData, logEntries);
       currentUserData = { ...(currentUserData || {}), map_data: state.mapData };
       await DB.updateMapData(member.id, state.mapData);
     } catch (e) { console.warn('Tages-Log (Schatz) Fehler:', e); }
@@ -1327,7 +1422,7 @@ async function _handleKarteStep(tx, ty, member, state, seed, COLS, ROWS, MARGIN)
         member.name
       );
     } catch (e) { console.warn('Chat-Broadcast Fehler:', e); }
-    const displayTreasure = bartBonus ? { ...treasure, cc: totalCC } : treasure;
+    const displayTreasure = (bartBonus || raubStolen > 0) ? { ...treasure, cc: totalCC } : treasure;
     _showKarteDiscovery(displayTreasure); // nicht-blockierendes Auto-Popup (kein zusätzlicher Toast)
   } else if (event) {
     const eff = event.effect;
@@ -1741,4 +1836,492 @@ function _showKarteEvent(event, noteText) {
       </div>
     </div>
   `);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ⚔️ Kaffee-Krieger RPG — Plan: plans/PLAN_kaffee_krieger.md
+// Eigenständiges System (eigene Dungeon-Karte/Schritte/Stufe), läuft parallel zu
+// Kaffee-Jagd/Pixel-Karte/Weltkarte ohne sie zu beeinflussen (Designentscheidung
+// im Plan §0 — bewusst NICHT verschmolzen, geringeres Risiko Bestehendes zu zerlegen).
+// Kampfausgang ist ausschließlich serverseitig (RPC dungeon_fight) — alles hier ist
+// nur Anzeige/Eingabe, "Server ist Wahrheit".
+// ═══════════════════════════════════════════════════════════════════════════
+
+let _kriegerSubTab = 'dungeon'; // überlebt Re-Renders innerhalb der Session (wie _msgTab)
+
+function _buildKrieger(member, el) {
+  let dd = member.dungeon_data || {};
+
+  // Start-Tile beim ersten Öffnen auto-erkunden (analog _buildKarte)
+  if (!dd.explored || Object.keys(dd.explored).length === 0) {
+    dd = {
+      ...dd,
+      pos: { x: KRIEGER_START_X, y: KRIEGER_START_Y },
+      explored: { [`${KRIEGER_START_X},${KRIEGER_START_Y}`]: Date.now() },
+    };
+    DB.saveDungeonData(member.id, dd).catch(() => {});
+  }
+
+  const _COLS = Math.floor(320 / KRIEGER_TILE);
+  const _ROWS = Math.floor(280 / KRIEGER_TILE);
+  const _MARGIN = 4;
+  const initPos = kriegerPos(dd);
+  const state = {
+    dd,
+    memberCoins: member.coins || 0,
+    vpX: Math.max(0, Math.min(KRIEGER_WORLD - _COLS, initPos.x - Math.floor(_COLS / 2))),
+    vpY: Math.max(0, Math.min(KRIEGER_WORLD - _ROWS, initPos.y - Math.floor(_ROWS / 2))),
+  };
+  const seed = _kriegerWorldSeed();
+
+  el.innerHTML = `
+    <div class="krieger-subtabs" id="krieger-subtabs">
+      <button class="krieger-subtab" data-ksub="dungeon">⚔️ Dungeon</button>
+      <button class="krieger-subtab" data-ksub="shop">🛒 Ausrüstung</button>
+      <button class="krieger-subtab" data-ksub="progress">📊 Fortschritt</button>
+    </div>
+    <div id="krieger-body"></div>
+  `;
+
+  el.querySelectorAll('.krieger-subtab').forEach(b => b.onclick = () => {
+    _kriegerSubTab = b.dataset.ksub;
+    _kriegerRenderSubTab(member, state, seed, _COLS, _ROWS, _MARGIN);
+  });
+
+  _kriegerRenderSubTab(member, state, seed, _COLS, _ROWS, _MARGIN);
+}
+
+function _kriegerRenderSubTab(member, state, seed, COLS, ROWS, MARGIN) {
+  document.querySelectorAll('.krieger-subtab').forEach(b => b.classList.toggle('active', b.dataset.ksub === _kriegerSubTab));
+  const body = document.getElementById('krieger-body');
+  if (!body) return;
+  if (_kriegerSubTab === 'dungeon')  _kriegerRenderDungeon(member, state, seed, COLS, ROWS, MARGIN, body);
+  if (_kriegerSubTab === 'shop')     _kriegerRenderShop(member, state, body);
+  if (_kriegerSubTab === 'progress') _kriegerRenderProgress(member, state, body);
+}
+
+function _kriegerUpdateHud(state) {
+  const prog = kriegerProgress(state.dd);
+  const hud = document.querySelector('.krieger-hud');
+  if (hud) {
+    const pos = kriegerPos(state.dd);
+    hud.innerHTML = `
+      <span>📍 ${pos.x}, ${pos.y} &nbsp;·&nbsp; Stufe ${prog.level}</span>
+      <span>👣 ${kriegerStepsUsed(state.dd)}/${kriegerStepsAllowed(prog.level)}</span>`;
+  }
+  const bar = document.querySelector('.krieger-xp-bar');
+  if (bar) bar.style.width = prog.pct + '%';
+}
+
+// ── Sub-Tab: Dungeon-Karte ───────────────────────────────────────────────────
+function _kriegerRenderDungeon(member, state, seed, COLS, ROWS, MARGIN, body) {
+  const prog = kriegerProgress(state.dd);
+  body.innerHTML = `
+    <div class="krieger-hud">
+      <span>📍 ${kriegerPos(state.dd).x}, ${kriegerPos(state.dd).y} &nbsp;·&nbsp; Stufe ${prog.level}</span>
+      <span>👣 ${kriegerStepsUsed(state.dd)}/${kriegerStepsAllowed(prog.level)}</span>
+    </div>
+    <div class="krieger-xp-wrap"><div class="krieger-xp-bar" style="width:${prog.pct}%"></div></div>
+    <canvas id="krieger-canvas" class="cc-karte-canvas" width="320" height="280" style="margin-top:8px"></canvas>
+    <p class="cc-karte-hint" style="opacity:.6;font-size:10px;margin-top:4px">⚔️ Tipp auf ein Gegner-/Boss-Feld zum Kämpfen &nbsp;·&nbsp; ziehen = Karte verschieben</p>
+    <div id="krieger-popup" class="cc-karte-popup hidden"></div>
+  `;
+  const canvas = document.getElementById('krieger-canvas');
+  if (canvas) kriegerRender(canvas, state.dd, seed, state.vpX, state.vpY);
+
+  // ── Canvas-Interaktion (Tap = Schritt/Kampf, Ziehen = Karte verschieben) — 1:1 Muster wie _buildKarte ──
+  let _down = false, _moved = false, _sx = 0, _sy = 0, _startVpX = 0, _startVpY = 0;
+  const _DRAG_THRESH = 8;
+
+  function _tileFromEvent(e) {
+    const rect   = canvas.getBoundingClientRect();
+    const scaleX = canvas.width  / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const cx = (e.clientX - rect.left) * scaleX;
+    const cy = (e.clientY - rect.top)  * scaleY;
+    return { tx: state.vpX + Math.floor(cx / KRIEGER_TILE), ty: state.vpY + Math.floor(cy / KRIEGER_TILE) };
+  }
+
+  canvas?.addEventListener('pointerdown', (e) => {
+    _down = true; _moved = false; _sx = e.clientX; _sy = e.clientY;
+    _startVpX = state.vpX; _startVpY = state.vpY;
+    canvas.setPointerCapture?.(e.pointerId);
+  });
+  canvas?.addEventListener('pointermove', (e) => {
+    if (!_down) return;
+    const dxPx = e.clientX - _sx, dyPx = e.clientY - _sy;
+    if (!_moved && Math.abs(dxPx) < _DRAG_THRESH && Math.abs(dyPx) < _DRAG_THRESH) return;
+    _moved = true;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width, scaleY = canvas.height / rect.height;
+    const dxT = Math.round(dxPx * scaleX / KRIEGER_TILE);
+    const dyT = Math.round(dyPx * scaleY / KRIEGER_TILE);
+    const nvX = Math.max(0, Math.min(KRIEGER_WORLD - COLS, _startVpX - dxT));
+    const nvY = Math.max(0, Math.min(KRIEGER_WORLD - ROWS, _startVpY - dyT));
+    if (nvX !== state.vpX || nvY !== state.vpY) {
+      state.vpX = nvX; state.vpY = nvY;
+      kriegerRender(canvas, state.dd, seed, state.vpX, state.vpY);
+    }
+  });
+  canvas?.addEventListener('pointerup', async (e) => {
+    if (!_down) return;
+    _down = false;
+    canvas.releasePointerCapture?.(e.pointerId);
+    if (_moved) return;
+    const { tx, ty } = _tileFromEvent(e);
+    await _handleKriegerTap(tx, ty, member, state, seed, COLS, ROWS, MARGIN);
+  });
+  canvas?.addEventListener('pointercancel', () => { _down = false; });
+}
+
+async function _handleKriegerTap(tx, ty, member, state, seed, COLS, ROWS, MARGIN) {
+  const isBoss  = tx === KRIEGER_BOSS_POS.x && ty === KRIEGER_BOSS_POS.y;
+  const key     = `${tx},${ty}`;
+  const explored = kriegerIsExplored(tx, ty, state.dd);
+
+  // 1) Bereits erkundetes Feld mit bekanntem Encounter (oder Bossfeld) → Kampf erneut
+  // anbieten — Gegner-Felder verschwinden laut Spieldesign NICHT nach einem Kampf.
+  if (explored && (isBoss || (state.dd.encounters || {})[key])) {
+    const tier = isBoss ? 'boss' : state.dd.encounters[key];
+    _showKriegerFightPrompt(member, state, tier, seed, COLS, ROWS, MARGIN);
+    return;
+  }
+  if (explored) return; // erkundetes, leeres Feld — nichts zu tun (kein Bau-System im Dungeon)
+
+  // 1b) Versiegelte Drachenhöhle vor Stufe 80 angetippt → Hinweis statt stillem No-Op
+  // (kriegerCanStep blockt das Betreten unten ohnehin, aber ohne Feedback wirkt es wie ein Bug).
+  if (isBoss && (state.dd.level || 1) < KRIEGER_BOSS_MIN_LEVEL) {
+    showToast(`🐉 Die Drachenhöhle bleibt bis Stufe ${KRIEGER_BOSS_MIN_LEVEL} versiegelt.`, 'info');
+    return;
+  }
+
+  // 2) Unerkundetes, angrenzendes Feld → Schritt
+  if (!kriegerCanStep(tx, ty, state.dd, seed)) return;
+
+  const { newDungeonData, gimmick, encounter } = kriegerExploreTile(tx, ty, state.dd, seed);
+  let dd2 = newDungeonData;
+  if (encounter) dd2 = { ...dd2, encounters:   { ...(dd2.encounters   || {}), [key]: encounter.tier } };
+  if (gimmick)   dd2 = { ...dd2, gimmickTiles: { ...(dd2.gimmickTiles || {}), [key]: true } };
+
+  const prevDd = state.dd;
+  state.dd = dd2;
+  try { await DB.saveDungeonData(member.id, state.dd); }
+  catch (e) { state.dd = prevDd; showToast('Dungeon konnte nicht gespeichert werden.', 'error'); return; }
+  currentUserData = { ...(currentUserData || {}), dungeon_data: state.dd };
+
+  if (gimmick) {
+    state.memberCoins += gimmick.cc;
+    currentUserData = { ...(currentUserData || {}), coins: state.memberCoins };
+    _updateHeaderCoins({ coins: state.memberCoins });
+    try { await DB.addCoins(member.id, gimmick.cc); } catch (e) {}
+    showToast(`🪙 +${gimmick.cc} CC im Dungeon gefunden!`, 'success');
+    try { await DB.postMessage(`🪙 ${_esc2(member.name)} hat im Dungeon ${gimmick.cc} CC gefunden!`, member.name); } catch (e) {}
+  }
+
+  // Viewport nachziehen + neu rendern (analog _handleKarteStep)
+  const pos = kriegerPos(state.dd);
+  const pvpX = pos.x - state.vpX, pvpY = pos.y - state.vpY;
+  if (pvpX < MARGIN)                 state.vpX = Math.max(0, pos.x - MARGIN);
+  else if (pvpX > COLS - MARGIN - 1) state.vpX = Math.min(KRIEGER_WORLD - COLS, pos.x - (COLS - MARGIN - 1));
+  if (pvpY < MARGIN)                 state.vpY = Math.max(0, pos.y - MARGIN);
+  else if (pvpY > ROWS - MARGIN - 1) state.vpY = Math.min(KRIEGER_WORLD - ROWS, pos.y - (ROWS - MARGIN - 1));
+
+  const canvas = document.getElementById('krieger-canvas');
+  if (canvas) kriegerRender(canvas, state.dd, seed, state.vpX, state.vpY);
+  _kriegerUpdateHud(state);
+
+  if (encounter) _showKriegerFightPrompt(member, state, encounter.tier, seed, COLS, ROWS, MARGIN);
+}
+
+// Eigene Werte rein zur ANZEIGE (Prompt/HUD) — der tatsächliche Kampfausgang kommt
+// ausschließlich von der RPC, die dieselbe Formel serverseitig nachrechnet.
+function _kriegerOwnStats(dd) {
+  const eq = dd.equipped || {};
+  const owned = dd.owned || {};
+  let atk = 0, def = 0, crit = 0;
+  for (const slot of ['weapon', 'armor', 'talisman']) {
+    const key = eq[slot];
+    if (key && owned[key]) {
+      const item = kriegerItemByKey(key);
+      if (item) { atk += item.atk; def += item.def; crit += item.crit; }
+    }
+  }
+  const setCulture = kriegerActiveSetCulture(eq);
+  if (setCulture === 'orient') crit += 10;
+  const level = dd.level || 1;
+  return { atk, def, crit, hp: 80 + level * 4, setCulture };
+}
+
+function _showKriegerFightPrompt(member, state, tier, seed, COLS, ROWS, MARGIN) {
+  const enemyDef = kriegerEnemyDef(tier);
+  if (!enemyDef) return;
+  const flavorIdx = Math.floor(Math.random() * enemyDef.flavor.length); // rein optisch
+  const flavor = enemyDef.flavor[flavorIdx] || enemyDef.name;
+  const flavorEmoji = flavor.split(' ')[0];
+  const flavorName  = flavor.replace(/^\S+\s*/, '') || enemyDef.name;
+  const own = _kriegerOwnStats(state.dd);
+  const setBonus = own.setCulture ? KRIEGER_SET_BONUSES[own.setCulture] : null;
+
+  const popup = document.getElementById('krieger-popup');
+  if (!popup) return;
+  popup.classList.remove('hidden');
+  popup.innerHTML = `
+    <div class="krieger-fight-overlay">
+      <div class="cc-karte-popup-inner" style="max-width:360px;width:100%">
+        <div class="cc-karte-popup-hdr">${tier === 'boss' ? '🐉 BOSSKAMPF' : '⚔️ Gegner entdeckt'}</div>
+        <div class="cc-karte-popup-body" style="flex-direction:column;align-items:stretch;gap:8px">
+          <div style="text-align:center;font-size:2em">${_esc2(flavorEmoji)}</div>
+          <div style="text-align:center;font-weight:700">${_esc2(flavorName)} (${_esc2(enemyDef.name)})</div>
+          <div style="display:flex;justify-content:space-between;font-size:12px;opacity:.85">
+            <span>Gegner: ❤️${enemyDef.hp} ⚔️${enemyDef.atk} 🛡️${enemyDef.def}</span>
+            <span>Du: ❤️${own.hp} ⚔️${own.atk} 🛡️${own.def} 🎯${own.crit}%</span>
+          </div>
+          ${setBonus ? `<div style="font-size:11px;color:#FAC775;text-align:center">✨ Set-Bonus aktiv: ${_esc2(setBonus.name)} — ${_esc2(setBonus.desc)}</div>` : ''}
+          ${tier !== 'boss' ? '<div style="font-size:11px;opacity:.6;text-align:center">Niederlage = kein Verlust, du kannst es später erneut versuchen.</div>' : ''}
+        </div>
+        <div style="display:flex;gap:8px;margin-top:10px" id="krieger-fight-actions">
+          <button class="cc-build-btn" id="krieger-fight-go" style="flex:1">⚔️ Kämpfen</button>
+          <button class="cc-karte-popup-close" id="krieger-fight-cancel" style="flex:1">Abbrechen</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.getElementById('krieger-fight-cancel').onclick = () => popup.classList.add('hidden');
+  document.getElementById('krieger-fight-go').onclick = () => _runKriegerFight(member, state, tier, seed, COLS, ROWS, MARGIN);
+}
+
+async function _runKriegerFight(member, state, tier, seed, COLS, ROWS, MARGIN) {
+  const popup = document.getElementById('krieger-popup');
+  const btn = document.getElementById('krieger-fight-go');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Kämpft …'; }
+
+  let result;
+  try { result = await kriegerFight(member.id, tier); }
+  catch (e) { showToast(e.message || 'Kampf fehlgeschlagen', 'error'); if (btn) btn.disabled = false; return; }
+  if (result?.error) {
+    const msg = {
+      boss_on_cooldown: 'Der Drache braucht noch Ruhe — erst in einer Woche wieder.',
+      level_too_low:    `Dafür brauchst du mindestens Stufe ${result.min_level || '?'} (aktuell ${result.have ?? '?'}).`,
+      unknown_enemy:    'Unbekannter Gegner.',
+    }[result.error] || 'Kampf fehlgeschlagen.';
+    showToast(msg, 'info');
+    if (btn) btn.disabled = false;
+    return;
+  }
+
+  const enemyDef = kriegerEnemyDef(tier);
+  const inner = popup.querySelector('.cc-karte-popup-inner');
+  if (!inner) return;
+  inner.innerHTML = `
+    <div class="cc-karte-popup-hdr">${tier === 'boss' ? '🐉 BOSSKAMPF' : '⚔️ Kampf'}</div>
+    <div class="krieger-hp-bar-wrap"><div class="krieger-hp-bar enemy" id="krieger-ehp" style="width:100%"></div></div>
+    <div class="krieger-hp-bar-wrap"><div class="krieger-hp-bar player" id="krieger-php" style="width:100%"></div></div>
+    <div id="krieger-log" style="max-height:160px;overflow-y:auto;margin-top:8px"></div>
+    <div id="krieger-result" style="text-align:center;margin-top:10px"></div>
+  `;
+  const logEl  = document.getElementById('krieger-log');
+  const ehpBar = document.getElementById('krieger-ehp');
+  const phpBar = document.getElementById('krieger-php');
+  const enemyHpMax = enemyDef.hp;
+  const ownHpMax   = 80 + (state.dd.level || 1) * 4;
+
+  const log = result.log || [];
+  for (const entry of log) {
+    await new Promise(r => setTimeout(r, 400));
+    const line = document.createElement('div');
+    line.className = `krieger-log-line ${entry.side}`;
+    line.textContent = entry.side === 'player'
+      ? `Du triffst für ${entry.dmg} ⚔️`
+      : `Der Gegner kontert für ${entry.dmg} 🛡️`;
+    logEl.appendChild(line);
+    logEl.scrollTop = logEl.scrollHeight;
+    if (entry.side === 'player' && ehpBar) ehpBar.style.width = Math.max(0, entry.hp_left / enemyHpMax * 100) + '%';
+    if (entry.side === 'enemy'  && phpBar) phpBar.style.width = Math.max(0, entry.hp_left / ownHpMax * 100) + '%';
+  }
+
+  const resultEl = document.getElementById('krieger-result');
+  const levelUpHtml = result.leveled_up ? `<div class="krieger-levelup">🎉 Stufenaufstieg auf ${result.new_level}!</div>` : '';
+  const setHtml = result.set_bonus ? `<div style="font-size:11px;color:#FAC775">✨ ${_esc2(KRIEGER_SET_BONUSES[result.set_bonus]?.name || result.set_bonus)}-Bonus angewendet</div>` : '';
+  resultEl.innerHTML = `
+    <div class="${result.won ? 'krieger-result-win' : 'krieger-result-lose'}">${result.won ? '🏆 Sieg!' : '💀 Niederlage'}</div>
+    <div style="margin-top:4px">+${result.cc_awarded} 🫘 CC &nbsp;·&nbsp; +${result.ep_awarded} EP</div>
+    ${levelUpHtml}${setHtml}
+    <button class="cc-karte-popup-close" id="krieger-fight-close" style="margin-top:10px">Schließen</button>
+  `;
+  document.getElementById('krieger-fight-close').onclick = () => popup.classList.add('hidden');
+
+  // State/Header aktualisieren
+  state.dd = result.new_dungeon_data || { ...state.dd, level: result.new_level };
+  if (result.cc_awarded > 0) state.memberCoins += result.cc_awarded;
+  currentUserData = { ...(currentUserData || {}), coins: state.memberCoins, dungeon_data: state.dd };
+  _updateHeaderCoins({ coins: state.memberCoins });
+  _kriegerUpdateHud(state);
+  const canvas = document.getElementById('krieger-canvas');
+  if (canvas) kriegerRender(canvas, state.dd, seed, state.vpX, state.vpY);
+
+  // Chat-Broadcast (Pflicht laut Plan: Sieg/Niederlage/Level-Up/Boss-Kill)
+  try {
+    if (result.won) {
+      await DB.postMessage(`⚔️ ${_esc2(member.name)} hat ${enemyDef.name} besiegt! (+${result.cc_awarded} CC, +${result.ep_awarded} EP)`, member.name);
+      if (tier === 'boss') await DB.postMessage(`🐉 ${_esc2(member.name)} hat den Espresso-Drachen besiegt!`, member.name);
+    } else {
+      await DB.postMessage(`💀 ${_esc2(member.name)} ist gegen ${enemyDef.name} unterlegen (+${result.ep_awarded} Trost-EP).`, member.name);
+    }
+    if (result.leveled_up) await DB.postMessage(`🎉 ${_esc2(member.name)} hat Krieger-Stufe ${result.new_level} erreicht!`, member.name);
+  } catch (e) { /* non-critical */ }
+
+  // Achievements (Erster Sieg/Stufe 10/50/100/Drachentöter) — analog Kaffee-Jagd-Block
+  try {
+    const dd2 = state.dd;
+    const existing = currentUserData?.achievements || {};
+    const toGrant = {};
+    if (!existing.krieger_first_win  && (dd2.wins  || 0) >= 1)   toGrant.krieger_first_win  = true;
+    if (!existing.krieger_level_10   && (dd2.level || 1) >= 10)  toGrant.krieger_level_10   = true;
+    if (!existing.krieger_level_50   && (dd2.level || 1) >= 50)  toGrant.krieger_level_50   = true;
+    if (!existing.krieger_level_100  && (dd2.level || 1) >= 100) toGrant.krieger_level_100  = true;
+    if (!existing.krieger_boss_kill  && (dd2.bossKills || 0) >= 1) toGrant.krieger_boss_kill = true;
+    if (Object.keys(toGrant).length > 0) {
+      await DB.grantAchievements(member.id, toGrant);
+      currentUserData = { ...(currentUserData || {}), achievements: { ...existing, ...toGrant } };
+      for (const id of Object.keys(toGrant)) {
+        const ach = (typeof ACHIEVEMENTS !== 'undefined' ? ACHIEVEMENTS : []).find(a => a.id === id);
+        if (ach) showToast(`🏆 Achievement: ${ach.name}! (+${ach.coinReward} CC)`, 'success');
+      }
+    }
+  } catch (e) { /* non-critical */ }
+}
+
+// ── Sub-Tab: Ausrüstung (Shop) ───────────────────────────────────────────────
+function _kriegerRenderShop(member, state, body) {
+  const dd = state.dd;
+  const owned = dd.owned || {};
+  const equipped = dd.equipped || {};
+  const level = dd.level || 1;
+
+  const slotIcons = { weapon: '⚔️', armor: '🛡️', talisman: '🧿' };
+  const slotNames = { weapon: 'Waffe', armor: 'Rüstung', talisman: 'Talisman' };
+  const loadoutHtml = ['weapon', 'armor', 'talisman'].map(slot => {
+    const key = equipped[slot];
+    const item = key ? kriegerItemByKey(key) : null;
+    return `<div class="krieger-slot${item ? ' filled' : ''}">
+      <span class="krieger-slot-icon">${item ? item.icon : slotIcons[slot]}</span>
+      <span>${item ? _esc2(item.name) : slotNames[slot] + ' leer'}</span>
+    </div>`;
+  }).join('');
+
+  const setCulture = kriegerActiveSetCulture(equipped);
+  const setHint = setCulture
+    ? `<div style="font-size:12px;color:#FAC775;text-align:center;margin-bottom:10px">✨ Set aktiv: ${_esc2(KRIEGER_SET_BONUSES[setCulture].name)} — ${_esc2(KRIEGER_SET_BONUSES[setCulture].desc)}</div>`
+    : '';
+
+  const sections = Object.keys(KRIEGER_CULTURE_NAMES).map(culture => {
+    const items = KRIEGER_ITEMS.filter(i => i.culture === culture);
+    const cards = items.map(item => {
+      const isOwned    = !!owned[item.key];
+      const isEquipped = equipped[item.slot] === item.key;
+      const locked     = level < item.minLevel;
+      const canBuy     = !isOwned && !locked && state.memberCoins >= item.cost;
+      let action;
+      if (isOwned) {
+        action = isEquipped
+          ? `<span class="ciq-state ciq-on">✓ ausgerüstet</span>`
+          : `<button class="cc-build-btn krieger-equip-btn" data-equip="${item.key}" data-slot="${item.slot}">Ausrüsten</button>`;
+      } else if (locked) {
+        action = `<span class="ciq-state ciq-lock">🔒 ab Stufe ${item.minLevel}</span>`;
+      } else {
+        action = `<button class="cc-build-btn krieger-buy-btn" data-buy-item="${item.key}"${canBuy ? '' : ' disabled'}>Kaufen · ${item.cost} 🫘</button>`;
+      }
+      const statTxt = [
+        item.atk ? `ATK+${item.atk}` : null,
+        item.def ? `DEF${item.def > 0 ? '+' : ''}${item.def}` : null,
+        item.crit ? `CRIT+${item.crit}%` : null,
+      ].filter(Boolean).join(' · ');
+      return `<div class="krieger-item-card${isOwned ? ' owned' : ''}${locked ? ' locked' : ''}">
+        <div style="font-size:20px">${item.icon}</div>
+        <div style="font-size:11px;font-weight:700">${_esc2(item.name)}</div>
+        <div class="krieger-item-stats">${statTxt}</div>
+        <div style="margin-top:5px">${action}</div>
+      </div>`;
+    }).join('');
+    return `<div class="krieger-shop-section">
+      <div class="section-title" style="font-size:13px">${KRIEGER_CULTURE_NAMES[culture]}</div>
+      <div class="krieger-shop-grid">${cards}</div>
+    </div>`;
+  }).join('');
+
+  body.innerHTML = `<div class="krieger-loadout">${loadoutHtml}</div>${setHint}${sections}`;
+
+  body.querySelectorAll('.krieger-buy-btn').forEach(btn => {
+    btn.onclick = async () => {
+      const item = kriegerItemByKey(btn.dataset.buyItem);
+      if (!item) return;
+      btn.disabled = true;
+      try {
+        const newDD = await DB.buyKriegerItem(member.id, item, state.dd);
+        state.dd = newDD;
+        state.memberCoins -= item.cost;
+        currentUserData = { ...(currentUserData || {}), coins: state.memberCoins, dungeon_data: state.dd };
+        _updateHeaderCoins({ coins: state.memberCoins });
+        showToast(`🛒 ${item.name} erworben!`, 'success');
+        try { await DB.postMessage(`🛒 ${_esc2(member.name)} hat ${item.icon} ${_esc2(item.name)} erworben!`, member.name); } catch (e) {}
+        _kriegerRenderShop(member, state, body);
+      } catch (e) { showToast(e.message || 'Kauf fehlgeschlagen', 'error'); btn.disabled = false; }
+    };
+  });
+
+  body.querySelectorAll('.krieger-equip-btn').forEach(btn => {
+    btn.onclick = async () => {
+      const slot = btn.dataset.slot, key = btn.dataset.equip;
+      const prevEquipped = state.dd.equipped || {};
+      const newEquipped  = { ...prevEquipped, [slot]: key };
+      const newDD = { ...state.dd, equipped: newEquipped };
+      try {
+        await DB.saveDungeonData(member.id, newDD);
+        const wasComplete = kriegerActiveSetCulture(prevEquipped);
+        state.dd = newDD;
+        currentUserData = { ...(currentUserData || {}), dungeon_data: state.dd };
+        const nowComplete = kriegerActiveSetCulture(newEquipped);
+        if (nowComplete && !wasComplete) {
+          const bonus = KRIEGER_SET_BONUSES[nowComplete];
+          showToast(`✨ Set komplett: ${bonus.name}!`, 'success');
+          try { await DB.postMessage(`✨ ${_esc2(member.name)} hat das ${KRIEGER_CULTURE_NAMES[nowComplete]}-Set komplettiert! (${_esc2(bonus.name)} aktiv)`, member.name); } catch (e) {}
+          try {
+            const existing = currentUserData?.achievements || {};
+            if (!existing.krieger_set_complete) {
+              await DB.grantAchievements(member.id, { krieger_set_complete: true });
+              currentUserData = { ...currentUserData, achievements: { ...existing, krieger_set_complete: true } };
+              const ach = (typeof ACHIEVEMENTS !== 'undefined' ? ACHIEVEMENTS : []).find(a => a.id === 'krieger_set_complete');
+              if (ach) showToast(`🏆 Achievement: ${ach.name}! (+${ach.coinReward} CC)`, 'success');
+            }
+          } catch (e) {}
+        }
+        _kriegerRenderShop(member, state, body);
+      } catch (e) { showToast(e.message || 'Ausrüsten fehlgeschlagen', 'error'); }
+    };
+  });
+}
+
+// ── Sub-Tab: Fortschritt ─────────────────────────────────────────────────────
+function _kriegerRenderProgress(member, state, body) {
+  const dd = state.dd;
+  const prog = kriegerProgress(dd);
+  const equipped = dd.equipped || {};
+  const setCulture = kriegerActiveSetCulture(equipped);
+  const ownedItems = KRIEGER_ITEMS.filter(i => (dd.owned || {})[i.key]);
+  const itemsHtml = ownedItems.length
+    ? ownedItems.map(i => `<div class="cc-passiv-detail-row"><span>${i.icon} ${_esc2(i.name)}</span><span>${equipped[i.slot] === i.key ? '✓ ausgerüstet' : ''}</span></div>`).join('')
+    : '<p class="empty-hint">Noch keine Ausrüstung.</p>';
+
+  body.innerHTML = `
+    <div class="krieger-xp-wrap" style="height:8px;border-radius:4px;overflow:hidden"><div class="krieger-xp-bar" style="width:${prog.pct}%"></div></div>
+    <p style="text-align:center;margin:6px 0 14px">Stufe <strong>${prog.level}</strong>${prog.need ? ` &nbsp;·&nbsp; ${prog.xp}/${prog.need} EP (${prog.pct}%)` : ' (Maximalstufe erreicht)'}</p>
+    <div class="cc-passiv-detail">
+      <div class="cc-passiv-detail-row"><span>🏆 Siege</span><span>${dd.wins || 0}</span></div>
+      <div class="cc-passiv-detail-row"><span>💀 Niederlagen</span><span>${dd.losses || 0}</span></div>
+      <div class="cc-passiv-detail-row"><span>🐉 Boss-Kills</span><span>${dd.bossKills || 0}</span></div>
+      ${setCulture ? `<div class="cc-passiv-detail-row"><span>✨ Aktives Set</span><span>${_esc2(KRIEGER_SET_BONUSES[setCulture].name)}</span></div>` : ''}
+    </div>
+    <div class="section-title" style="font-size:13px;margin-top:14px">🎒 Ausrüstung (${ownedItems.length}/24)</div>
+    ${itemsHtml}
+  `;
 }

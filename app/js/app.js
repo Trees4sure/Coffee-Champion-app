@@ -93,6 +93,13 @@ function showApp() {
   switchView('rangliste');
   // Kaffee-Quiz: am 1./15. ggf. Einladungs-Modal zeigen (nur wenn noch nicht gespielt).
   if (typeof Quiz !== 'undefined') Quiz.checkAndMaybePopup();
+  // "Was ist neu"-Hinweis: leicht verzögert, damit er nicht mit dem Quiz-Modal kollidiert
+  // (Quiz-Invite hat Vorrang — falls es gerade offen ist, kommt der Hinweis beim nächsten Login).
+  setTimeout(() => {
+    const qm = document.getElementById('quiz-modal');
+    const quizOpen = !!qm && !qm.classList.contains('hidden');
+    if (!quizOpen) checkAndMaybeShowWhatsNew();
+  }, 700);
   // Passives Einkommen beim App-Start einlösen (entkoppelt von Tassen). Der
   // Gehalts-Snapshot läuft ERST danach (verkettet), nicht parallel: sein map_data-Write
   // (`{...md0, salaryHistory}`) würde sonst den frisch von claimPassive geschriebenen
@@ -537,6 +544,53 @@ function renderLeaderboard() {
   ensureRegelwerk();
 }
 
+// ── "Was ist neu"-Popup ──────────────────────────────────────────────────────
+// Zeigt einmalig pro Versionsstand eine Kurzfassung der jüngsten neuen Features beim
+// App-Start. Idempotent über map_data.whatsNewSeen = WHATS_NEW_VERSION (analog Login-Bonus/
+// Tagesaufgaben-Muster) — wer schon dran war, sieht es nicht erneut. Bei künftigen neuen
+// Features: WHATS_NEW_VERSION + WHATS_NEW_ITEMS aktualisieren, dann poppt es einmalig erneut auf.
+const WHATS_NEW_VERSION = '2026-06-30-krieger';
+const WHATS_NEW_ITEMS = [
+  { icon: '⚔️', title: 'Kaffee-Krieger', text: 'Neuer Reiter im Imperium: eigenes Felsenlabyrinth mit Gimmick-Funden, Ausrüstung in 4 Kulturen und automatischen Kämpfen — bis hin zum Drachen-Boss (ab Stufe 80, dann 1× pro Woche).' },
+  { icon: '🧠', title: 'CIQ-Angriffsfähigkeiten', text: 'Kaffee-IQ aus dem Quiz schaltet jetzt auch PvP-Fähigkeiten frei — Diebstahl, Debuffs & Co. gegen die Top-Spieler (mit 12h-Schutzschild fürs Opfer, damit niemand dauerbeschossen wird).' },
+];
+
+function checkAndMaybeShowWhatsNew() {
+  if (!currentUserData || typeof currentUser === 'undefined' || !currentUser?.id) return;
+  if (currentUserData.map_data?.whatsNewSeen === WHATS_NEW_VERSION) return;
+  _showWhatsNewModal();
+}
+
+function _showWhatsNewModal() {
+  let m = document.getElementById('whats-new-modal');
+  if (!m) { m = document.createElement('div'); m.id = 'whats-new-modal'; m.className = 'hidden'; document.body.appendChild(m); }
+  const itemsHtml = WHATS_NEW_ITEMS.map(i => `
+    <div style="text-align:left;margin:10px 0">
+      <strong>${i.icon} ${_esc(i.title)}</strong>
+      <p style="margin:3px 0 0;font-size:0.85rem;line-height:1.4;color:var(--muted)">${_esc(i.text)}</p>
+    </div>`).join('');
+  m.innerHTML = `
+    <div class="quiz-backdrop"></div>
+    <div class="quiz-box">
+      <div class="quiz-card" style="text-align:center">
+        <div class="quiz-emoji">🆕</div>
+        <h2>Neu im Coffee Champion!</h2>
+        ${itemsHtml}
+        <p class="quiz-hint" style="margin-top:12px">📖 Alle Details stehen wie immer im Regelwerk unten in der Rangliste.</p>
+        <button class="btn-primary quiz-cta" id="whats-new-ok">Verstanden, los geht's!</button>
+      </div>
+    </div>`;
+  m.classList.remove('hidden');
+  document.getElementById('whats-new-ok').onclick = async () => {
+    m.classList.add('hidden');
+    try {
+      const md = { ...(currentUserData.map_data || {}), whatsNewSeen: WHATS_NEW_VERSION };
+      currentUserData = { ...currentUserData, map_data: md };
+      await DB.updateMapData(currentUser.id, md);
+    } catch (e) { /* non-critical — poppt im Zweifel nochmal auf */ }
+  };
+}
+
 // ── Regelwerk / Spickzettel (unten in der Rangliste, einmal injiziert) ──────────
 function ensureRegelwerk() {
   const host = document.getElementById('view-rangliste');
@@ -593,6 +647,20 @@ function ensureRegelwerk() {
       Mit der <b>Welthandels-Lizenz</b> (Forschung) öffnet sich die Welt: investiere CC in G20-Länder,
       verdränge die Konkurrenz und sichere dir <b>Regierung, Baurecht & Erträge</b>.
       Baue Landes-Strukturen, halte Rang 1 — Rang 2 & 3 zahlen dir sogar Steuer. Kaffee-Imperialismus, charmant.`)}
+    ${sec('⚔️', 'Kaffee-Krieger — Dungeon, Ausrüstung & Kämpfe', `
+      Eigener Imperium-Reiter „⚔️ Krieger": Erkunde dein <b>persönliches Felsenlabyrinth</b> — die
+      täglichen Schritte wachsen mit deiner Krieger-Stufe. Auf neu betretenen Feldern warten
+      <b>kleine Funde</b> (🪙 1–8 CC, sofort gutgeschrieben) oder <b>Gegner</b>.
+      <span class="cc-rw-hl">Gegner-Felder verschwinden NICHT</span> nach einem Kampf — komm mit
+      besserer Ausrüstung jederzeit zurück und versuch's erneut.<br>
+      <span class="cc-rw-hl">Kämpfe laufen automatisch</span> (kein Klick-Skill): deine Werte
+      (ATK/DEF/CRIT aus Waffe/Rüstung/Talisman) treten gegen den Gegner an. <b>Sieg</b> bringt CC + EP,
+      <b>Niederlage</b> kostet nichts außer etwas Trost-EP — verlieren darf man hier ruhig.<br>
+      <span class="cc-rw-hl">4 Kulturen</span> (Mittelalterlich, Europäisch, Orientalisch,
+      Südamerikanisch) mit Einsteiger- und veredelter Profi-Ausrüstung. Trägst du alle 3 Slots
+      derselben Kultur, aktiviert sich ein <b>Set-Bonus</b> (Schadensschild, mehr CC, mehr CRIT
+      oder mehr EP). Am Kartenrand wartet <b>Der Espresso-Drache 🐉</b> — die Höhle bleibt bis
+      <b>Stufe 80</b> versiegelt, danach 1× pro Woche bezwingbar.`)}
     ${sec('💰', 'Gruppenkasse & Stufen', `
       Zahl freiwillig in die <b>Gruppenkasse</b> ein — gemeinsam erreicht ihr 5 Kassen-Stufen,
       die neue Ziele & dauerhafte Perks für <i>alle</i> freischalten (Dividende, Spar-Zins …).<br>
@@ -757,12 +825,25 @@ function renderCiqPerks(u) {
     else return;
   }
 
+  // 🧠 Eigene aktive Debuffs (von ANDEREN auferlegt) — sichtbar machen, sonst merkt
+  // das Opfer nie, dass z.B. die Tagesabgabe gerade doppelt ist.
+  const myDebuffs = (u.map_data?.ciq_debuffs || []).filter(d => d && new Date(d.expires_at).getTime() > now);
+  const debuffHint = myDebuffs.length ? `
+    <div class="ciq-debuff-warning">⚠️ Aktive Debuffs gegen dich: ${myDebuffs.map(d => {
+      const def = (typeof ciqDef === 'function') ? ciqDef(d.type) : null;
+      const hrs = Math.max(1, Math.round((new Date(d.expires_at).getTime() - now) / 3600000));
+      return `${def?.icon || '⚠️'} ${_esc(def?.name || d.type)} (noch ~${hrs} h)`;
+    }).join(' · ')}</div>` : '';
+
   const cards = CIQ_PERKS.map(def => {
-    const owned   = !!perks[def.id]?.at;
+    const isPvp   = def.type === 'attack' || def.type === 'debuff';
+    const owned   = !isPvp && !!perks[def.id]?.at;
     const timed   = def.type === 'timed';
     const active  = timed && perks[def.id]?.active_until && new Date(perks[def.id].active_until).getTime() > now;
     const reachable = ciq >= (def.ciq || 0);
     const ok      = condMet(def);
+    const cooldownUntil = isPvp && typeof ciqAttackCooldownUntil === 'function'
+      ? ciqAttackCooldownUntil(u.map_data, def.id) : null;
     let stateCls = 'locked', actionHtml = '';
     if (def.pending) {
       stateCls = 'pending';
@@ -775,20 +856,27 @@ function renderCiqPerks(u) {
       const until = new Date(perks[def.id].active_until);
       const hrs = Math.max(1, Math.round((until.getTime() - now) / 3600000));
       actionHtml = `<span class="ciq-state ciq-on">⏳ aktiv – noch ~${hrs} h</span>`;
+    } else if (cooldownUntil) {
+      const hrs = Math.max(1, Math.round((cooldownUntil - now) / 3600000));
+      actionHtml = `<span class="ciq-state ciq-lock">⏳ Cooldown noch ~${hrs} h</span>`;
     } else if (!reachable) {
       actionHtml = `<span class="ciq-state ciq-lock">🔒 ab CIQ ${def.ciq}</span>`;
     } else if (!ok) {
       actionHtml = `<span class="ciq-state ciq-lock">🔒 ${_esc(def.condText || 'Voraussetzung fehlt')}</span>`;
+    } else if (isPvp) {
+      stateCls = 'buyable';
+      actionHtml = `<button class="btn-primary ciq-attack" data-perk="${def.id}">${def.type === 'attack' ? 'Angreifen' : 'Auslösen'} · ${def.cc} 🫘</button>`;
     } else {
       stateCls = 'buyable';
       actionHtml = `<button class="btn-primary ciq-buy" data-perk="${def.id}">Kaufen · ${def.cc} 🫘</button>`;
     }
     const meta = [];
-    if (timed) meta.push(`⏱️ ${def.durationH >= 24 ? (def.durationH / 24) + ' Tage' : def.durationH + ' h'}`);
+    if (isPvp) meta.push(def.type === 'attack' ? '⚔️ Sofort' : `🩹 ${def.durationH} h Debuff`);
+    else if (timed) meta.push(`⏱️ ${def.durationH >= 24 ? (def.durationH / 24) + ' Tage' : def.durationH + ' h'}`);
     else meta.push('♾️ dauerhaft');
     meta.push(`🧠 CIQ ${def.ciq}`);
     return `
-      <div class="ciq-card ciq-${stateCls}">
+      <div class="ciq-card ciq-${stateCls}${isPvp ? ' ciq-pvp' : ''}">
         <div class="ciq-head"><span class="ciq-icon">${def.tier} ${def.icon}</span>
           <span class="ciq-name">${_esc(def.name)}</span></div>
         <div class="ciq-desc">${_esc(def.desc)}</div>
@@ -798,7 +886,8 @@ function renderCiqPerks(u) {
 
   sec.innerHTML = `
     <div class="section-title">🧠 CIQ-Fähigkeiten <span class="ciq-score">Dein Kaffee-IQ: ${Math.floor(ciq)}</span></div>
-    <div class="ciq-intro">Wer klug ist, soll's auch spüren. Quiz-Wissen (CIQ) schaltet Fähigkeiten frei — bezahlt wird mit 🫘. CIQ sinkt nie.</div>
+    <div class="ciq-intro">Wer klug ist, soll's auch spüren. Quiz-Wissen (CIQ) schaltet Fähigkeiten frei — bezahlt wird mit 🫘. CIQ sinkt nie. <em>Frisch getroffene Spieler sind 12h vor weiteren Angriffen geschützt — die Ziel-Auswahl rutscht dann automatisch weiter.</em></div>
+    ${debuffHint}
     <button class="ciq-toggle-btn" onclick="this.classList.toggle('open');this.nextElementSibling.style.display=this.classList.contains('open')?'':'none'">
       Fähigkeiten anzeigen <span class="ciq-toggle-arrow">▸</span>
     </button>
@@ -827,6 +916,37 @@ function renderCiqPerks(u) {
           btn.disabled = false;
         }
       } catch (e) { showToast(e.message, 'error'); btn.disabled = false; }
+    };
+  });
+
+  // 🧠 Angriffs-/Debuff-Perks: serverseitige RPC, Ziel wird automatisch bestimmt
+  // (kein Auswahl-Dialog — siehe PLAN_ciq_angriffe.md §5 "Kein Opfer wählen").
+  sec.querySelectorAll('.ciq-attack').forEach(btn => {
+    btn.onclick = async () => {
+      const perkId = btn.dataset.perk;
+      const def = CIQ_PERKS.find(p => p.id === perkId);
+      btn.disabled = true; btn.textContent = '⏳';
+      try {
+        const r = await DB.applyCiqAttack(currentUser.id, perkId);
+        if (r?.ok) {
+          await refreshData();
+          const gained = r.cc_gained > 0 ? ` (+${r.cc_gained} 🫘)` : '';
+          showToast(`✓ ${def?.name || 'Angriff'} gegen ${r.target_name || 'Ziel'}${gained}`, 'success');
+          if (r.broadcast_msg) { try { await DB.postMessage(r.broadcast_msg, 'CIQ-Labor'); } catch (e) {} }
+        } else {
+          const msg = {
+            not_enough_ciq:    `Dafür brauchst du CIQ ${def?.ciq}. Trink weniger, lern mehr. 🧠`,
+            insufficient_coins:'Nicht genug CoffeeCoins.',
+            cooldown:          'Dieser Angriff braucht noch Pause — erst Cooldown abwarten.',
+            no_target:         'Gerade kein gültiges Ziel in der Gruppe (zu wenig Mitspieler).',
+            no_yield:          `Bei ${r?.target_name || 'dem Ziel'} gab es gerade nichts zu holen.`,
+            unknown_perk:      'Unbekannte Fähigkeit.',
+          }[r?.error] || 'Konnte nicht ausgeführt werden.';
+          showToast(msg, r?.error === 'insufficient_coins' ? 'error' : 'info');
+          btn.disabled = false;
+        }
+      } catch (e) { showToast(e.message, 'error'); btn.disabled = false; }
+      finally { renderProfile(); }
     };
   });
 }

@@ -31,6 +31,13 @@ const ACHIEVEMENTS = [
   { id: 'dungeon_first',  icon: '⚔️',  name: 'Dungeon-Debütant', desc: 'Ersten Dungeon abgeschlossen',          coinReward: 25,   condition: u => (u.map_data?.dungeonStats?.count  || 0) >= 1  },
   { id: 'dungeon_5',      icon: '🏚️', name: 'Dungeon-Veteran',  desc: '5 Dungeons abgeschlossen',              coinReward: 75,   condition: u => (u.map_data?.dungeonStats?.count  || 0) >= 5  },
   { id: 'dungeon_master', icon: '🗡️', name: 'Dungeon-Meister',  desc: '100+ Punkte in einem Dungeon',           coinReward: 100,  condition: u => (u.map_data?.dungeonStats?.bestScore || 0) >= 100 },
+  // ── Kaffee-Krieger (ad-hoc vergeben in imperium.js, nicht über condition()) ──
+  { id: 'krieger_first_win',   icon: '🗡️', name: 'Erster Sieg',        desc: 'Ersten Dungeon-Gegner besiegt',      condition: null, coinReward: 10 },
+  { id: 'krieger_level_10',    icon: '⚔️', name: 'Geselle',            desc: 'Krieger-Stufe 10 erreicht',          condition: null, coinReward: 20 },
+  { id: 'krieger_level_50',    icon: '🛡️', name: 'Krieger',            desc: 'Krieger-Stufe 50 erreicht',          condition: null, coinReward: 60 },
+  { id: 'krieger_level_100',   icon: '👑', name: 'Meister-Krieger',    desc: 'Krieger-Stufe 100 erreicht',         condition: null, coinReward: 150 },
+  { id: 'krieger_boss_kill',   icon: '🐉', name: 'Drachentöter',       desc: 'Den Espresso-Drachen besiegt',       condition: null, coinReward: 80 },
+  { id: 'krieger_set_complete',icon: '🎭', name: 'Kulturset komplett', desc: 'Ein vollständiges Ausrüstungs-Set ausgerüstet', condition: null, coinReward: 30 },
 ];
 
 function checkAchievements(userData, newAchievements = {}) {

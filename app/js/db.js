@@ -84,6 +84,7 @@ const DB = (() => {
       research:  u.research              || {},
       cosmetics: u.cosmetics             || {},
       map_data:  u.map_data              || {},
+      dungeon_data: u.dungeon_data       || {},
     };
   }
 
@@ -267,7 +268,9 @@ const DB = (() => {
     if (hoursDiff < 1) return 0; // Max einmal pro Stunde
 
     const earned  = Math.round(perDay * (hoursDiff / 24) * 100) / 100;
-    const capped  = Math.min(earned, perDay * 4); // Max 4 Tages-Passiv auf einmal (deckt Wochenende/Abwesenheit ab)
+    let capped    = Math.min(earned, perDay * 4); // Max 4 Tages-Passiv auf einmal (deckt Wochenende/Abwesenheit ab)
+    // 🧠 CIQ Kaffeekartell (Selbst-Buff, 1h): alle eigenen CC-Einnahmen verdoppelt (auch Passiv).
+    if (typeof ciqKartellMult === 'function') capped = Math.round(capped * ciqKartellMult(_cosmP) * 100) / 100;
     if (capped < 0.01) return 0;
 
     await _sb.rpc('add_coins', { p_member_id: memberId, p_amount: capped });
@@ -601,9 +604,13 @@ const DB = (() => {
     // ── CoffeeCoins berechnen ─────────────────────────────────────────────────
     const baseCoins    = amount * 2;
     const morningBonus = (hour >= 5 && hour < 10) ? amount * 1 : 0; // Morgenröte-Bonus
-    const researchBonus = (typeof calcResearchPerCup === 'function')
+    let researchBonus = (typeof calcResearchPerCup === 'function')
       ? Math.round(amount * calcResearchPerCup(member.research) * 100) / 100
       : 0;
+    // 🧠 CIQ Reputationsangriff (Fremd-Debuff): −10 % Forschungs-CC/Tasse-Bonus für 4h.
+    if (typeof ciqDebuffActive === 'function' && ciqDebuffActive(member.map_data, 'reputationsangriff')) {
+      researchBonus = Math.round(researchBonus * 0.9 * 100) / 100;
+    }
     // Welt-Einfluss-Bonus pro Tasse (eigene Länder-Ränge + rangabhängige Land-Gebäude) — robust, 0 falls Backend fehlt
     const worldRankMap = await _fetchWorldRankMap(memberId);
     const worldByCountry = Object.keys(worldRankMap).length ? await _fetchWorldBuildingsByCountry() : {};
@@ -651,6 +658,11 @@ const DB = (() => {
     }
 
     let totalCoins = baseCoins + morningBonus + researchBonus + worldBonus + groupBonus + achCoinTotal + streakBonus + ciqBonus;
+    // 🧠 CIQ Kaffeekartell (Selbst-Buff, 1h): alle eigenen CC-Einnahmen verdoppelt.
+    if (typeof ciqKartellMult === 'function') {
+      const kartellMult = ciqKartellMult(_cosm);
+      if (kartellMult > 1) totalCoins = Math.round(totalCoins * kartellMult * 100) / 100;
+    }
 
     if (totalCoins > 0) {
       const { error: coinErr } = await _sb.rpc('add_coins', { p_member_id: memberId, p_amount: totalCoins });
@@ -845,6 +857,12 @@ const DB = (() => {
           // Tageseinkommen = passiv/Tag + heutige Tassen × (Basis 2 CC + perCup-Boni)
           const income    = Math.round((sal.day + cupsToday * (2 + sal.cup)) * 100) / 100;
           let amt = Math.round(income * LEVY_RATE * 100) / 100;
+          // 🧠 CIQ Steuerumgehung (Selbst-Buff, cosmetics.ciq_perks): heutige Abgabe = 0.
+          if (typeof ciqActive === 'function' && ciqActive(member.cosmetics, 'steuerumgehung')) continue;
+          // 🧠 CIQ Steuerprüfer (Fremd-Debuff, map_data.ciq_debuffs): doppelte Abgabe.
+          if (typeof ciqDebuffActive === 'function' && ciqDebuffActive(member.map_data, 'steuer_pruefer')) {
+            amt = Math.round(amt * 2 * 100) / 100;
+          }
           if (amt < 0.01) continue;
           const bal = parseFloat(member.coins) || 0;
           if (amt > bal) amt = Math.round(bal * 100) / 100; // aufs Guthaben deckeln, nie Minus
@@ -1055,6 +1073,20 @@ const DB = (() => {
     const { error: upErr } = await _sb.from('members').update({ cosmetics: newCosm }).eq('id', memberId);
     if (upErr) return { error: upErr.message };
     return { ok: true, cosmetics: newCosm };
+  }
+
+  // ── 🧠 CIQ-Angriffsfähigkeit einsetzen (Phase B: PvP) ─────────────────────────
+  // Reine Weiterleitung an die SECURITY-DEFINER-RPC apply_ciq_attack — Ziel-Bestimmung,
+  // CIQ-/CC-Prüfung, Cooldown und der eigentliche CC-Transfer/Debuff-Eintrag laufen
+  // ALLE serverseitig (kein Client-Side-Trust, siehe plans/PLAN_ciq_angriffe.md §3).
+  async function applyCiqAttack(memberId, perkId) {
+    const { data, error } = await _sb.rpc('apply_ciq_attack', {
+      p_member_id: memberId,
+      p_perk_id:   perkId,
+      p_group_id:  _groupId,
+    });
+    if (error) throw new Error(error.message);
+    return data;
   }
 
   // ── Saison abschließen ───────────────────────────────────────────────────────
@@ -1298,6 +1330,34 @@ const DB = (() => {
   async function updateMapData(memberId, mapData) {
     const { error } = await _sb.rpc('save_map_data', { p_member_id: memberId, p_map_data: mapData });
     if (error) throw new Error(error.message);
+  }
+
+  // ── Kaffee-Krieger ───────────────────────────────────────────────────────────
+  async function saveDungeonData(memberId, dungeonData) {
+    const { error } = await _sb.rpc('save_dungeon_data', { p_member_id: memberId, p_dungeon_data: dungeonData });
+    if (error) throw new Error(error.message);
+  }
+
+  async function dungeonFight(memberId, enemyTier) {
+    const { data, error } = await _sb.rpc('dungeon_fight', {
+      p_member_id: memberId, p_group_id: _groupId, p_enemy_tier: enemyTier,
+    });
+    if (error) throw new Error(error.message);
+    return data;
+  }
+
+  // Kauf eines Krieger-Items: atomarer Coin-Abzug (bestehende spend_coins-RPC) +
+  // Besitz in dungeon_data eintragen. Gleiches Muster wie purchaseResearchItem.
+  async function buyKriegerItem(memberId, item, currentDungeonData) {
+    const owned = currentDungeonData?.owned || {};
+    if (owned[item.key]) throw new Error('Bereits im Besitz');
+    if ((currentDungeonData?.level || 1) < item.minLevel) throw new Error('Stufe zu niedrig');
+    const { data: newCoins, error } = await _sb.rpc('spend_coins', { p_member_id: memberId, p_amount: item.cost });
+    if (error) throw new Error(error.message);
+    if (newCoins === null || newCoins === undefined) throw new Error('Nicht genug CoffeeCoins');
+    const newDD = { ...currentDungeonData, owned: { ...owned, [item.key]: true } };
+    await saveDungeonData(memberId, newDD);
+    return newDD;
   }
 
   async function addCoins(memberId, amount) {
@@ -1564,8 +1624,9 @@ const DB = (() => {
     // Neu:
     spendCoins, fetchTreasury, contributeToTreasury, syncTreasuryGoals,
     applyDailyLevy, checkWeeklyChallenge,
-    purchaseResearchItem, saveCosmetics, buyCiqPerk,
+    purchaseResearchItem, saveCosmetics, buyCiqPerk, applyCiqAttack,
     updateMapData, addCoins, appendTodayLog, claimPassive, recordSalarySnapshot, recordSalarySnapshotsAll,
+    saveDungeonData, dungeonFight, buyKriegerItem,
     payBaristaBartGroup, addPenaltyToTreasury, payEigeneTasseGroup,
     claimLoginBonus, claimDailyTask,
     investInCountry, fetchCountryStandings, fetchAllWorldInvestments,

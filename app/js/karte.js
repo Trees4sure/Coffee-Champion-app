@@ -521,10 +521,14 @@ function karteStepsAllowed(mapData, research) {
     : effects
         .filter(e => e.type === 'step_malus' && e.expires === today)
         .reduce((s, e) => s + (e.amount || 0), 0);
+  // 🧠 CIQ Kartensaboteur (Fremd-Debuff): -2 Schritte heute (Thermos schützt NICHT —
+  // anders als bei den normalen Karten-Event-Mali, ist das ein gezielter PvP-Angriff).
+  const saboteurEntry = (typeof ciqDebuffEntry === 'function') ? ciqDebuffEntry(mapData, 'karten_saboteur') : null;
+  const saboteurMalus = saboteurEntry ? (saboteurEntry.steps_blocked || 2) : 0;
   const buildStep = calcBuildingStepBonus(mapData?.buildings);
   // Forschungs-Tier-Bonus: +10 Schritte je vollständig abgeschlossenem Tier
   const tierStep  = (typeof completedResearchTiers === 'function') ? completedResearchTiers(research) * 10 : 0;
-  return Math.max(1, KARTE_BASE_STEPS + footBonus + extra + stepBonus + buildStep + tierStep + _karteGroupSteps - stepMalus);
+  return Math.max(1, KARTE_BASE_STEPS + footBonus + extra + stepBonus + buildStep + tierStep + _karteGroupSteps - stepMalus - saboteurMalus);
 }
 
 function karteExtraStepsBought(mapData) {
@@ -556,6 +560,37 @@ function karteCanStep(tx, ty, mapData, research) {
   if ((mapData?.blocked || {})[`${tx},${ty}`] === _todayKey()) return false; // Tier blockiert das Feld heute
   const p = kartePos(mapData);
   return Math.abs(p.x - tx) <= 1 && Math.abs(p.y - ty) <= 1 && !(p.x === tx && p.y === ty);
+}
+
+// Kostenloses Zurücklaufen auf ein bereits erkundetes Nachbarfeld (kein Schrittverbrauch,
+// kein erneutes Explore). Behebt das "Steckenbleiben": wenn alle direkten Nachbarn schon
+// erkundet sind, gab es vorher KEINE Möglichkeit, sich zu einem unerkundeten Feld
+// anderswo auf der Karte zurückzubewegen — `blocked` ist hier irrelevant, das sperrt laut
+// Design nur UNERKUNDETE Felder (s. tile_block-Event), bereits erkundete sind nie blockiert.
+function karteCanWalkBack(tx, ty, mapData) {
+  if (!karteIsExplored(tx, ty, mapData)) return false;
+  if (tx < 0 || tx >= KARTE_WORLD || ty < 0 || ty >= KARTE_WORLD) return false;
+  const p = kartePos(mapData);
+  return Math.abs(p.x - tx) <= 1 && Math.abs(p.y - ty) <= 1 && !(p.x === tx && p.y === ty);
+}
+function karteWalkBack(tx, ty, mapData) {
+  return { ...(mapData || {}), pos: { x: tx, y: ty } };
+}
+
+// Steht der Spieler an der aktuellen Position fest (KEIN einziger der 8 Nachbarn
+// ist per karteCanStep betretbar)? Wer noch Schritte übrig hat, aber von erkundeten
+// Feldern umschlossen ist, gilt als "stuck". Wer 0 Schritte übrig hat, gilt NICHT als
+// stuck (das ist normaler Tages-Stopp, kein Deadlock).
+function karteIsStuck(mapData, research) {
+  if (karteStepsLeft(mapData, research) <= 0) return false;
+  const p = kartePos(mapData);
+  for (let dx = -1; dx <= 1; dx++) {
+    for (let dy = -1; dy <= 1; dy++) {
+      if (dx === 0 && dy === 0) continue;
+      if (karteCanStep(p.x + dx, p.y + dy, mapData, research)) return false;
+    }
+  }
+  return true;
 }
 
 // Gibt { newMapData, treasure, event } zurück; treasure/event sind null wenn nichts passiert.
