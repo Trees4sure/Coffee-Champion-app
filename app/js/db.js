@@ -1059,6 +1059,16 @@ const DB = (() => {
 
   // ── Saison abschließen ───────────────────────────────────────────────────────
   async function closeSeason(seasonId) {
+    // Atomarer Idempotenz-Guard: UPDATE greift nur, wenn die Saison noch aktiv ist.
+    // Liefert nur dann eine Zeile zurück, wenn DIESER Aufruf das Schließen "gewonnen"
+    // hat — verhindert Doppel-Auszahlung, falls mehrere Mitglieder (z. B. beim
+    // automatischen Abschluss am Monatsletzten) closeSeason fast gleichzeitig auslösen.
+    const { data: claimed } = await _sb.from('seasons')
+      .update({ is_active: false })
+      .eq('group_id', _groupId).eq('season_id', seasonId).eq('is_active', true)
+      .select('id');
+    if (!claimed || claimed.length === 0) return { alreadyClosed: true };
+
     const [year] = seasonId.split('-');
 
     // ── 1. Alle Members laden und nach Saison-Cups sortieren ──────────────────
@@ -1221,6 +1231,24 @@ const DB = (() => {
       const end   = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0, 10);
       await _sb.from('seasons').insert({ group_id: _groupId, season_id: id, name: getSeasonName(id), start_date: start, end_date: end, is_active: true });
     }
+  }
+
+  // ── Saison automatisch abschließen (letzter Monatstag, falls noch aktiv) ───────
+  // Aufruf wie Tagesabgabe/Wochen-Challenge beim App-Start (app.js dailyGroupTasks) —
+  // läuft an JEDEM Monatsletzten bei jedem aktiven Client, ist aber durch den
+  // Idempotenz-Guard in closeSeason() ungefährlich bei Mehrfachaufruf.
+  async function autoCloseSeasonIfDue() {
+    const now = new Date();
+    const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    if (now.getDate() !== lastDayOfMonth) return null; // Ortszeit, analog Tagesabgabe (18 Uhr)
+
+    const seasonId = getSeasonId();
+    const { data: season } = await _sb.from('seasons').select('is_active')
+      .eq('group_id', _groupId).eq('season_id', seasonId).maybeSingle();
+    if (!season || season.is_active === false) return null; // nicht angelegt oder schon zu
+
+    const result = await closeSeason(seasonId);
+    return { ...result, seasonId };
   }
 
   // ── Abgeleitete Getter ───────────────────────────────────────────────────────
@@ -1527,7 +1555,7 @@ const DB = (() => {
 
   return {
     init, setGroup, createGroup, joinGroup,
-    fetchData, registerUser, addCups, closeSeason,
+    fetchData, registerUser, addCups, closeSeason, autoCloseSeasonIfDue,
     getTitle, getSeasonId, getSeasonName, calcStreak,
     getLeaderboard, getDailyStats, getSeasons,
     fetchMonthStats, fetchYearSeasons,

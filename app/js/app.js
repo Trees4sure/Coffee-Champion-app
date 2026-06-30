@@ -166,6 +166,39 @@ async function dailyGroupTasks() {
       showToast(`${WEEKLY_CHALLENGE.icon} Wochen-Challenge geschafft! +${wc.reward} CC`, 'success');
     }
   } catch (e) { console.warn('Wochen-Challenge fehlgeschlagen:', e.message); }
+  // Saison automatisch abschließen, wenn heute der letzte Tag des Monats ist und sie
+  // noch nicht geschlossen wurde — sonst muss ein Admin manuell daran denken. Sicher
+  // bei Mehrfachaufruf durch mehrere gleichzeitig aktive Clients (Idempotenz-Guard
+  // in DB.closeSeason).
+  try {
+    const close = await DB.autoCloseSeasonIfDue();
+    if (close && !close.alreadyClosed) {
+      changed = true;
+      if (close.winner) {
+        const CC_BY_RANK = [50, 20, 10];
+        const CC_PART    = 5;
+        let rank = 0;
+        const lines = close.standings.map((m, i) => {
+          if (i > 0 && m.sc !== close.standings[i - 1].sc) rank = i;
+          const cc    = CC_BY_RANK[rank] ?? CC_PART;
+          const medal = ['🥇','🥈','🥉'][rank] || `${rank + 1}.`;
+          return `${medal} ${m.name} (${m.sc} ☕, +${cc} CC)`;
+        }).join(' · ');
+        const championNames = (close.winners || [close.winner]).map(w => w.name).join(' & ');
+        const themeMsg = close.themeId ? ` 🎨 Theme „${close.themeId}" freigeschaltet.` : '';
+        try {
+          await DB.postMessage(
+            `🏁 Saison ${close.seasonId} automatisch abgeschlossen! 🏆 Champion: ${championNames} (${close.winner.sc} ☕).${themeMsg}\n${lines}`,
+            'Saison-Abschluss'
+          );
+        } catch (e) {}
+      } else {
+        try {
+          await DB.postMessage(`🏁 Saison ${close.seasonId} automatisch abgeschlossen — kein aktiver Teilnehmer.`, 'Saison-Abschluss');
+        } catch (e) {}
+      }
+    }
+  } catch (e) { console.warn('Saison-Auto-Abschluss fehlgeschlagen:', e.message); }
   if (changed) { try { await refreshData(); } catch (e) {} }
 }
 
@@ -224,7 +257,7 @@ async function refreshData() {
 // CIQ-Broadcasts einfach unter einem dieser Namen posten, dann landen sie automatisch in News.)
 const CC_NEWS_SENDERS = new Set([
   'Gruppenkasse', 'Kaffee-Aufgabe', 'Koffein-Polizei', 'Work-Life-Balance-Polizei', 'Kaffee-Kasse',
-  'Büro-Krieg', 'CIQ-Labor', 'Förderstelle', 'Anonymer Tipp', 'Kaffee-Markt',
+  'Büro-Krieg', 'CIQ-Labor', 'Förderstelle', 'Anonymer Tipp', 'Kaffee-Markt', 'Saison-Abschluss',
 ]);
 function _isNewsMsg(m) { return CC_NEWS_SENDERS.has(m.member_name); }
 let _msgTab = 'chat';

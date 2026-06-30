@@ -228,12 +228,31 @@ function worldGovernments(investments, memberId) {
   return Object.values(rankMap).filter(r => r === 1).length;
 }
 
+// ── Tier-basiertes Länder-Limit ───────────────────────────────────────────────
+// Gibt das höchste Tier zurück, bei dem ALLE Forschungs-Items besessen werden.
+// Unabhängig von completedResearchTiers (der zählt alle, nicht nur das höchste).
+function worldHighestCompletedTier(research) {
+  if (!research) return 0;
+  const items = getAllResearchItems();
+  let highest = 0;
+  for (let t = 1; t <= 5; t++) {
+    const tierItems = items.filter(i => i.tier === t);
+    if (tierItems.length && tierItems.every(i => research[i.id])) highest = t;
+  }
+  return highest;
+}
+// T1→3, T2→6, T3→9, T4→12, T5→15
+function worldCountryLimit(research) {
+  return worldHighestCompletedTier(research) * 3;
+}
+
 const _wfmt = (n) => (typeof _fmtCoins === 'function') ? _fmtCoins(n) : (Math.round(n * 100) / 100);
 
 // ── UI: Weltkarte-Reiter ─────────────────────────────────────────────────────
 let _worldMap = null;
 let _worldGeoLayer = null;
 let _worldBldCache = {}; // { countryId: [{building_id, level, member_id}] }
+let _worldInvCache = []; // alle world_investments der Gruppe (für Limit-Prüfung)
 
 async function _buildWeltkarte(member, el) {
   if (!canAccessWorldMap(member)) {
@@ -279,6 +298,7 @@ async function _buildWeltkarte(member, el) {
   let bldRows = [];
   try { bldRows = await DB.fetchAllWorldBuildings(); } catch (e) { bldRows = []; }
   _worldBldCache = worldBuildingsByCountry(bldRows);
+  _worldInvCache = investments; // für Tier-Limit-Prüfung in _openCountrySheet
 
   // Welt-Statistik + Entwicklungen rendern (Steuer-Statistik resilient: {} ohne 19d-Migration)
   let taxStats = {};
@@ -404,6 +424,14 @@ async function _openCountrySheet(country, member) {
   else if (myRow) gardeBlock = `<button class="cc-build-btn cc-world-bbtn" data-world-garde="1">☕ Garde stationieren · ${gardeCost} 🫘</button>`;
   else            gardeBlock = `<span class="cc-world-blocked">Investiere zuerst für eine Garde</span>`;
 
+  // ── Tier-basiertes Länder-Limit ──────────────────────────────────────────────
+  const { rankMap: _myRankMap } = worldRanksForMember(_worldInvCache, member.id);
+  const _myGovCount  = Object.values(_myRankMap).filter(r => r === 1).length;
+  const _govLimit    = worldCountryLimit(member.research);
+  const _govTier     = worldHighestCompletedTier(member.research);
+  // Blockiert: Spieler ist hier NICHT Regent und hat sein Tier-Limit erreicht
+  const atGovLimit   = (myRank !== 1) && (_myGovCount >= _govLimit);
+
   // ── Söldner-Sabotage (nur wenn freigeschaltet + fremder Regent) ──
   const ownsSoeldner = !!(member.map_data && member.map_data.worldDev && member.map_data.worldDev.soeldner);
   const governor = standings.find(s => s.rank === 1) || standings[0] || null;
@@ -427,10 +455,17 @@ async function _openCountrySheet(country, member) {
     </div>
     <div class="cc-world-slots">${rows}</div>
     <p class="cc-world-status">${statusLine}<br>${topLine}</p>
-    <div class="cc-world-invest">
-      <input type="number" id="cc-world-amount" min="${WORLD_MIN_INVEST}" step="5" placeholder="CC (min. ${WORLD_MIN_INVEST})">
-      <button class="cc-build-btn" data-world-invest="1">🌍 Einfluss stärken</button>
-    </div>
+    ${atGovLimit
+      ? `<div class="cc-world-invest-locked">
+           🔒 Länder-Limit: <strong>${_myGovCount}/${_govLimit}</strong> Regierungen (Tier ${_govTier}).
+           Schließe <strong>Tier ${Math.min(_govTier + 1, 5)}</strong> vollständig ab,
+           um +3 weitere Länder regieren zu dürfen.
+         </div>`
+      : `<div class="cc-world-invest">
+           <input type="number" id="cc-world-amount" min="${WORLD_MIN_INVEST}" step="5" placeholder="CC (min. ${WORLD_MIN_INVEST})">
+           <button class="cc-build-btn" data-world-invest="1">🌍 Einfluss stärken</button>
+         </div>`
+    }
     <div class="cc-world-section-title">🏗️ Gebäude <span>(gehören dem Land)</span></div>
     <p class="cc-world-pctnote">${pctNote}</p>
     <div class="cc-world-blds">${bldRows}</div>
@@ -439,7 +474,8 @@ async function _openCountrySheet(country, member) {
     ${sabotageBlock ? `<div class="cc-world-section-title">⚔️ Sabotage</div><div class="cc-world-sabotage">${sabotageBlock}</div>` : ''}`;
 
   sheet.querySelector('[data-world-close]').onclick = () => sheet.classList.add('hidden');
-  sheet.querySelector('[data-world-invest]').onclick = () => _handleWorldInvest(country, member);
+  const investBtn = sheet.querySelector('[data-world-invest]');
+  if (investBtn) investBtn.onclick = () => _handleWorldInvest(country, member);
   const gb = sheet.querySelector('[data-world-garde]'); if (gb) gb.onclick = () => _handleBuyGarde(country, member);
   const sb = sheet.querySelector('[data-world-sabotage]'); if (sb && governor) sb.onclick = () => _handleSabotage(country, member, governor);
   sheet.querySelectorAll('[data-world-build]').forEach(b => b.onclick = () => {
@@ -505,6 +541,17 @@ async function _handleWorldInvest(country, member) {
   const input  = document.getElementById('cc-world-amount');
   const amount = Math.floor(parseFloat(input?.value || '0'));
   if (!amount || amount < WORLD_MIN_INVEST) { showToast(`Mindestens ${WORLD_MIN_INVEST} CC investieren!`, 'error'); return; }
+
+  // ── Tier-Limit Safety-Net (auch wenn UI-Block umgangen wird) ──
+  {
+    const { rankMap: _safeRankMap } = worldRanksForMember(_worldInvCache, member.id);
+    const _safeGovCount = Object.values(_safeRankMap).filter(r => r === 1).length;
+    const _safeLimit    = worldCountryLimit(member.research);
+    if (_safeRankMap[country.id] !== 1 && _safeGovCount >= _safeLimit) {
+      showToast(`🔒 Länder-Limit (${_safeLimit}) erreicht — schließe das nächste Forschungs-Tier ab!`, 'error');
+      return;
+    }
+  }
 
   // Rang VOR der Investition (für Verdrängungs-Erkennung)
   let before = [];
