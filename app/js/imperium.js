@@ -1984,10 +1984,13 @@ async function _handleKriegerTap(tx, ty, member, state, seed, COLS, ROWS, MARGIN
   const explored = kriegerIsExplored(tx, ty, state.dd);
 
   // 1) Bereits erkundetes Feld mit bekanntem Encounter (oder Bossfeld) → Kampf erneut
-  // anbieten — Gegner-Felder verschwinden laut Spieldesign NICHT nach einem Kampf.
+  // anbieten — aber NUR falls es noch nicht GEWONNEN wurde (Niederlage bleibt bewusst
+  // erneut versuchbar, siehe Spieldesign-Kommentar in _runKriegerFight). Bug-Fix
+  // 2026-07-04: vorher blieb ein Gegner-Feld auch nach einem SIEG unbegrenzt farmbar,
+  // weil hier nicht zwischen Sieg/Niederlage unterschieden wurde.
   if (explored && (isBoss || (state.dd.encounters || {})[key])) {
     const tier = isBoss ? 'boss' : state.dd.encounters[key];
-    _showKriegerFightPrompt(member, state, tier, seed, COLS, ROWS, MARGIN);
+    _showKriegerFightPrompt(member, state, tier, seed, COLS, ROWS, MARGIN, key);
     return;
   }
   if (explored) return; // erkundetes, leeres Feld — nichts zu tun (kein Bau-System im Dungeon)
@@ -2006,6 +2009,9 @@ async function _handleKriegerTap(tx, ty, member, state, seed, COLS, ROWS, MARGIN
   let dd2 = newDungeonData;
   if (encounter) dd2 = { ...dd2, encounters:   { ...(dd2.encounters   || {}), [key]: encounter.tier } };
   if (gimmick)   dd2 = { ...dd2, gimmickTiles: { ...(dd2.gimmickTiles || {}), [key]: true } };
+  // 🎁 Ausrüstungsfund: Gutschein lebt in dungeon_data, muss VOR dem Speichern gesetzt sein
+  // (wird beim nächsten passenden Kauf in buyKriegerItem() eingelöst, siehe db.js).
+  if (gimmick?.voucher) dd2 = { ...dd2, equipmentVoucher: gimmick.voucher };
 
   const prevDd = state.dd;
   state.dd = dd2;
@@ -2013,13 +2019,23 @@ async function _handleKriegerTap(tx, ty, member, state, seed, COLS, ROWS, MARGIN
   catch (e) { state.dd = prevDd; showToast('Dungeon konnte nicht gespeichert werden.', 'error'); return; }
   currentUserData = { ...(currentUserData || {}), dungeon_data: state.dd };
 
-  if (gimmick) {
+  if (gimmick?.cc) {
     state.memberCoins += gimmick.cc;
     currentUserData = { ...(currentUserData || {}), coins: state.memberCoins };
     _updateHeaderCoins({ coins: state.memberCoins });
     try { await DB.addCoins(member.id, gimmick.cc); } catch (e) {}
     showToast(`🪙 +${gimmick.cc} CC im Dungeon gefunden!`, 'success');
     try { await DB.postMessage(`🪙 ${_esc2(member.name)} hat im Dungeon ${gimmick.cc} CC gefunden!`, member.name); } catch (e) {}
+    // Tages-Log (Profil "Heute erhalten") — derselbe fehlende Eintrag wie beim Kampf-CC oben.
+    try {
+      const mdLog = DB.appendTodayLog(member.map_data || {}, [{ label: '🪙 Dungeon-Fund', amount: gimmick.cc }]);
+      await DB.updateMapData(member.id, mdLog);
+      currentUserData = { ...(currentUserData || {}), map_data: mdLog };
+    } catch (e) { /* non-critical */ }
+  } else if (gimmick?.voucher) {
+    const slotName = gimmick.voucher.slot === 'weapon' ? 'Waffen' : gimmick.voucher.slot === 'armor' ? 'Rüstungs' : 'Talisman';
+    showToast(`${gimmick.emoji} ${gimmick.name}! Nächster ${slotName}-Kauf 50% günstiger.`, 'success');
+    try { await DB.postMessage(`${gimmick.emoji} ${_esc2(member.name)} hat im Dungeon "${_esc2(gimmick.name)}" gefunden — 50% Rabatt auf den nächsten ${slotName}-Kauf!`, member.name); } catch (e) {}
   }
 
   // Viewport nachziehen + neu rendern (analog _handleKarteStep)
@@ -2034,7 +2050,7 @@ async function _handleKriegerTap(tx, ty, member, state, seed, COLS, ROWS, MARGIN
   if (canvas) kriegerRender(canvas, state.dd, seed, state.vpX, state.vpY);
   _kriegerUpdateHud(state);
 
-  if (encounter) _showKriegerFightPrompt(member, state, encounter.tier, seed, COLS, ROWS, MARGIN);
+  if (encounter) _showKriegerFightPrompt(member, state, encounter.tier, seed, COLS, ROWS, MARGIN, key);
 }
 
 // Eigene Werte rein zur ANZEIGE (Prompt/HUD) — der tatsächliche Kampfausgang kommt
@@ -2056,7 +2072,7 @@ function _kriegerOwnStats(dd) {
   return { atk, def, crit, hp: 80 + level * 4, setCulture };
 }
 
-function _showKriegerFightPrompt(member, state, tier, seed, COLS, ROWS, MARGIN) {
+function _showKriegerFightPrompt(member, state, tier, seed, COLS, ROWS, MARGIN, key) {
   const enemyDef = kriegerEnemyDef(tier);
   if (!enemyDef) return;
   const flavorIdx = Math.floor(Math.random() * enemyDef.flavor.length); // rein optisch
@@ -2091,10 +2107,10 @@ function _showKriegerFightPrompt(member, state, tier, seed, COLS, ROWS, MARGIN) 
     </div>
   `;
   document.getElementById('krieger-fight-cancel').onclick = () => popup.classList.add('hidden');
-  document.getElementById('krieger-fight-go').onclick = () => _runKriegerFight(member, state, tier, seed, COLS, ROWS, MARGIN);
+  document.getElementById('krieger-fight-go').onclick = () => _runKriegerFight(member, state, tier, seed, COLS, ROWS, MARGIN, key);
 }
 
-async function _runKriegerFight(member, state, tier, seed, COLS, ROWS, MARGIN) {
+async function _runKriegerFight(member, state, tier, seed, COLS, ROWS, MARGIN, key) {
   const popup = document.getElementById('krieger-popup');
   const btn = document.getElementById('krieger-fight-go');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Kämpft …'; }
@@ -2157,11 +2173,33 @@ async function _runKriegerFight(member, state, tier, seed, COLS, ROWS, MARGIN) {
   // State/Header aktualisieren
   state.dd = result.new_dungeon_data || { ...state.dd, level: result.new_level };
   if (result.cc_awarded > 0) state.memberCoins += result.cc_awarded;
+
+  // Bug-Fix 2026-07-04: nach einem SIEG (Nicht-Boss) das Encounter-Feld aus `encounters`
+  // entfernen — sonst bleibt das Feld über _handleKriegerTap() Punkt 1 unbegrenzt farmbar
+  // (dungeon_fight() selbst rührt `encounters` nicht an, das ist rein clientseitig verwaltet).
+  // Niederlage bleibt bewusst weiter versuchbar (encounters-Eintrag bleibt stehen).
+  if (result.won && tier !== 'boss' && key && state.dd.encounters?.[key]) {
+    const { [key]: _removed, ...restEncounters } = state.dd.encounters;
+    state.dd = { ...state.dd, encounters: restEncounters };
+    try { await DB.saveDungeonData(member.id, state.dd); } catch (e) { /* non-critical */ }
+  }
+
   currentUserData = { ...(currentUserData || {}), coins: state.memberCoins, dungeon_data: state.dd };
   _updateHeaderCoins({ coins: state.memberCoins });
   _kriegerUpdateHud(state);
   const canvas = document.getElementById('krieger-canvas');
   if (canvas) kriegerRender(canvas, state.dd, seed, state.vpX, state.vpY);
+
+  // Tages-Log (Profil "Heute erhalten") — Kampf-CC wurde bisher nirgends geloggt, obwohl
+  // die Gutschrift serverseitig in dungeon_fight() korrekt lief (nicht-kritisch: Fehler hier
+  // dürfen den Kampf-Flow nicht blockieren).
+  if (result.cc_awarded > 0) {
+    try {
+      const mdLog = DB.appendTodayLog(member.map_data || {}, [{ label: `⚔️ ${enemyDef.name}`, amount: result.cc_awarded }]);
+      await DB.updateMapData(member.id, mdLog);
+      currentUserData = { ...(currentUserData || {}), map_data: mdLog };
+    } catch (e) { /* non-critical */ }
+  }
 
   // Chat-Broadcast (Pflicht laut Plan: Sieg/Niederlage/Level-Up/Boss-Kill)
   try {
@@ -2218,13 +2256,19 @@ function _kriegerRenderShop(member, state, body) {
     ? `<div style="font-size:12px;color:#FAC775;text-align:center;margin-bottom:10px">✨ Set aktiv: ${_esc2(KRIEGER_SET_BONUSES[setCulture].name)} — ${_esc2(KRIEGER_SET_BONUSES[setCulture].desc)}</div>`
     : '';
 
+  // 🎁 Ausrüstungsfund-Gutschein (siehe krieger.js/db.js): beeinflusst Preis-Anzeige +
+  // Kaufbarkeits-Check, damit die Karte nicht fälschlich "zu teuer" zeigt, wenn der
+  // rabattierte Preis eigentlich schon leistbar wäre.
+  const voucher = dd.equipmentVoucher;
   const sections = Object.keys(KRIEGER_CULTURE_NAMES).map(culture => {
     const items = KRIEGER_ITEMS.filter(i => i.culture === culture);
     const cards = items.map(item => {
       const isOwned    = !!owned[item.key];
       const isEquipped = equipped[item.slot] === item.key;
       const locked     = level < item.minLevel;
-      const canBuy     = !isOwned && !locked && state.memberCoins >= item.cost;
+      const hasVoucher = !!(voucher && voucher.slot === item.slot);
+      const effCost    = hasVoucher ? Math.round(item.cost * (1 - (voucher.pct || 0.5))) : item.cost;
+      const canBuy     = !isOwned && !locked && state.memberCoins >= effCost;
       let action;
       if (isOwned) {
         action = isEquipped
@@ -2233,7 +2277,8 @@ function _kriegerRenderShop(member, state, body) {
       } else if (locked) {
         action = `<span class="ciq-state ciq-lock">🔒 ab Stufe ${item.minLevel}</span>`;
       } else {
-        action = `<button class="cc-build-btn krieger-buy-btn" data-buy-item="${item.key}"${canBuy ? '' : ' disabled'}>Kaufen · ${item.cost} 🫘</button>`;
+        const priceTxt = hasVoucher ? `🎁 <s>${item.cost}</s> ${effCost}` : `${item.cost}`;
+        action = `<button class="cc-build-btn krieger-buy-btn" data-buy-item="${item.key}"${canBuy ? '' : ' disabled'}>Kaufen · ${priceTxt} 🫘</button>`;
       }
       const statTxt = [
         item.atk ? `ATK+${item.atk}` : null,
@@ -2263,10 +2308,15 @@ function _kriegerRenderShop(member, state, body) {
       try {
         const newDD = await DB.buyKriegerItem(member.id, item, state.dd);
         state.dd = newDD;
-        state.memberCoins -= item.cost;
+        // Tatsächlich belasteter Betrag (kann durch einen Ausrüstungsfund-Gutschein 50%
+        // günstiger sein als item.cost, siehe buyKriegerItem in db.js) für die optimistische
+        // Coins-Anzeige verwenden — sonst weicht die Anzeige vom echten Kontostand ab.
+        state.memberCoins -= (newDD._costPaid ?? item.cost);
         currentUserData = { ...(currentUserData || {}), coins: state.memberCoins, dungeon_data: state.dd };
         _updateHeaderCoins({ coins: state.memberCoins });
-        showToast(`🛒 ${item.name} erworben!`, 'success');
+        showToast(newDD._discountApplied
+          ? `🛒 ${item.name} erworben! 🎁 Gutschein eingelöst (50% günstiger).`
+          : `🛒 ${item.name} erworben!`, 'success');
         try { await DB.postMessage(`🛒 ${_esc2(member.name)} hat ${item.icon} ${_esc2(item.name)} erworben!`, member.name); } catch (e) {}
         _kriegerRenderShop(member, state, body);
       } catch (e) { showToast(e.message || 'Kauf fehlgeschlagen', 'error'); btn.disabled = false; }
