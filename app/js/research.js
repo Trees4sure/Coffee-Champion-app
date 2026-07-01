@@ -723,7 +723,7 @@ const CIQ_PERKS = [
   // apply_ciq_attack, server-seitig). 'timed' bei diesen dreien = reiner Selbst-Buff,
   // läuft über den bestehenden buyCiqPerk-Pfad wie die Perks oben (kein Ziel, kein PvP).
   { id: 'informant',          tier: '🕵️', icon: '🕵️', name: 'Informant',          type: 'timed',  durationH: 12, ciq: 2,  cc: 5,
-    desc: '12 Stunden: exakte CC + letztes bekanntes Tageseinkommen aller Spieler einsehbar.' },
+    desc: '12 Stunden: voller Steckbrief aller Spieler — Guthaben, Forschung, Weltkarte, Karte/Gebäude, Schätze, Krieger.' },
   { id: 'steuerumgehung',     tier: '🧾', icon: '🧾', name: 'Steuerumgehung',     type: 'timed',  durationH: 24, ciq: 3,  cc: 15,
     desc: 'Deine Tagesabgabe heute fällt komplett aus.' },
   { id: 'kaffee_dieb',        tier: '🫘', icon: '🫘', name: 'Kaffeedieb',         type: 'attack',                ciq: 4,  cc: 20,

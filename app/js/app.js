@@ -1011,14 +1011,53 @@ async function renderStats() {
   else renderJahr(info);
 }
 
-// 🕵️ Informant (CIQ-Perk): solange aktiv, zeigt die Gehaltsstatistik zusätzlich eine ECHTE
-// Einzelaufschlüsselung des Passiv-Einkommens ALLER Gruppenmitglieder — nicht nur die nackten
-// Summen, die man als Top 5 ohnehin schon in der Chart-Tabelle darüber sieht. Wiederverwendet
-// _buildPassivBreakdown() aus imperium.js (dieselbe Komponente, die jeder für sich selbst im
-// Profil sieht: Forschungs-Items/Kombos/Gebäude einzeln + Multiplikatoren), hier einfach pro
-// fremdem Mitglied statt nur für sich selbst. Alle nötigen Rohdaten (research, map_data.buildings,
-// coins, salaryHistory) sind client-seitig ohnehin schon geladen (RLS erlaubt gruppenweiten
-// Lesezugriff) — Informant schaltet nur die ANZEIGE frei, holt nichts vom Server nach.
+// 🕵️ Informant-Kompaktzeile: EIN Steckbrief über alle Spielsysteme hinweg — Forschung, Weltkarte,
+// Pixel-Karte/Gebäude, Schätze, Kaffee-Krieger. Das ist genau das, was man sich sonst mühsam selbst
+// aus Statistik/Weltkarte/Karte/Krieger-Tab zusammensuchen müsste. Wiederverwendet ausschließlich
+// bestehende Helfer (_cc*-Familie aus der Hall-of-Fame-Logik, kriegerProgress aus krieger.js) —
+// keine neue Datenquelle, nur neu zusammengestellt. Künftige Minigames (Garten/Spähung/Café/
+// Logistik, siehe plans/PLAN_erlebnis_minigames.md) sollen hier je EINE weitere Zeile ergänzen,
+// sobald sie existieren.
+function _informantStatsHtml(u) {
+  const items = [];
+
+  const rTotal = (typeof getAllResearchItems === 'function') ? getAllResearchItems().length : 0;
+  const rOwned = (typeof getAllResearchItems === 'function')
+    ? getAllResearchItems().filter(i => (u.research || {})[i.id]).length : 0;
+  const rScore = (typeof calcResearchScore === 'function') ? calcResearchScore(u.research || {}) : 0;
+  items.push(`🔬 Forschung: ${rOwned}/${rTotal} Items · ${_fmtCoins(rScore)} Score`);
+
+  const worldInv = (typeof _ccWorldInvested === 'function') ? _ccWorldInvested(u) : 0;
+  const gov       = (typeof _ccGovernments === 'function') ? _ccGovernments(u) : 0;
+  if (worldInv > 0 || gov > 0) items.push(`🌍 Weltkarte: ${_fmtCoins(worldInv)} CC investiert · ${gov} Regierung${gov === 1 ? '' : 'en'}`);
+
+  const bldCount  = (typeof _ccBldCount === 'function') ? _ccBldCount(u) : 0;
+  const explored  = (typeof _ccExploredPct === 'function') ? _ccExploredPct(u) : 0;
+  if (bldCount > 0 || explored > 0) items.push(`🗺️ Karte: ${bldCount} Gebäude · ${explored}% erkundet`);
+
+  const treasures = (typeof _ccTreasures === 'function') ? _ccTreasures(u) : 0;
+  if (treasures > 0) items.push(`💎 Schätze: ${treasures} gefunden`);
+
+  const dd = u.dungeon_data || {};
+  if ((dd.level || 1) > 1 || (dd.wins || 0) > 0 || (dd.losses || 0) > 0) {
+    const prog = (typeof kriegerProgress === 'function') ? kriegerProgress(dd) : { level: dd.level || 1 };
+    items.push(`⚔️ Krieger: Stufe ${prog.level} · ${dd.wins || 0}S/${dd.losses || 0}N`);
+  }
+
+  if (!items.length) return '';
+  return `<div class="cc-informant-stats" style="display:flex;flex-wrap:wrap;gap:6px;margin:4px 0">
+    ${items.map(t => `<span style="background:rgba(255,255,255,.05);border-radius:6px;padding:2px 7px;font-size:.72rem;color:var(--muted)">${t}</span>`).join('')}
+  </div>`;
+}
+
+// 🕵️ Informant (CIQ-Perk): solange aktiv, zeigt die Gehaltsstatistik zusätzlich einen VOLLEN
+// Steckbrief ALLER Gruppenmitglieder — nicht nur die nackten Guthaben-Summen, die man als Top 5
+// ohnehin schon in der Chart-Tabelle darüber sieht. Zwei Ebenen pro Spieler: (1) die System-
+// übergreifende Kompaktzeile aus _informantStatsHtml() (Forschung/Weltkarte/Karte/Schätze/Krieger),
+// (2) die bestehende _buildPassivBreakdown() aus imperium.js für die Einzelaufschlüsselung des
+// Passiv-Einkommens (Forschungs-Items/Kombos/Gebäude einzeln + Multiplikatoren). Alle nötigen
+// Rohdaten sind client-seitig ohnehin schon geladen (RLS erlaubt gruppenweiten Lesezugriff) —
+// Informant schaltet nur die ANZEIGE frei, holt nichts vom Server nach.
 function _informantPanelHtml() {
   const cosm = currentUserData?.cosmetics || {};
   if (typeof ciqActive !== 'function' || !ciqActive(cosm, 'informant', Date.now())) return '';
@@ -1030,6 +1069,7 @@ function _informantPanelHtml() {
       const hist = u.map_data?.salaryHistory || [];
       const last = hist.slice().sort((a, b) => (a.ts || 0) - (b.ts || 0)).pop() || {};
       const perCup = (typeof calcResearchPerCup === 'function') ? calcResearchPerCup(u.research || {}) : 0;
+      const stats = _informantStatsHtml(u);
       const breakdown = (typeof _buildPassivBreakdown === 'function') ? _buildPassivBreakdown(u) : '';
       return `
         <div class="cc-informant-row" style="border-bottom:1px solid var(--gold-dim);padding:8px 2px">
@@ -1037,6 +1077,7 @@ function _informantPanelHtml() {
             <strong>${_esc(u.name)}</strong>
             <span style="color:var(--muted);font-size:.78rem">🪙 ${_fmtCoins(u.coins || 0)} · 💰 ${last.day ?? '–'}/Tag realisiert · ☕ +${_fmtCoins(perCup)}/Tasse</span>
           </div>
+          ${stats}
           ${breakdown || '<p class="empty-hint" style="margin:4px 0 0;font-size:.75rem">Keine laufenden Forschungs-/Gebäude-Einnahmen.</p>'}
         </div>`;
     }).join('');
