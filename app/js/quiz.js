@@ -179,6 +179,14 @@ const Quiz = (() => {
       _info('Auswertung fehlgeschlagen. Deine Antworten sind gespeichert und werden später gewertet.');
       return;
     }
+    if (!res.replay) {
+      try {
+        await DB.postMessage(
+          `🧠 ${currentUser.name} hat das Kaffee-Quiz mit ${res.score}/10 gespielt! (+${_fmtCoins(res.cc)} CC, +${res.ciq} Kaffee-IQ)`,
+          currentUser.name
+        );
+      } catch (e) {}
+    }
     _show(`
       <div class="quiz-card quiz-result">
         <div class="quiz-emoji">🧠</div>
