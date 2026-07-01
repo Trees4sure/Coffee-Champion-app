@@ -875,11 +875,17 @@ function renderCiqPerks(u) {
     else if (timed) meta.push(`⏱️ ${def.durationH >= 24 ? (def.durationH / 24) + ' Tage' : def.durationH + ' h'}`);
     else meta.push('♾️ dauerhaft');
     meta.push(`🧠 CIQ ${def.ciq}`);
+    // Informant zeigt sein Ergebnis nicht hier im Profil, sondern in der Statistik —
+    // ohne diesen Hinweis wirkt der Kauf wie ein Blindkauf (Fundstelle sonst unklar).
+    const locHint = def.id === 'informant'
+      ? `<div class="ciq-hint" style="color:var(--muted);font-size:.72rem;margin-top:3px">📍 Ergebnis erscheint unter 📊 Statistik → 💰 Gehalt.</div>`
+      : '';
     return `
       <div class="ciq-card ciq-${stateCls}${isPvp ? ' ciq-pvp' : ''}">
         <div class="ciq-head"><span class="ciq-icon">${def.tier} ${def.icon}</span>
           <span class="ciq-name">${_esc(def.name)}</span></div>
         <div class="ciq-desc">${_esc(def.desc)}</div>
+        ${locHint}
         <div class="ciq-foot"><span class="ciq-meta">${meta.join(' · ')}</span>${actionHtml}</div>
       </div>`;
   }).join('');
@@ -1002,6 +1008,29 @@ async function renderStats() {
   else renderJahr(info);
 }
 
+// 🕵️ Informant (CIQ-Perk): solange aktiv, zeigt die Gehaltsstatistik zusätzlich Guthaben +
+// letztes bekanntes Tagesgehalt ALLER Gruppenmitglieder (nicht nur der Top 5 wie die
+// Chart-Tabelle darüber). Die Daten (appData.users[].coins / .map_data.salaryHistory) sind
+// client-seitig ohnehin schon geladen (RLS erlaubt gruppenweiten Lesezugriff) — Informant
+// schaltet hier also nur die ANZEIGE frei, holt keine neuen Daten nach.
+function _informantPanelHtml() {
+  const cosm = currentUserData?.cosmetics || {};
+  if (typeof ciqActive !== 'function' || !ciqActive(cosm, 'informant', Date.now())) return '';
+  const until = cosm.ciq_perks?.informant?.active_until;
+  const untilTxt = until ? new Date(until).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '';
+  const rows = (appData.users || []).slice()
+    .sort((a, b) => (b.coins || 0) - (a.coins || 0))
+    .map(u => {
+      const hist = u.map_data?.salaryHistory || [];
+      const last = hist.slice().sort((a, b) => (a.ts || 0) - (b.ts || 0)).pop() || {};
+      return `<tr class="${u.id === currentUser?.id ? 'winner-row' : ''}"><td>${_esc(u.name)}</td><td>${_fmtCoins(u.coins || 0)}</td><td>${last.day ?? '–'}</td></tr>`;
+    }).join('');
+  return `
+    <div class="section-title" style="margin-top:16px">🕵️ Informant — Geheimdienst-Bericht
+      <span style="color:var(--muted);font-weight:400;font-size:.72rem">(noch bis ${untilTxt} Uhr)</span></div>
+    <table><thead><tr><th>Name</th><th>🪙 Guthaben</th><th>💰 /Tag passiv</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
 // 💰 Einkommens-Verlauf der Top-5-Mitglieder (Liniendiagramm). Zeigt das realisierte
 // GESAMT-Tageseinkommen (alle Quellen: Tassen, Schätze, Forschung, Welt, Login, Aufgaben),
 // solange dafür Snapshot-Daten (gross) vorliegen — sonst Fallback auf passives Tagesgehalt.
@@ -1035,7 +1064,8 @@ function renderGehalt() {
   if (!days.length) {
     if (charts.main) { charts.main.destroy(); charts.main = null; }
     document.getElementById('period-summary').innerHTML =
-      '<p style="color:var(--muted);padding:18px;text-align:center">📈 Noch keine Gehaltsdaten vorhanden.<br>Der Verlauf baut sich ab jetzt alle 5 Stunden auf — schau später wieder vorbei!</p>';
+      '<p style="color:var(--muted);padding:18px;text-align:center">📈 Noch keine Gehaltsdaten vorhanden.<br>Der Verlauf baut sich ab jetzt alle 5 Stunden auf — schau später wieder vorbei!</p>'
+      + _informantPanelHtml();
     return;
   }
 
@@ -1068,7 +1098,8 @@ function renderGehalt() {
       return `<tr class="${u.id === currentUser?.id ? 'winner-row' : ''}"><td>${_esc(u.name)}</td><td>${gt > 0 ? _fmtCoins(gt) : '–'}</td><td>${last.day ?? '–'}</td><td>${last.cup ?? '–'}</td><td>${last.coins ?? '–'}</td></tr>`;
     }).join('')}
     </tbody></table>
-    <p style="color:var(--muted);font-size:.72rem;padding:6px 4px 0">📈 „Heute gesamt" = alle heute realisierten CC (Tassen, Schätze, Forschung, Welt, Login, Aufgaben). Der Verlauf zeigt das Gesamteinkommen pro Tag, sobald genug Snapshots vorliegen.</p>`;
+    <p style="color:var(--muted);font-size:.72rem;padding:6px 4px 0">📈 „Heute gesamt" = alle heute realisierten CC (Tassen, Schätze, Forschung, Welt, Login, Aufgaben). Der Verlauf zeigt das Gesamteinkommen pro Tag, sobald genug Snapshots vorliegen.</p>
+    ${_informantPanelHtml()}`;
 }
 
 async function renderMonat(info) {
