@@ -98,21 +98,25 @@ const DB = (() => {
     return { ...(mapData || {}), todayLog: { date: day, entries: next } };
   }
 
-  // Passiv-Einkommen anteilig nach Forschung / Gebäude / Welt-Einfluss aufschlüsseln,
-  // jeweils mit Quellen-Detail (woraus es entsteht — für „Heute erhalten").
-  function _passiveLogEntries(member, passiveEarned, worldRankMap, worldByCountry, groupPerDay) {
+  // Passiv-Einkommen anteilig nach Forschung / Gebäude / Welt-Einfluss / Handelsbündnis
+  // aufschlüsseln, jeweils mit Quellen-Detail (woraus es entsteht — für „Heute erhalten").
+  // tradeBonusDay: additiver 🤝-Bündnisanteil (aus _allianceTradeBonus), separat von
+  // wPerDay (Welt-Einfluss), damit er in der Anzeige nicht stillschweigend darin aufgeht.
+  function _passiveLogEntries(member, passiveEarned, worldRankMap, worldByCountry, groupPerDay, tradeBonusDay) {
     const rPerDay = (typeof calcResearchPerDay === 'function') ? calcResearchPerDay(member.research || {}) : 0;
     const bPerDay = (typeof calcBuildingPerDay === 'function') ? calcBuildingPerDay(member.map_data?.buildings || {}) : 0;
     const wRank   = (worldRankMap && typeof calcWorldPerDay === 'function') ? calcWorldPerDay(worldRankMap) : 0;
     const wBld    = (worldRankMap && typeof calcWorldBuildingPerDay === 'function') ? calcWorldBuildingPerDay(worldRankMap, worldByCountry) : 0;
     const wPerDay = wRank + wBld;
     const gPerDay = groupPerDay || 0;
-    const tot = rPerDay + bPerDay + wPerDay + gPerDay;
+    const tPerDay = tradeBonusDay || 0;
+    const tot = rPerDay + bPerDay + wPerDay + gPerDay + tPerDay;
     if (tot <= 0) return [{ label: '⚙️ Passiv-Einkommen', amount: passiveEarned }];
     const bShare = Math.round(passiveEarned * (bPerDay / tot) * 100) / 100;
     const wShare = Math.round(passiveEarned * (wPerDay / tot) * 100) / 100;
     const gShare = Math.round(passiveEarned * (gPerDay / tot) * 100) / 100;
-    const rShare = Math.round((passiveEarned - bShare - wShare - gShare) * 100) / 100;
+    const tShare = Math.round(passiveEarned * (tPerDay / tot) * 100) / 100;
+    const rShare = Math.round((passiveEarned - bShare - wShare - gShare - tShare) * 100) / 100;
     const wDetail = [
       (typeof worldPerDayDetail === 'function') ? worldPerDayDetail(worldRankMap) : '',
       (typeof worldBuildingPerDayDetail === 'function') ? worldBuildingPerDayDetail(worldRankMap, worldByCountry) : '',
@@ -121,6 +125,7 @@ const DB = (() => {
     if (rShare > 0) out.push({ label: '⚙️ Forschung (passiv)', amount: rShare, detail: (typeof researchPerDayDetail === 'function') ? researchPerDayDetail(member.research) : '' });
     if (bShare > 0) out.push({ label: '🏗️ Gebäude-Einkommen',  amount: bShare, detail: (typeof buildingPerDayDetail === 'function') ? buildingPerDayDetail(member.map_data?.buildings || {}) : '' });
     if (wShare > 0) out.push({ label: '🌍 Welt-Einfluss',       amount: wShare, detail: wDetail });
+    if (tShare > 0) out.push({ label: '🤝 Handelsbündnis',      amount: tShare, detail: '+10% Einkommen aus dem Bündnis-Land' });
     if (gShare > 0) out.push({ label: '🏛️ Gruppenkasse (passiv)', amount: gShare, detail: `+${gPerDay} CC/Tag für alle` });
     return out;
   }
@@ -151,7 +156,7 @@ const DB = (() => {
 
   // ── Daten laden ──────────────────────────────────────────────────────────────
   async function fetchData() {
-    const [m, ds, s, h, wi, wb, tr] = await Promise.all([
+    const [m, ds, s, h, wi, wb, wa, tr] = await Promise.all([
       _sb.from('members').select('*').eq('group_id', _groupId).order('total_cups', { ascending: false }),
       _sb.from('daily_stats').select('*').eq('group_id', _groupId).order('date', { ascending: false }).limit(90),
       _sb.from('seasons').select('*').eq('group_id', _groupId).order('season_id', { ascending: false }),
@@ -159,6 +164,8 @@ const DB = (() => {
       // Welt-Daten (Phase 1.5): liefern {data:null,error} falls noch nicht migriert → []. Kein Reject.
       _sb.from('world_investments').select('member_id, country_id, total_invested, garde_level').eq('group_id', _groupId),
       _sb.from('world_buildings').select('member_id, country_id, building_id, level').eq('group_id', _groupId),
+      // Weltbündnisse (für Informant-Bericht) — [] falls Migration noch nicht ausgeführt.
+      _sb.from('world_alliances').select('id, type, member_a, member_b, country_a, country_b, payer_id, offer_cc, status, started_at, expires_at, last_tribut_at').eq('group_id', _groupId),
       _sb.from('group_treasury').select('balance, contributions, unlocked_goals').eq('group_id', _groupId).maybeSingle(),
     ]);
     return {
@@ -168,6 +175,7 @@ const DB = (() => {
       halloffame: h.data || {},
       worldInvestments: wi.data || [],
       worldBuildings: wb.data || [],
+      worldAlliances: wa.data || [],
       treasury: tr.data || { balance: 0, contributions: {}, unlocked_goals: {} },
       entries: []
     };
@@ -199,17 +207,30 @@ const DB = (() => {
     return (member && member.map_data && member.map_data.worldDev && member.map_data.worldDev.garde_akademie) ? 1.1 : 1;
   }
 
-  // 🤝 Handelsbündnis: +8% auf alle Welt-Einkommen je aktivem Bündnis (world_alliances,
-  // type='handel'). Wert muss zu ALLIANCE_TYPES.handel.bonusPct in alliances.js passen.
-  // Robust: {} bei fehlender Tabelle (Migration noch nicht ausgeführt) → Mult 1.
-  async function _allianceTradeMult(memberId) {
+  // 🤝 Handelsbündnis: LÄNDERbezogen (nicht personenbezogen) — +10% auf das Einkommen AUS
+  // DEM JEWEILIGEN LAND, für wen auch immer es GERADE regiert (rankMap prüft das live, nicht
+  // member_a/member_b — "das Geld bekommt der regierende Mitspieler"). Additiver Bonus (kein
+  // Multiplikator wie bei _gardeMult), weil er nur die eine betroffene Länder-Zeile im rankMap
+  // betrifft, nicht das gesamte Welt-Einkommen. Wert muss zu ALLIANCE_TYPES.handel.bonusPct in
+  // alliances.js passen. Robust: {cup:0,day:0} bei fehlender Tabelle/Migration.
+  async function _allianceTradeBonus(rankMap, byCountry) {
     try {
       const { data, error } = await _sb.from('world_alliances')
-        .select('id').eq('group_id', _groupId).eq('type', 'handel').eq('status', 'active')
-        .or(`member_a.eq.${memberId},member_b.eq.${memberId}`);
+        .select('country_a, country_b').eq('group_id', _groupId).eq('type', 'handel').eq('status', 'active');
       if (error) throw error;
-      return 1 + (data || []).length * 0.08;
-    } catch (e) { return 1; }
+      let cup = 0, day = 0;
+      for (const pact of (data || [])) {
+        for (const cid of [pact.country_a, pact.country_b]) {
+          if ((rankMap || {})[cid] !== 1) continue;
+          const sub = { [cid]: 1 };
+          cup += (((typeof calcWorldPerCup === 'function') ? calcWorldPerCup(sub) : 0)
+                + ((typeof calcWorldBuildingPerCup === 'function') ? calcWorldBuildingPerCup(sub, byCountry) : 0)) * 0.10;
+          day += (((typeof calcWorldPerDay === 'function') ? calcWorldPerDay(sub) : 0)
+                + ((typeof calcWorldBuildingPerDay === 'function') ? calcWorldBuildingPerDay(sub, byCountry) : 0)) * 0.10;
+        }
+      }
+      return { cup: Math.round(cup * 100) / 100, day: Math.round(day * 100) / 100 };
+    } catch (e) { return { cup: 0, day: 0 }; }
   }
 
   // Gruppenkasse-Boni (perCup/perDay) aus freigeschalteten Gruppen-Zielen — robust,
@@ -268,28 +289,29 @@ const DB = (() => {
     if (typeof ciqBuildingPassiveMult === 'function') buildingPerDay = Math.round(buildingPerDay * ciqBuildingPassiveMult(_cosmP) * 100) / 100;
     const rankMap = worldRankMap || await _fetchWorldRankMap(memberId);
     const byCountry = worldByCountry || (Object.keys(rankMap).length ? await _fetchWorldBuildingsByCountry() : {});
-    const _gm = _gardeMult(member) * (await _allianceTradeMult(memberId));
+    const _gm = _gardeMult(member);
     const worldPerDay = Math.round(((typeof calcWorldPerDay === 'function') ? calcWorldPerDay(rankMap) : 0) * _gm * 100) / 100;
     const worldBldPerDay = Math.round(((typeof calcWorldBuildingPerDay === 'function') ? calcWorldBuildingPerDay(rankMap, byCountry) : 0) * _gm * 100) / 100;
+    const tradeBonus = await _allianceTradeBonus(rankMap, byCountry);
     const groupPerDay = (await _fetchGroupPerks()).perDay || 0; // Gruppenkasse-Passiv für alle
-    const perDay = researchPerDay + buildingPerDay + worldPerDay + worldBldPerDay + groupPerDay;
-    if (perDay <= 0) return 0;
+    const perDay = researchPerDay + buildingPerDay + worldPerDay + worldBldPerDay + tradeBonus.day + groupPerDay;
+    if (perDay <= 0) return { earned: 0, tradeBonusDay: 0 };
 
     const cosm = member.cosmetics || {};
     const lastClaim = cosm.lastPassiveClaim ? new Date(cosm.lastPassiveClaim) : new Date(member.joinDate || today());
     const hoursDiff = (Date.now() - lastClaim.getTime()) / (1000 * 60 * 60);
-    if (hoursDiff < 1) return 0; // Max einmal pro Stunde
+    if (hoursDiff < 1) return { earned: 0, tradeBonusDay: 0 }; // Max einmal pro Stunde
 
     const earned  = Math.round(perDay * (hoursDiff / 24) * 100) / 100;
     let capped    = Math.min(earned, perDay * 4); // Max 4 Tages-Passiv auf einmal (deckt Wochenende/Abwesenheit ab)
     // 🧠 CIQ Kaffeekartell (Selbst-Buff, 1h): alle eigenen CC-Einnahmen verdoppelt (auch Passiv).
     if (typeof ciqKartellMult === 'function') capped = Math.round(capped * ciqKartellMult(_cosmP) * 100) / 100;
-    if (capped < 0.01) return 0;
+    if (capped < 0.01) return { earned: 0, tradeBonusDay: 0 };
 
     await _sb.rpc('add_coins', { p_member_id: memberId, p_amount: capped });
     const newCosmetics = { ...cosm, lastPassiveClaim: new Date().toISOString() };
     await _sb.from('members').update({ cosmetics: newCosmetics }).eq('id', memberId);
-    return capped;
+    return { earned: capped, tradeBonusDay: tradeBonus.day };
   }
 
   // ── Passives Einkommen EIGENSTÄNDIG einlösen (entkoppelt von Tassen) ──────────
@@ -308,9 +330,9 @@ const DB = (() => {
       const member = normalizeUser(raw);
       const worldRankMap = await _fetchWorldRankMap(memberId);
       const worldByCountry = Object.keys(worldRankMap).length ? await _fetchWorldBuildingsByCountry() : {};
-      const earned = await _checkAndClaimPassive(memberId, member, worldRankMap, worldByCountry);
+      const { earned, tradeBonusDay } = await _checkAndClaimPassive(memberId, member, worldRankMap, worldByCountry);
       if (earned > 0) {
-        // Tages-Log (Forschung / Gebäude / Welt / Gruppenkasse anteilig + Quellen-Detail) — Fehler nicht eskalieren
+        // Tages-Log (Forschung / Gebäude / Welt / Handelsbündnis / Gruppenkasse anteilig + Quellen-Detail) — Fehler nicht eskalieren
         try {
           const gPerDay = (await _fetchGroupPerks()).perDay || 0;
           // map_data UNMITTELBAR vor dem Write frisch lesen und nur todayLog mergen:
@@ -319,7 +341,7 @@ const DB = (() => {
           // Das Write-Fenster schrumpft so auf einen RPC (wie in _writeSalaryPoint).
           const { data: fresh } = await _sb.from('members').select('map_data').eq('id', memberId).single();
           const md = appendTodayLog((fresh && fresh.map_data) || member.map_data,
-            _passiveLogEntries(member, earned, worldRankMap, worldByCountry, gPerDay));
+            _passiveLogEntries(member, earned, worldRankMap, worldByCountry, gPerDay, tradeBonusDay));
           await updateMapData(memberId, md);
         } catch (e) { console.warn('Passiv-Log konnte nicht gespeichert werden:', e); }
       }
@@ -411,18 +433,19 @@ const DB = (() => {
     const rankMap   = await _fetchWorldRankMap(member.id);
     const bc        = byCountry || (Object.keys(rankMap).length ? await _fetchWorldBuildingsByCountry() : {});
     const pk        = perks || await _fetchGroupPerks();
-    const gm        = _gardeMult(member) * (await _allianceTradeMult(member.id));
+    const gm        = _gardeMult(member);
+    const tradeBonus = await _allianceTradeBonus(rankMap, bc);
 
     const resDay = (typeof calcResearchPerDay === 'function')      ? calcResearchPerDay(research) : 0;
     const bldDay = (typeof calcBuildingPerDay === 'function')      ? calcBuildingPerDay(member.map_data?.buildings || {}) : 0;
     const wDay   = (typeof calcWorldPerDay === 'function')         ? calcWorldPerDay(rankMap) * gm : 0;
     const wbDay  = (typeof calcWorldBuildingPerDay === 'function') ? calcWorldBuildingPerDay(rankMap, bc) * gm : 0;
-    const perDay = Math.round((resDay + bldDay + wDay + wbDay + (pk.perDay || 0)) * 100) / 100;
+    const perDay = Math.round((resDay + bldDay + wDay + wbDay + tradeBonus.day + (pk.perDay || 0)) * 100) / 100;
 
     const resCup = (typeof calcResearchPerCup === 'function')      ? calcResearchPerCup(research) : 0;
     const wCup   = (typeof calcWorldPerCup === 'function')         ? calcWorldPerCup(rankMap) * gm : 0;
     const wbCup  = (typeof calcWorldBuildingPerCup === 'function') ? calcWorldBuildingPerCup(rankMap, bc) * gm : 0;
-    const perCup = Math.round((resCup + wCup + wbCup + (pk.perCup || 0)) * 100) / 100;
+    const perCup = Math.round((resCup + wCup + wbCup + tradeBonus.cup + (pk.perCup || 0)) * 100) / 100;
 
     // Realisiertes Gesamteinkommen HEUTE (alle Quellen: Tassen, Schätze, Forschung,
     // Welt, Login, Aufgaben …) aus dem Tages-Log — so erfasst der Verlauf nicht nur
@@ -627,10 +650,14 @@ const DB = (() => {
     // Welt-Einfluss-Bonus pro Tasse (eigene Länder-Ränge + rangabhängige Land-Gebäude) — robust, 0 falls Backend fehlt
     const worldRankMap = await _fetchWorldRankMap(memberId);
     const worldByCountry = Object.keys(worldRankMap).length ? await _fetchWorldBuildingsByCountry() : {};
-    const worldPerCup = Math.round((((typeof calcWorldPerCup === 'function' ? calcWorldPerCup(worldRankMap) : 0)
+    const worldPerCupBase = Math.round((((typeof calcWorldPerCup === 'function' ? calcWorldPerCup(worldRankMap) : 0)
                       + (typeof calcWorldBuildingPerCup === 'function' ? calcWorldBuildingPerCup(worldRankMap, worldByCountry) : 0))
-                      * _gardeMult(member) * (await _allianceTradeMult(memberId))) * 100) / 100;
-    const worldBonus = Math.round(amount * worldPerCup * 100) / 100;
+                      * _gardeMult(member)) * 100) / 100;
+    const tradeBonus = await _allianceTradeBonus(worldRankMap, worldByCountry);
+    const worldBonus = Math.round(amount * worldPerCupBase * 100) / 100;
+    // 🤝 Handelsbündnis separat gehalten (statt in worldPerCup gemischt), damit es im
+    // Tages-Log als eigene Zeile erscheint statt still im Welt-Einfluss unterzugehen.
+    const allianceCupBonus = Math.round(amount * tradeBonus.cup * 100) / 100;
     // Gruppenkasse-Bonus pro Tasse (freigeschaltete Gruppen-Ziele) — wirkt für alle gleich
     const groupPerks = await _fetchGroupPerks();
     const groupBonus = Math.round(amount * (groupPerks.perCup || 0) * 100) / 100;
@@ -665,17 +692,18 @@ const DB = (() => {
       const _activeMembers = Object.keys(newStats || {}).length;
       const _blds = member.map_data?.buildings || {};
       const _buildingCount = Object.values(_blds).filter(b => b && (b.completesAt || 0) <= _nowMs).length;
-      const _ctx = { cupIncome: baseCoins + morningBonus + researchBonus + worldBonus + groupBonus, amount, activeMembers: _activeMembers, buildingCount: _buildingCount, now: _nowMs };
+      const _ctx = { cupIncome: baseCoins + morningBonus + researchBonus + worldBonus + allianceCupBonus + groupBonus, amount, activeMembers: _activeMembers, buildingCount: _buildingCount, now: _nowMs };
       ciqBonus = ciqCupBonus(_cosm, _ctx);
       if (ciqBonus > 0 && typeof ciqCupBonusDetail === 'function') ciqDetail = ciqCupBonusDetail(_cosm, _ctx);
     }
 
-    let totalCoins = baseCoins + morningBonus + researchBonus + worldBonus + groupBonus + achCoinTotal + streakBonus + ciqBonus;
     // 🧠 CIQ Kaffeekartell (Selbst-Buff, 1h): alle eigenen CC-Einnahmen verdoppelt.
-    if (typeof ciqKartellMult === 'function') {
-      const kartellMult = ciqKartellMult(_cosm);
-      if (kartellMult > 1) totalCoins = Math.round(totalCoins * kartellMult * 100) / 100;
-    }
+    // Einmal hier berechnet, weil dieselbe Zahl gleich NOCHMAL beim Tages-Log gebraucht
+    // wird (siehe unten) — sonst würden die Log-Zeilen nur die HALBE totalCoins-Summe
+    // ausweisen, die tatsächlich gutgeschrieben wird.
+    const kartellMult = (typeof ciqKartellMult === 'function') ? ciqKartellMult(_cosm) : 1;
+    let totalCoins = baseCoins + morningBonus + researchBonus + worldBonus + allianceCupBonus + groupBonus + achCoinTotal + streakBonus + ciqBonus;
+    if (kartellMult > 1) totalCoins = Math.round(totalCoins * kartellMult * 100) / 100;
 
     if (totalCoins > 0) {
       const { error: coinErr } = await _sb.rpc('add_coins', { p_member_id: memberId, p_amount: totalCoins });
@@ -685,7 +713,7 @@ const DB = (() => {
     payEigeneTasseGroup(memberId, amount).catch(() => {});
 
     // Passiv-Einkommen prüfen (Welt-Ränge + Gebäude wiederverwenden, kein Doppel-Fetch)
-    const passiveEarned = await _checkAndClaimPassive(memberId, member, worldRankMap, worldByCountry);
+    const { earned: passiveEarned, tradeBonusDay: passiveTradeBonusDay } = await _checkAndClaimPassive(memberId, member, worldRankMap, worldByCountry);
 
     // 🚩 Koffein-Strafe an die Gruppenkasse — einmal beim Überschreiten von 6 Tassen.
     // Maßvoll (max. 15 CC) und aufs verfügbare Guthaben gedeckelt (nie Minus).
@@ -698,7 +726,7 @@ const DB = (() => {
     // an die Gruppenkasse abgeben → Tassen sammeln am Wochenende lohnt sich netto nicht.
     // Aufs verfügbare Guthaben gedeckelt (nie Minus, berücksichtigt eine evtl. Koffein-Strafe).
     const isWeekend = (now.getDay() === 0 || now.getDay() === 6); // So=0, Sa=6 (Ortszeit)
-    const weekendCupIncome = Math.round((baseCoins + morningBonus + researchBonus + worldBonus + groupBonus) * 100) / 100;
+    const weekendCupIncome = Math.round((baseCoins + morningBonus + researchBonus + worldBonus + allianceCupBonus + groupBonus) * 100) / 100;
     const weekendLevy = isWeekend
       ? Math.round(Math.max(0, Math.min(weekendCupIncome, (member.coins || 0) + totalCoins - caffeinePenalty)) * 100) / 100
       : 0;
@@ -706,31 +734,39 @@ const DB = (() => {
     // Tages-Log aktualisieren (woher kamen die Coins?) — Fehler hier dürfen den Tassen-Eintrag nicht blockieren
     try {
       const logEntries = [];
+      // Kartell-Faktor auf jede Tassen-Einnahme-Zeile anwenden — genau die Komponenten,
+      // die auch in totalCoins oben einfließen (Achievements/Streak eingeschlossen,
+      // die werden von der RPC ebenfalls verdoppelt gutgeschrieben).
+      const k = amt => kartellMult > 1 ? Math.round(amt * kartellMult * 100) / 100 : amt;
       if (baseCoins + morningBonus > 0) {
-        logEntries.push({ label: amount > 1 ? `☕ ${amount} Tassen` : '☕ Tasse', amount: Math.round((baseCoins + morningBonus) * 100) / 100 });
+        logEntries.push({ label: amount > 1 ? `☕ ${amount} Tassen` : '☕ Tasse', amount: k(Math.round((baseCoins + morningBonus) * 100) / 100) });
       }
       if (researchBonus > 0) {
         const detail = (typeof researchPerCupDetail === 'function')
           ? researchPerCupDetail(member.research, amount, calcResearchPerCup(member.research)) : '';
-        logEntries.push({ label: '🔬 Forschung', amount: researchBonus, detail });
+        logEntries.push({ label: '🔬 Forschung', amount: k(researchBonus), detail });
       }
       if (worldBonus > 0) {
         const detail = (typeof worldPerCupDetail === 'function')
-          ? `${amount}× à ${worldPerCup}/Tasse · ${worldPerCupDetail(worldRankMap)}` : '';
-        logEntries.push({ label: '🌍 Welt-Einfluss', amount: worldBonus, detail });
+          ? `${amount}× à ${worldPerCupBase}/Tasse · ${worldPerCupDetail(worldRankMap)}` : '';
+        logEntries.push({ label: '🌍 Welt-Einfluss', amount: k(worldBonus), detail });
+      }
+      if (allianceCupBonus > 0) {
+        logEntries.push({ label: '🤝 Handelsbündnis', amount: k(allianceCupBonus), detail: `${amount}× à ${tradeBonus.cup}/Tasse · +10% Einkommen aus dem Bündnis-Land` });
       }
       if (groupBonus > 0) {
-        logEntries.push({ label: '🏛️ Gruppenkasse', amount: groupBonus, detail: `${amount}× à ${groupPerks.perCup}/Tasse (Gruppen-Effekt)` });
+        logEntries.push({ label: '🏛️ Gruppenkasse', amount: k(groupBonus), detail: `${amount}× à ${groupPerks.perCup}/Tasse (Gruppen-Effekt)` });
       }
       for (const a of allNew) {
-        if (a?.coinReward) logEntries.push({ label: `🏆 ${a.name || a.id}`, amount: a.coinReward });
+        if (a?.coinReward) logEntries.push({ label: `🏆 ${a.name || a.id}`, amount: k(a.coinReward) });
       }
-      if (streakBonus > 0) logEntries.push({ label: `🔥 Streak ${newStreak}`, amount: streakBonus });
-      if (ciqBonus > 0)    logEntries.push({ label: '🧠 CIQ-Fähigkeit', amount: ciqBonus, detail: ciqDetail });
+      if (streakBonus > 0) logEntries.push({ label: `🔥 Streak ${newStreak}`, amount: k(streakBonus) });
+      if (ciqBonus > 0)    logEntries.push({ label: '🧠 CIQ-Fähigkeit', amount: k(ciqBonus), detail: ciqDetail });
+      if (kartellMult > 1) logEntries.push({ label: '👑 Kaffeekartell aktiv', amount: 0, detail: 'Alle Tassen-Einnahmen oben bereits ×2 gerechnet' });
       if (caffeinePenalty > 0) logEntries.push({ label: '🚩 Koffein-Strafe → Gruppenkasse', amount: -caffeinePenalty });
       if (weekendLevy > 0)     logEntries.push({ label: '📅 Wochenend-Abgabe → Gruppenkasse', amount: -weekendLevy });
       if (passiveEarned > 0) {
-        for (const e of _passiveLogEntries(member, passiveEarned, worldRankMap, worldByCountry, groupPerks.perDay)) logEntries.push(e);
+        for (const e of _passiveLogEntries(member, passiveEarned, worldRankMap, worldByCountry, groupPerks.perDay, passiveTradeBonusDay)) logEntries.push(e);
       }
 
       let md = member.map_data || {};
@@ -1064,7 +1100,7 @@ const DB = (() => {
     const def = (typeof CIQ_PERKS !== 'undefined') ? CIQ_PERKS.find(p => p.id === perkId) : null;
     if (!def) return { error: 'unknown' };
     if (def.pending) return { error: 'pending' };
-    const { data: raw } = await _sb.from('members').select('coins, cosmetics').eq('id', memberId).single();
+    const { data: raw } = await _sb.from('members').select('coins, cosmetics, map_data').eq('id', memberId).single();
     if (!raw) return { error: 'not_found' };
     const cosm  = raw.cosmetics || {};
     const ciq   = (typeof ciqGetCiq === 'function') ? ciqGetCiq(cosm) : 0;
@@ -1085,6 +1121,18 @@ const DB = (() => {
     const newCosm = { ...cosm, ciq_perks: perks };
     const { error: upErr } = await _sb.from('members').update({ cosmetics: newCosm }).eq('id', memberId);
     if (upErr) return { error: upErr.message };
+    // Tages-Log: Kaufpreis der Fähigkeit sichtbar machen — bisher komplett unsichtbar,
+    // nur der Kontostand sank (analog zum Handelsbündnis-Geschenk-Fund). Fresh-Read
+    // direkt vor dem Merge (wie in claimLoginBonus), falls zwischenzeitlich ein
+    // anderer Write (Passiv/Gehalt) das map_data schon weitergeschrieben hat.
+    if ((def.cc || 0) > 0) {
+      try {
+        const { data: fresh } = await _sb.from('members').select('map_data').eq('id', memberId).single();
+        const md = appendTodayLog((fresh && fresh.map_data) || raw.map_data,
+          [{ label: `🧠 ${def.name} freigeschaltet`, amount: -def.cc }]);
+        await updateMapData(memberId, md);
+      } catch (e) { console.warn('CIQ-Kauf-Log konnte nicht gespeichert werden:', e); }
+    }
     return { ok: true, cosmetics: newCosm };
   }
 
@@ -1297,7 +1345,12 @@ const DB = (() => {
   }
 
   // ── Abgeleitete Getter ───────────────────────────────────────────────────────
-  function getLeaderboard(data)   { return [...(data.users || [])].sort((a, b) => b.totalCups - a.totalCups); }
+  // Tiebreak nach Name (statt reinem totalCups-Vergleich): ohne festen Tiebreak konnten
+  // Spieler mit exakt gleichem Tassen-Stand (z.B. mehrere bei 0) je nach Aufruf in
+  // wechselnder Reihenfolge erscheinen — wirkte willkürlich, u.a. weil dieselbe Rangliste
+  // auch die CIQ-Angriffsziel-Auswahl bestimmt (siehe apply_ciq_attack() SQL + ciqAttackQueue
+  // in research.js, dieselbe Tiebreak-Konvention).
+  function getLeaderboard(data)   { return [...(data.users || [])].sort((a, b) => b.totalCups - a.totalCups || a.name.localeCompare(b.name)); }
   function getSeasons(data)       { return [...(data.seasons || [])].sort((a, b) => b.season_id?.localeCompare(a.season_id)); }
   function getDailyStats(data, days = 30) {
     const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - days);
@@ -1451,17 +1504,20 @@ const DB = (() => {
   async function fetchAllWorldAlliances() {
     try {
       const { data, error } = await _sb.from('world_alliances')
-        .select('id, type, member_a, member_b, country_a, country_b, payer_id, status, started_at, expires_at, last_tribut_at')
+        .select('id, type, member_a, member_b, country_a, country_b, payer_id, offer_cc, status, started_at, expires_at, last_tribut_at')
         .eq('group_id', _groupId);
       if (error) throw error;
       return data || [];
     } catch (e) { return []; }
   }
 
-  async function proposeAlliance(memberId, type, countryId, targetMemberId, targetCountryId) {
+  // offerCc: nur bei type='handel' relevant (CC-Geschenk, fließt erst bei Annahme) — bei
+  // frieden/schutz einfach 0 mitschicken (RPC ignoriert es dort serverseitig).
+  async function proposeAlliance(memberId, type, countryId, targetMemberId, targetCountryId, offerCc) {
     const { data, error } = await _sb.rpc('propose_alliance', {
       p_member_id: memberId, p_group_id: _groupId, p_type: type,
-      p_country_id: countryId, p_target_member_id: targetMemberId, p_target_country_id: targetCountryId
+      p_country_id: countryId, p_target_member_id: targetMemberId, p_target_country_id: targetCountryId,
+      p_offer_cc: parseFloat(offerCc) || 0
     });
     if (error) throw new Error(error.message);
     return data; // { ok, status } oder { error }
@@ -1518,6 +1574,19 @@ const DB = (() => {
           });
           if (!error && data && data.ok) results.push(data);
         } catch (e) { /* einzelnes Bündnis überspringen, Rest weiterlaufen lassen */ }
+      }
+
+      // Tages-Log (Zahler-Sicht — der Empfänger erfährt seinen Zugewinn nur über den
+      // steigenden Kontostand, analog zu anderen serverseitigen CC-Transfers wie
+      // Sabotage/CIQ-Angriffen): -CC-Zeile je tatsächlich bezahltem Tribut.
+      const paid = results.filter(r => r.amount_paid > 0);
+      if (paid.length) {
+        try {
+          const { data: fresh } = await _sb.from('members').select('map_data').eq('id', memberId).single();
+          const logEntries = paid.map(r => ({ label: `🕊️ Friedenstribut → ${r.receiver_name || '?'}`, amount: -r.amount_paid }));
+          const md = appendTodayLog((fresh && fresh.map_data) || member.map_data, logEntries);
+          await updateMapData(memberId, md);
+        } catch (e) { console.warn('Tribut-Log konnte nicht gespeichert werden:', e); }
       }
     } catch (e) { console.warn('Bündnis-Tribut fehlgeschlagen:', e.message); }
     return results;

@@ -122,16 +122,18 @@ async function claimPassiveAndRefresh(force = false) {
   // Login-Eintrag; claimLoginBonus liest dabei das von claimPassive aktualisierte
   // map_data frisch). ERST danach ein einziges refreshData. So kann kein zwischendurch
   // ausgelöster Refresh/Snapshot den gerade geschriebenen Passiv-Eintrag clobbern.
-  let earned = 0, lb = 0;
+  let earned = 0, lb = 0, tribute = [];
   try { earned = await DB.claimPassive(currentUser.id); }
   catch (e) { console.warn('Passiv-Einlösung fehlgeschlagen:', e.message); }
   // Täglicher Login-Bonus (idempotent pro Tag, eskaliert mit der Login-Serie)
   try { lb = await DB.claimLoginBonus(currentUser.id); }
   catch (e) { console.warn('Login-Bonus fehlgeschlagen:', e.message); }
   // 🕊️ Fälligen Friedensbündnis-Tribut abbuchen (server-seitig auf 7 Tage gegated,
-  // hier nur "anstoßen" wie Passiv-/Login-Bonus — kein Cron).
-  try { await DB.settleAllianceTributes(currentUser.id); } catch (e) {}
-  if (earned > 0 || (lb && lb.reward)) {
+  // hier nur "anstoßen" wie Passiv-/Login-Bonus — kein Cron). Schreibt selbst einen
+  // -CC-Log-Eintrag (settleAllianceTributes) — Ergebnis hier nur für Toast/Refresh nötig.
+  try { tribute = await DB.settleAllianceTributes(currentUser.id); } catch (e) {}
+  const tributePaid = (tribute || []).filter(t => t.amount_paid > 0);
+  if (earned > 0 || (lb && lb.reward) || tributePaid.length) {
     try { await refreshData(); } catch (e) {}
     const hc = document.getElementById('header-coins');
     if (hc && currentUserData?.coins !== undefined) {
@@ -139,6 +141,7 @@ async function claimPassiveAndRefresh(force = false) {
     }
     if (earned > 0) showToast(`⚙️ +${earned} CC passives Einkommen`, 'success');
     if (lb && lb.reward) showToast(`📅 +${lb.reward} CC Login-Bonus (Tag ${lb.streak})`, 'success');
+    for (const t of tributePaid) showToast(`🕊️ -${t.amount_paid} CC Friedenstribut an ${t.receiver_name || '?'}`, 'info');
   }
   dailyGroupTasks(); // Tagesabgabe + Wochen-Challenge (selbst idempotent pro Tag/Woche)
 }
@@ -696,6 +699,17 @@ function _zusatztitelSuffix(u) {
   return ztDef ? ` · ${ztDef.icon} ${ztDef.name}` : '';
 }
 
+// ── Profil-Untertabs (Tagesstatistik / CIQ / Achievements+Tagesaufgabe+Sprüche) ──────
+// Reiner Anzeige-Toggle — der Inhalt aller 3 Panels wird bei jedem renderProfile()
+// unabhängig vom aktiven Tab neu befüllt (siehe renderCiqPerks/renderDailyTask/
+// renderSprueche), hier wird nur ein-/ausgeblendet.
+function switchProfileSubtab(name) {
+  document.querySelectorAll('#profile-subtabs [data-profile-subtab]').forEach(btn =>
+    btn.classList.toggle('active', btn.dataset.profileSubtab === name));
+  ['stats', 'ciq', 'achievements'].forEach(t =>
+    document.getElementById(`profile-subtab-${t}`)?.classList.toggle('hidden', t !== name));
+}
+
 // ── Profil ────────────────────────────────────────────────────────────────────
 function renderProfile() {
   const u = currentUserData;
@@ -754,7 +768,9 @@ function renderProfile() {
 }
 
 // ✨ Kaffee-Aufgabe der Tage (rotiert alle 3 Tage). Wird dynamisch ins Profil injiziert
-// (kein index.html-Edit). Einlösen ist Goodwill — Kontrolle liegt in der Gruppe.
+// (kein index.html-Edit) — landet im Untertab "🏆 Achievements" (voran der Achievements-
+// Grid, siehe Profil-Untertabs), zusammen mit Achievements + Sprüche. Einlösen ist
+// Goodwill — Kontrolle liegt in der Gruppe.
 function renderDailyTask(u) {
   if (typeof currentDailyTask !== 'function') return;
   const { period, task } = currentDailyTask(undefined, u.id); // persönliche Aufgabe je Mitglied
@@ -764,8 +780,8 @@ function renderDailyTask(u) {
     sec = document.createElement('div');
     sec.id = 'daily-task-section';
     sec.className = 'progress-section';
-    const achSec = document.getElementById('achievements-grid')?.closest('.progress-section');
-    if (achSec && achSec.parentNode) achSec.parentNode.insertBefore(sec, achSec);
+    const tab = document.getElementById('profile-subtab-achievements');
+    if (tab) tab.insertBefore(sec, tab.firstChild);
     else return; // Profil-DOM (noch) nicht da
   }
   const claimed = !!(u.map_data?.taskClaims?.[periodKey]);
@@ -802,7 +818,8 @@ function renderDailyTask(u) {
   }
 }
 
-// 🧠 CIQ-Fähigkeiten — dynamisch ins Profil injiziert (kein index.html-Edit).
+// 🧠 CIQ-Fähigkeiten — dynamisch ins Profil injiziert (kein index.html-Edit), landet im
+// eigenen Untertab "🧠 CIQ" (siehe Profil-Untertabs).
 // CIQ (cosmetics.quiz.ciq) ist die Schwelle, bezahlt wird mit CC. Plan: plans/2026-06-26-ciq-faehigkeiten-plan.md
 function renderCiqPerks(u) {
   if (typeof CIQ_PERKS === 'undefined') return;
@@ -823,8 +840,8 @@ function renderCiqPerks(u) {
     sec = document.createElement('div');
     sec.id = 'ciq-perks-section';
     sec.className = 'progress-section';
-    const achSec = document.getElementById('achievements-grid')?.closest('.progress-section');
-    if (achSec && achSec.parentNode) achSec.parentNode.insertBefore(sec, achSec);
+    const tab = document.getElementById('profile-subtab-ciq');
+    if (tab) tab.appendChild(sec);
     else return;
   }
 
@@ -838,7 +855,29 @@ function renderCiqPerks(u) {
       return `${def?.icon || '⚠️'} ${_esc(def?.name || d.type)} (noch ~${hrs} h)`;
     }).join(' · ')}</div>` : '';
 
-  const cards = CIQ_PERKS.map(def => {
+  // 🎯 Angriffs-Reihenfolge sichtbar machen (User-Wunsch: die Ziel-Auswahl "rutscht"
+  // durchs 12h-Opfer-Schutzschild, ohne diese Liste war völlig unklar, wer gerade
+  // dran/geschützt ist — wer zuerst angreift, bekommt oft die größere Beute).
+  const queue = (typeof ciqAttackQueue === 'function') ? ciqAttackQueue(appData?.users, u.id, now) : [];
+  const queueHtml = queue.length ? `
+    <div class="ciq-debuff-warning" style="background:rgba(212,170,55,.08);border-color:rgba(212,170,55,.35)">
+      <div style="font-weight:700;margin-bottom:4px">🎯 Angriffs-Reihenfolge (Rangliste)</div>
+      <div style="color:var(--muted);font-size:.72rem;margin-bottom:8px">Angriffe treffen immer den höchstplatzierten NICHT geschützten Spieler. Wer zuerst angreift, trifft entsprechend oft die größere Beute — Getroffene sind 12h geschützt und rutschen aus der Reihe, der/die Nächste rückt nach.</div>
+      ${queue.map((t, i) => `
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 8px;margin-bottom:3px;border-radius:6px;font-size:.82rem;${t.shieldedUntil
+          ? 'opacity:.55'
+          : 'background:rgba(212,170,55,.14);border:1px solid rgba(212,170,55,.4)'}">
+          <span style="font-weight:700;color:${t.shieldedUntil ? 'var(--muted)' : 'var(--cream)'}">#${i + 1} ${_esc(t.name)}</span>
+          <span style="font-weight:700;color:${t.shieldedUntil ? 'var(--muted)' : 'var(--gold)'}">${t.shieldedUntil
+            ? `🛡️ geschützt noch ~${Math.max(1, Math.round((t.shieldedUntil - now) / 3600000))} h`
+            : '⚔️ angreifbar'}</span>
+        </div>`).join('')}
+    </div>` : '';
+
+  // Karte für einen einzelnen Perk bauen — wird unten für "🧠 Fähigkeiten" (Selbst-Buffs)
+  // und "⚔️ Angriffe & Debuffs" (PvP) getrennt aufgerufen (User-Wunsch: Fähigkeiten und
+  // Angriffe im CIQ-Tab unterteilen statt einer gemischten Liste).
+  const renderCiqCard = (def) => {
     const isPvp   = def.type === 'attack' || def.type === 'debuff';
     const owned   = !isPvp && !!perks[def.id]?.at;
     const timed   = def.type === 'timed';
@@ -883,24 +922,43 @@ function renderCiqPerks(u) {
     const locHint = def.id === 'informant'
       ? `<div class="ciq-hint" style="color:var(--muted);font-size:.72rem;margin-top:3px">📍 Ergebnis erscheint unter 📊 Statistik → 💰 Gehalt.</div>`
       : '';
+    // Live-Beschreibung MIT eingesetztem Ziel-Namen statt der abstrakten "Rangliste-
+    // Erster/Top 3"-Formulierung — die Ziel-Auswahl "rutscht" durchs 12h-Opfer-
+    // Schutzschild ständig weiter, ohne konkreten Namen war kaum nachvollziehbar,
+    // WER gerade getroffen würde.
+    const liveDesc = (isPvp && typeof ciqPerkDesc === 'function')
+      ? ciqPerkDesc(def, appData?.users, u.id)
+      : def.desc;
     return `
       <div class="ciq-card ciq-${stateCls}${isPvp ? ' ciq-pvp' : ''}">
         <div class="ciq-head"><span class="ciq-icon">${def.tier} ${def.icon}</span>
           <span class="ciq-name">${_esc(def.name)}</span></div>
-        <div class="ciq-desc">${_esc(def.desc)}</div>
+        <div class="ciq-desc">${_esc(liveDesc)}</div>
         ${locHint}
         <div class="ciq-foot"><span class="ciq-meta">${meta.join(' · ')}</span>${actionHtml}</div>
       </div>`;
-  }).join('');
+  };
+  const buffCards   = CIQ_PERKS.filter(d => d.type !== 'attack' && d.type !== 'debuff').map(renderCiqCard).join('');
+  const attackCards = CIQ_PERKS.filter(d => d.type === 'attack' || d.type === 'debuff').map(renderCiqCard).join('');
 
   sec.innerHTML = `
-    <div class="section-title">🧠 CIQ-Fähigkeiten <span class="ciq-score">Dein Kaffee-IQ: ${Math.floor(ciq)}</span></div>
-    <div class="ciq-intro">Wer klug ist, soll's auch spüren. Quiz-Wissen (CIQ) schaltet Fähigkeiten frei — bezahlt wird mit 🫘. CIQ sinkt nie. <em>Frisch getroffene Spieler sind 12h vor weiteren Angriffen geschützt — die Ziel-Auswahl rutscht dann automatisch weiter.</em></div>
+    <div class="section-title">🧠 CIQ <span class="ciq-score">Dein Kaffee-IQ: ${Math.floor(ciq)}</span></div>
+    <div class="ciq-intro">Wer klug ist, soll's auch spüren. Quiz-Wissen (CIQ) schaltet Fähigkeiten frei — bezahlt wird mit 🫘. CIQ sinkt nie.</div>
     ${debuffHint}
+
+    <div class="section-title" style="margin-top:14px">🧠 Fähigkeiten</div>
     <button class="ciq-toggle-btn" onclick="this.classList.toggle('open');this.nextElementSibling.style.display=this.classList.contains('open')?'':'none'">
       Fähigkeiten anzeigen <span class="ciq-toggle-arrow">▸</span>
     </button>
-    <div class="ciq-grid" style="display:none">${cards}</div>`;
+    <div class="ciq-grid" style="display:none">${buffCards}</div>
+
+    <div class="section-title" style="margin-top:14px">⚔️ Angriffe &amp; Debuffs</div>
+    <div class="ciq-intro">Frisch getroffene Spieler sind 12h vor weiteren Angriffen geschützt — die Ziel-Auswahl rutscht dann automatisch weiter.</div>
+    ${queueHtml}
+    <button class="ciq-toggle-btn" onclick="this.classList.toggle('open');this.nextElementSibling.style.display=this.classList.contains('open')?'':'none'">
+      Angriffe anzeigen <span class="ciq-toggle-arrow">▸</span>
+    </button>
+    <div class="ciq-grid" style="display:none">${attackCards}</div>`;
 
   sec.querySelectorAll('.ciq-buy').forEach(btn => {
     btn.onclick = async () => {
@@ -1033,6 +1091,20 @@ function _informantStatsHtml(u) {
   const worldInv = (typeof _ccWorldInvested === 'function') ? _ccWorldInvested(u) : 0;
   const gov       = (typeof _ccGovernments === 'function') ? _ccGovernments(u) : 0;
   if (worldInv > 0 || gov > 0) items.push(`🌍 Weltkarte: ${_fmtCoins(worldInv)} CC investiert · ${gov} Regierung${gov === 1 ? '' : 'en'}`);
+
+  // 🤝 Weltbündnisse: 'handel' ist länderbezogen (zählt, wenn u GERADE eines der beiden
+  // Bündnis-Länder regiert — nicht nur beim Erst-Unterzeichner), 'frieden'/'schutz' bleiben
+  // personenbezogen. Braucht appData.worldAlliances + das eigene Länder-Rangprofil von u.
+  if (typeof _allianceSummaryForUser === 'function' && typeof worldRanksForMember === 'function') {
+    const uRankMap = worldRanksForMember(appData?.worldInvestments, u.id).rankMap;
+    const as = _allianceSummaryForUser(u.id, appData?.worldAlliances, uRankMap);
+    const parts = [];
+    if (as.handel > 0)     parts.push(`${as.handel}× 🤝`);
+    if (as.friedenPay > 0) parts.push(`${as.friedenPay}× 🕊️ zahlt`);
+    if (as.friedenGet > 0) parts.push(`${as.friedenGet}× 🕊️ erhält`);
+    if (as.schutz > 0)     parts.push(`${as.schutz}× 🛡️`);
+    if (parts.length) items.push(`🤝 Bündnisse: ${parts.join(' · ')}`);
+  }
 
   const bldCount  = (typeof _ccBldCount === 'function') ? _ccBldCount(u) : 0;
   const explored  = (typeof _ccExploredPct === 'function') ? _ccExploredPct(u) : 0;
@@ -1572,6 +1644,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('custom-cups-input').addEventListener('keydown', e => { if (e.key==='Enter') customAdd(); });
   document.getElementById('btn-profile-add').addEventListener('click', profileAddCups);
   document.getElementById('profile-cups-input').addEventListener('keydown', e => { if (e.key==='Enter') profileAddCups(); });
+  document.querySelectorAll('#profile-subtabs [data-profile-subtab]').forEach(btn =>
+    btn.addEventListener('click', () => switchProfileSubtab(btn.dataset.profileSubtab)));
   document.getElementById('btn-refresh')?.addEventListener('click', async () => { await refreshData(); showToast('Aktualisiert', 'info'); });
   document.getElementById('btn-pinnwand-post').addEventListener('click', () => postPinnwand(document.getElementById('pinnwand-input').value));
   document.getElementById('pinnwand-input').addEventListener('keydown', e => { if (e.key === 'Enter') postPinnwand(e.target.value); });

@@ -335,8 +335,9 @@ async function _buildWeltkarte(member, el) {
   try { if (typeof DB.fetchTaxStats === 'function') taxStats = await DB.fetchTaxStats(); } catch (e) { taxStats = {}; }
   const statsEl = document.getElementById('cc-world-stats');
   if (statsEl) {
+    const { rankMap: _myAllianceRankMap } = worldRanksForMember(_worldInvCache, member.id);
     statsEl.innerHTML = _renderWeltStatistik(investments, _worldBldCache, member, taxStats, users)
-      + ((typeof renderAllianceOverview === 'function') ? renderAllianceOverview(alliances, member, users) : '');
+      + ((typeof renderAllianceOverview === 'function') ? renderAllianceOverview(alliances, member, users, _myAllianceRankMap) : '');
     statsEl.querySelectorAll('[data-alliance-accept]').forEach(b => b.onclick = () => _handleRespondAlliance(b.dataset.allianceAccept, true, null, member));
     statsEl.querySelectorAll('[data-alliance-decline]').forEach(b => b.onclick = () => _handleRespondAlliance(b.dataset.allianceDecline, false, null, member));
   }
@@ -498,6 +499,11 @@ async function _openCountrySheet(country, member) {
     }
   }
 
+  // ── Weltbündnisse mit dem Regenten dieses Landes (plans/PLAN_weltbuendnisse.md) ──
+  const myGovernedCountryId = Object.entries(_myRankMap).find(([, r]) => r === 1)?.[0] || null;
+  const allianceBlock = (typeof renderAllianceSection === 'function')
+    ? renderAllianceSection(country, member, governor, _worldAllianceCache, myGovernedCountryId, _worldInvCache, _worldBldCache) : '';
+
   sheet.innerHTML = `
     <div class="cc-world-sheet-head">
       <span>${country.flag} <strong>${_esc2(country.name)}</strong> · ${_esc2(country.specialty)}</span>
@@ -521,12 +527,23 @@ async function _openCountrySheet(country, member) {
     <div class="cc-world-blds">${bldRows}</div>
     <div class="cc-world-section-title">☕ Garde</div>
     <div class="cc-world-garde">${gardeBlock}</div>
-    ${sabotageBlock ? `<div class="cc-world-section-title">⚔️ Sabotage</div><div class="cc-world-sabotage">${sabotageBlock}</div>` : ''}`;
+    ${sabotageBlock ? `<div class="cc-world-section-title">⚔️ Sabotage</div><div class="cc-world-sabotage">${sabotageBlock}</div>` : ''}
+    ${allianceBlock}`;
 
   sheet.querySelector('[data-world-close]').onclick = () => sheet.classList.add('hidden');
   const investBtn = sheet.querySelector('[data-world-invest]');
   if (investBtn) investBtn.onclick = () => _handleWorldInvest(country, member);
   const gb = sheet.querySelector('[data-world-garde]'); if (gb) gb.onclick = () => _handleBuyGarde(country, member);
+  sheet.querySelectorAll('[data-alliance-propose]').forEach(b => b.onclick = () => {
+    const type = b.dataset.alliancePropose;
+    const offerInput = b.closest('.cc-alliance-row')?.querySelector('[data-alliance-offer-for="handel"]');
+    const minOffer = b.dataset.allianceMinOffer ? parseFloat(b.dataset.allianceMinOffer) : undefined;
+    _handleProposeAlliance(type, country, governor, member, myGovernedCountryId, offerInput?.value, minOffer);
+  });
+  sheet.querySelectorAll('[data-alliance-accept]').forEach(b => b.onclick = () =>
+    _handleRespondAlliance(b.dataset.allianceAccept, true, country, member));
+  sheet.querySelectorAll('[data-alliance-decline]').forEach(b => b.onclick = () =>
+    _handleRespondAlliance(b.dataset.allianceDecline, false, country, member));
   const sb = sheet.querySelector('[data-world-sabotage]'); if (sb && governor) sb.onclick = () => _handleSabotage(country, member, governor);
   sheet.querySelectorAll('[data-world-build]').forEach(b => b.onclick = () => {
     const def = worldBuildingDef(country.id, b.dataset.worldBuild); if (def) _handleBuildWorld(country, member, def);
@@ -595,6 +612,53 @@ async function _handleBuyGarde(country, member) {
   await _worldRefreshAndReopen(country, member);
 }
 
+// ── Weltbündnisse (plans/PLAN_weltbuendnisse.md) ─────────────────────────────
+async function _handleProposeAlliance(type, country, governor, member, myCountryId, offerCc, minOffer) {
+  if (!myCountryId) { showToast('Werde zuerst selbst Regent eines Landes.', 'error'); return; }
+  const def = (typeof allianceDef === 'function') ? allianceDef(type) : null;
+  const offer = Math.floor(parseFloat(offerCc) || 0);
+  const requiredOffer = minOffer != null ? minOffer
+    : ((typeof allianceMinOffer === 'function') ? allianceMinOffer(country.id, _worldInvCache, _worldBldCache) : ALLIANCE_MIN_OFFER);
+  if (type === 'handel' && offer < requiredOffer) {
+    showToast(`Handelsbündnis mit ${country.flag} ${country.name} braucht mind. ${requiredOffer} CC als Geschenk-Angebot.`, 'error');
+    return;
+  }
+  let res;
+  try { res = await DB.proposeAlliance(member.id, type, myCountryId, governor.member_id, country.id, offer); }
+  catch (e) { showToast(e.message || 'Vorschlag fehlgeschlagen', 'error'); return; }
+  if (res?.error === 'already_exists')      { showToast('Es gibt bereits ein Bündnis dieses Typs.', 'error'); return; }
+  if (res?.error === 'not_rank1_self')      { showToast('Du regierst dein Land gerade nicht (mehr).', 'error'); return; }
+  if (res?.error === 'not_rank1_target')    { showToast(`${governor.member_name} regiert ${country.name} gerade nicht (mehr).`, 'error'); return; }
+  if (res?.error === 'self')                { showToast('Du kannst kein Bündnis mit dir selbst schließen.', 'error'); return; }
+  if (res?.error === 'offer_too_low')       { showToast(`Angebot zu niedrig (Server-Minimum ${ALLIANCE_MIN_OFFER} CC).`, 'error'); return; }
+  if (!res?.ok || !def) { showToast('Bündnis-Vorschlag fehlgeschlagen', 'error'); return; }
+  const offerTxt = (type === 'handel') ? ` (${offer} CC Geschenk-Angebot)` : '';
+  showToast(`${def.icon} Vorschlag an ${governor.member_name} gesendet.`, 'success');
+  try { await DB.postMessage(`${def.icon} ${member.name} schlägt ${governor.member_name} ein ${def.name} vor${offerTxt}.`, member.name); } catch (e) {}
+  await _worldRefreshAndReopen(country, member);
+}
+
+async function _handleRespondAlliance(allianceId, accept, country, member) {
+  let res;
+  try { res = await DB.respondAlliance(member.id, allianceId, accept); }
+  catch (e) { showToast(e.message || 'Aktion fehlgeschlagen', 'error'); return; }
+  if (res?.error === 'offer_unfunded') { showToast('Der Antragsteller hat gerade nicht mehr genug CC für sein Angebot.', 'error'); return; }
+  if (res?.error === 'not_yours') { showToast('Dieser Antrag richtete sich an den vorherigen Regenten, nicht an dich.', 'error'); return; }
+  if (!res?.ok) { showToast('Aktion fehlgeschlagen', 'error'); return; }
+  const def = (typeof allianceDef === 'function') ? allianceDef(res.type) : null;
+  const otherId = res.member_a === member.id ? res.member_b : res.member_a;
+  const otherName = ((typeof appData !== 'undefined' && appData?.users) || []).find(u => u.id === otherId)?.name || '—';
+  if (def) {
+    const giftTxt = (accept && res.offer_cc > 0) ? ` (+${res.offer_cc} CC Geschenk erhalten)` : '';
+    const msg = accept
+      ? `${def.icon} ${member.name} nimmt das ${def.name} von ${otherName} an!${giftTxt}`
+      : `${def.icon} ${member.name} lehnt das ${def.name} von ${otherName} ab.`;
+    showToast(accept ? `${def.icon} Bündnis aktiv!${giftTxt}` : 'Abgelehnt.', accept ? 'success' : 'info');
+    try { await DB.postMessage(msg, member.name); } catch (e) {}
+  }
+  await _worldRefreshAndReopen(country, member);
+}
+
 async function _handleWorldInvest(country, member) {
   const input  = document.getElementById('cc-world-amount');
   const amount = Math.floor(parseFloat(input?.value || '0'));
@@ -623,6 +687,7 @@ async function _handleWorldInvest(country, member) {
   catch (e) { showToast(e.message || 'Investition fehlgeschlagen', 'error'); return; }
   if (res?.error === 'min_25')             { showToast(`Mindestens ${WORLD_MIN_INVEST} CC!`, 'error'); return; }
   if (res?.error === 'insufficient_coins') { showToast('Nicht genug CoffeeCoins!', 'error'); return; }
+  if (res?.error === 'peace_pact_blocked') { showToast('🕊️ Ein Friedensbündnis schützt diesen Regenten gerade vor dir.', 'error'); return; }
   if (!res?.ok)                            { showToast('Investition fehlgeschlagen', 'error'); return; }
 
   showToast(`🌍 ${amount} CC in ${country.flag} ${country.name} investiert!`, 'success');
@@ -670,6 +735,19 @@ function worldTopInvest(investments, countryId) {
   let t = 0;
   for (const w of (investments || [])) if (w.country_id === countryId) t = Math.max(t, Number(w.total_invested) || 0);
   return t;
+}
+
+// Gesamtwert eines Landes: Summe ALLER Investitionen (aller Spieler) + Gebäudewert
+// (Baukosten, L2 = ×1.5 wie in worldStatsForMember). Misst, wie "ausgebaut" ein Land ist —
+// genutzt für die Mindest-Geschenkhöhe beim Handelsbündnis-Antrag (alliances.js).
+function worldCountryValue(countryId, investments, byCountry) {
+  let v = 0;
+  for (const w of (investments || [])) if (w.country_id === countryId) v += Number(w.total_invested) || 0;
+  for (const b of (byCountry?.[countryId] || [])) {
+    const def = worldBuildingDef(countryId, b.building_id);
+    if (def) v += def.cost * (b.level === 2 ? 1.5 : 1);
+  }
+  return Math.round(v);
 }
 
 // Aktueller Regierungs-Inhaber (Rang 1, effektiver Einfluss) eines Landes
@@ -1004,6 +1082,7 @@ async function _handleSabotage(country, member, governor) {
   if (res?.error === 'insufficient_coins') { showToast('Nicht genug CoffeeCoins!', 'error'); return; }
   if (res?.error === 'already_active')     { showToast('Hier läuft bereits eine Sabotage.', 'error'); return; }
   if (res?.error === 'self')               { showToast('Du kannst dich nicht selbst sabotieren.', 'error'); return; }
+  if (res?.error === 'allied')             { showToast('🛡️ Ein Schutzbündnis verhindert Sabotage gegen diesen Regenten.', 'error'); return; }
   if (!res?.ok) { showToast('Sabotage fehlgeschlagen', 'error'); return; }
   showToast(`⚔️ Söldner sabotieren ${country.flag} ${country.name}!`, 'success');
   try { await DB.postMessage(`${member.name} schickt Söldner nach ${country.flag} ${country.name} — ${governor.member_name} verliert dort ${SABOTAGE_DAYS} Tage Einkommen! ⚔️`, member.name); } catch (e) {}

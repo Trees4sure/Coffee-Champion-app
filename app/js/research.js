@@ -727,19 +727,19 @@ const CIQ_PERKS = [
   { id: 'steuerumgehung',     tier: '🧾', icon: '🧾', name: 'Steuerumgehung',     type: 'timed',  durationH: 24, ciq: 3,  cc: 15,
     desc: 'Deine Tagesabgabe heute fällt komplett aus.' },
   { id: 'kaffee_dieb',        tier: '🫘', icon: '🫘', name: 'Kaffeedieb',         type: 'attack',                ciq: 4,  cc: 20,
-    desc: 'Stiehl sofort bis zu 30 CC vom Spieler mit den meisten CC (gedeckelt auf dessen Guthaben).' },
+    desc: 'Stiehl sofort bis zu 30 CC vom Rangliste-Ersten (gedeckelt auf dessen Guthaben).' },
   { id: 'steuer_pruefer',     tier: '🔍', icon: '🔍', name: 'Steuerprüfer',       type: 'debuff', durationH: 24, ciq: 5,  cc: 25,
-    desc: 'Der CC-Spitzenreiter zahlt 24 h lang die doppelte Tagesabgabe.' },
+    desc: 'Der Rangliste-Erste zahlt 24 h lang die doppelte Tagesabgabe.' },
   { id: 'schatz_raeuber',     tier: '💎', icon: '💎', name: 'Schatzräuber',       type: 'debuff', durationH: 48, ciq: 5,  cc: 25,
-    desc: 'Der nächste Kartenschatz des Zweitplatzierten geht zur Hälfte an dich (48 h Zeitfenster).' },
+    desc: 'Der nächste Kartenschatz des Rangliste-Zweiten geht zur Hälfte an dich (48 h Zeitfenster).' },
   { id: 'karten_saboteur',    tier: '🚫', icon: '🚫', name: 'Kartensaboteur',     type: 'debuff', durationH: 24, ciq: 6,  cc: 30,
-    desc: 'Der CC-Spitzenreiter verliert heute 2 Karten-Schritte.' },
+    desc: 'Der Rangliste-Erste verliert heute 2 Karten-Schritte.' },
   { id: 'tages_diebstahl',    tier: '💸', icon: '💸', name: 'Tagesdiebstahl',     type: 'attack',                ciq: 7,  cc: 35,
-    desc: 'Erhalte sofort 20 % des heutigen Tassen-Einkommens des Spitzenreiters.' },
+    desc: 'Erhalte sofort 20 % des heutigen Tassen-Einkommens des Rangliste-Ersten.' },
   { id: 'kaffee_pfluecker',   tier: '🌿', icon: '🌿', name: 'Kaffeepflücker',     type: 'attack',                ciq: 9,  cc: 50,
-    desc: 'Erhalte sofort 25 % des zuletzt erfassten passiven Tageseinkommens des Spitzenreiters.' },
+    desc: 'Erhalte sofort 25 % des zuletzt erfassten passiven Tageseinkommens des Rangliste-Ersten.' },
   { id: 'reputationsangriff', tier: '📉', icon: '📉', name: 'Reputationsangriff', type: 'debuff', durationH: 4,  ciq: 10, cc: 60,
-    desc: 'Die Top 3 (außer dir) verlieren 4 h lang je 10 % ihres Forschungs-CC/Tasse-Bonus.' },
+    desc: 'Die Top 3 der Rangliste (außer dir) verlieren 4 h lang je 10 % ihres Forschungs-CC/Tasse-Bonus.' },
   { id: 'kaffee_kartell',     tier: '👑', icon: '👑', name: 'Kaffeekartell',      type: 'timed',  durationH: 1,  ciq: 12, cc: 100,
     desc: '1 Stunde: alle eigenen CC-Einnahmen (Tassen + Passiv) verdoppelt.' },
 ];
@@ -776,6 +776,70 @@ function ciqAttackCooldownUntil(mapData, perkId) {
   if (!ts) return null;
   const until = new Date(ts).getTime() + 12 * 3600000;
   return until > Date.now() ? until : null;
+}
+
+// ── Angriffsziel-Vorschau (rein Anzeige) ──────────────────────────────────────
+// Repliziert die serverseitige Ziel-Auswahl aus apply_ciq_attack() (SQL: Rangliste
+// total_cups DESC, Selbst + zuletzt getroffene Opfer mit 12h-Schutzschild raus) — damit
+// "Rangliste-Erster" im Perk-Text nicht abstrakt bleibt, sondern der konkrete Name
+// erscheint. Der Server bestimmt beim tatsächlichen Klick erneut autoritativ; bei einem
+// Wettlauf zwischen Anzeige und Klick (z. B. Ziel wird zwischenzeitlich woanders
+// getroffen) kann sich das tatsächliche Ziel noch verschieben — daher reine Vorschau.
+// Bei Punktegleichstand (z. B. mehrere Spieler mit 0 Tassen) sortierte weder diese
+// Vorschau noch getLeaderboard()/die SQL-Ziel-Auswahl deterministisch — dieselben zwei
+// Spieler konnten je nach Aufruf in wechselnder Reihenfolge erscheinen, was sich wie
+// Willkür anfühlte. Fix: fester Tiebreak nach Name (gleiche Konvention wie in
+// closeSeason()/getSeasons() für Saison-Standings), hier UND in getLeaderboard() (db.js)
+// UND in apply_ciq_attack() (SQL) — alle drei müssen synchron bleiben.
+const CIQ_VICTIM_SHIELD_HOURS = 12;
+function _ciqRankSort(a, b) { return (b.totalCups || 0) - (a.totalCups || 0) || (a.name || '').localeCompare(b.name || ''); }
+// Volle Angriffs-Reihenfolge (ALLE anderen Mitglieder, inkl. gerade geschützter) — für
+// die Transparenz-Anzeige im CIQ-Tab: macht sichtbar, wer gerade "dran" ist und wer
+// durchs 12h-Opfer-Schutzschild geschützt ist (User-Wunsch: "das muss ersichtlich sein").
+function ciqAttackQueue(users, selfId, nowTs) {
+  const now = nowTs || Date.now();
+  return (users || [])
+    .filter(u => u.id !== selfId)
+    .map(u => {
+      const cd = u.map_data && u.map_data.ciq_victim_cooldown;
+      const shieldUntil = cd ? new Date(cd).getTime() + CIQ_VICTIM_SHIELD_HOURS * 3600000 : 0;
+      return { id: u.id, name: u.name, totalCups: u.totalCups || 0, shieldedUntil: shieldUntil > now ? shieldUntil : null };
+    })
+    .sort(_ciqRankSort);
+}
+function ciqEligibleTargets(users, selfId, nowTs) {
+  return ciqAttackQueue(users, selfId, nowTs).filter(t => !t.shieldedUntil);
+}
+// Gibt den/die Namen zurück, die dieser Perk GERADE treffen würde (null = kein Ziel).
+function ciqAttackTargetLabel(perkId, users, selfId, nowTs) {
+  if (perkId === 'reputationsangriff') {
+    const top3 = ciqEligibleTargets(users, selfId, nowTs).slice(0, 3);
+    return top3.length ? top3.map(u => u.name).join(', ') : null;
+  }
+  const rank = perkId === 'schatz_raeuber' ? 2 : 1;
+  const target = ciqEligibleTargets(users, selfId, nowTs)[rank - 1];
+  return target ? target.name : null;
+}
+// Perk-Beschreibung MIT eingesetztem Ziel-Namen statt der abstrakten "Rangliste-
+// Erster/Zweiter/Top 3"-Formulierung — User-Wunsch: der Name soll direkt im Satz stehen,
+// nicht nur als separate Zeile darunter. Eigene Formulierung je Perk (Namen sind im
+// Deutschen nicht deklinierbar, aber Satzstellung/Präposition unterscheiden sich pro
+// Perk) — Fallback bleibt def.desc (die abstrakte Rangliste-Formulierung), falls gerade
+// niemand angreifbar ist, um keine grammatikalisch falschen Pronomen einsetzen zu müssen.
+const CIQ_TARGET_DESC = {
+  kaffee_dieb:        name => `Stiehl sofort bis zu 30 CC von ${name} (gedeckelt auf dessen Guthaben).`,
+  steuer_pruefer:     name => `${name} zahlt 24 h lang die doppelte Tagesabgabe.`,
+  schatz_raeuber:     name => `Der nächste Kartenschatz von ${name} geht zur Hälfte an dich (48 h Zeitfenster).`,
+  karten_saboteur:    name => `${name} verliert heute 2 Karten-Schritte.`,
+  tages_diebstahl:    name => `Erhalte sofort 20 % des heutigen Tassen-Einkommens von ${name}.`,
+  kaffee_pfluecker:   name => `Erhalte sofort 25 % des zuletzt erfassten passiven Tageseinkommens von ${name}.`,
+  reputationsangriff: name => `${name} verlieren 4 h lang je 10 % ihres Forschungs-CC/Tasse-Bonus.`,
+};
+function ciqPerkDesc(def, users, selfId, nowTs) {
+  const fmt = CIQ_TARGET_DESC[def.id];
+  if (!fmt) return def.desc;
+  const name = ciqAttackTargetLabel(def.id, users, selfId, nowTs);
+  return name ? fmt(name) : def.desc;
 }
 
 // ── Effekt-Helfer (in db.js angewandt) ───────────────────────────────────────
@@ -821,5 +885,6 @@ if (typeof module !== 'undefined' && module.exports) {
     CIQ_PERKS, ciqGetCiq, ciqActive, ciqDef, ciqDailyMax, ciqRedFlagImmune,
     ciqCupBonus, ciqResearchPassiveMult, ciqBuildingPassiveMult, ciqResearchCostMult, ciqRewardMult,
     ciqKartellMult, ciqDebuffEntry, ciqDebuffActive, ciqAttackCooldownUntil,
+    ciqEligibleTargets, ciqAttackTargetLabel, ciqPerkDesc, ciqAttackQueue,
   });
 }
