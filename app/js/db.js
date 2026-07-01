@@ -157,7 +157,7 @@ const DB = (() => {
       _sb.from('seasons').select('*').eq('group_id', _groupId).order('season_id', { ascending: false }),
       _sb.from('hall_of_fame').select('*').eq('group_id', _groupId).maybeSingle(),
       // Welt-Daten (Phase 1.5): liefern {data:null,error} falls noch nicht migriert → []. Kein Reject.
-      _sb.from('world_investments').select('member_id, country_id, total_invested, garde_purchased').eq('group_id', _groupId),
+      _sb.from('world_investments').select('member_id, country_id, total_invested, garde_level').eq('group_id', _groupId),
       _sb.from('world_buildings').select('member_id, country_id, building_id, level').eq('group_id', _groupId),
       _sb.from('group_treasury').select('balance, contributions, unlocked_goals').eq('group_id', _groupId).maybeSingle(),
     ]);
@@ -197,6 +197,19 @@ const DB = (() => {
   // Garde-Akademie-Entwicklung (+10% auf alle Welt-Einkommen) — aus map_data.worldDev
   function _gardeMult(member) {
     return (member && member.map_data && member.map_data.worldDev && member.map_data.worldDev.garde_akademie) ? 1.1 : 1;
+  }
+
+  // 🤝 Handelsbündnis: +8% auf alle Welt-Einkommen je aktivem Bündnis (world_alliances,
+  // type='handel'). Wert muss zu ALLIANCE_TYPES.handel.bonusPct in alliances.js passen.
+  // Robust: {} bei fehlender Tabelle (Migration noch nicht ausgeführt) → Mult 1.
+  async function _allianceTradeMult(memberId) {
+    try {
+      const { data, error } = await _sb.from('world_alliances')
+        .select('id').eq('group_id', _groupId).eq('type', 'handel').eq('status', 'active')
+        .or(`member_a.eq.${memberId},member_b.eq.${memberId}`);
+      if (error) throw error;
+      return 1 + (data || []).length * 0.08;
+    } catch (e) { return 1; }
   }
 
   // Gruppenkasse-Boni (perCup/perDay) aus freigeschalteten Gruppen-Zielen — robust,
@@ -255,7 +268,7 @@ const DB = (() => {
     if (typeof ciqBuildingPassiveMult === 'function') buildingPerDay = Math.round(buildingPerDay * ciqBuildingPassiveMult(_cosmP) * 100) / 100;
     const rankMap = worldRankMap || await _fetchWorldRankMap(memberId);
     const byCountry = worldByCountry || (Object.keys(rankMap).length ? await _fetchWorldBuildingsByCountry() : {});
-    const _gm = _gardeMult(member);
+    const _gm = _gardeMult(member) * (await _allianceTradeMult(memberId));
     const worldPerDay = Math.round(((typeof calcWorldPerDay === 'function') ? calcWorldPerDay(rankMap) : 0) * _gm * 100) / 100;
     const worldBldPerDay = Math.round(((typeof calcWorldBuildingPerDay === 'function') ? calcWorldBuildingPerDay(rankMap, byCountry) : 0) * _gm * 100) / 100;
     const groupPerDay = (await _fetchGroupPerks()).perDay || 0; // Gruppenkasse-Passiv für alle
@@ -398,7 +411,7 @@ const DB = (() => {
     const rankMap   = await _fetchWorldRankMap(member.id);
     const bc        = byCountry || (Object.keys(rankMap).length ? await _fetchWorldBuildingsByCountry() : {});
     const pk        = perks || await _fetchGroupPerks();
-    const gm        = _gardeMult(member);
+    const gm        = _gardeMult(member) * (await _allianceTradeMult(member.id));
 
     const resDay = (typeof calcResearchPerDay === 'function')      ? calcResearchPerDay(research) : 0;
     const bldDay = (typeof calcBuildingPerDay === 'function')      ? calcBuildingPerDay(member.map_data?.buildings || {}) : 0;
@@ -616,7 +629,7 @@ const DB = (() => {
     const worldByCountry = Object.keys(worldRankMap).length ? await _fetchWorldBuildingsByCountry() : {};
     const worldPerCup = Math.round((((typeof calcWorldPerCup === 'function' ? calcWorldPerCup(worldRankMap) : 0)
                       + (typeof calcWorldBuildingPerCup === 'function' ? calcWorldBuildingPerCup(worldRankMap, worldByCountry) : 0))
-                      * _gardeMult(member)) * 100) / 100;
+                      * _gardeMult(member) * (await _allianceTradeMult(memberId))) * 100) / 100;
     const worldBonus = Math.round(amount * worldPerCup * 100) / 100;
     // Gruppenkasse-Bonus pro Tasse (freigeschaltete Gruppen-Ziele) — wirkt für alle gleich
     const groupPerks = await _fetchGroupPerks();
@@ -1382,7 +1395,7 @@ const DB = (() => {
 
   async function fetchAllWorldInvestments() {
     const { data, error } = await _sb.from('world_investments')
-      .select('member_id, country_id, total_invested, garde_purchased').eq('group_id', _groupId);
+      .select('member_id, country_id, total_invested, garde_level').eq('group_id', _groupId);
     if (error) throw new Error(error.message);
     return data || [];
   }
@@ -1408,7 +1421,7 @@ const DB = (() => {
       p_member_id: memberId, p_group_id: _groupId, p_country_id: countryId
     });
     if (error) throw new Error(error.message);
-    return data; // { ok, cost } oder { error, cost }
+    return data; // { ok, cost, level } oder { error, cost? }
   }
 
   // ── Söldner-Sabotage (Welt) ──────────────────────────────────────────────────
@@ -1431,6 +1444,83 @@ const DB = (() => {
       if (error) throw error;
       return data || [];
     } catch (e) { return []; }
+  }
+
+  // ── Weltbündnisse (PLAN_weltbuendnisse.md) ───────────────────────────────────
+  // Alle Bündnisse der Gruppe — [] bei fehlender Tabelle (Migration noch nicht ausgeführt).
+  async function fetchAllWorldAlliances() {
+    try {
+      const { data, error } = await _sb.from('world_alliances')
+        .select('id, type, member_a, member_b, country_a, country_b, payer_id, status, started_at, expires_at, last_tribut_at')
+        .eq('group_id', _groupId);
+      if (error) throw error;
+      return data || [];
+    } catch (e) { return []; }
+  }
+
+  async function proposeAlliance(memberId, type, countryId, targetMemberId, targetCountryId) {
+    const { data, error } = await _sb.rpc('propose_alliance', {
+      p_member_id: memberId, p_group_id: _groupId, p_type: type,
+      p_country_id: countryId, p_target_member_id: targetMemberId, p_target_country_id: targetCountryId
+    });
+    if (error) throw new Error(error.message);
+    return data; // { ok, status } oder { error }
+  }
+
+  async function respondAlliance(memberId, allianceId, accept) {
+    const { data, error } = await _sb.rpc('respond_alliance', {
+      p_member_id: memberId, p_group_id: _groupId, p_alliance_id: allianceId, p_accept: !!accept
+    });
+    if (error) throw new Error(error.message);
+    return data; // { ok, status, type, member_a, member_b } oder { error }
+  }
+
+  // Housekeeping (Ablauf + Rang-1-Verlust) — [] bei fehlender Tabelle/RPC, sonst Liste
+  // von { event:'expired'|'broken', id, type, member_a, member_b } für Chat-Broadcasts.
+  async function reconcileWorldAlliances() {
+    try {
+      const { data, error } = await _sb.rpc('reconcile_world_alliances', { p_group_id: _groupId });
+      if (error) throw error;
+      return data || [];
+    } catch (e) { return []; }
+  }
+
+  // Fälligen Friedensbündnis-Tribut einlösen (10% des wöchentlichen Welt-Einkommens
+  // des Zahlers je aktivem Pakt, serverseitig auf 7 Tage gegated). Wert muss zu
+  // ALLIANCE_TYPES.frieden.tributPct in alliances.js passen. Aufruf analog claimPassive
+  // beim App-Start/Poll — kein Cron, robust (Fehler brechen den Login-Flow nicht).
+  async function settleAllianceTributes(memberId) {
+    const results = [];
+    try {
+      const { data: rows } = await _sb.from('world_alliances')
+        .select('id, started_at, last_tribut_at')
+        .eq('group_id', _groupId).eq('type', 'frieden').eq('status', 'active').eq('payer_id', memberId);
+      const due = (rows || []).filter(r => {
+        const base = r.last_tribut_at ? new Date(r.last_tribut_at) : new Date(r.started_at);
+        return Date.now() - base.getTime() >= 7 * 24 * 3600 * 1000;
+      });
+      if (!due.length) return results;
+
+      const { data: raw } = await _sb.from('members').select('*').eq('id', memberId).single();
+      if (!raw) return results;
+      const member = normalizeUser(raw);
+      const rankMap = await _fetchWorldRankMap(memberId);
+      const byCountry = Object.keys(rankMap).length ? await _fetchWorldBuildingsByCountry() : {};
+      const gm = _gardeMult(member);
+      const worldPerDay = (((typeof calcWorldPerDay === 'function') ? calcWorldPerDay(rankMap) : 0)
+        + ((typeof calcWorldBuildingPerDay === 'function') ? calcWorldBuildingPerDay(rankMap, byCountry) : 0)) * gm;
+      const tribut = Math.max(0, Math.round(worldPerDay * 7 * 0.10 * 100) / 100);
+
+      for (const row of due) {
+        try {
+          const { data, error } = await _sb.rpc('pay_alliance_tribut', {
+            p_member_id: memberId, p_group_id: _groupId, p_alliance_id: row.id, p_amount: tribut
+          });
+          if (!error && data && data.ok) results.push(data);
+        } catch (e) { /* einzelnes Bündnis überspringen, Rest weiterlaufen lassen */ }
+      }
+    } catch (e) { console.warn('Bündnis-Tribut fehlgeschlagen:', e.message); }
+    return results;
   }
 
   // Steuer-Statistik je Member (erhalten/gezahlt, Woche + gesamt).
@@ -1632,6 +1722,7 @@ const DB = (() => {
     investInCountry, fetchCountryStandings, fetchAllWorldInvestments,
     fetchAllWorldBuildings, buildWorldStructure, buyGarde, fetchTaxStats,
     castSabotage, fetchSabotages,
+    fetchAllWorldAlliances, proposeAlliance, respondAlliance, reconcileWorldAlliances, settleAllianceTributes,
     quizStatus, quizStart, quizAnswer, quizFinalize, quizGroupReveal,
     grantAchievements,
     startMinigame, claimMinigame, getMinigameStatus,

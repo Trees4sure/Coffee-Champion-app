@@ -1413,6 +1413,8 @@ async function _handleKarteStep(tx, ty, member, state, seed, COLS, ROWS, MARGIN)
       const logEntries = [{ label: `🗺️ ${treasure.name}`, amount: totalCC }];
       if (raubStolen > 0) logEntries.push({ label: '💎 Schatzräuber-Abzweig', amount: -raubStolen });
       state.mapData = DB.appendTodayLog(state.mapData, logEntries);
+      // Lifetime-Summe für den Informant-Bericht (_ccTreasureCc in app.js) — additiv, keine SQL nötig.
+      state.mapData = { ...state.mapData, totalTreasureCc: (state.mapData.totalTreasureCc || 0) + totalCC };
       currentUserData = { ...(currentUserData || {}), map_data: state.mapData };
       await DB.updateMapData(member.id, state.mapData);
     } catch (e) { console.warn('Tages-Log (Schatz) Fehler:', e); }

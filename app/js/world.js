@@ -169,6 +169,16 @@ function calcGardeCost(countryId, byCountry) {
   const levels = (byCountry?.[countryId] || []).reduce((s, b) => s + (b.level || 1), 0);
   return 40 + levels * 15;
 }
+// Stufe 2 (Ausbau) kostet 2,5× den aktuellen Stufe-1-Preis (User-Vorgabe 2026-07-02).
+function calcGardeUpgradeCost(countryId, byCountry) {
+  return Math.round(calcGardeCost(countryId, byCountry) * 2.5);
+}
+// Effektiver Einfluss-Bonus je Garde-Stufe — konsistent zur DB (buy_garde/get_country_standings).
+function _gardeBonus(level, top) {
+  if (level === 1) return 0.15 * top;
+  if (level === 2) return 0.30 * top;
+  return 0;
+}
 function worldBuildingPerDayDetail(rankMap, byCountry) {
   const parts = [];
   for (const [cid, rank] of Object.entries(rankMap || {})) {
@@ -202,11 +212,11 @@ function worldRanksForMember(investments, memberId) {
   const rankMap = {};               // { countryId: eigener Rang }
   const foreignGovt = new Set();    // ISO-Codes mit fremder Regierung (Rang 1)
   for (const [cid, list] of Object.entries(byCountry)) {
-    // Effektiver Einfluss = total + (Garde ? 0.15 × Top-Rohbetrag : 0) — konsistent zur DB
+    // Effektiver Einfluss = total + Garde-Stufen-Bonus (0/15%/30% × Top-Rohbetrag) — konsistent zur DB
     const top = Math.max(0, ...list.map(w => Number(w.total_invested) || 0));
     const eff = list.map(w => ({
       member_id: w.member_id,
-      e: (Number(w.total_invested) || 0) + (w.garde_purchased ? 0.15 * top : 0),
+      e: (Number(w.total_invested) || 0) + _gardeBonus(w.garde_level || 0, top),
     })).sort((a, b) => b.e - a.e);
     const myIdx = eff.findIndex(w => w.member_id === memberId);
     if (myIdx >= 0 && myIdx < 3) rankMap[cid] = myIdx + 1;
@@ -253,6 +263,7 @@ let _worldMap = null;
 let _worldGeoLayer = null;
 let _worldBldCache = {}; // { countryId: [{building_id, level, member_id}] }
 let _worldInvCache = []; // alle world_investments der Gruppe (für Limit-Prüfung)
+let _worldAllianceCache = []; // alle world_alliances der Gruppe (für Länder-Sheet + Übersicht)
 
 async function _buildWeltkarte(member, el) {
   if (!canAccessWorldMap(member)) {
@@ -300,12 +311,35 @@ async function _buildWeltkarte(member, el) {
   _worldBldCache = worldBuildingsByCountry(bldRows);
   _worldInvCache = investments; // für Tier-Limit-Prüfung in _openCountrySheet
 
+  // 🤝 Weltbündnisse: erst Housekeeping (Ablauf/Rang-1-Verlust auflösen + Chat-Meldung),
+  // dann den aktuellen Stand laden. Beides robust — [] bei fehlender Migration.
+  const users = (typeof appData !== 'undefined' && appData && appData.users) ? appData.users : [member];
+  let allianceChanges = [];
+  try { if (typeof DB.reconcileWorldAlliances === 'function') allianceChanges = await DB.reconcileWorldAlliances(); } catch (e) {}
+  let alliances = [];
+  try { if (typeof DB.fetchAllWorldAlliances === 'function') alliances = await DB.fetchAllWorldAlliances(); } catch (e) {}
+  _worldAllianceCache = alliances;
+  if (allianceChanges.length && typeof allianceDef === 'function') {
+    const nameOfA = (id) => (users.find(u => u.id === id) || {}).name || '—';
+    for (const c of allianceChanges) {
+      const def = allianceDef(c.type); if (!def) continue;
+      const msg = c.event === 'expired'
+        ? `${def.icon} Das ${def.name} zwischen ${nameOfA(c.member_a)} und ${nameOfA(c.member_b)} ist ausgelaufen.`
+        : `${def.icon} Das ${def.name} zwischen ${nameOfA(c.member_a)} und ${nameOfA(c.member_b)} wurde aufgelöst (Rang-1-Verlust).`;
+      DB.postMessage(msg, 'Weltkarte').catch(() => {});
+    }
+  }
+
   // Welt-Statistik + Entwicklungen rendern (Steuer-Statistik resilient: {} ohne 19d-Migration)
   let taxStats = {};
   try { if (typeof DB.fetchTaxStats === 'function') taxStats = await DB.fetchTaxStats(); } catch (e) { taxStats = {}; }
-  const users = (typeof appData !== 'undefined' && appData && appData.users) ? appData.users : [member];
   const statsEl = document.getElementById('cc-world-stats');
-  if (statsEl) statsEl.innerHTML = _renderWeltStatistik(investments, _worldBldCache, member, taxStats, users);
+  if (statsEl) {
+    statsEl.innerHTML = _renderWeltStatistik(investments, _worldBldCache, member, taxStats, users)
+      + ((typeof renderAllianceOverview === 'function') ? renderAllianceOverview(alliances, member, users) : '');
+    statsEl.querySelectorAll('[data-alliance-accept]').forEach(b => b.onclick = () => _handleRespondAlliance(b.dataset.allianceAccept, true, null, member));
+    statsEl.querySelectorAll('[data-alliance-decline]').forEach(b => b.onclick = () => _handleRespondAlliance(b.dataset.allianceDecline, false, null, member));
+  }
   const devsEl = document.getElementById('cc-world-devs');
   if (devsEl) {
     devsEl.innerHTML = _renderWeltEntwicklungen(member, investments, _worldBldCache);
@@ -416,15 +450,29 @@ async function _openCountrySheet(country, member) {
     if (myRank !== 1) pctNote += ` Beim Bauen zahlst du <strong>${taxPct} %</strong> Steuer an die Regierung${hasSteuerberater ? ' (💼 Steuerberater)' : ''}.`;
   }
 
-  // ── Garde (nur der amtierende Regent, Rang 1, darf stationieren — Garde
-  //    verteidigt die eigene Regierung, ist kein Aufhol-Tool für Herausforderer) ──
-  const gardeCost = calcGardeCost(country.id, _worldBldCache);
-  const hasGarde  = !!(myRow && myRow.garde);
+  // ── Garde (nur der amtierende Regent, Rang 1, darf stationieren/ausbauen —
+  //    Garde verteidigt die eigene Regierung, ist kein Aufhol-Tool für
+  //    Herausforderer). 2 Stufen, je Person+Land genau 1 Kauf-Slot: Stufe 1
+  //    (+15% Einfluss) → Ausbau Stufe 2 (2,5× Stufe-1-Preis, +30% Einfluss).
+  //    Bleibt bei Verlust von Rang 1 bestehen (hängt an der Investment-Zeile).
+  const gardeCost  = calcGardeCost(country.id, _worldBldCache);
+  const gardeCost2 = calcGardeUpgradeCost(country.id, _worldBldCache);
+  const gardeLevel = (myRow && myRow.garde_level) || 0;
   let gardeBlock;
-  if (hasGarde)          gardeBlock = `<span class="cc-world-garde-on">☕ Garde aktiv · +15% Einfluss</span>`;
-  else if (myRank === 1) gardeBlock = `<button class="cc-build-btn cc-world-bbtn" data-world-garde="1">☕ Garde stationieren · ${gardeCost} 🫘</button>`;
-  else if (myRow)        gardeBlock = `<span class="cc-world-blocked">Nur der Regent (Rang 1) kann eine Garde stationieren.</span>`;
-  else                   gardeBlock = `<span class="cc-world-blocked">Investiere zuerst für eine Garde</span>`;
+  if (gardeLevel >= 2) {
+    gardeBlock = `<span class="cc-world-garde-on">☕☕ Garde Stufe 2 aktiv · +30% Einfluss</span>`;
+  } else if (gardeLevel === 1) {
+    gardeBlock = myRank === 1
+      ? `<span class="cc-world-garde-on">☕ Garde Stufe 1 aktiv · +15% Einfluss</span><br>
+         <button class="cc-build-btn cc-world-bbtn" style="margin-top:4px" data-world-garde="1">⬆️ Ausbau Stufe 2 · ${gardeCost2} 🫘</button>`
+      : `<span class="cc-world-garde-on">☕ Garde Stufe 1 aktiv · +15% Einfluss</span>`;
+  } else if (myRank === 1) {
+    gardeBlock = `<button class="cc-build-btn cc-world-bbtn" data-world-garde="1">☕ Garde stationieren · ${gardeCost} 🫘</button>`;
+  } else if (myRow) {
+    gardeBlock = `<span class="cc-world-blocked">Nur der Regent (Rang 1) kann eine Garde stationieren/ausbauen.</span>`;
+  } else {
+    gardeBlock = `<span class="cc-world-blocked">Investiere zuerst für eine Garde</span>`;
+  }
 
   // ── Tier-basiertes Länder-Limit ──────────────────────────────────────────────
   const { rankMap: _myRankMap } = worldRanksForMember(_worldInvCache, member.id);
@@ -496,7 +544,11 @@ async function _worldRefreshAndReopen(country, member) {
     if (um) { currentUserData = { ...currentUserData, ...um }; if (typeof _updateHeaderCoins === 'function') _updateHeaderCoins(um); }
   } catch (e) {}
   const el = document.getElementById('imp-content');
-  if (el) { el.innerHTML = ''; await _buildWeltkarte(currentUserData || member, el); await _openCountrySheet(country, currentUserData || member); }
+  if (el) {
+    el.innerHTML = '';
+    await _buildWeltkarte(currentUserData || member, el);
+    if (country) await _openCountrySheet(country, currentUserData || member);
+  }
 }
 
 async function _handleBuildWorld(country, member, def) {
@@ -530,13 +582,16 @@ async function _handleBuyGarde(country, member) {
   let res;
   try { res = await DB.buyGarde(member.id, country.id); }
   catch (e) { showToast(e.message || 'Garde fehlgeschlagen', 'error'); return; }
-  if (res?.error === 'insufficient_coins') { showToast(`Nicht genug CC (Garde kostet ${res.cost})!`, 'error'); return; }
+  if (res?.error === 'insufficient_coins') { showToast(`Nicht genug CC (kostet ${res.cost})!`, 'error'); return; }
   if (res?.error === 'no_investment')      { showToast('Investiere zuerst in dieses Land.', 'error'); return; }
-  if (res?.error === 'already_garde')      { showToast('Garde bereits stationiert.', 'error'); return; }
-  if (res?.error === 'not_rank1')          { showToast('Nur der amtierende Regent (Rang 1) kann eine Garde stationieren.', 'error'); return; }
+  if (res?.error === 'already_max')        { showToast('Garde ist bereits auf Stufe 2 (Maximum).', 'error'); return; }
+  if (res?.error === 'not_rank1')          { showToast('Nur der amtierende Regent (Rang 1) kann eine Garde stationieren/ausbauen.', 'error'); return; }
   if (!res?.ok) { showToast('Garde fehlgeschlagen', 'error'); return; }
-  showToast(`☕ Kaffee-Garde in ${country.flag} ${country.name} stationiert!`, 'success');
-  try { await DB.postMessage(`${member.name} stationiert eine ☕ Kaffee-Garde in ${country.flag} ${country.name}!`, member.name); } catch (e) {}
+  const msg = res.level === 2
+    ? `⬆️ Kaffee-Garde in ${country.flag} ${country.name} auf Stufe 2 ausgebaut!`
+    : `☕ Kaffee-Garde in ${country.flag} ${country.name} stationiert!`;
+  showToast(msg, 'success');
+  try { await DB.postMessage(`${member.name}: ${msg}`, member.name); } catch (e) {}
   await _worldRefreshAndReopen(country, member);
 }
 
@@ -624,7 +679,7 @@ function worldGovernorId(investments, countryId) {
   const top = Math.max(0, ...list.map(w => Number(w.total_invested) || 0));
   let best = null, bestE = -1;
   for (const w of list) {
-    const e = (Number(w.total_invested) || 0) + (w.garde_purchased ? 0.15 * top : 0);
+    const e = (Number(w.total_invested) || 0) + _gardeBonus(w.garde_level || 0, top);
     if (e > bestE) { bestE = e; best = w.member_id; }
   }
   return best;
@@ -667,7 +722,7 @@ function worldStatLineHTML(u, investments, byCountry) {
 }
 
 // Offen/Zu-Zustand der Welt-Akkordeons — überlebt den Refresh nach Kauf/Aktion
-let _worldAccOpen = { stats: true, gallery: false, devs: false };
+let _worldAccOpen = { stats: true, gallery: false, devs: false, alliances: false };
 
 // ── Ausführliches Welt-Statistik-Panel ───────────────────────────────────────
 function _renderWeltStatistik(investments, byCountry, member, taxStats, users) {

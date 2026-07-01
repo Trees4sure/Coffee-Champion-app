@@ -128,6 +128,9 @@ async function claimPassiveAndRefresh(force = false) {
   // Täglicher Login-Bonus (idempotent pro Tag, eskaliert mit der Login-Serie)
   try { lb = await DB.claimLoginBonus(currentUser.id); }
   catch (e) { console.warn('Login-Bonus fehlgeschlagen:', e.message); }
+  // 🕊️ Fälligen Friedensbündnis-Tribut abbuchen (server-seitig auf 7 Tage gegated,
+  // hier nur "anstoßen" wie Passiv-/Login-Bonus — kein Cron).
+  try { await DB.settleAllianceTributes(currentUser.id); } catch (e) {}
   if (earned > 0 || (lb && lb.reward)) {
     try { await refreshData(); } catch (e) {}
     const hc = document.getElementById('header-coins');
@@ -1035,19 +1038,64 @@ function _informantStatsHtml(u) {
   const explored  = (typeof _ccExploredPct === 'function') ? _ccExploredPct(u) : 0;
   if (bldCount > 0 || explored > 0) items.push(`🗺️ Karte: ${bldCount} Gebäude · ${explored}% erkundet`);
 
-  const treasures = (typeof _ccTreasures === 'function') ? _ccTreasures(u) : 0;
-  if (treasures > 0) items.push(`💎 Schätze: ${treasures} gefunden`);
+  const treasures   = (typeof _ccTreasures === 'function') ? _ccTreasures(u) : 0;
+  const treasureCc  = (typeof _ccTreasureCc === 'function') ? _ccTreasureCc(u) : 0;
+  if (treasures > 0) items.push(`💎 Schätze: ${treasures} gefunden · ${_fmtCoins(treasureCc)} CC`);
 
   const dd = u.dungeon_data || {};
   if ((dd.level || 1) > 1 || (dd.wins || 0) > 0 || (dd.losses || 0) > 0) {
     const prog = (typeof kriegerProgress === 'function') ? kriegerProgress(dd) : { level: dd.level || 1 };
-    items.push(`⚔️ Krieger: Stufe ${prog.level} · ${dd.wins || 0}S/${dd.losses || 0}N`);
+    // totalCcEarned wird server-seitig in dungeon_fight() mitgeführt (siehe
+    // migration_kaffee_krieger.sql) — ohne dieses Feld gäbe es keine Lifetime-Summe,
+    // nur flüchtige Einzelkampf-Ergebnisse.
+    const dGold = dd.totalCcEarned || 0;
+    items.push(`⚔️ Krieger: Stufe ${prog.level} · ${dd.wins || 0}S/${dd.losses || 0}N · ${_fmtCoins(dGold)} CC insgesamt`);
+  }
+
+  // CIQ-Gesamtbild: Punktestand (Quiz), kumulierte CC aus Quiz-Runden UND aus CIQ-Angriffen,
+  // plus welche Angriffs-/Debuff-Fähigkeiten der aktuelle CIQ-Stand freischaltet (Bedrohungs-
+  // Einschätzung — Angriffs-Perks sind kein Dauerbesitz, sondern ab genug CIQ jederzeit nutzbar).
+  // quizCC: cosmetics.quiz.history speichert pro Periode nur den Score, CC wird daraus abgeleitet
+  // (aktueller Satz 4 CC/Punkt, seit Quiz-Einführung unverändert). ciqCcEarned: map_data-Feld,
+  // serverseitig in apply_ciq_attack() mitgeführt (migration_2026-07-02_garde_level2_ciq_tracking.sql).
+  const quiz = u.cosmetics?.quiz || {};
+  const quizCiq   = quiz.ciq || 0;
+  const quizCC    = Object.values(quiz.history || {}).reduce((s, h) => s + (h.score || 0) * 4, 0);
+  const ciqEarned = u.map_data?.ciqCcEarned || 0;
+  const ciqSkills = (typeof CIQ_PERKS !== 'undefined')
+    ? CIQ_PERKS.filter(p => (p.type === 'attack' || p.type === 'debuff') && quizCiq >= p.ciq).map(p => p.icon).join(' ')
+    : '';
+  if (quizCiq > 0 || quizCC > 0 || ciqEarned > 0) {
+    items.push(`🧠 CIQ: ${quizCiq} Punkte · ${_fmtCoins(quizCC)} CC aus Quiz · ${_fmtCoins(ciqEarned)} CC aus Angriffen${ciqSkills ? ' · Fähigkeiten: ' + ciqSkills : ''}`);
   }
 
   if (!items.length) return '';
   return `<div class="cc-informant-stats" style="display:flex;flex-wrap:wrap;gap:6px;margin:4px 0">
     ${items.map(t => `<span style="background:rgba(255,255,255,.05);border-radius:6px;padding:2px 7px;font-size:.72rem;color:var(--muted)">${t}</span>`).join('')}
   </div>`;
+}
+
+// 🧠 Welche CIQ-Vorteile (dauerhafte Perks + gerade aktive Selbst-Buffs) ein Spieler hat/nutzt —
+// PvP-Angriffs-/Debuff-Perks bewusst ausgeschlossen (das sind Aktionen gegen andere, keine
+// "gehaltenen" Vorteile). Rein aus bereits geladenen Daten (u.cosmetics.ciq_perks) + CIQ_PERKS-
+// Definitionen (research.js) — kein neuer Datenzugriff.
+function _informantCiqPerksHtml(u) {
+  if (typeof CIQ_PERKS === 'undefined') return '';
+  const perks = u.cosmetics?.ciq_perks || {};
+  const now = Date.now();
+  const active = CIQ_PERKS
+    .filter(def => def.type === 'permanent' || def.type === 'timed')
+    .map(def => {
+      const e = perks[def.id];
+      if (!e) return null;
+      if (def.type === 'permanent') return e.at ? `${def.icon} ${def.name}` : null;
+      if (!e.active_until || new Date(e.active_until).getTime() <= now) return null;
+      const hrs = Math.max(1, Math.round((new Date(e.active_until).getTime() - now) / 3600000));
+      return `${def.icon} ${def.name} (noch ~${hrs}h)`;
+    })
+    .filter(Boolean);
+  if (!active.length) return '';
+  return `<div style="margin:2px 0 4px;font-size:.72rem;color:var(--muted)">🧠 CIQ-Vorteile: ${active.join(' · ')}</div>`;
 }
 
 // 🕵️ Informant (CIQ-Perk): solange aktiv, zeigt die Gehaltsstatistik zusätzlich einen VOLLEN
@@ -1070,6 +1118,7 @@ function _informantPanelHtml() {
       const last = hist.slice().sort((a, b) => (a.ts || 0) - (b.ts || 0)).pop() || {};
       const perCup = (typeof calcResearchPerCup === 'function') ? calcResearchPerCup(u.research || {}) : 0;
       const stats = _informantStatsHtml(u);
+      const ciqPerks = _informantCiqPerksHtml(u);
       const breakdown = (typeof _buildPassivBreakdown === 'function') ? _buildPassivBreakdown(u) : '';
       return `
         <div class="cc-informant-row" style="border-bottom:1px solid var(--gold-dim);padding:8px 2px">
@@ -1078,6 +1127,7 @@ function _informantPanelHtml() {
             <span style="color:var(--muted);font-size:.78rem">🪙 ${_fmtCoins(u.coins || 0)} · 💰 ${last.day ?? '–'}/Tag realisiert · ☕ +${_fmtCoins(perCup)}/Tasse</span>
           </div>
           ${stats}
+          ${ciqPerks}
           ${breakdown || '<p class="empty-hint" style="margin:4px 0 0;font-size:.75rem">Keine laufenden Forschungs-/Gebäude-Einnahmen.</p>'}
         </div>`;
     }).join('');
@@ -1267,6 +1317,9 @@ function _ccWealth(u) {
   return Math.round((u.coins || 0) + _ccResearchScore(u) + _ccBldScore(u));
 }
 function _ccTreasures(u) { return Object.keys(u.map_data?.treasures || {}).length; }
+// Lifetime-CC-Summe aus Kartenschätzen — map_data.totalTreasureCc, mitgeführt seit 2026-07-02
+// (Schätze davor zählen nicht rückwirkend nach, da es diese Summe vorher nicht gab).
+function _ccTreasureCc(u) { return u.map_data?.totalTreasureCc || 0; }
 function _ccExploredPct(u) {
   const WORLD = (typeof KARTE_WORLD !== 'undefined') ? KARTE_WORLD : 128;
   const n = Object.keys(u.map_data?.explored || {}).length;
