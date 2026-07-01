@@ -179,14 +179,16 @@ function kriegerActiveSetCulture(equipped) {
 }
 
 // ── Gegner (MUSS exakt mit _krieger_enemy_stats in SQL übereinstimmen) ──────
-// CC-Belohnungen 2026-06-30 nach unten korrigiert (User-Feedback "darf nicht zu viel sein") —
-// auf ca. 40% der ursprünglichen Plan-Werte, HP/ATK/DEF/EP unverändert (nur CC war zu hoch).
+// CC-Belohnungen 2026-06-30 nach unten korrigiert (User-Feedback "darf nicht zu viel sein"),
+// 2026-07-04 wieder auf die ursprünglichen Plan-Werte angehoben (lohnte sich nicht gegenüber
+// Ausrüstungspreisen) — muss synchron mit _krieger_enemy_stats() in
+// migration_kaffee_krieger.sql bleiben, hier nur die UI-Vorschau vor dem Kampf.
 const KRIEGER_ENEMIES = [
-  { tier:'t1',   name:'Schaum-Gesindel', flavor:['🫧 Milchschaum-Wicht','👹 Bohnen-Goblin','🟤 Kaffeesatz-Schleim'], hp:50,  atk:9,  def:2,  ccMin:8,   ccMax:14,  ep:25,  minLevel:1,  maxDist:15 },
-  { tier:'t2',   name:'Mahlwerk-Bande',  flavor:['⚙️ Mahlwerk-Golem','👻 Filterpapier-Geist','🔨 Tamper-Troll'],      hp:110, atk:16, def:7,  ccMin:18,  ccMax:28,  ep:55,  minLevel:15, maxDist:35 },
-  { tier:'t3',   name:'Röster-Horde',    flavor:['🔥 Röstkammer-Dämon','🕷️ Säure-Spinne','🐍 Crema-Hydra'],          hp:200, atk:25, def:13, ccMin:35,  ccMax:55,  ep:100, minLevel:30, maxDist:60 },
-  { tier:'t4',   name:'Koffein-Elite',   flavor:['⚡ Koffein-Berserker','👻 Espresso-Geist','🗿 Robusta-Titan'],      hp:340, atk:36, def:20, ccMin:65,  ccMax:95,  ep:170, minLevel:50, maxDist:90 },
-  { tier:'boss', name:'Der Espresso-Drache', flavor:['🐉 Der Espresso-Drache'], hp:650, atk:50, def:28, ccMin:140, ccMax:200, ep:350, minLevel:80, maxDist:9999 },
+  { tier:'t1',   name:'Schaum-Gesindel', flavor:['🫧 Milchschaum-Wicht','👹 Bohnen-Goblin','🟤 Kaffeesatz-Schleim'], hp:50,  atk:9,  def:2,  ccMin:20,  ccMax:35,  ep:25,  minLevel:1,  maxDist:15 },
+  { tier:'t2',   name:'Mahlwerk-Bande',  flavor:['⚙️ Mahlwerk-Golem','👻 Filterpapier-Geist','🔨 Tamper-Troll'],      hp:110, atk:16, def:7,  ccMin:45,  ccMax:75,  ep:55,  minLevel:15, maxDist:35 },
+  { tier:'t3',   name:'Röster-Horde',    flavor:['🔥 Röstkammer-Zwerg','🕷️ Säure-Spinne','🐍 Crema-Hydra'],          hp:200, atk:25, def:13, ccMin:90,  ccMax:140, ep:100, minLevel:30, maxDist:60 },
+  { tier:'t4',   name:'Koffein-Elite',   flavor:['⚡ Koffein-Berserker','👻 Espresso-Geist','🗿 Robusta-Titan'],      hp:340, atk:36, def:20, ccMin:170, ccMax:260, ep:170, minLevel:50, maxDist:90 },
+  { tier:'boss', name:'Der Espresso-Drache', flavor:['🐉 Der Espresso-Drache'], hp:650, atk:50, def:28, ccMin:350, ccMax:550, ep:350, minLevel:80, maxDist:9999 },
 ];
 
 function kriegerEnemyDef(tier) { return KRIEGER_ENEMIES.find(e => e.tier === tier) || null; }

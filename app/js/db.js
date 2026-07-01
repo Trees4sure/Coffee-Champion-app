@@ -543,17 +543,20 @@ const DB = (() => {
     const { data: rawMember, error: mErr } = await _sb.from('members').select('*').eq('id', memberId).single();
     if (mErr || !rawMember) throw new Error('Mitglied nicht gefunden');
 
-    // Tageslimit prüfen: normal 15 Tassen/Tag — aber wenn gestern >6 Tassen getrunken
-    // wurden, ist heute eine Koffein-Red-Flag aktiv (map_data.caffeineFlag === heute) → max. 3.
+    // Tageslimit prüfen: normal 15 Tassen/Tag — aber wenn gestern über der Rot-Flaggen-
+    // Schwelle getrunken wurde, ist heute eine Koffein-Red-Flag aktiv (map_data.caffeineFlag
+    // === heute) → gedrosselt. Schwelle (normal 6) und Drosselung (normal 3) sind über die
+    // CIQ-Fähigkeit Koffein-Toleranz anpassbar (2026-07-04 Redesign: echte Toleranz statt
+    // Komplett-Immunität — siehe ciqCaffeineFlagThreshold/-Cap in research.js).
     const { data: todayStats } = await _sb.from('daily_stats').select('*')
       .eq('group_id', _groupId).eq('date', dateStr).maybeSingle();
     const alreadyToday = (todayStats?.stats || {})[memberId] || 0;
     const _cosm  = rawMember.cosmetics || {};
     const _nowMs = now.getTime();
-    // 🧠 CIQ: Koffein-Toleranz macht immun gegen die Red-Flag-Drosselung; Schwarzbrenner hebt das Limit auf.
-    const _redFlagImmune = (typeof ciqRedFlagImmune === 'function') && ciqRedFlagImmune(_cosm, _nowMs);
-    const caffeineActive = !_redFlagImmune && rawMember.map_data?.caffeineFlag === dateStr;
-    let dailyMax = caffeineActive ? 3 : 15;
+    const flagThreshold = (typeof ciqCaffeineFlagThreshold === 'function') ? ciqCaffeineFlagThreshold(_cosm, _nowMs) : 6;
+    const flagCap        = (typeof ciqCaffeineFlagCap === 'function') ? ciqCaffeineFlagCap(_cosm, _nowMs) : 3;
+    const caffeineActive = rawMember.map_data?.caffeineFlag === dateStr;
+    let dailyMax = caffeineActive ? flagCap : 15;
     if (!caffeineActive && typeof ciqDailyMax === 'function') dailyMax = ciqDailyMax(_cosm, _nowMs);
     else if (caffeineActive && typeof ciqActive === 'function' && ciqActive(_cosm, 'schwarzbrenner', _nowMs)) dailyMax = 9999;
     if (alreadyToday + amount > dailyMax) {
@@ -561,11 +564,11 @@ const DB = (() => {
         ? `🚩 Koffein-Limit aktiv: wegen zu viel Koffein gestern heute nur ${dailyMax} Tassen (bereits ${alreadyToday} erfasst).`
         : `Tageslimit erreicht: heute bereits ${alreadyToday} von ${dailyMax} Tassen erfasst.`);
     }
-    // Red-Flag für MORGEN: wer heute mit diesem Eintrag über 6 Tassen kommt, wird morgen
-    // auf 3 gedrosselt (einmal pro Tag setzen, nicht bei jeder weiteren Tasse neu).
+    // Red-Flag für MORGEN: wer heute mit diesem Eintrag über die Schwelle kommt, wird morgen
+    // gedrosselt (einmal pro Tag setzen, nicht bei jeder weiteren Tasse neu).
     const personalToday = alreadyToday + amount;
     const tomorrowStr   = new Date(Date.parse(dateStr + 'T00:00:00Z') + 86400000).toISOString().slice(0, 10);
-    const caffeineRedFlag = personalToday > 6 && !_redFlagImmune && rawMember.map_data?.caffeineFlag !== tomorrowStr;
+    const caffeineRedFlag = personalToday > flagThreshold && rawMember.map_data?.caffeineFlag !== tomorrowStr;
     const caffeineMsg = (caffeineRedFlag && typeof caffeineFlagMsg === 'function') ? caffeineFlagMsg(personalToday) : '';
 
     const member    = normalizeUser(rawMember);

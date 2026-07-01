@@ -521,14 +521,18 @@ function karteStepsAllowed(mapData, research) {
     : effects
         .filter(e => e.type === 'step_malus' && e.expires === today)
         .reduce((s, e) => s + (e.amount || 0), 0);
-  // 🧠 CIQ Kartensaboteur (Fremd-Debuff): -2 Schritte heute (Thermos schützt NICHT —
-  // anders als bei den normalen Karten-Event-Mali, ist das ein gezielter PvP-Angriff).
-  const saboteurEntry = (typeof ciqDebuffEntry === 'function') ? ciqDebuffEntry(mapData, 'karten_saboteur') : null;
-  const saboteurMalus = saboteurEntry ? (saboteurEntry.steps_blocked || 2) : 0;
   const buildStep = calcBuildingStepBonus(mapData?.buildings);
   // Forschungs-Tier-Bonus: +10 Schritte je vollständig abgeschlossenem Tier
   const tierStep  = (typeof completedResearchTiers === 'function') ? completedResearchTiers(research) * 10 : 0;
-  return Math.max(1, KARTE_BASE_STEPS + footBonus + extra + stepBonus + buildStep + tierStep + _karteGroupSteps - stepMalus - saboteurMalus);
+  const baseAllowed = Math.max(1, KARTE_BASE_STEPS + footBonus + extra + stepBonus + buildStep + tierStep + _karteGroupSteps - stepMalus);
+  // 🧠 CIQ Kartensaboteur (Fremd-Debuff): HÄLFTE der heutigen Schritte weg (Thermos schützt
+  // NICHT — anders als bei den normalen Karten-Event-Mali, ist das ein gezielter PvP-Angriff).
+  // War vorher ein fixer -2-Malus — bei starkem Ausbau (Füße/Gebäude/Forschungs-Tier oft 20+
+  // Schritte) faktisch wirkungslos für die investierten 30 CC. Jetzt relativ zum tatsächlichen
+  // Tages-Kontingent, damit der Angriff bei jedem Ausbaustand spürbar bleibt.
+  const saboteurEntry = (typeof ciqDebuffEntry === 'function') ? ciqDebuffEntry(mapData, 'karten_saboteur') : null;
+  const saboteurMalus = saboteurEntry ? Math.floor(baseAllowed / 2) : 0;
+  return Math.max(1, baseAllowed - saboteurMalus);
 }
 
 function karteExtraStepsBought(mapData) {

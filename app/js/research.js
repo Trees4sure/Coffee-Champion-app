@@ -680,30 +680,43 @@ function getCurrentSpruch(totalCups, achievements, unlockedPacks) {
 // Perks mit pending:true sind sichtbar, aber noch NICHT kaufbar (Effekt-Verdrahtung
 // in karte.js/world.js/imperium.js folgt) — niemand soll für toten Effekt zahlen.
 // ═══════════════════════════════════════════════════════════════════════════
+// 2026-07-04 Balance-Nachbesserung (User-Feedback): ALLE bisherigen 'permanent'-Perks liefen
+// für immer, was den hohen Einmalpreis eigentlich rechtfertigen sollte — fühlte sich aber laut
+// User trotzdem "zu viel" an. Umgestellt auf 'timed'/168h (7 Tage), Preis jeweils auf ca. 1/5
+// des alten Permanent-Preises gesenkt (~5 Wochen Wiederkauf = alter Permanent-Preis, aber
+// niedrigere Einstiegshürde + wiederkehrende Einnahme statt Einmalkauf). Betrifft NUR die
+// Zahlen/den Typ — `ciqActive()` behandelt 'timed' (active_until) und ehemals 'permanent' (.at)
+// bereits identisch, keine weiteren Code-Änderungen nötig.
 const CIQ_PERKS = [
   // 🟢 Anfänger
-  { id: 'koffein_gedaechtnis', tier: '🟢', icon: '🧠', name: 'Koffein-Gedächtnis', type: 'permanent', ciq: 10, cc: 150,
-    desc: '+5 % CoffeeCoins auf jede Tasse — dauerhaft. Dein Körper belohnt Wissen mit Wachheit.' },
-  { id: 'espresso_fokus', tier: '🟢', icon: '⚡', name: 'Espresso-Fokus', type: 'timed', durationH: 24, ciq: 15, cc: 80,
+  { id: 'koffein_gedaechtnis', tier: '🟢', icon: '🧠', name: 'Koffein-Gedächtnis', type: 'timed', durationH: 168, ciq: 10, cc: 30,
+    desc: '7 Tage: +5 % CoffeeCoins auf jede Tasse. Dein Körper belohnt Wissen mit Wachheit.' },
+  { id: 'espresso_fokus', tier: '🟢', icon: '⚡', name: 'Espresso-Fokus', type: 'timed', durationH: 24, ciq: 15, cc: 10,
     desc: '24 Stunden doppelte CC pro Tasse. Schlaf? Überbewertet.' },
-  { id: 'koffein_toleranz', tier: '🟢', icon: '🥤', name: 'Koffein-Toleranz', type: 'permanent', ciq: 18, cc: 200,
-    desc: 'Tageslimit 15 → 20 Tassen und immun gegen die Koffein-Polizei. Dein CYP1A2 arbeitet im Akkord.' },
+  // Redesign (User: "unlogisch, denke dir was anderes aus") — volle Immunität + höheres
+  // Tageslimit überschnitt sich mit Schwarzbrenner (macht dasselbe, nur temporär & stärker).
+  // Jetzt: echte Toleranz-Logik — höhere Schwelle, BEVOR die Rot-Flagge greift, und mildere
+  // Drosselung danach, statt kompletter Wegfall der Konsequenz.
+  { id: 'koffein_toleranz', tier: '🟢', icon: '🥤', name: 'Koffein-Toleranz', type: 'timed', durationH: 168, ciq: 18, cc: 40,
+    desc: '7 Tage: Koffein-Flagge greift erst ab 10 Tassen (statt 6) und drosselt danach nur auf 8 (statt 3) Tassen. Dein CYP1A2 arbeitet im Akkord.' },
   // 🟡 Fortgeschrittene
-  { id: 'forscherdrang', tier: '🟡', icon: '🔬', name: 'Forscherdrang', type: 'permanent', ciq: 25, cc: 400,
-    desc: 'Alle Forschungs-Items dauerhaft 15 % günstiger. Mengenrabatt für Schlauberger.' },
-  { id: 'wachmacher', tier: '🟡', icon: '🌅', name: 'Wachmacher', type: 'permanent', ciq: 28, cc: 250,
-    desc: 'Login-Bonus und Tagesaufgabe zahlen dir das Doppelte. Du weißt, wann Koffein wirkt — morgens.' },
-  { id: 'bohnen_verstaendnis', tier: '🟡', icon: '🫘', name: 'Bohnen-Verständnis', type: 'permanent', ciq: 30, cc: 300,
-    desc: 'Passives Forschungs-Einkommen dauerhaft +10 %. Coffea eugenioides wäre stolz.' },
-  { id: 'grossroester', tier: '🟡', icon: '🏭', name: 'Großröster', type: 'permanent', ciq: 30, cc: 350, condText: 'mind. 1 Einkommens-Gebäude',
-    desc: 'Gebäude-Einkommen dauerhaft +20 %. Du verstehst die Rösttrommel — sie dankt es dir.' },
-  { id: 'erntehelfer', tier: '🟡', icon: '👷', name: 'Erntehelfer-Kolonne', type: 'permanent', ciq: 35, cc: 350,
-    desc: '+1 CC pro Tasse je fertiges Einkommens-Gebäude (max +5). Deine Gebäude liefern, deine Tassen profitieren.' },
-  { id: 'schwarmintelligenz', tier: '🟡', icon: '🐝', name: 'Schwarmintelligenz', type: 'permanent', ciq: 35, cc: 350,
-    desc: '+1 CC pro Tasse je heute aktivem Mitglied (max +5). Deine Kollegen arbeiten für dich — psst.' },
-  // ⚫ Professoren
-  { id: 'schwarzbrenner', tier: '⚫', icon: '🔥', name: 'Schwarzbrenner', type: 'timed', durationH: 24, ciq: 65, cc: 300,
-    desc: '24 Stunden kein Tageslimit + jede Tasse +1 CC. Keine Lizenz, kein Limit, kein schlechtes Gewissen.' },
+  { id: 'forscherdrang', tier: '🟡', icon: '🔬', name: 'Forscherdrang', type: 'timed', durationH: 168, ciq: 25, cc: 80,
+    desc: '7 Tage: alle Forschungs-Items 15 % günstiger. Mengenrabatt für Schlauberger.' },
+  { id: 'wachmacher', tier: '🟡', icon: '🌅', name: 'Wachmacher', type: 'timed', durationH: 168, ciq: 28, cc: 50,
+    desc: '7 Tage: Login-Bonus und Tagesaufgabe zahlen dir das Doppelte. Du weißt, wann Koffein wirkt — morgens.' },
+  { id: 'bohnen_verstaendnis', tier: '🟡', icon: '🫘', name: 'Bohnen-Verständnis', type: 'timed', durationH: 168, ciq: 30, cc: 60,
+    desc: '7 Tage: passives Forschungs-Einkommen +10 %. Coffea eugenioides wäre stolz.' },
+  { id: 'grossroester', tier: '🟡', icon: '🏭', name: 'Großröster', type: 'timed', durationH: 168, ciq: 30, cc: 70, condText: 'mind. 1 Einkommens-Gebäude',
+    desc: '7 Tage: Gebäude-Einkommen +20 %. Du verstehst die Rösttrommel — sie dankt es dir.' },
+  { id: 'erntehelfer', tier: '🟡', icon: '👷', name: 'Erntehelfer-Kolonne', type: 'timed', durationH: 168, ciq: 35, cc: 70,
+    desc: '7 Tage: +1 CC pro Tasse je fertiges Einkommens-Gebäude (max +5). Deine Gebäude liefern, deine Tassen profitieren.' },
+  { id: 'schwarmintelligenz', tier: '🟡', icon: '🐝', name: 'Schwarmintelligenz', type: 'timed', durationH: 168, ciq: 35, cc: 70,
+    desc: '7 Tage: +1 CC pro Tasse je heute aktivem Mitglied (max +5). Deine Kollegen arbeiten für dich — psst.' },
+  // ⚫ Professoren — CIQ 65→45 (User: "viel zu hoch"), Effekt von flachem "+1 CC/Tasse" auf
+  // "doppelte CC/Tasse" umgestellt (User: "eher jede Tasse zählt doppelt CC") — stackt mit
+  // Espresso-Fokus multiplikativ (×4 bei beiden aktiv), das ist als Profi-Kombo gewollt.
+  { id: 'schwarzbrenner', tier: '⚫', icon: '🔥', name: 'Schwarzbrenner', type: 'timed', durationH: 24, ciq: 45, cc: 300,
+    desc: '24 Stunden kein Tageslimit + jede Tasse zählt doppelt CC. Keine Lizenz, kein Limit, kein schlechtes Gewissen.' },
 
   // ── Karten-/Welt-gekoppelte Perks ──
   { id: 'schatzgraeber', tier: '🟢', icon: '🪙', name: 'Schatzgräber', type: 'timed', durationH: 168, ciq: 20, cc: 120,
@@ -712,10 +725,10 @@ const CIQ_PERKS = [
     desc: '7 Tage: höhere Schatz- und Event-Chance auf der Karte.' },
   { id: 'kaffeesatz_leser', tier: '🔴', icon: '🔮', name: 'Kaffeesatz-Leser', type: 'timed', durationH: 48, ciq: 40, cc: 100,
     desc: '48 Stunden: Karten-Events sind nur noch positiv (keine Mali/Strafen).' },
-  { id: 'bautraeger_lizenz', tier: '🟡', icon: '🏗️', name: 'Bauträger-Lizenz', type: 'permanent', ciq: 32, cc: 350, condText: 'mind. 1 Gebäude',
-    desc: 'Baukosten aller Karten-Gebäude dauerhaft −15 %.' },
-  { id: 'handelsattache', tier: '🔴', icon: '🛂', name: 'Handelsattaché', type: 'permanent', ciq: 50, cc: 400, condText: 'Weltkarte freigeschaltet',
-    desc: 'Weltkarten-Strukturen dauerhaft −15 % CC.' },
+  { id: 'bautraeger_lizenz', tier: '🟡', icon: '🏗️', name: 'Bauträger-Lizenz', type: 'timed', durationH: 168, ciq: 32, cc: 70, condText: 'mind. 1 Gebäude',
+    desc: '7 Tage: Baukosten aller Karten-Gebäude −15 %.' },
+  { id: 'handelsattache', tier: '🔴', icon: '🛂', name: 'Handelsattaché', type: 'timed', durationH: 168, ciq: 50, cc: 80, condText: 'Weltkarte freigeschaltet',
+    desc: '7 Tage: Weltkarten-Strukturen −15 % CC.' },
 
   // ── Angriffs-Perks (Phase B, PvP) — Plan: plans/PLAN_ciq_angriffe.md ──────────
   // type 'attack'/'debuff': KEIN Selbstkauf wie oben — ein Klick löst sofort eine
@@ -730,10 +743,10 @@ const CIQ_PERKS = [
     desc: 'Stiehl sofort bis zu 30 CC vom Rangliste-Ersten (gedeckelt auf dessen Guthaben).' },
   { id: 'steuer_pruefer',     tier: '🔍', icon: '🔍', name: 'Steuerprüfer',       type: 'debuff', durationH: 24, ciq: 5,  cc: 25,
     desc: 'Der Rangliste-Erste zahlt 24 h lang die doppelte Tagesabgabe.' },
-  { id: 'schatz_raeuber',     tier: '💎', icon: '💎', name: 'Schatzräuber',       type: 'debuff', durationH: 48, ciq: 5,  cc: 25,
-    desc: 'Der nächste Kartenschatz des Rangliste-Zweiten geht zur Hälfte an dich (48 h Zeitfenster).' },
+  { id: 'schatz_raeuber',     tier: '💎', icon: '💎', name: 'Schatzräuber',       type: 'debuff', durationH: 24, ciq: 5,  cc: 25,
+    desc: 'Jeder Kartenschatz des Rangliste-Zweiten geht heute zur Hälfte an dich.' },
   { id: 'karten_saboteur',    tier: '🚫', icon: '🚫', name: 'Kartensaboteur',     type: 'debuff', durationH: 24, ciq: 6,  cc: 30,
-    desc: 'Der Rangliste-Erste verliert heute 2 Karten-Schritte.' },
+    desc: 'Der Rangliste-Erste verliert heute die Hälfte seiner Karten-Schritte.' },
   { id: 'tages_diebstahl',    tier: '💸', icon: '💸', name: 'Tagesdiebstahl',     type: 'attack',                ciq: 7,  cc: 35,
     desc: 'Erhalte sofort 20 % des heutigen Tassen-Einkommens des Rangliste-Ersten.' },
   { id: 'kaffee_pfluecker',   tier: '🌿', icon: '🌿', name: 'Kaffeepflücker',     type: 'attack',                ciq: 9,  cc: 50,
@@ -829,8 +842,8 @@ function ciqAttackTargetLabel(perkId, users, selfId, nowTs) {
 const CIQ_TARGET_DESC = {
   kaffee_dieb:        name => `Stiehl sofort bis zu 30 CC von ${name} (gedeckelt auf dessen Guthaben).`,
   steuer_pruefer:     name => `${name} zahlt 24 h lang die doppelte Tagesabgabe.`,
-  schatz_raeuber:     name => `Der nächste Kartenschatz von ${name} geht zur Hälfte an dich (48 h Zeitfenster).`,
-  karten_saboteur:    name => `${name} verliert heute 2 Karten-Schritte.`,
+  schatz_raeuber:     name => `Jeder Kartenschatz von ${name} geht heute zur Hälfte an dich.`,
+  karten_saboteur:    name => `${name} verliert heute die Hälfte seiner Karten-Schritte.`,
   tages_diebstahl:    name => `Erhalte sofort 20 % des heutigen Tassen-Einkommens von ${name}.`,
   kaffee_pfluecker:   name => `Erhalte sofort 25 % des zuletzt erfassten passiven Tageseinkommens von ${name}.`,
   reputationsangriff: name => `${name} verlieren 4 h lang je 10 % ihres Forschungs-CC/Tasse-Bonus.`,
@@ -843,12 +856,17 @@ function ciqPerkDesc(def, users, selfId, nowTs) {
 }
 
 // ── Effekt-Helfer (in db.js angewandt) ───────────────────────────────────────
-// Tageslimit unter CIQ-Perks: Schwarzbrenner hebt es auf, Koffein-Toleranz hebt auf 20.
+// Tageslimit unter CIQ-Perks: Schwarzbrenner hebt es komplett auf (kein Koffein-Toleranz-
+// Bonus mehr hier — siehe ciqCaffeineFlagThreshold/-Cap unten für das Redesign).
 function ciqDailyMax(cosm, nowTs) {
-  if (ciqActive(cosm, 'schwarzbrenner', nowTs)) return 9999;
-  return ciqActive(cosm, 'koffein_toleranz', nowTs) ? 20 : 15;
+  return ciqActive(cosm, 'schwarzbrenner', nowTs) ? 9999 : 15;
 }
-function ciqRedFlagImmune(cosm, nowTs) { return ciqActive(cosm, 'koffein_toleranz', nowTs); }
+// Koffein-Toleranz-Redesign (2026-07-04, User: alte Version "unlogisch" + überschnitt sich
+// mit Schwarzbrenner): keine Komplett-Immunität mehr, sondern eine höhere Schwelle, BEVOR die
+// Rot-Flagge greift (10 statt 6 Tassen), und eine mildere Drosselung danach (8 statt 3) — echte
+// Toleranz statt Wegfall der Konsequenz.
+function ciqCaffeineFlagThreshold(cosm, nowTs) { return ciqActive(cosm, 'koffein_toleranz', nowTs) ? 10 : 6; }
+function ciqCaffeineFlagCap(cosm, nowTs)       { return ciqActive(cosm, 'koffein_toleranz', nowTs) ? 8  : 3; }
 // Zusätzliche CC auf einen Tassen-Eintrag durch CIQ-Perks.
 // ctx = { cupIncome (CC dieses Eintrags aus Tasse/Forschung/Welt/Kasse), amount, activeMembers, buildingCount, now }
 function ciqCupBonus(cosm, ctx) {
@@ -857,9 +875,11 @@ function ciqCupBonus(cosm, ctx) {
   let mult = 1, flatPerCup = 0;
   if (ciqActive(cosm, 'koffein_gedaechtnis', now)) mult += 0.05;
   if (ciqActive(cosm, 'espresso_fokus', now))      mult *= 2;
+  // Schwarzbrenner: von flachem "+1 CC/Tasse" auf "doppelte CC/Tasse" umgestellt (User-Wunsch)
+  // — stackt multiplikativ mit Espresso-Fokus (×4 bei beiden aktiv, gewollte Profi-Kombo).
+  if (ciqActive(cosm, 'schwarzbrenner', now))      mult *= 2;
   if (ciqActive(cosm, 'schwarmintelligenz', now))  flatPerCup += Math.min(ctx?.activeMembers || 0, 5);
   if (ciqActive(cosm, 'erntehelfer', now))         flatPerCup += Math.min(ctx?.buildingCount || 0, 5);
-  if (ciqActive(cosm, 'schwarzbrenner', now))      flatPerCup += 1;
   const bonus = (ctx?.cupIncome || 0) * (mult - 1) + flatPerCup * (ctx?.amount || 0);
   return Math.round(bonus * 100) / 100;
 }
@@ -867,10 +887,10 @@ function ciqCupBonus(cosm, ctx) {
 function ciqCupBonusDetail(cosm, ctx) {
   const now = ctx?.now, parts = [];
   if (ciqActive(cosm, 'espresso_fokus', now))      parts.push('Espresso-Fokus ×2');
+  if (ciqActive(cosm, 'schwarzbrenner', now))      parts.push('Schwarzbrenner ×2');
   if (ciqActive(cosm, 'koffein_gedaechtnis', now)) parts.push('Gedächtnis +5%');
   if (ciqActive(cosm, 'schwarmintelligenz', now))  parts.push(`Schwarm +${Math.min(ctx?.activeMembers || 0, 5)}/Tasse`);
   if (ciqActive(cosm, 'erntehelfer', now))         parts.push(`Erntehelfer +${Math.min(ctx?.buildingCount || 0, 5)}/Tasse`);
-  if (ciqActive(cosm, 'schwarzbrenner', now))      parts.push('Schwarzbrenner +1/Tasse');
   return parts.join(', ');
 }
 function ciqResearchPassiveMult(cosm, nowTs) { return ciqActive(cosm, 'bohnen_verstaendnis', nowTs) ? 1.10 : 1; }
@@ -882,7 +902,7 @@ function ciqKartellMult(cosm, nowTs)         { return ciqActive(cosm, 'kaffee_ka
 // Für Node-Tests / spätere Module
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = Object.assign(module.exports || {}, {
-    CIQ_PERKS, ciqGetCiq, ciqActive, ciqDef, ciqDailyMax, ciqRedFlagImmune,
+    CIQ_PERKS, ciqGetCiq, ciqActive, ciqDef, ciqDailyMax, ciqCaffeineFlagThreshold, ciqCaffeineFlagCap,
     ciqCupBonus, ciqResearchPassiveMult, ciqBuildingPassiveMult, ciqResearchCostMult, ciqRewardMult,
     ciqKartellMult, ciqDebuffEntry, ciqDebuffActive, ciqAttackCooldownUntil,
     ciqEligibleTargets, ciqAttackTargetLabel, ciqPerkDesc, ciqAttackQueue,

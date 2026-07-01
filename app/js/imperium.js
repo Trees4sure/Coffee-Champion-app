@@ -1383,16 +1383,18 @@ async function _handleKarteStep(tx, ty, member, state, seed, COLS, ROWS, MARGIN)
   if (treasure) {
     const bartBonus  = hasBart ? 1 : 0;
     let totalCC      = treasure.cc + bartBonus;
-    // 🧠 CIQ Schatzräuber (Fremd-Debuff, einmalig): die Hälfte des NÄCHSTEN Schatzfundes
-    // geht an den Angreifer — wird hier verbraucht (aus ciq_debuffs entfernt), nicht erst
-    // nach den 48h Ablauf.
+    // 🧠 CIQ Schatzräuber (Fremd-Debuff): die Hälfte JEDES Schatzfundes geht an den
+    // Angreifer, solange der Debuff aktiv ist (24h) — NICHT mehr nur beim ersten Fund.
+    // Vorher wurde der Eintrag nach einem einzigen Treffer aus ciq_debuffs entfernt; bei
+    // seltenen Schatzfunden lohnten sich die 25 CC Angriffskosten damit kaum (User-Feedback
+    // 2026-07-04). Der Debuff läuft jetzt einfach über ciqDebuffEntry()/expires_at aus, wie
+    // alle anderen zeitlich befristeten Debuffs auch.
     const raubEntry = (typeof ciqDebuffEntry === 'function') ? ciqDebuffEntry(state.mapData, 'schatz_raeuber') : null;
     let raubStolen = 0, raubFrom = null;
     if (raubEntry) {
       raubStolen = Math.round(totalCC * (raubEntry.amount || 0.5));
       raubFrom   = raubEntry.from;
       totalCC    = totalCC - raubStolen;
-      state.mapData = { ...state.mapData, ciq_debuffs: (state.mapData.ciq_debuffs || []).filter(d => d !== raubEntry) };
     }
     // Optimistic UI update sofort
     state.memberCoins += totalCC;
