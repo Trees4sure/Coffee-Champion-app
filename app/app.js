@@ -1035,8 +1035,9 @@ function _informantStatsHtml(u) {
   const explored  = (typeof _ccExploredPct === 'function') ? _ccExploredPct(u) : 0;
   if (bldCount > 0 || explored > 0) items.push(`🗺️ Karte: ${bldCount} Gebäude · ${explored}% erkundet`);
 
-  const treasures = (typeof _ccTreasures === 'function') ? _ccTreasures(u) : 0;
-  if (treasures > 0) items.push(`💎 Schätze: ${treasures} gefunden`);
+  const treasures   = (typeof _ccTreasures === 'function') ? _ccTreasures(u) : 0;
+  const treasureCc  = (typeof _ccTreasureCc === 'function') ? _ccTreasureCc(u) : 0;
+  if (treasures > 0) items.push(`💎 Schätze: ${treasures} gefunden · ${_fmtCoins(treasureCc)} CC`);
 
   const dd = u.dungeon_data || {};
   if ((dd.level || 1) > 1 || (dd.wins || 0) > 0 || (dd.losses || 0) > 0) {
@@ -1048,13 +1049,22 @@ function _informantStatsHtml(u) {
     items.push(`⚔️ Krieger: Stufe ${prog.level} · ${dd.wins || 0}S/${dd.losses || 0}N · ${_fmtCoins(dGold)} CC insgesamt`);
   }
 
-  // Quiz: CIQ-Punktestand + kumulierte CC aus allen bisherigen Quiz-Runden. cosmetics.quiz.history
-  // speichert pro Periode nur den Score — CC wird daraus abgeleitet (aktueller Satz: 4 CC/Punkt,
-  // seit Quiz-Einführung unverändert), da keine eigene Lifetime-CC-Summe fürs Quiz existiert.
+  // CIQ-Gesamtbild: Punktestand (Quiz), kumulierte CC aus Quiz-Runden UND aus CIQ-Angriffen,
+  // plus welche Angriffs-/Debuff-Fähigkeiten der aktuelle CIQ-Stand freischaltet (Bedrohungs-
+  // Einschätzung — Angriffs-Perks sind kein Dauerbesitz, sondern ab genug CIQ jederzeit nutzbar).
+  // quizCC: cosmetics.quiz.history speichert pro Periode nur den Score, CC wird daraus abgeleitet
+  // (aktueller Satz 4 CC/Punkt, seit Quiz-Einführung unverändert). ciqCcEarned: map_data-Feld,
+  // serverseitig in apply_ciq_attack() mitgeführt (migration_2026-07-02_garde_level2_ciq_tracking.sql).
   const quiz = u.cosmetics?.quiz || {};
-  const quizCiq = quiz.ciq || 0;
-  const quizCC  = Object.values(quiz.history || {}).reduce((s, h) => s + (h.score || 0) * 4, 0);
-  if (quizCiq > 0 || quizCC > 0) items.push(`🧠 Quiz: ${quizCiq} CIQ · ${_fmtCoins(quizCC)} CC insgesamt`);
+  const quizCiq   = quiz.ciq || 0;
+  const quizCC    = Object.values(quiz.history || {}).reduce((s, h) => s + (h.score || 0) * 4, 0);
+  const ciqEarned = u.map_data?.ciqCcEarned || 0;
+  const ciqSkills = (typeof CIQ_PERKS !== 'undefined')
+    ? CIQ_PERKS.filter(p => (p.type === 'attack' || p.type === 'debuff') && quizCiq >= p.ciq).map(p => p.icon).join(' ')
+    : '';
+  if (quizCiq > 0 || quizCC > 0 || ciqEarned > 0) {
+    items.push(`🧠 CIQ: ${quizCiq} Punkte · ${_fmtCoins(quizCC)} CC aus Quiz · ${_fmtCoins(ciqEarned)} CC aus Angriffen${ciqSkills ? ' · Fähigkeiten: ' + ciqSkills : ''}`);
+  }
 
   if (!items.length) return '';
   return `<div class="cc-informant-stats" style="display:flex;flex-wrap:wrap;gap:6px;margin:4px 0">
@@ -1304,6 +1314,9 @@ function _ccWealth(u) {
   return Math.round((u.coins || 0) + _ccResearchScore(u) + _ccBldScore(u));
 }
 function _ccTreasures(u) { return Object.keys(u.map_data?.treasures || {}).length; }
+// Lifetime-CC-Summe aus Kartenschätzen — map_data.totalTreasureCc, mitgeführt seit 2026-07-02
+// (Schätze davor zählen nicht rückwirkend nach, da es diese Summe vorher nicht gab).
+function _ccTreasureCc(u) { return u.map_data?.totalTreasureCc || 0; }
 function _ccExploredPct(u) {
   const WORLD = (typeof KARTE_WORLD !== 'undefined') ? KARTE_WORLD : 128;
   const n = Object.keys(u.map_data?.explored || {}).length;
