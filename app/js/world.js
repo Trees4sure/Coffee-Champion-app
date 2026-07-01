@@ -416,13 +416,15 @@ async function _openCountrySheet(country, member) {
     if (myRank !== 1) pctNote += ` Beim Bauen zahlst du <strong>${taxPct} %</strong> Steuer an die Regierung${hasSteuerberater ? ' (💼 Steuerberater)' : ''}.`;
   }
 
-  // ── Garde ──
+  // ── Garde (nur der amtierende Regent, Rang 1, darf stationieren — Garde
+  //    verteidigt die eigene Regierung, ist kein Aufhol-Tool für Herausforderer) ──
   const gardeCost = calcGardeCost(country.id, _worldBldCache);
   const hasGarde  = !!(myRow && myRow.garde);
   let gardeBlock;
-  if (hasGarde)   gardeBlock = `<span class="cc-world-garde-on">☕ Garde aktiv · +15% Einfluss</span>`;
-  else if (myRow) gardeBlock = `<button class="cc-build-btn cc-world-bbtn" data-world-garde="1">☕ Garde stationieren · ${gardeCost} 🫘</button>`;
-  else            gardeBlock = `<span class="cc-world-blocked">Investiere zuerst für eine Garde</span>`;
+  if (hasGarde)          gardeBlock = `<span class="cc-world-garde-on">☕ Garde aktiv · +15% Einfluss</span>`;
+  else if (myRank === 1) gardeBlock = `<button class="cc-build-btn cc-world-bbtn" data-world-garde="1">☕ Garde stationieren · ${gardeCost} 🫘</button>`;
+  else if (myRow)        gardeBlock = `<span class="cc-world-blocked">Nur der Regent (Rang 1) kann eine Garde stationieren.</span>`;
+  else                   gardeBlock = `<span class="cc-world-blocked">Investiere zuerst für eine Garde</span>`;
 
   // ── Tier-basiertes Länder-Limit ──────────────────────────────────────────────
   const { rankMap: _myRankMap } = worldRanksForMember(_worldInvCache, member.id);
@@ -531,6 +533,7 @@ async function _handleBuyGarde(country, member) {
   if (res?.error === 'insufficient_coins') { showToast(`Nicht genug CC (Garde kostet ${res.cost})!`, 'error'); return; }
   if (res?.error === 'no_investment')      { showToast('Investiere zuerst in dieses Land.', 'error'); return; }
   if (res?.error === 'already_garde')      { showToast('Garde bereits stationiert.', 'error'); return; }
+  if (res?.error === 'not_rank1')          { showToast('Nur der amtierende Regent (Rang 1) kann eine Garde stationieren.', 'error'); return; }
   if (!res?.ok) { showToast('Garde fehlgeschlagen', 'error'); return; }
   showToast(`☕ Kaffee-Garde in ${country.flag} ${country.name} stationiert!`, 'success');
   try { await DB.postMessage(`${member.name} stationiert eine ☕ Kaffee-Garde in ${country.flag} ${country.name}!`, member.name); } catch (e) {}

@@ -727,7 +727,7 @@ const CIQ_PERKS = [
   { id: 'steuerumgehung',     tier: '🧾', icon: '🧾', name: 'Steuerumgehung',     type: 'timed',  durationH: 24, ciq: 3,  cc: 15,
     desc: 'Deine Tagesabgabe heute fällt komplett aus.' },
   { id: 'kaffee_dieb',        tier: '🫘', icon: '🫘', name: 'Kaffeedieb',         type: 'attack',                ciq: 4,  cc: 20,
-    desc: 'Stiehl sofort 8 CC vom Spieler mit den meisten CC.' },
+    desc: 'Stiehl sofort bis zu 30 CC vom Spieler mit den meisten CC (gedeckelt auf dessen Guthaben).' },
   { id: 'steuer_pruefer',     tier: '🔍', icon: '🔍', name: 'Steuerprüfer',       type: 'debuff', durationH: 24, ciq: 5,  cc: 25,
     desc: 'Der CC-Spitzenreiter zahlt 24 h lang die doppelte Tagesabgabe.' },
   { id: 'schatz_raeuber',     tier: '💎', icon: '💎', name: 'Schatzräuber',       type: 'debuff', durationH: 48, ciq: 5,  cc: 25,
