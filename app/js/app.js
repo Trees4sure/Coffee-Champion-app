@@ -908,7 +908,10 @@ function renderCiqPerks(u) {
         const r = await DB.buyCiqPerk(currentUser.id, perkId);
         if (r?.ok) {
           await refreshData();
-          showToast(`🧠 „${def?.name || 'Fähigkeit'}" freigeschaltet!`, 'success');
+          // Informant zeigt sein Ergebnis nicht am Kauf-Ort (Profil), sondern in der Statistik —
+          // ohne diesen Hinweis direkt bei der Aktion wirkt der Kauf wie er nichts bewirkt hätte.
+          const locSuffix = perkId === 'informant' ? ' Bericht steht unter 📊 Statistik → 💰 Gehalt.' : '';
+          showToast(`🧠 „${def?.name || 'Fähigkeit'}" freigeschaltet!${locSuffix}`, 'success');
           renderProfile();
         } else {
           const msg = {
@@ -1008,11 +1011,14 @@ async function renderStats() {
   else renderJahr(info);
 }
 
-// 🕵️ Informant (CIQ-Perk): solange aktiv, zeigt die Gehaltsstatistik zusätzlich Guthaben +
-// letztes bekanntes Tagesgehalt ALLER Gruppenmitglieder (nicht nur der Top 5 wie die
-// Chart-Tabelle darüber). Die Daten (appData.users[].coins / .map_data.salaryHistory) sind
-// client-seitig ohnehin schon geladen (RLS erlaubt gruppenweiten Lesezugriff) — Informant
-// schaltet hier also nur die ANZEIGE frei, holt keine neuen Daten nach.
+// 🕵️ Informant (CIQ-Perk): solange aktiv, zeigt die Gehaltsstatistik zusätzlich eine ECHTE
+// Einzelaufschlüsselung des Passiv-Einkommens ALLER Gruppenmitglieder — nicht nur die nackten
+// Summen, die man als Top 5 ohnehin schon in der Chart-Tabelle darüber sieht. Wiederverwendet
+// _buildPassivBreakdown() aus imperium.js (dieselbe Komponente, die jeder für sich selbst im
+// Profil sieht: Forschungs-Items/Kombos/Gebäude einzeln + Multiplikatoren), hier einfach pro
+// fremdem Mitglied statt nur für sich selbst. Alle nötigen Rohdaten (research, map_data.buildings,
+// coins, salaryHistory) sind client-seitig ohnehin schon geladen (RLS erlaubt gruppenweiten
+// Lesezugriff) — Informant schaltet nur die ANZEIGE frei, holt nichts vom Server nach.
 function _informantPanelHtml() {
   const cosm = currentUserData?.cosmetics || {};
   if (typeof ciqActive !== 'function' || !ciqActive(cosm, 'informant', Date.now())) return '';
@@ -1023,12 +1029,21 @@ function _informantPanelHtml() {
     .map(u => {
       const hist = u.map_data?.salaryHistory || [];
       const last = hist.slice().sort((a, b) => (a.ts || 0) - (b.ts || 0)).pop() || {};
-      return `<tr class="${u.id === currentUser?.id ? 'winner-row' : ''}"><td>${_esc(u.name)}</td><td>${_fmtCoins(u.coins || 0)}</td><td>${last.day ?? '–'}</td></tr>`;
+      const perCup = (typeof calcResearchPerCup === 'function') ? calcResearchPerCup(u.research || {}) : 0;
+      const breakdown = (typeof _buildPassivBreakdown === 'function') ? _buildPassivBreakdown(u) : '';
+      return `
+        <div class="cc-informant-row" style="border-bottom:1px solid var(--gold-dim);padding:8px 2px">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px">
+            <strong>${_esc(u.name)}</strong>
+            <span style="color:var(--muted);font-size:.78rem">🪙 ${_fmtCoins(u.coins || 0)} · 💰 ${last.day ?? '–'}/Tag realisiert · ☕ +${_fmtCoins(perCup)}/Tasse</span>
+          </div>
+          ${breakdown || '<p class="empty-hint" style="margin:4px 0 0;font-size:.75rem">Keine laufenden Forschungs-/Gebäude-Einnahmen.</p>'}
+        </div>`;
     }).join('');
   return `
     <div class="section-title" style="margin-top:16px">🕵️ Informant — Geheimdienst-Bericht
       <span style="color:var(--muted);font-weight:400;font-size:.72rem">(noch bis ${untilTxt} Uhr)</span></div>
-    <table><thead><tr><th>Name</th><th>🪙 Guthaben</th><th>💰 /Tag passiv</th></tr></thead><tbody>${rows}</tbody></table>`;
+    <div class="cc-informant-list">${rows}</div>`;
 }
 
 // 💰 Einkommens-Verlauf der Top-5-Mitglieder (Liniendiagramm). Zeigt das realisierte
