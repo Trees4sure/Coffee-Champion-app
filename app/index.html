@@ -171,19 +171,34 @@
         </div>
       </div>
 
-      <div class="progress-section" id="today-log-section" style="display:none">
-        <div class="section-title">☕ Heute erhalten</div>
-        <div id="today-log-list" class="today-log-list"></div>
-      </div>
-
-      <div class="progress-section">
-        <div class="section-title">Achievements</div>
-        <div class="achievements-grid" id="achievements-grid"></div>
-      </div>
-
       <!-- NEU: CoffeeCoins im Profil -->
       <div class="progress-section" style="padding-top:0">
         <div id="coins-section"></div>
+      </div>
+
+      <!-- NEU: Profil-Untertabs (Tagesstatistik / CIQ / Achievements+Tagesaufgabe+Sprüche) -->
+      <div class="period-tabs" id="profile-subtabs">
+        <button class="period-btn active" data-profile-subtab="stats">📊 Tagesstatistik</button>
+        <button class="period-btn" data-profile-subtab="ciq">🧠 CIQ</button>
+        <button class="period-btn" data-profile-subtab="achievements">🏆 Achievements</button>
+      </div>
+
+      <div class="tab-panel" id="profile-subtab-stats">
+        <div class="progress-section" id="today-log-section" style="display:none">
+          <div class="section-title">☕ Heute erhalten</div>
+          <div id="today-log-list" class="today-log-list"></div>
+        </div>
+      </div>
+
+      <!-- ciq-perks-section wird von renderCiqPerks() hier hineingerendert -->
+      <div class="tab-panel hidden" id="profile-subtab-ciq"></div>
+
+      <div class="tab-panel hidden" id="profile-subtab-achievements">
+        <!-- daily-task-section wird von renderDailyTask() hier vorangestellt -->
+        <div class="progress-section">
+          <div class="section-title">Achievements</div>
+          <div class="achievements-grid" id="achievements-grid"></div>
+        </div>
         <div id="sprueche-section"></div>
       </div>
 
@@ -329,6 +344,7 @@
 <script src="js/krieger.js"></script><!-- NEU: Kaffee-Krieger RPG, braucht karte.js (_tileRng), vor imperium.js! -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><!-- NEU: Weltkarte -->
 <script src="js/world.js"></script><!-- NEU: Weltkarte, vor imperium.js! -->
+<script src="js/alliances.js"></script><!-- NEU: Weltbündnisse, nach world.js, vor imperium.js! -->
 <script src="js/imperium.js"></script><!-- NEU: vor app.js! -->
 <script src="js/minigame.js"></script><!-- NEU: Kaffee-Jagd Minigame, nach imperium.js! -->
 <script src="js/app.js"></script>
