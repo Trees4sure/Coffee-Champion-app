@@ -1509,6 +1509,20 @@ const DB = (() => {
     return { ...newDD, _costPaid: cost, _discountApplied: applyDiscount };
   }
 
+  // 🔨 Rüstung reparieren: atomarer Coin-Abzug (spend_coins) + Haltbarkeit auf 100 setzen.
+  // Haltbarkeit lebt in dungeon_data.armorDur; Abzug bei Niederlage passiert serverseitig in
+  // dungeon_fight. Reparatur clientseitig (gleiches Vertrauensmodell wie Kauf/Schritte).
+  async function repairArmor(memberId, armorKey, cost, currentDungeonData) {
+    if (!armorKey || !(cost > 0)) throw new Error('Nichts zu reparieren');
+    const { data: newCoins, error } = await _sb.rpc('spend_coins', { p_member_id: memberId, p_amount: cost });
+    if (error) throw new Error(error.message);
+    if (newCoins === null || newCoins === undefined) throw new Error('Nicht genug CoffeeCoins');
+    const armorDur = { ...(currentDungeonData?.armorDur || {}), [armorKey]: 100 };
+    const newDD = { ...currentDungeonData, armorDur };
+    await saveDungeonData(memberId, newDD);
+    return newDD;
+  }
+
   async function addCoins(memberId, amount) {
     const { error } = await _sb.rpc('add_coins', { p_member_id: memberId, p_amount: Math.max(0, amount) });
     if (error) throw new Error(error.message);
@@ -1878,7 +1892,7 @@ const DB = (() => {
     applyDailyLevy, checkWeeklyChallenge,
     purchaseResearchItem, saveCosmetics, buyCiqPerk, applyCiqAttack,
     updateMapData, addCoins, appendTodayLog, claimPassive, recordSalarySnapshot, recordSalarySnapshotsAll,
-    saveDungeonData, dungeonFight, buyKriegerItem,
+    saveDungeonData, dungeonFight, buyKriegerItem, repairArmor,
     payBaristaBartGroup, addPenaltyToTreasury, payEigeneTasseGroup,
     claimLoginBonus, claimDailyTask,
     investInCountry, investPassive, fetchCountryStandings, fetchAllWorldInvestments,

@@ -217,7 +217,7 @@ function kriegerActiveSetCulture(equipped) {
 // Ausrüstungspreisen) — muss synchron mit _krieger_enemy_stats() in
 // migration_kaffee_krieger.sql bleiben, hier nur die UI-Vorschau vor dem Kampf.
 const KRIEGER_ENEMIES = [
-  { tier:'t1',   name:'Schaum-Gesindel', flavor:['🫧 Milchschaum-Wicht','👹 Bohnen-Goblin','🟤 Kaffeesatz-Schleim'], hp:50,  atk:9,  def:2,  ccMin:20,  ccMax:35,  ep:25,  minLevel:1,  maxDist:15 },
+  { tier:'t1',   name:'Schaum-Gesindel', flavor:['🫧 Milchschaum-Wicht','👹 Bohnen-Goblin','🟤 Kaffeesatz-Schleim'], hp:60,  atk:11, def:2,  ccMin:20,  ccMax:35,  ep:25,  minLevel:1,  maxDist:15 },
   { tier:'t2',   name:'Mahlwerk-Bande',  flavor:['⚙️ Mahlwerk-Golem','👻 Filterpapier-Geist','🔨 Tamper-Troll'],      hp:110, atk:16, def:7,  ccMin:45,  ccMax:75,  ep:55,  minLevel:15, maxDist:35 },
   { tier:'t3',   name:'Röster-Horde',    flavor:['🔥 Röstkammer-Zwerg','🕷️ Säure-Spinne','🐍 Crema-Hydra'],          hp:200, atk:25, def:13, ccMin:90,  ccMax:140, ep:100, minLevel:30, maxDist:60 },
   { tier:'t4',   name:'Koffein-Elite',   flavor:['⚡ Koffein-Berserker','👻 Espresso-Geist','🗿 Robusta-Titan'],      hp:340, atk:36, def:20, ccMin:170, ccMax:260, ep:170, minLevel:50, maxDist:90 },
@@ -284,6 +284,39 @@ function kriegerCanStep(tx, ty, dd, worldSeed) {
   if (tx === KRIEGER_BOSS_POS.x && ty === KRIEGER_BOSS_POS.y && (dd?.level || 1) < KRIEGER_BOSS_MIN_LEVEL) return false;
   const p = kriegerPos(dd);
   return Math.abs(p.x - tx) <= 1 && Math.abs(p.y - ty) <= 1 && !(p.x === tx && p.y === ty);
+}
+
+// Kostenloses Zurücklaufen auf ein bereits erkundetes Nachbarfeld (kein Schrittverbrauch,
+// kein erneutes Explore/Fund). Behebt das "Steckenbleiben": sobald alle direkten Nachbarn
+// erkundet sind, konnte man sich vorher NICHT mehr zu einem unerkundeten Feld anderswo
+// zurückbewegen. Analog karteCanWalkBack/karteWalkBack in karte.js.
+function kriegerCanWalkBack(tx, ty, dd) {
+  if (!kriegerIsExplored(tx, ty, dd)) return false;
+  if (tx < 0 || tx >= KRIEGER_WORLD || ty < 0 || ty >= KRIEGER_WORLD) return false;
+  const p = kriegerPos(dd);
+  return Math.abs(p.x - tx) <= 1 && Math.abs(p.y - ty) <= 1 && !(p.x === tx && p.y === ty);
+}
+function kriegerWalkBack(tx, ty, dd) {
+  return { ...(dd || {}), pos: { x: tx, y: ty } };
+}
+
+// ── Level-Kampfbonus (2026-07-05): Level wirkt jetzt auch auf ATK/DEF, nicht nur HP.
+// Muss zur SQL dungeon_fight passen (floor(level/4) ATK, floor(level/5) DEF). ───────
+function kriegerLevelAtkBonus(level) { return Math.floor((level || 1) / 4); }
+function kriegerLevelDefBonus(level) { return Math.floor((level || 1) / 5); }
+
+// ── Rüstungs-Haltbarkeit (2026-07-05): 0..100, Standard 100. Niederlage MIT Rüstung
+// senkt sie (serverseitig in dungeon_fight um 20); der Rüstungs-DEF skaliert damit. ──
+function kriegerArmorDur(dd, key) {
+  const v = dd && dd.armorDur ? dd.armorDur[key] : undefined;
+  return (v === undefined || v === null) ? 100 : Math.max(0, Math.min(100, Number(v)));
+}
+const KRIEGER_REPAIR_FACTOR = 0.3; // Reparaturkosten = fehlende% × Basispreis × Faktor
+function kriegerRepairCost(dd, key) {
+  const item = (typeof kriegerItemByKey === 'function') ? kriegerItemByKey(key) : null;
+  if (!item) return 0;
+  const missing = (100 - kriegerArmorDur(dd, key)) / 100;
+  return Math.ceil((item.cost || 0) * KRIEGER_REPAIR_FACTOR * missing);
 }
 
 // Betritt ein neues Feld. Gibt { newDungeonData, gimmick, encounter } zurück.

@@ -1993,7 +1993,14 @@ async function _handleKriegerTap(tx, ty, member, state, seed, COLS, ROWS, MARGIN
     _showKriegerFightPrompt(member, state, tier, seed, COLS, ROWS, MARGIN, key);
     return;
   }
-  if (explored) return; // erkundetes, leeres Feld — nichts zu tun (kein Bau-System im Dungeon)
+  // Erkundetes, leeres Feld: kostenlos dorthin zurücklaufen (kein Schrittverbrauch, kein
+  // erneuter Fund) — sonst sitzt man fest, sobald alle Nachbarfelder erkundet sind.
+  if (explored) {
+    if (kriegerCanWalkBack(tx, ty, state.dd)) {
+      await _handleKriegerWalkBack(tx, ty, member, state, seed, COLS, ROWS, MARGIN);
+    }
+    return;
+  }
 
   // 1b) Versiegelte Drachenhöhle vor Stufe 80 angetippt → Hinweis statt stillem No-Op
   // (kriegerCanStep blockt das Betreten unten ohnehin, aber ohne Feedback wirkt es wie ein Bug).
@@ -2053,6 +2060,27 @@ async function _handleKriegerTap(tx, ty, member, state, seed, COLS, ROWS, MARGIN
   if (encounter) _showKriegerFightPrompt(member, state, encounter.tier, seed, COLS, ROWS, MARGIN, key);
 }
 
+// Kostenloses Zurücklaufen auf ein erkundetes Dungeon-Feld — nur Position + Viewport +
+// Render, kein Schritt-/Explore-/Fund-Aufruf. Pendant zu _handleKarteWalkBack.
+async function _handleKriegerWalkBack(tx, ty, member, state, seed, COLS, ROWS, MARGIN) {
+  const prevDd = state.dd;
+  state.dd = kriegerWalkBack(tx, ty, state.dd);
+  try { await DB.saveDungeonData(member.id, state.dd); }
+  catch (e) { state.dd = prevDd; showToast('Konnte nicht zurücklaufen.', 'error'); return; }
+  currentUserData = { ...(currentUserData || {}), dungeon_data: state.dd };
+
+  const pos  = kriegerPos(state.dd);
+  const pvpX = pos.x - state.vpX, pvpY = pos.y - state.vpY;
+  if (pvpX < MARGIN)                 state.vpX = Math.max(0, pos.x - MARGIN);
+  else if (pvpX > COLS - MARGIN - 1) state.vpX = Math.min(KRIEGER_WORLD - COLS, pos.x - (COLS - MARGIN - 1));
+  if (pvpY < MARGIN)                 state.vpY = Math.max(0, pos.y - MARGIN);
+  else if (pvpY > ROWS - MARGIN - 1) state.vpY = Math.min(KRIEGER_WORLD - ROWS, pos.y - (ROWS - MARGIN - 1));
+
+  const canvas = document.getElementById('krieger-canvas');
+  if (canvas) kriegerRender(canvas, state.dd, seed, state.vpX, state.vpY);
+  _kriegerUpdateHud(state);
+}
+
 // Eigene Werte rein zur ANZEIGE (Prompt/HUD) — der tatsächliche Kampfausgang kommt
 // ausschließlich von der RPC, die dieselbe Formel serverseitig nachrechnet.
 function _kriegerOwnStats(dd) {
@@ -2063,12 +2091,20 @@ function _kriegerOwnStats(dd) {
     const key = eq[slot];
     if (key && owned[key]) {
       const item = kriegerItemByKey(key);
-      if (item) { atk += item.atk; def += item.def; crit += item.crit; }
+      if (item) {
+        atk += item.atk; crit += item.crit;
+        // Rüstungs-DEF skaliert mit Haltbarkeit (mirror dungeon_fight)
+        def += (slot === 'armor')
+          ? Math.round(item.def * kriegerArmorDur(dd, key) / 100)
+          : item.def;
+      }
     }
   }
   const setCulture = kriegerActiveSetCulture(eq);
   if (setCulture === 'orient') crit += 10;
   const level = dd.level || 1;
+  atk += kriegerLevelAtkBonus(level); // Level-Kampfbonus (mirror dungeon_fight)
+  def += kriegerLevelDefBonus(level);
   return { atk, def, crit, hp: 80 + level * 4, setCulture };
 }
 
@@ -2196,6 +2232,21 @@ async function _runKriegerFight(member, state, tier, seed, COLS, ROWS, MARGIN, k
     dungeonDirty = true;
   }
 
+  // Niederlage-Konsequenzen (2026-07-05): MIT Rüstung leidet die Haltbarkeit (bereits
+  // serverseitig in dungeon_fight −20 gesenkt, steckt in new_dungeon_data). OHNE Rüstung
+  // verfallen stattdessen die restlichen Tagesschritte.
+  if (!result.won) {
+    const armorKey = state.dd.equipped?.armor;
+    const armorEquipped = !!(armorKey && state.dd.owned?.[armorKey]);
+    if (armorEquipped) {
+      showToast(`🛡️ Rüstung beschädigt (${kriegerArmorDur(state.dd, armorKey)}% Haltbarkeit) — beim 🔨 Schmied reparieren.`, 'info');
+    } else {
+      state.dd = { ...state.dd, steps_today: kriegerStepsAllowed(state.dd.level || 1, state.dd), steps_date: _kriegerTodayKey() };
+      dungeonDirty = true;
+      showToast('👟 Ohne Rüstung unterlegen — deine Tagesschritte für heute sind aufgebraucht!', 'error');
+    }
+  }
+
   if (dungeonDirty) {
     try { await DB.saveDungeonData(member.id, state.dd); } catch (e) { /* non-critical */ }
   }
@@ -2315,7 +2366,23 @@ function _kriegerRenderShop(member, state, body) {
     </div>`;
   }).join('');
 
-  body.innerHTML = `<div class="krieger-loadout">${loadoutHtml}</div>${setHint}${sections}`;
+  // 🔨 Schmied: beschädigte (Haltbarkeit < 100 %) Rüstungen im Besitz reparieren.
+  const damagedArmors = KRIEGER_ITEMS.filter(i => i.slot === 'armor' && owned[i.key] && kriegerArmorDur(dd, i.key) < 100);
+  const schmiedHtml = `<div class="krieger-shop-section">
+    <div class="section-title" style="font-size:13px">🔨 Schmied</div>
+    ${damagedArmors.length ? damagedArmors.map(item => {
+      const dur = kriegerArmorDur(dd, item.key);
+      const cost = kriegerRepairCost(dd, item.key);
+      const can = state.memberCoins >= cost;
+      return `<div class="krieger-item-card owned">
+        <div style="font-size:11px;font-weight:700">${item.icon} ${_esc2(item.name)}</div>
+        <div class="krieger-item-stats">Haltbarkeit ${dur}% · DEF wirkt zu ${dur}%</div>
+        <div style="margin-top:5px"><button class="cc-build-btn krieger-repair-btn" data-repair="${item.key}"${can ? '' : ' disabled'}>Reparieren · ${cost} 🫘</button></div>
+      </div>`;
+    }).join('') : '<div style="font-size:12px;color:var(--muted);text-align:center;padding:4px">Alle Rüstungen intakt. 👍</div>'}
+  </div>`;
+
+  body.innerHTML = `<div class="krieger-loadout">${loadoutHtml}</div>${setHint}${schmiedHtml}${sections}`;
 
   body.querySelectorAll('.krieger-buy-btn').forEach(btn => {
     btn.onclick = async () => {
@@ -2370,6 +2437,25 @@ function _kriegerRenderShop(member, state, body) {
       } catch (e) { showToast(e.message || 'Ausrüsten fehlgeschlagen', 'error'); }
     };
   });
+
+  body.querySelectorAll('.krieger-repair-btn').forEach(btn => {
+    btn.onclick = async () => {
+      const key = btn.dataset.repair;
+      const cost = kriegerRepairCost(state.dd, key);
+      if (cost <= 0) return;
+      if (state.memberCoins < cost) { showToast('Nicht genug CoffeeCoins!', 'error'); return; }
+      btn.disabled = true;
+      try {
+        const newDD = await DB.repairArmor(member.id, key, cost, state.dd);
+        state.dd = newDD;
+        state.memberCoins -= cost;
+        currentUserData = { ...(currentUserData || {}), coins: state.memberCoins, dungeon_data: state.dd };
+        _updateHeaderCoins({ coins: state.memberCoins });
+        showToast('🔨 Rüstung repariert — volle Haltbarkeit!', 'success');
+        _kriegerRenderShop(member, state, body);
+      } catch (e) { btn.disabled = false; showToast(e.message || 'Reparatur fehlgeschlagen', 'error'); }
+    };
+  });
 }
 
 // ── Sub-Tab: Fortschritt ─────────────────────────────────────────────────────
@@ -2387,6 +2473,8 @@ function _kriegerRenderProgress(member, state, body) {
     <div class="krieger-xp-wrap" style="height:8px;border-radius:4px;overflow:hidden"><div class="krieger-xp-bar" style="width:${prog.pct}%"></div></div>
     <p style="text-align:center;margin:6px 0 14px">Stufe <strong>${prog.level}</strong>${prog.need ? ` &nbsp;·&nbsp; ${prog.xp}/${prog.need} EP (${prog.pct}%)` : ' (Maximalstufe erreicht)'}</p>
     <div class="cc-passiv-detail">
+      <div class="cc-passiv-detail-row"><span>⚔️ Kampfwerte (inkl. Level)</span><span>ATK ${_kriegerOwnStats(dd).atk} · DEF ${_kriegerOwnStats(dd).def} · CRIT ${_kriegerOwnStats(dd).crit}%</span></div>
+      <div class="cc-passiv-detail-row"><span>📈 Level-Bonus</span><span>+${kriegerLevelAtkBonus(prog.level)} ATK · +${kriegerLevelDefBonus(prog.level)} DEF · +${prog.level * 4} HP</span></div>
       <div class="cc-passiv-detail-row"><span>🏆 Siege</span><span>${dd.wins || 0}</span></div>
       <div class="cc-passiv-detail-row"><span>💀 Niederlagen</span><span>${dd.losses || 0}</span></div>
       <div class="cc-passiv-detail-row"><span>🐉 Boss-Kills</span><span>${dd.bossKills || 0}</span></div>

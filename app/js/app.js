@@ -555,11 +555,12 @@ function renderLeaderboard() {
 // App-Start. Idempotent über map_data.whatsNewSeen = WHATS_NEW_VERSION (analog Login-Bonus/
 // Tagesaufgaben-Muster) — wer schon dran war, sieht es nicht erneut. Bei künftigen neuen
 // Features: WHATS_NEW_VERSION + WHATS_NEW_ITEMS aktualisieren, dann poppt es einmalig erneut auf.
-const WHATS_NEW_VERSION = '2026-07-02-welthandel';
+const WHATS_NEW_VERSION = '2026-07-05-krieger-balance';
 const WHATS_NEW_ITEMS = [
   { icon: '🏛️', title: 'Erbauer-Dividende', text: 'Wer im Welthandel baut, kassiert ab sofort jede Woche 15 % der eigenen Baukosten als Dividende — zusätzlich zum Rang-Ertrag und egal, ob der Rang gehalten oder verloren geht.' },
   { icon: '🏦', title: 'Stille Anlage', text: 'Neu im Länder-Menü: lege CC in einem Land an und kassiere täglich passiven Ertrag — ganz ohne Rang-Kampf. Verdrängt niemanden, macht dich nicht zur Zielscheibe. Ideal, um Erträge zu sichern, ohne in den Rang-Kampf gezogen zu werden — oder um bewusst Rang 2/3 zu spielen, wenn dir dessen Land-Effekte besser passen.' },
   { icon: '🔒', title: 'Bauen braucht Einfluss', text: 'Länder-Gebäude kannst du jetzt nur noch bauen, wenn du im Land echten Einfluss hast (Top 3). Wer nie investiert hat, baut nicht mehr — Investieren lohnt sich damit wieder richtig.' },
+  { icon: '⚔️', title: 'Kaffee-Krieger neu ausbalanciert', text: 'Dein Level zählt jetzt auch im Kampf (mehr ATK & DEF, nicht nur HP). Belohnungen richten sich nach der echten Herausforderung — schwache Gegner geben kaum noch CC, ebenbürtige volle. Und Niederlagen haben Folgen: ohne Rüstung sind deine Tagesschritte weg, mit Rüstung leidet ihre Haltbarkeit — reparierbar beim 🔨 Schmied im Shop.' },
 ];
 
 function checkAndMaybeShowWhatsNew() {
