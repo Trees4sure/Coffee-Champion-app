@@ -643,7 +643,7 @@ function _buildKriegerStats(users) {
     const ownedCount = Object.keys(dd.owned || {}).length;
     return `<div class="cc-stats-kasse-row">
       <span>⚔️ ${_esc2(u.name)} · Stufe ${prog.level}${prog.need ? ` (${prog.pct}%)` : ' (MAX)'}</span>
-      <strong>🏆 ${dd.wins || 0} · 💀 ${dd.losses || 0} · 🐉 ${dd.bossKills || 0} · 🎒 ${ownedCount}/24</strong>
+      <strong>🏆 ${dd.wins || 0} · 💀 ${dd.losses || 0} · 🐉 ${dd.bossKills || 0} · 🎒 ${ownedCount}/${KRIEGER_ITEMS.length}</strong>
     </div>`;
   }).join('');
 }
@@ -1911,7 +1911,7 @@ function _kriegerUpdateHud(state) {
     const pos = kriegerPos(state.dd);
     hud.innerHTML = `
       <span>📍 ${pos.x}, ${pos.y} &nbsp;·&nbsp; Stufe ${prog.level}</span>
-      <span>👣 ${kriegerStepsUsed(state.dd)}/${kriegerStepsAllowed(prog.level)}</span>`;
+      <span>👣 ${kriegerStepsUsed(state.dd)}/${kriegerStepsAllowed(prog.level, state.dd)}</span>`;
   }
   const bar = document.querySelector('.krieger-xp-bar');
   if (bar) bar.style.width = prog.pct + '%';
@@ -1923,7 +1923,7 @@ function _kriegerRenderDungeon(member, state, seed, COLS, ROWS, MARGIN, body) {
   body.innerHTML = `
     <div class="krieger-hud">
       <span>📍 ${kriegerPos(state.dd).x}, ${kriegerPos(state.dd).y} &nbsp;·&nbsp; Stufe ${prog.level}</span>
-      <span>👣 ${kriegerStepsUsed(state.dd)}/${kriegerStepsAllowed(prog.level)}</span>
+      <span>👣 ${kriegerStepsUsed(state.dd)}/${kriegerStepsAllowed(prog.level, state.dd)}</span>
     </div>
     <div class="krieger-xp-wrap"><div class="krieger-xp-bar" style="width:${prog.pct}%"></div></div>
     <canvas id="krieger-canvas" class="cc-karte-canvas" width="320" height="280" style="margin-top:8px"></canvas>
@@ -2174,6 +2174,18 @@ async function _runKriegerFight(member, state, tier, seed, COLS, ROWS, MARGIN, k
   state.dd = result.new_dungeon_data || { ...state.dd, level: result.new_level };
   if (result.cc_awarded > 0) state.memberCoins += result.cc_awarded;
 
+  let dungeonDirty = false;
+
+  // Bonus (User-Wunsch 2026-07-05): jeder gewonnene Kampf gibt sofort +5 Schritte
+  // zurück ("für den Moment") — reduziert nur die heute bereits verbrauchten
+  // Dungeon-Schritte, die reguläre Tagesgrenze (kriegerStepsAllowed) bleibt
+  // unverändert. Gilt auch für Boss-Siege.
+  if (result.won) {
+    const usedNow = kriegerStepsUsed(state.dd);
+    state.dd = { ...state.dd, steps_today: Math.max(0, usedNow - 5), steps_date: _kriegerTodayKey() };
+    dungeonDirty = true;
+  }
+
   // Bug-Fix 2026-07-04: nach einem SIEG (Nicht-Boss) das Encounter-Feld aus `encounters`
   // entfernen — sonst bleibt das Feld über _handleKriegerTap() Punkt 1 unbegrenzt farmbar
   // (dungeon_fight() selbst rührt `encounters` nicht an, das ist rein clientseitig verwaltet).
@@ -2181,6 +2193,10 @@ async function _runKriegerFight(member, state, tier, seed, COLS, ROWS, MARGIN, k
   if (result.won && tier !== 'boss' && key && state.dd.encounters?.[key]) {
     const { [key]: _removed, ...restEncounters } = state.dd.encounters;
     state.dd = { ...state.dd, encounters: restEncounters };
+    dungeonDirty = true;
+  }
+
+  if (dungeonDirty) {
     try { await DB.saveDungeonData(member.id, state.dd); } catch (e) { /* non-critical */ }
   }
 
@@ -2240,9 +2256,9 @@ function _kriegerRenderShop(member, state, body) {
   const equipped = dd.equipped || {};
   const level = dd.level || 1;
 
-  const slotIcons = { weapon: '⚔️', armor: '🛡️', talisman: '🧿' };
-  const slotNames = { weapon: 'Waffe', armor: 'Rüstung', talisman: 'Talisman' };
-  const loadoutHtml = ['weapon', 'armor', 'talisman'].map(slot => {
+  const slotIcons = { weapon: '⚔️', armor: '🛡️', talisman: '🧿', feet: '👢' };
+  const slotNames = { weapon: 'Waffe', armor: 'Rüstung', talisman: 'Talisman', feet: 'Stiefel' };
+  const loadoutHtml = ['weapon', 'armor', 'talisman', 'feet'].map(slot => {
     const key = equipped[slot];
     const item = key ? kriegerItemByKey(key) : null;
     return `<div class="krieger-slot${item ? ' filled' : ''}">
@@ -2284,6 +2300,7 @@ function _kriegerRenderShop(member, state, body) {
         item.atk ? `ATK+${item.atk}` : null,
         item.def ? `DEF${item.def > 0 ? '+' : ''}${item.def}` : null,
         item.crit ? `CRIT+${item.crit}%` : null,
+        item.steps ? `👣+${item.steps} Schritte/Tag` : null,
       ].filter(Boolean).join(' · ');
       return `<div class="krieger-item-card${isOwned ? ' owned' : ''}${locked ? ' locked' : ''}">
         <div style="font-size:20px">${item.icon}</div>
@@ -2375,7 +2392,7 @@ function _kriegerRenderProgress(member, state, body) {
       <div class="cc-passiv-detail-row"><span>🐉 Boss-Kills</span><span>${dd.bossKills || 0}</span></div>
       ${setCulture ? `<div class="cc-passiv-detail-row"><span>✨ Aktives Set</span><span>${_esc2(KRIEGER_SET_BONUSES[setCulture].name)}</span></div>` : ''}
     </div>
-    <div class="section-title" style="font-size:13px;margin-top:14px">🎒 Ausrüstung (${ownedItems.length}/24)</div>
+    <div class="section-title" style="font-size:13px;margin-top:14px">🎒 Ausrüstung (${ownedItems.length}/${KRIEGER_ITEMS.length})</div>
     ${itemsHtml}
   `;
 }

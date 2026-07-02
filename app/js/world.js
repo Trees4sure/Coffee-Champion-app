@@ -412,6 +412,7 @@ async function _openCountrySheet(country, member) {
     </div>`;
   }).join('');
 
+  const _myPassiveHere = (member.map_data && member.map_data.worldPassive && member.map_data.worldPassive[country.id]) || 0;
   const needForTop = myRank === 1 ? 0 : Math.max(WORLD_MIN_INVEST, Math.floor(topInv - myInv) + 1);
   const statusLine = myRank
     ? `Dein Einfluss: <strong>Rang ${myRank}</strong> · ${_wfmt(myInv)} CC investiert`
@@ -522,6 +523,12 @@ async function _openCountrySheet(country, member) {
            <button class="cc-build-btn" data-world-invest="1">🌍 Einfluss stärken</button>
          </div>`
     }
+    <div class="cc-world-section-title">🏦 Stille Anlage <span>(Ertrag ohne Rang-Einfluss)</span></div>
+    <p class="cc-world-pctnote">Wirft <strong>${(WORLD_PASSIVE_RATE_PER_DAY * 100).toFixed(1).replace('.', ',')} %/Tag</strong> passiv — verdrängt niemanden, zählt nicht auf den Rang.${_myPassiveHere > 0 ? ` Deine Anlage hier: <strong>${_wfmt(_myPassiveHere)} CC</strong>.` : ''}</p>
+    <div class="cc-world-invest">
+      <input type="number" id="cc-world-passive-amount" min="${WORLD_MIN_INVEST}" step="5" placeholder="CC (min. ${WORLD_MIN_INVEST})">
+      <button class="cc-build-btn" data-world-passive="1">🏦 Anlegen</button>
+    </div>
     <div class="cc-world-section-title">🏗️ Gebäude <span>(gehören dem Land)</span></div>
     <p class="cc-world-pctnote">${pctNote}</p>
     <div class="cc-world-blds">${bldRows}</div>
@@ -533,6 +540,8 @@ async function _openCountrySheet(country, member) {
   sheet.querySelector('[data-world-close]').onclick = () => sheet.classList.add('hidden');
   const investBtn = sheet.querySelector('[data-world-invest]');
   if (investBtn) investBtn.onclick = () => _handleWorldInvest(country, member);
+  const passiveBtn = sheet.querySelector('[data-world-passive]');
+  if (passiveBtn) passiveBtn.onclick = () => _handlePassiveInvest(country, member);
   const gb = sheet.querySelector('[data-world-garde]'); if (gb) gb.onclick = () => _handleBuyGarde(country, member);
   sheet.querySelectorAll('[data-alliance-propose]').forEach(b => b.onclick = () => {
     const type = b.dataset.alliancePropose;
@@ -574,6 +583,7 @@ async function _handleBuildWorld(country, member, def) {
   catch (e) { showToast(e.message || 'Bau fehlgeschlagen', 'error'); return; }
   if (res?.error === 'insufficient_coins') { showToast('Nicht genug CoffeeCoins!', 'error'); return; }
   if (res?.error === 'already_built')      { showToast('Schon gebaut.', 'error'); return; }
+  if (res?.error === 'rank_required')      { showToast('🔒 Nur wer im Land Einfluss hat (Top 3), darf bauen — investiere erst.', 'error'); return; }
   if (!res?.ok) { showToast('Bau fehlgeschlagen', 'error'); return; }
   const taxMsg = res.tax_paid > 0 ? ` (${res.tax_paid} CC Steuer${res.tax_receiver ? ' an ' + res.tax_receiver : ''})` : '';
   showToast(`🏗️ ${def.name} in ${country.flag} ${country.name} gebaut!${taxMsg}`, 'success');
@@ -588,6 +598,7 @@ async function _handleUpgradeWorld(country, member, def) {
   catch (e) { showToast(e.message || 'Ausbau fehlgeschlagen', 'error'); return; }
   if (res?.error === 'insufficient_coins') { showToast('Nicht genug CoffeeCoins!', 'error'); return; }
   if (res?.error === 'cannot_upgrade')     { showToast('Ausbau nicht möglich.', 'error'); return; }
+  if (res?.error === 'rank_required')      { showToast('🔒 Nur wer im Land Einfluss hat (Top 3), darf ausbauen — investiere erst.', 'error'); return; }
   if (!res?.ok) { showToast('Ausbau fehlgeschlagen', 'error'); return; }
   const taxMsg = res.tax_paid > 0 ? ` (${res.tax_paid} CC Steuer${res.tax_receiver ? ' an ' + res.tax_receiver : ''})` : '';
   showToast(`⬆️ ${def.name} auf Level 2 ausgebaut!${taxMsg}`, 'success');
@@ -720,6 +731,23 @@ async function _handleWorldInvest(country, member) {
   await _worldRefreshAndReopen(country, member);
 }
 
+// 🏦 Stille Anlage: CC anlegen (Ertrag ohne Rang-Einfluss). Atomar via invest_passive-RPC.
+async function _handlePassiveInvest(country, member) {
+  const input = document.getElementById('cc-world-passive-amount');
+  const amount = Math.floor(Number(input && input.value) || 0);
+  if (!amount || amount < WORLD_MIN_INVEST) { showToast(`Mindestens ${WORLD_MIN_INVEST} CC!`, 'error'); return; }
+  if ((member.coins || 0) < amount) { showToast('Nicht genug CoffeeCoins!', 'error'); return; }
+  let res;
+  try { res = await DB.investPassive(member.id, country.id, amount); }
+  catch (e) { showToast(e.message || 'Anlage fehlgeschlagen', 'error'); return; }
+  if (res?.error === 'not_enough_cc') { showToast('Nicht genug CoffeeCoins!', 'error'); return; }
+  if (res?.error === 'bad_amount')    { showToast(`Mindestens ${WORLD_MIN_INVEST} CC!`, 'error'); return; }
+  if (!res?.ok) { showToast(res?.error === 'not_found' ? 'Konto nicht gefunden' : 'Anlage fehlgeschlagen — Backend evtl. nicht migriert', 'error'); return; }
+  showToast(`🏦 ${amount} CC in ${country.flag} ${country.name} angelegt — wirft täglich passiv ab!`, 'success');
+  try { await DB.postMessage(`${member.name} legt ${amount} CC still in ${country.flag} ${country.name} an 🏦`, member.name); } catch (e) {}
+  await _worldRefreshAndReopen(country, member);
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Welt-Statistik + Entwicklungen (Ergaenzung_Statistik_Weltkarte)
 // ═══════════════════════════════════════════════════════════════════════════
@@ -764,6 +792,43 @@ function worldGovernorId(investments, countryId) {
 }
 
 // Aggregierte Welt-Kennzahlen je Member. byCountry = worldBuildingsByCountry(rows)
+// Baukosten-Summe aller vom Mitglied erbauten Länder-Gebäude (L1 + 50% für L2-Ausbau).
+// Einzige Quelle der Formel — worldStatsForMember().bldSpent UND die Erbauer-Dividende
+// (db.js) rechnen darüber, damit die Bezugsgröße nie auseinanderläuft. Braucht nur
+// byCountry (die Gebäude), kein investments/rankMap-Fetch.
+function worldBuilderSpent(byCountry, memberId) {
+  let spent = 0;
+  for (const [cid, list] of Object.entries(byCountry || {})) {
+    for (const b of (list || [])) {
+      if (b.member_id === memberId) {
+        const def = worldBuildingDef(cid, b.building_id);
+        if (def) spent += def.cost * (b.level === 2 ? 1.5 : 1); // L1 + 50% Ausbau
+      }
+    }
+  }
+  return Math.round(spent);
+}
+
+// ── 💰 Stille Anlage (Ertrag ohne Rang-Einfluss) ─────────────────────────────
+// Kapital liegt in member.map_data.worldPassive = { [countryId]: betrag } — komplett
+// getrennt von world_investments und damit von worldRanksForMember: verdrängt niemanden,
+// zählt nicht auf den Rang. Wirft stetigen Tages-Ertrag (WORLD_PASSIVE_RATE_PER_DAY),
+// der clientseitig ins Passiv-Einkommen eingerechnet wird (db.js).
+const WORLD_PASSIVE_RATE_PER_DAY = 0.004; // 0,4 %/Tag ≈ 2,8 %/Woche — später tunebar
+function worldPassiveTotal(member) {
+  const wp = (member && member.map_data && member.map_data.worldPassive) || {};
+  let s = 0; for (const v of Object.values(wp)) s += Number(v) || 0;
+  return Math.round(s * 100) / 100;
+}
+function worldPassivePerDay(member) {
+  return Math.round(worldPassiveTotal(member) * WORLD_PASSIVE_RATE_PER_DAY * 100) / 100;
+}
+function worldPassivePerDayDetail(member) {
+  const t = worldPassiveTotal(member);
+  if (t <= 0) return '';
+  return `${(WORLD_PASSIVE_RATE_PER_DAY * 100).toFixed(1).replace('.', ',')} %/Tag auf ${Math.round(t)} CC Anlage`;
+}
+
 function worldStatsForMember(investments, byCountry, memberId) {
   const { rankMap } = worldRanksForMember(investments, memberId);
   const governments = Object.values(rankMap).filter(r => r === 1).length;
@@ -771,18 +836,16 @@ function worldStatsForMember(investments, byCountry, memberId) {
   const invested    = worldInvestedTotal(investments, memberId);
   const perDay = calcWorldPerDay(rankMap) + calcWorldBuildingPerDay(rankMap, byCountry);
   const perCup = calcWorldPerCup(rankMap) + calcWorldBuildingPerCup(rankMap, byCountry);
-  const myBld = []; let bldSpent = 0;
+  const myBld = [];
   for (const [cid, list] of Object.entries(byCountry || {})) {
     for (const b of list) if (b.member_id === memberId) {
-      const def = worldBuildingDef(cid, b.building_id);
-      myBld.push({ cid, def, level: b.level });
-      if (def) bldSpent += def.cost * (b.level === 2 ? 1.5 : 1); // L1 + 50% Ausbau
+      myBld.push({ cid, def: worldBuildingDef(cid, b.building_id), level: b.level });
     }
   }
   return {
     rankMap, governments, baurechte, ranks: Object.keys(rankMap).length,
     invested, perDay: Math.round(perDay * 100) / 100, perCup: Math.round(perCup * 100) / 100,
-    myBld, bldSpent: Math.round(bldSpent),
+    myBld, bldSpent: worldBuilderSpent(byCountry, memberId),
   };
 }
 
@@ -805,7 +868,7 @@ let _worldAccOpen = { stats: true, gallery: false, devs: false, alliances: false
 // ── Ausführliches Welt-Statistik-Panel ───────────────────────────────────────
 function _renderWeltStatistik(investments, byCountry, member, taxStats, users) {
   const list = (users || []).map(u => ({ u, s: worldStatsForMember(investments, byCountry, u.id) }))
-    .filter(x => x.s.ranks || x.s.myBld.length)
+    .filter(x => x.s.ranks || x.s.myBld.length || worldPassiveTotal(x.u) > 0)
     .sort((a, b) => (b.s.governments - a.s.governments) || (b.s.invested - a.s.invested) || (b.s.perDay - a.s.perDay));
   if (!list.length) return `
     <details class="cc-world-acc" data-acc="stats"${_worldAccOpen.stats ? ' open' : ''}><summary>📊 Welt-Statistik</summary>
@@ -820,6 +883,8 @@ function _renderWeltStatistik(investments, byCountry, member, taxStats, users) {
       .map(([cid]) => (_worldById(cid) ? _worldById(cid).flag : '')).join('');
     const t = (taxStats || {})[u.id] || {};
     const mine = u.id === member.id ? ' cc-world-mine' : '';
+    const divTotal = u.map_data?.worldDividend?.totalReceived || 0;
+    const anlage = worldPassiveTotal(u);
     return `<div class="cc-wstat-row${mine}">
       <div class="cc-wstat-name">${_esc2(u.name)} <span class="cc-wstat-flags">${govFlags}</span></div>
       <div class="cc-wstat-cells">
@@ -828,6 +893,8 @@ function _renderWeltStatistik(investments, byCountry, member, taxStats, users) {
         <span title="investiert gesamt">💰 ${_wfmt(s.invested)}</span>
         <span title="errichtete Gebäude">🏗️ ${s.myBld.length}</span>
         <span title="Welt-Einkommen / Tag">📈 +${_wfmt(s.perDay)}</span>
+        ${anlage > 0 ? `<span class="cc-wstat-anlage" title="Stille Anlage (Ertrag ohne Rang-Einfluss)">🏦 ${_wfmt(anlage)}</span>` : ''}
+        ${divTotal > 0 ? `<span class="cc-wstat-div" title="Erbauer-Dividende erhalten (gesamt)">💵 ${_wfmt(divTotal)}</span>` : ''}
         ${hasTax ? `<span class="cc-wstat-tax" title="Steuern erhalten (Woche · gesamt)">🪙 ${_wfmt(t.received_7d || 0)}·${_wfmt(t.received_total || 0)}</span>` : ''}
         ${hasTax ? `<span class="cc-wstat-tax" title="Steuern gezahlt (Woche · gesamt)">💸 ${_wfmt(t.paid_7d || 0)}·${_wfmt(t.paid_total || 0)}</span>` : ''}
       </div>

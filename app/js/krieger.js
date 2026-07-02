@@ -10,7 +10,19 @@ const KRIEGER_TILE       = 20;
 const KRIEGER_GIMMICK_P  = 0.25;   // Fundchance pro neuem Feld
 const KRIEGER_ENEMY_P    = 0.12;   // Encounter-Chance pro neuem Feld
 const KRIEGER_GIMMICKS   = [
-  { emoji:'🪙', cc: [1, 8] }, // einziger Fundtyp in v1, bewusst simpel gehalten
+  { emoji:'🪙', cc: [1, 8] }, // Standard-Fund (CC)
+];
+// 🎁 Ausrüstungsfunde (2026-07-04, User-Idee): ~20% der Funde sind statt CC ein thematischer
+// Ausrüstungsfund passend zum Slot — gewährt einen 50%-Rabatt-Gutschein auf den nächsten Kauf/
+// Ausbau eines Items DIESES Slots (kulturunabhängig). Nur 1 Gutschein gleichzeitig aktiv (siehe
+// kriegerExploreTile) — kein Stapeln, sonst normaler CC-Fund als Fallback.
+const KRIEGER_VOUCHER_CHANCE = 0.2;
+const KRIEGER_VOUCHER_FINDS = [
+  { slot:'weapon',   emoji:'⚔️', name:'Altes Schwertteil entdeckt' },
+  { slot:'weapon',   emoji:'⚔️', name:'Angerosteter Klingensplitter entdeckt' },
+  { slot:'armor',    emoji:'🛡️', name:'Helmvisier entdeckt' },
+  { slot:'armor',    emoji:'🛡️', name:'Verbeulter Brustpanzer-Rest entdeckt' },
+  { slot:'talisman', emoji:'🧿', name:'Zerbrochener Talisman-Splitter entdeckt' },
 ];
 
 // Eigener Welt-Seed, deterministisch aus dem bestehenden Karten-Seed abgeleitet —
@@ -118,39 +130,51 @@ function _kriegerCarveCorridor(grid, N, x1, y1, x2, y2) {
   grid[y2 * N + x2] = 0;
 }
 
-// ── Ausrüstung (MUSS exakt mit _krieger_item_stats / _krieger_item_culture in SQL übereinstimmen) ──
+// ── Ausrüstung (weapon/armor/talisman MÜSSEN exakt mit _krieger_item_stats /
+// _krieger_item_culture in SQL übereinstimmen — die 3 Slots gehen in den serverseitigen
+// Kampf ein. Der Slot 'feet' (Stiefel) ist eine reine Client-/Storage-Erweiterung: er
+// beeinflusst nur kriegerStepsAllowed() hier im Frontend, dungeon_fight() liest ihn nicht,
+// deshalb ist dafür KEINE SQL-Änderung nötig.) ──
 const KRIEGER_ITEMS = [
   // ── Mittelalterlich (Tier 1: ab Stufe 1 · Tier 2 „Veredelt": ab Stufe 20) ──
   { key:'schwert_mittelalter_t1',  slot:'weapon',   culture:'mittelalter', tier:1, icon:'⚔️', name:'Langschwert',        cost:140, minLevel:1,  atk:8,  def:0,  crit:0 },
   { key:'ruestung_mittelalter_t1', slot:'armor',    culture:'mittelalter', tier:1, icon:'🛡️', name:'Kettenrüstung',      cost:150, minLevel:1,  atk:0,  def:8,  crit:0 },
   { key:'amulett_mittelalter_t1',  slot:'talisman', culture:'mittelalter', tier:1, icon:'🧿', name:'Wappenschild-Anhänger', cost:120, minLevel:1, atk:0, def:0, crit:4 },
+  { key:'stiefel_mittelalter_t1',  slot:'feet',     culture:'mittelalter', tier:1, icon:'👢', name:'Wanderstiefel',      cost:130, minLevel:1,  atk:0,  def:0,  crit:0, steps:5 },
   { key:'schwert_mittelalter_t2',  slot:'weapon',   culture:'mittelalter', tier:2, icon:'⚔️', name:'Ritterschwert',      cost:420, minLevel:20, atk:22, def:0,  crit:0 },
   { key:'ruestung_mittelalter_t2', slot:'armor',    culture:'mittelalter', tier:2, icon:'🛡️', name:'Plattenrüstung',     cost:450, minLevel:20, atk:0,  def:22, crit:0 },
   { key:'amulett_mittelalter_t2',  slot:'talisman', culture:'mittelalter', tier:2, icon:'🧿', name:'Drachenwappen-Amulett', cost:380, minLevel:20, atk:0, def:0, crit:10 },
+  { key:'stiefel_mittelalter_t2',  slot:'feet',     culture:'mittelalter', tier:2, icon:'👢', name:'Ritterstiefel',      cost:420, minLevel:20, atk:0,  def:0,  crit:0, steps:12 },
 
   // ── Europäisch ──
   { key:'rapier_europa_t1',        slot:'weapon',   culture:'europa', tier:1, icon:'🤺', name:'Rapier',           cost:150, minLevel:1,  atk:6,  def:0,  crit:2 },
   { key:'wams_europa_t1',          slot:'armor',    culture:'europa', tier:1, icon:'👘', name:'Samtwams',         cost:130, minLevel:1,  atk:0,  def:6,  crit:0 },
   { key:'siegelring_europa_t1',    slot:'talisman', culture:'europa', tier:1, icon:'💍', name:'Siegelring',       cost:120, minLevel:1,  atk:3,  def:3,  crit:0 },
+  { key:'schuhe_europa_t1',        slot:'feet',     culture:'europa', tier:1, icon:'👞', name:'Lederschuhe',      cost:130, minLevel:1,  atk:0,  def:0,  crit:0, steps:5 },
   { key:'degen_europa_t2',         slot:'weapon',   culture:'europa', tier:2, icon:'🤺', name:'Hofdegen',         cost:480, minLevel:20, atk:18, def:0,  crit:6 },
   { key:'harnisch_europa_t2',      slot:'armor',    culture:'europa', tier:2, icon:'👘', name:'Brokat-Harnisch',  cost:420, minLevel:20, atk:0,  def:20, crit:0 },
   { key:'adelssiegel_europa_t2',   slot:'talisman', culture:'europa', tier:2, icon:'💍', name:'Adelssiegel',      cost:400, minLevel:20, atk:8,  def:8,  crit:4 },
+  { key:'reitstiefel_europa_t2',   slot:'feet',     culture:'europa', tier:2, icon:'👞', name:'Reitstiefel',      cost:420, minLevel:20, atk:0,  def:0,  crit:0, steps:12 },
 
   // ── Orientalisch ──
   { key:'saebel_orient_t1',        slot:'weapon',   culture:'orient', tier:1, icon:'🗡️', name:'Krummsäbel',       cost:160, minLevel:1,  atk:10, def:-2, crit:0 },
   { key:'kaftan_orient_t1',        slot:'armor',    culture:'orient', tier:1, icon:'🧥', name:'Seidenkaftan',     cost:110, minLevel:1,  atk:0,  def:4,  crit:0 },
   { key:'basaramulett_orient_t1',  slot:'talisman', culture:'orient', tier:1, icon:'🧿', name:'Basar-Amulett',    cost:170, minLevel:1,  atk:0,  def:0,  crit:7 },
+  { key:'sandalen_orient_t1',      slot:'feet',     culture:'orient', tier:1, icon:'🥿', name:'Basar-Sandalen',   cost:130, minLevel:1,  atk:0,  def:0,  crit:0, steps:5 },
   { key:'saebel_orient_t2',        slot:'weapon',   culture:'orient', tier:2, icon:'🗡️', name:'Damaszener-Säbel', cost:500, minLevel:20, atk:26, def:-4, crit:0 },
   { key:'kettenhemd_orient_t2',    slot:'armor',    culture:'orient', tier:2, icon:'🧥', name:'Seiden-Kettenhemd',cost:380, minLevel:20, atk:0,  def:12, crit:5 },
   { key:'wesiramulett_orient_t2',  slot:'talisman', culture:'orient', tier:2, icon:'🧿', name:'Wesir-Amulett',    cost:600, minLevel:20, atk:0,  def:0,  crit:18 },
+  { key:'kamelstiefel_orient_t2',  slot:'feet',     culture:'orient', tier:2, icon:'🥿', name:'Karawanen-Stiefel',cost:420, minLevel:20, atk:0,  def:0,  crit:0, steps:12 },
 
   // ── Südamerikanisch ──
   { key:'keule_suedamerika_t1',    slot:'weapon',   culture:'suedamerika', tier:1, icon:'🏏', name:'Obsidian-Keule',  cost:140, minLevel:1,  atk:6,  def:2,  crit:0 },
   { key:'umhang_suedamerika_t1',   slot:'armor',    culture:'suedamerika', tier:1, icon:'🪶', name:'Federumhang',     cost:150, minLevel:1,  atk:0,  def:5,  crit:2 },
   { key:'sonnenscheibe_suedamerika_t1', slot:'talisman', culture:'suedamerika', tier:1, icon:'☀️', name:'Sonnenscheibe', cost:130, minLevel:1, atk:2, def:2, crit:2 },
+  { key:'sandalen_suedamerika_t1', slot:'feet',     culture:'suedamerika', tier:1, icon:'🩴', name:'Naturfaser-Sandalen', cost:130, minLevel:1, atk:0, def:0, crit:0, steps:5 },
   { key:'keule_suedamerika_t2',    slot:'weapon',   culture:'suedamerika', tier:2, icon:'🏏', name:'Sonnenkeule',     cost:440, minLevel:20, atk:16, def:8,  crit:0 },
   { key:'umhang_suedamerika_t2',   slot:'armor',    culture:'suedamerika', tier:2, icon:'🪶', name:'Kondorumhang',    cost:460, minLevel:20, atk:0,  def:14, crit:6 },
   { key:'goldscheibe_suedamerika_t2', slot:'talisman', culture:'suedamerika', tier:2, icon:'☀️', name:'Goldene Sonnenscheibe', cost:480, minLevel:20, atk:8, def:8, crit:8 },
+  { key:'kondorstiefel_suedamerika_t2', slot:'feet', culture:'suedamerika', tier:2, icon:'🩴', name:'Kondorfeder-Stiefel', cost:420, minLevel:20, atk:0, def:0, crit:0, steps:12 },
 ];
 
 const KRIEGER_CULTURE_NAMES = {
@@ -169,6 +193,15 @@ const KRIEGER_SET_BONUSES = {
 
 function kriegerItemsBySlot(slot) { return KRIEGER_ITEMS.filter(i => i.slot === slot); }
 function kriegerItemByKey(key)    { return KRIEGER_ITEMS.find(i => i.key === key) || null; }
+
+// Stiefel-Bonus (2026-07-05, User-Wunsch): ausgerüstetes 'feet'-Item erhöht das tägliche
+// Dungeon-Schritte-Budget dauerhaft. Rein additiv zum +5-Sieg-Bonus aus _runKriegerFight —
+// beide stapeln sich normal, da Sieg-Bonus die VERBRAUCHTEN Schritte senkt, Stiefel dagegen
+// das ERLAUBTE Budget anheben.
+function kriegerFeetBonus(dd) {
+  const item = kriegerItemByKey(dd?.equipped?.feet);
+  return item?.steps || 0;
+}
 
 // Aktives Set (3 gleichkultur. Items in weapon/armor/talisman) oder null
 function kriegerActiveSetCulture(equipped) {
@@ -209,7 +242,19 @@ function kriegerTierForDistance(dist) {
 
 // ── Stufen/EP ──────────────────────────────────────────────────────────────────
 function kriegerXpForLevel(level) { return 50 + 40 * level; }
-function kriegerStepsAllowed(level) { return 5 + Math.floor((level || 1) / 5) * 5; }
+// Balance-Anpassung 2026-07-04 (User-Wunsch, "für die Motivation"): bis Stufe 10 gibt JEDE
+// Stufe +2 Schritte (statt nur alle 5 Stufen +5) — frühe Level-Ups fühlen sich dadurch spürbar
+// an. Ab Stufe 10 zurück zum ursprünglichen Rhythmus (alle 5 Stufen +5), auf den erreichten
+// Stand bei Stufe 10 aufgesetzt. War vorher: `5 + floor(level/5)*5` (nur alle 5 Stufen).
+// Basis-Anpassung 2026-07-02 (User: "es sind zu wenige Schritte, sollte mit 10 gestartet
+// werden können"): Startwert 5→10 angehoben, komplette Kurve um +5 verschoben (gleiche Form).
+// dd optional (2026-07-05): wenn übergeben, wird der Stiefel-Bonus (kriegerFeetBonus)
+// addiert. Bestandsschutz: ohne dd (alte Aufrufe) unverändertes Verhalten.
+function kriegerStepsAllowed(level, dd) {
+  const lvl = level || 1;
+  const base = lvl <= 10 ? 10 + (lvl - 1) * 2 : 28 + Math.floor((lvl - 10) / 5) * 5;
+  return base + (dd ? kriegerFeetBonus(dd) : 0);
+}
 function kriegerProgress(dd) {
   const level = dd?.level || 1, xp = dd?.xp || 0;
   const need = level >= 100 ? 0 : kriegerXpForLevel(level);
@@ -227,7 +272,7 @@ function kriegerStepsUsed(dd) {
 }
 function kriegerStepsLeft(dd) {
   const level = dd?.level || 1;
-  return Math.max(0, kriegerStepsAllowed(level) - kriegerStepsUsed(dd));
+  return Math.max(0, kriegerStepsAllowed(level, dd) - kriegerStepsUsed(dd));
 }
 function kriegerCanStep(tx, ty, dd, worldSeed) {
   if (kriegerStepsLeft(dd) <= 0) return false;
@@ -242,7 +287,8 @@ function kriegerCanStep(tx, ty, dd, worldSeed) {
 }
 
 // Betritt ein neues Feld. Gibt { newDungeonData, gimmick, encounter } zurück.
-// encounter = { tier, flavorIdx } oder null. gimmick = { cc } oder null.
+// encounter = { tier, flavorIdx } oder null.
+// gimmick = { cc } (CC-Fund) ODER { voucher: {slot,pct}, emoji, name } (Ausrüstungsfund) oder null.
 function kriegerExploreTile(tx, ty, dd, worldSeed) {
   // Defensiv: eine Felswand kann eigentlich nie hier ankommen (kriegerCanStep blockt das
   // schon in der UI), aber falls doch — unverändert zurückgeben statt einen Stein "begehbar" zu machen.
@@ -268,9 +314,16 @@ function kriegerExploreTile(tx, ty, dd, worldSeed) {
     } else {
       const rGim = _tileRng(tx, ty, 7373, worldSeed)();
       if (rGim < KRIEGER_GIMMICK_P) {
-        const cc = KRIEGER_GIMMICKS[0].cc;
-        const amount = cc[0] + Math.floor(_tileRng(tx, ty, 8484, worldSeed)() * (cc[1] - cc[0] + 1));
-        gimmick = { cc: amount };
+        const rType = _tileRng(tx, ty, 9494, worldSeed)();
+        if (rType < KRIEGER_VOUCHER_CHANCE && !dd?.equipmentVoucher) {
+          const vi = Math.floor(_tileRng(tx, ty, 10101, worldSeed)() * KRIEGER_VOUCHER_FINDS.length);
+          const find = KRIEGER_VOUCHER_FINDS[vi];
+          gimmick = { voucher: { slot: find.slot, pct: 0.5 }, emoji: find.emoji, name: find.name };
+        } else {
+          const cc = KRIEGER_GIMMICKS[0].cc;
+          const amount = cc[0] + Math.floor(_tileRng(tx, ty, 8484, worldSeed)() * (cc[1] - cc[0] + 1));
+          gimmick = { cc: amount };
+        }
       }
     }
   }
@@ -323,6 +376,9 @@ function kriegerRender(canvas, dd, worldSeed, vpX, vpY) {
 
       // Felswand: immer sichtbar (Labyrinth-Grenze), unabhängig vom Fog. Versiegelte
       // Drachenhöhle (vor Stufe 80) sieht optisch ebenfalls wie Fels aus — kein Spoiler.
+      // Optik 2026-07-02, überarbeitet: Wand zurück auf das ursprüngliche Braun (User fand
+      // Grün/Blau-Kombi zu "blau-grün"), stattdessen die begehbare, aber noch unerkundete
+      // Fläche (Fog) auf neutrales Grau — hebt sich klar von Wand-Braun UND Boden-Braun ab.
       const sealedBoss = isBoss && level < KRIEGER_BOSS_MIN_LEVEL;
       if (kriegerIsWall(wx, wy, worldSeed) || sealedBoss) {
         ctx.fillStyle = '#241d16';
@@ -334,8 +390,23 @@ function kriegerRender(canvas, dd, worldSeed, vpX, vpY) {
       }
 
       if (!explored[key]) {
-        ctx.fillStyle = '#15100c';
+        // Grau + Schraffur statt Flat-Fill — hebt sich als "noch unerkundet" ab,
+        // ohne so dunkel/eintönig wie vorher zu wirken.
+        ctx.fillStyle = '#5a5a5a';
         ctx.fillRect(px, py, T, T);
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(px, py, T, T);
+        ctx.clip();
+        ctx.strokeStyle = 'rgba(255,255,255,.22)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (let i = -T; i <= T; i += 5) {
+          ctx.moveTo(px + i, py);
+          ctx.lineTo(px + i + T, py + T);
+        }
+        ctx.stroke();
+        ctx.restore();
         // Bossfeld bleibt (sobald freigeschaltet) auch durch Nebel als Questziel sichtbar
         if (isBoss) {
           ctx.globalAlpha = 0.55;
@@ -346,11 +417,12 @@ function kriegerRender(canvas, dd, worldSeed, vpX, vpY) {
         continue;
       }
 
-      // Erkundeter Pfad: 2-Ton-Steinboden
+      // Erkundeter Pfad: 2-Ton helles Steinboden-Braun (vorher zu dunkel/kaum
+      // unterscheidbar vom Fog)
       const checker = (wx + wy) % 2 === 0;
-      ctx.fillStyle = checker ? '#2b241d' : '#241e18';
+      ctx.fillStyle = checker ? '#a3805a' : '#8f6d48';
       ctx.fillRect(px, py, T, T);
-      ctx.strokeStyle = 'rgba(0,0,0,.25)';
+      ctx.strokeStyle = 'rgba(0,0,0,.2)';
       ctx.strokeRect(px + 0.5, py + 0.5, T - 1, T - 1);
 
       if (isBoss) {

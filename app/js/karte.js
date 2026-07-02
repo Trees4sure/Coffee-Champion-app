@@ -696,8 +696,12 @@ function karteExploreTile(tx, ty, mapData, worldSeed, opts) {
   }
 
   // Dungeon-Meilenstein: alle 15 eigenen Schritte (per Spieler, unabhängig von Gruppen-Tiles)
+  // Fix (2026-07-02): kein neuer Dungeon, solange noch ein alter unbeantwortet ("Später"
+  // geklickt) offen ist — sonst überschreibt der neue Meilenstein dungeonTile/dungeonAvailable
+  // und der alte Dungeon geht ersatzlos verloren, obwohl der Spieler ihn nur aufgeschoben
+  // (nicht abgelehnt) hatte.
   const myStepCount   = (mapData.myStepCount || 0) + 1;
-  const dungeonMilestone = myStepCount % 15 === 0;
+  const dungeonMilestone = myStepCount % 15 === 0 && !mapData.dungeonAvailable;
   const dungeonUpdate = dungeonMilestone
     ? { dungeonAvailable: true, dungeonTile: { x: tx, y: ty } }
     : {};

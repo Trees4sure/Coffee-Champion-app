@@ -555,10 +555,11 @@ function renderLeaderboard() {
 // App-Start. Idempotent über map_data.whatsNewSeen = WHATS_NEW_VERSION (analog Login-Bonus/
 // Tagesaufgaben-Muster) — wer schon dran war, sieht es nicht erneut. Bei künftigen neuen
 // Features: WHATS_NEW_VERSION + WHATS_NEW_ITEMS aktualisieren, dann poppt es einmalig erneut auf.
-const WHATS_NEW_VERSION = '2026-06-30-krieger';
+const WHATS_NEW_VERSION = '2026-07-02-welthandel';
 const WHATS_NEW_ITEMS = [
-  { icon: '⚔️', title: 'Kaffee-Krieger', text: 'Neuer Reiter im Imperium: eigenes Felsenlabyrinth mit Gimmick-Funden, Ausrüstung in 4 Kulturen und automatischen Kämpfen — bis hin zum Drachen-Boss (ab Stufe 80, dann 1× pro Woche).' },
-  { icon: '🧠', title: 'CIQ-Angriffsfähigkeiten', text: 'Kaffee-IQ aus dem Quiz schaltet jetzt auch PvP-Fähigkeiten frei — Diebstahl, Debuffs & Co. gegen die Top-Spieler (mit 12h-Schutzschild fürs Opfer, damit niemand dauerbeschossen wird).' },
+  { icon: '🏛️', title: 'Erbauer-Dividende', text: 'Wer im Welthandel baut, kassiert ab sofort jede Woche 15 % der eigenen Baukosten als Dividende — zusätzlich zum Rang-Ertrag und egal, ob der Rang gehalten oder verloren geht.' },
+  { icon: '🏦', title: 'Stille Anlage', text: 'Neu im Länder-Menü: lege CC in einem Land an und kassiere täglich passiven Ertrag — ganz ohne Rang-Kampf. Verdrängt niemanden, macht dich nicht zur Zielscheibe. Ideal, um Erträge zu sichern, ohne in den Rang-Kampf gezogen zu werden — oder um bewusst Rang 2/3 zu spielen, wenn dir dessen Land-Effekte besser passen.' },
+  { icon: '🔒', title: 'Bauen braucht Einfluss', text: 'Länder-Gebäude kannst du jetzt nur noch bauen, wenn du im Land echten Einfluss hast (Top 3). Wer nie investiert hat, baut nicht mehr — Investieren lohnt sich damit wieder richtig.' },
 ];
 
 function checkAndMaybeShowWhatsNew() {
@@ -652,7 +653,13 @@ function ensureRegelwerk() {
     ${sec('🌍', 'Weltkarte', `
       Mit der <b>Welthandels-Lizenz</b> (Forschung) öffnet sich die Welt: investiere CC in G20-Länder,
       verdränge die Konkurrenz und sichere dir <b>Regierung, Baurecht & Erträge</b>.
-      Baue Landes-Strukturen, halte Rang 1 — Rang 2 & 3 zahlen dir sogar Steuer. Kaffee-Imperialismus, charmant.`)}
+      Baue Landes-Strukturen (nur mit <b>Einfluss im Land</b> — Top 3), halte Rang 1 — Rang 2 & 3 zahlen dir sogar Steuer. Kaffee-Imperialismus, charmant.<br>
+      <span class="cc-rw-hl">🏛️ Erbauer-Dividende:</span> Wer in einem Land baut, kassiert jede Woche
+      automatisch <b>15 % seiner Baukosten</b> zurück — zusätzlich zum Rang-Ertrag und
+      <b>egal, ob der Rang gehalten oder verloren geht</b>. Einmal gebaut, zahlt sich's dauerhaft aus.<br>
+      <span class="cc-rw-hl">🏦 Stille Anlage:</span> Willst du Ertrag <b>ohne PvP</b>? Leg CC in einem Land an
+      (Länder-Menü) — sie werfen <b>täglich passiv</b> ab, <b>zählen aber nicht auf den Rang</b> und
+      verdrängen niemanden. So bleibst du unter dem Radar und hältst z. B. bewusst Rang 2/3.`)}
     ${sec('⚔️', 'Kaffee-Krieger — Dungeon, Ausrüstung & Kämpfe', `
       Eigener Imperium-Reiter „⚔️ Krieger": Erkunde dein <b>persönliches Felsenlabyrinth</b> — die
       täglichen Schritte wachsen mit deiner Krieger-Stufe. Auf neu betretenen Feldern warten

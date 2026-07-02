@@ -110,13 +110,15 @@ const DB = (() => {
     const wPerDay = wRank + wBld;
     const gPerDay = groupPerDay || 0;
     const tPerDay = tradeBonusDay || 0;
-    const tot = rPerDay + bPerDay + wPerDay + gPerDay + tPerDay;
+    const pPerDay = (typeof worldPassivePerDay === 'function') ? worldPassivePerDay(member) : 0; // 🏦 Stille Anlage
+    const tot = rPerDay + bPerDay + wPerDay + gPerDay + tPerDay + pPerDay;
     if (tot <= 0) return [{ label: '⚙️ Passiv-Einkommen', amount: passiveEarned }];
     const bShare = Math.round(passiveEarned * (bPerDay / tot) * 100) / 100;
     const wShare = Math.round(passiveEarned * (wPerDay / tot) * 100) / 100;
     const gShare = Math.round(passiveEarned * (gPerDay / tot) * 100) / 100;
     const tShare = Math.round(passiveEarned * (tPerDay / tot) * 100) / 100;
-    const rShare = Math.round((passiveEarned - bShare - wShare - gShare - tShare) * 100) / 100;
+    const pShare = Math.round(passiveEarned * (pPerDay / tot) * 100) / 100;
+    const rShare = Math.round((passiveEarned - bShare - wShare - gShare - tShare - pShare) * 100) / 100;
     const wDetail = [
       (typeof worldPerDayDetail === 'function') ? worldPerDayDetail(worldRankMap) : '',
       (typeof worldBuildingPerDayDetail === 'function') ? worldBuildingPerDayDetail(worldRankMap, worldByCountry) : '',
@@ -127,6 +129,7 @@ const DB = (() => {
     if (wShare > 0) out.push({ label: '🌍 Welt-Einfluss',       amount: wShare, detail: wDetail });
     if (tShare > 0) out.push({ label: '🤝 Handelsbündnis',      amount: tShare, detail: '+10% Einkommen aus dem Bündnis-Land' });
     if (gShare > 0) out.push({ label: '🏛️ Gruppenkasse (passiv)', amount: gShare, detail: `+${gPerDay} CC/Tag für alle` });
+    if (pShare > 0) out.push({ label: '🏦 Stille Anlage',        amount: pShare, detail: (typeof worldPassivePerDayDetail === 'function') ? worldPassivePerDayDetail(member) : '' });
     return out;
   }
 
@@ -294,7 +297,8 @@ const DB = (() => {
     const worldBldPerDay = Math.round(((typeof calcWorldBuildingPerDay === 'function') ? calcWorldBuildingPerDay(rankMap, byCountry) : 0) * _gm * 100) / 100;
     const tradeBonus = await _allianceTradeBonus(rankMap, byCountry);
     const groupPerDay = (await _fetchGroupPerks()).perDay || 0; // Gruppenkasse-Passiv für alle
-    const perDay = researchPerDay + buildingPerDay + worldPerDay + worldBldPerDay + tradeBonus.day + groupPerDay;
+    const passiveInvestDay = (typeof worldPassivePerDay === 'function') ? worldPassivePerDay(member) : 0; // 🏦 Stille Anlage
+    const perDay = researchPerDay + buildingPerDay + worldPerDay + worldBldPerDay + tradeBonus.day + groupPerDay + passiveInvestDay;
     if (perDay <= 0) return { earned: 0, tradeBonusDay: 0 };
 
     const cosm = member.cosmetics || {};
@@ -312,6 +316,69 @@ const DB = (() => {
     const newCosmetics = { ...cosm, lastPassiveClaim: new Date().toISOString() };
     await _sb.from('members').update({ cosmetics: newCosmetics }).eq('id', memberId);
     return { earned: capped, tradeBonusDay: tradeBonus.day };
+  }
+
+  // ── 🏛️ Erbauer-Dividende (Welthandel) ────────────────────────────────────────
+  // Wöchentlicher Fixbonus für jeden, der in einem Land gebaut hat — 15% der eigenen
+  // Baukosten-Summe, UNABHÄNGIG vom aktuellen Rang (auch nach Verdrängung/Sabotage/Sturm).
+  // Eigener 7-Tage-Timer (rollierend pro Mitglied), getrennt vom 1h-Passiv-Timer. Nutzt nur
+  // bestehende RPCs (add_coins/save_map_data). Erstkontakt setzt nur den Zeitstempel, zahlt
+  // nichts rückwirkend (kein Windfall beim Rollout).
+  const WORLD_BUILDER_DIVIDEND_RATE = 0.15;
+  const WORLD_BUILDER_DIVIDEND_INTERVAL = 7 * 86400000;
+
+  async function _checkWorldBuilderDividend(memberId, member, worldByCountry) {
+    if (typeof worldBuilderSpent !== 'function') return;              // world.js nicht geladen
+    if (typeof canAccessWorldMap === 'function' && !canAccessWorldMap(member)) return;
+    // WICHTIG: claimPassive lädt worldByCountry nur bei nicht-leerer rankMap. Ein aus ALLEN
+    // Rängen verdrängter Erbauer hätte hier {} — genau der Fall, den die Dividende abdecken
+    // soll. Darum byCountry nachladen, wenn leer (liefert alle Gruppen-Gebäude, rang-unabhängig).
+    let byCountry = worldByCountry;
+    if (!byCountry || !Object.keys(byCountry).length) byCountry = await _fetchWorldBuildingsByCountry();
+    const spent = worldBuilderSpent(byCountry || {}, memberId);
+    if (!spent) return;                                              // nichts gebaut → nichts zu tun
+    // map_data frisch lesen — claimPassive hat evtl. gerade den Passiv-Tages-Log geschrieben;
+    // stale member.map_data würde diesen Eintrag beim Merge clobbern.
+    const { data: fresh } = await _sb.from('members').select('map_data').eq('id', memberId).single();
+    const md0 = (fresh && fresh.map_data) || member.map_data || {};
+    const wd = md0.worldDividend || {};
+    const now = Date.now();
+    if (!wd.lastPaidAt) { // Erstkontakt: nur Startpunkt setzen, kein rückwirkender Bonus
+      await updateMapData(memberId, { ...md0, worldDividend: { lastPaidAt: now, totalReceived: wd.totalReceived || 0 } });
+      return;
+    }
+    if (now - wd.lastPaidAt < WORLD_BUILDER_DIVIDEND_INTERVAL) return; // Vorabprüfung (RPC prüft atomar erneut)
+    const amount = Math.round(spent * WORLD_BUILDER_DIVIDEND_RATE * 100) / 100;
+    if (amount < 1) { // zu klein — Zeitstempel trotzdem weiterschieben, kein Spam-Cent
+      await updateMapData(memberId, { ...md0, worldDividend: { lastPaidAt: now, totalReceived: wd.totalReceived || 0 } });
+      return;
+    }
+    // Atomare Auszahlung: claim_builder_dividend sperrt die Zeile, prüft die 7-Tage-Frist erneut
+    // (schützt vor Cross-Device-Doppelzahlung) und schreibt Coins + Marker in EINEM Update — kein
+    // Teilfehler-Fenster mehr (früher: erst add_coins, dann separat lastPaidAt → bei Fehler Re-Pay).
+    let paid = false, viaRpc = false;
+    try {
+      const { data: res, error } = await _sb.rpc('claim_builder_dividend', {
+        p_member_id: memberId, p_amount: amount, p_interval_ms: WORLD_BUILDER_DIVIDEND_INTERVAL
+      });
+      if (!error && res && typeof res.paid !== 'undefined') { viaRpc = true; paid = !!res.paid; }
+    } catch (e) { /* RPC evtl. noch nicht migriert → Fallback unten */ }
+    if (!viaRpc) {
+      // Fallback (Backend noch nicht migriert): nicht-atomar wie zuvor.
+      await _sb.rpc('add_coins', { p_member_id: memberId, p_amount: amount });
+      const newTotal = Math.round(((wd.totalReceived || 0) + amount) * 100) / 100;
+      await updateMapData(memberId, { ...md0, worldDividend: { lastPaidAt: now, totalReceived: newTotal } });
+      paid = true;
+    }
+    if (paid) {
+      // Tages-Log frisch mergen — RPC/Fallback hat worldDividend + coins bereits geschrieben.
+      try {
+        const { data: f2 } = await _sb.from('members').select('map_data').eq('id', memberId).single();
+        const md = appendTodayLog((f2 && f2.map_data) || md0, [{ label: '🏛️ Erbauer-Dividende', amount }]);
+        await updateMapData(memberId, md);
+      } catch (e) { console.warn('Dividende-Tageslog konnte nicht gespeichert werden:', e); }
+      if (typeof showToast === 'function') showToast(`🏛️ Erbauer-Dividende: +${amount} CC`, 'success');
+    }
   }
 
   // ── Passives Einkommen EIGENSTÄNDIG einlösen (entkoppelt von Tassen) ──────────
@@ -345,6 +412,11 @@ const DB = (() => {
           await updateMapData(memberId, md);
         } catch (e) { console.warn('Passiv-Log konnte nicht gespeichert werden:', e); }
       }
+      // 🏛️ Erbauer-Dividende (eigener 7-Tage-Timer) — NACH der Passiv-Gutschrift, damit ein
+      // Fehler hier nie das normale Passiv-Einkommen blockiert. Läuft auch, wenn earned==0.
+      try {
+        await _checkWorldBuilderDividend(memberId, member, worldByCountry);
+      } catch (e) { console.warn('Erbauer-Dividende fehlgeschlagen (nicht kritisch):', e.message); }
       return earned;
     } catch (e) {
       console.warn('claimPassive fehlgeschlagen:', e.message);
@@ -440,7 +512,8 @@ const DB = (() => {
     const bldDay = (typeof calcBuildingPerDay === 'function')      ? calcBuildingPerDay(member.map_data?.buildings || {}) : 0;
     const wDay   = (typeof calcWorldPerDay === 'function')         ? calcWorldPerDay(rankMap) * gm : 0;
     const wbDay  = (typeof calcWorldBuildingPerDay === 'function') ? calcWorldBuildingPerDay(rankMap, bc) * gm : 0;
-    const perDay = Math.round((resDay + bldDay + wDay + wbDay + tradeBonus.day + (pk.perDay || 0)) * 100) / 100;
+    const pInvDay = (typeof worldPassivePerDay === 'function') ? worldPassivePerDay(member) : 0; // 🏦 Stille Anlage
+    const perDay = Math.round((resDay + bldDay + wDay + wbDay + tradeBonus.day + (pk.perDay || 0) + pInvDay) * 100) / 100;
 
     const resCup = (typeof calcResearchPerCup === 'function')      ? calcResearchPerCup(research) : 0;
     const wCup   = (typeof calcWorldPerCup === 'function')         ? calcWorldPerCup(rankMap) * gm : 0;
@@ -1421,12 +1494,19 @@ const DB = (() => {
     const owned = currentDungeonData?.owned || {};
     if (owned[item.key]) throw new Error('Bereits im Besitz');
     if ((currentDungeonData?.level || 1) < item.minLevel) throw new Error('Stufe zu niedrig');
-    const { data: newCoins, error } = await _sb.rpc('spend_coins', { p_member_id: memberId, p_amount: item.cost });
+    // 🎁 Ausrüstungsfund-Gutschein (Dungeon-Karte, 2026-07-04): 50% Rabatt, wenn der Gutschein
+    // zum Slot des gekauften Items passt — wird bei diesem Kauf verbraucht (egal ob Kauf oder
+    // Ausbau), unabhängig von der Kultur. Nur EIN Gutschein kann je aktiv sein (siehe krieger.js).
+    const voucher = currentDungeonData?.equipmentVoucher;
+    const applyDiscount = !!(voucher && voucher.slot === item.slot);
+    const cost = applyDiscount ? Math.round(item.cost * (1 - (voucher.pct || 0.5))) : item.cost;
+    const { data: newCoins, error } = await _sb.rpc('spend_coins', { p_member_id: memberId, p_amount: cost });
     if (error) throw new Error(error.message);
     if (newCoins === null || newCoins === undefined) throw new Error('Nicht genug CoffeeCoins');
     const newDD = { ...currentDungeonData, owned: { ...owned, [item.key]: true } };
+    if (applyDiscount) delete newDD.equipmentVoucher;
     await saveDungeonData(memberId, newDD);
-    return newDD;
+    return { ...newDD, _costPaid: cost, _discountApplied: applyDiscount };
   }
 
   async function addCoins(memberId, amount) {
@@ -1447,6 +1527,16 @@ const DB = (() => {
     const { data, error } = await _sb.rpc('get_country_standings', { p_group_id: _groupId, p_country_id: countryId });
     if (error) throw new Error(error.message);
     return data || [];
+  }
+
+  // 🏦 Stille Anlage: atomar CC abziehen + map_data.worldPassive[country] erhöhen.
+  // Kein Rang-Einfluss (world_investments unberührt). { ok, invested, coins } | { error }.
+  async function investPassive(memberId, countryId, amount) {
+    const { data, error } = await _sb.rpc('invest_passive', {
+      p_member_id: memberId, p_country_id: countryId, p_amount: parseFloat(amount)
+    });
+    if (error) return { error: error.message };
+    return data || { error: 'no_data' };
   }
 
   async function fetchAllWorldInvestments() {
@@ -1791,7 +1881,7 @@ const DB = (() => {
     saveDungeonData, dungeonFight, buyKriegerItem,
     payBaristaBartGroup, addPenaltyToTreasury, payEigeneTasseGroup,
     claimLoginBonus, claimDailyTask,
-    investInCountry, fetchCountryStandings, fetchAllWorldInvestments,
+    investInCountry, investPassive, fetchCountryStandings, fetchAllWorldInvestments,
     fetchAllWorldBuildings, buildWorldStructure, buyGarde, fetchTaxStats,
     castSabotage, fetchSabotages,
     fetchAllWorldAlliances, proposeAlliance, respondAlliance, reconcileWorldAlliances, settleAllianceTributes,
