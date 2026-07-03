@@ -1406,6 +1406,18 @@ async function _handleKarteStep(tx, ty, member, state, seed, COLS, ROWS, MARGIN)
     if (raubStolen > 0 && raubFrom) {
       DB.addCoins(raubFrom, raubStolen).catch(() => {});
       DB.postMessage(`💎 Ein Spitzel hat ${raubStolen} CC vom Schatzfund von ${_esc2(member.name)} abgezweigt!`, 'CIQ-Labor').catch(() => {});
+      // Angreifer-Seite (raubFrom = ein anderer Spieler, nicht der aktive Client): Tages-Log
+      // + ciqCcEarned nachführen — lief bisher nur über die CC-Gutschrift, tauchte nirgends auf.
+      // Fresh-Read-Merge auf fremdes map_data (Race-Muster wie beim Bündnis-Tribut); nicht-kritisch:
+      // darf den Schatzfund-Flow des Finders nie blockieren.
+      (async () => {
+        try {
+          const fresh = await DB.fetchMemberMapData(raubFrom);
+          let md = DB.appendTodayLog(fresh, [{ label: `💎 Schatzräuber-Beute von ${member.name}`, amount: raubStolen }]);
+          md = { ...md, ciqCcEarned: (md.ciqCcEarned || 0) + raubStolen };
+          await DB.updateMapData(raubFrom, md);
+        } catch (e) { /* non-critical */ }
+      })();
     }
     // Barista Bart: jeder ANDERE Mitspieler mit Bart erhält +1 CC pro Schatzfund
     if (typeof DB.payBaristaBartGroup === 'function') {
@@ -1417,6 +1429,9 @@ async function _handleKarteStep(tx, ty, member, state, seed, COLS, ROWS, MARGIN)
       state.mapData = DB.appendTodayLog(state.mapData, logEntries);
       // Lifetime-Summe für den Informant-Bericht (_ccTreasureCc in app.js) — additiv, keine SQL nötig.
       state.mapData = { ...state.mapData, totalTreasureCc: (state.mapData.totalTreasureCc || 0) + totalCC };
+      // Opfer-Lifetime-Summe „durch Angriffe verloren" (Informant, ciqCcLost) — der Finder ist der
+      // aktive User, daher hier direkt am eigenen map_data (kein Fresh-Read nötig).
+      if (raubStolen > 0) state.mapData = { ...state.mapData, ciqCcLost: (state.mapData.ciqCcLost || 0) + raubStolen };
       currentUserData = { ...(currentUserData || {}), map_data: state.mapData };
       await DB.updateMapData(member.id, state.mapData);
     } catch (e) { console.warn('Tages-Log (Schatz) Fehler:', e); }

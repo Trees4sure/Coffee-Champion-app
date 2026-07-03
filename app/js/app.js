@@ -555,12 +555,9 @@ function renderLeaderboard() {
 // App-Start. Idempotent über map_data.whatsNewSeen = WHATS_NEW_VERSION (analog Login-Bonus/
 // Tagesaufgaben-Muster) — wer schon dran war, sieht es nicht erneut. Bei künftigen neuen
 // Features: WHATS_NEW_VERSION + WHATS_NEW_ITEMS aktualisieren, dann poppt es einmalig erneut auf.
-const WHATS_NEW_VERSION = '2026-07-05-krieger-balance';
+const WHATS_NEW_VERSION = '2026-07-06-anlage-rework';
 const WHATS_NEW_ITEMS = [
-  { icon: '🏛️', title: 'Erbauer-Dividende', text: 'Wer im Welthandel baut, kassiert ab sofort jede Woche 15 % der eigenen Baukosten als Dividende — zusätzlich zum Rang-Ertrag und egal, ob der Rang gehalten oder verloren geht.' },
-  { icon: '🏦', title: 'Stille Anlage', text: 'Neu im Länder-Menü: lege CC in einem Land an und kassiere täglich passiven Ertrag — ganz ohne Rang-Kampf. Verdrängt niemanden, macht dich nicht zur Zielscheibe. Ideal, um Erträge zu sichern, ohne in den Rang-Kampf gezogen zu werden — oder um bewusst Rang 2/3 zu spielen, wenn dir dessen Land-Effekte besser passen.' },
-  { icon: '🔒', title: 'Bauen braucht Einfluss', text: 'Länder-Gebäude kannst du jetzt nur noch bauen, wenn du im Land echten Einfluss hast (Top 3). Wer nie investiert hat, baut nicht mehr — Investieren lohnt sich damit wieder richtig.' },
-  { icon: '⚔️', title: 'Kaffee-Krieger neu ausbalanciert', text: 'Dein Level zählt jetzt auch im Kampf (mehr ATK & DEF, nicht nur HP). Belohnungen richten sich nach der echten Herausforderung — schwache Gegner geben kaum noch CC, ebenbürtige volle. Und Niederlagen haben Folgen: ohne Rüstung sind deine Tagesschritte weg, mit Rüstung leidet ihre Haltbarkeit — reparierbar beim 🔨 Schmied im Shop.' },
+  { icon: '🏦', title: 'Stille Anlage neu aufgestellt', text: 'Deine Stille Anlage wirft jetzt keinen festen Zins mehr ab, sondern einen Anteil am Gebäude-Einkommen des Landes — je mehr du anlegst (bis 1.250 CC/Land), desto größer dein Anteil (bis 20 %). Länder ohne Gebäude werfen nichts ab. Und neu: du kannst dein Kapital jederzeit wieder auszahlen — dabei gehen 20 % als Entschädigung an die Erbauer des Landes, die dir die Erträge erst ermöglicht haben (leeres Land: 0 %).' },
 ];
 
 function checkAndMaybeShowWhatsNew() {
@@ -659,8 +656,9 @@ function ensureRegelwerk() {
       automatisch <b>15 % seiner Baukosten</b> zurück — zusätzlich zum Rang-Ertrag und
       <b>egal, ob der Rang gehalten oder verloren geht</b>. Einmal gebaut, zahlt sich's dauerhaft aus.<br>
       <span class="cc-rw-hl">🏦 Stille Anlage:</span> Willst du Ertrag <b>ohne PvP</b>? Leg CC in einem Land an
-      (Länder-Menü) — sie werfen <b>täglich passiv</b> ab, <b>zählen aber nicht auf den Rang</b> und
-      verdrängen niemanden. So bleibst du unter dem Radar und hältst z. B. bewusst Rang 2/3.`)}
+      (Länder-Menü) — du bekommst einen <b>Anteil am Gebäude-Einkommen des Landes</b> (mehr Kapital = mehr Anteil,
+      bis 20 % bei 1.250 CC), <b>täglich passiv</b> und <b>ohne Rang-Einfluss</b>. Länder ohne Gebäude werfen nichts ab.
+      <b>Auszahlen</b> geht jederzeit — 20 % gehen dabei als Entschädigung an die Erbauer des Landes.`)}
     ${sec('⚔️', 'Kaffee-Krieger — Dungeon, Ausrüstung & Kämpfe', `
       Eigener Imperium-Reiter „⚔️ Krieger": Erkunde dein <b>persönliches Felsenlabyrinth</b> — die
       täglichen Schritte wachsen mit deiner Krieger-Stufe. Auf neu betretenen Feldern warten
@@ -1142,11 +1140,12 @@ function _informantStatsHtml(u) {
   const quizCiq   = quiz.ciq || 0;
   const quizCC    = Object.values(quiz.history || {}).reduce((s, h) => s + (h.score || 0) * 4, 0);
   const ciqEarned = u.map_data?.ciqCcEarned || 0;
+  const ciqLost   = u.map_data?.ciqCcLost   || 0;
   const ciqSkills = (typeof CIQ_PERKS !== 'undefined')
     ? CIQ_PERKS.filter(p => (p.type === 'attack' || p.type === 'debuff') && quizCiq >= p.ciq).map(p => p.icon).join(' ')
     : '';
-  if (quizCiq > 0 || quizCC > 0 || ciqEarned > 0) {
-    items.push(`🧠 CIQ: ${quizCiq} Punkte · ${_fmtCoins(quizCC)} CC aus Quiz · ${_fmtCoins(ciqEarned)} CC aus Angriffen${ciqSkills ? ' · Fähigkeiten: ' + ciqSkills : ''}`);
+  if (quizCiq > 0 || quizCC > 0 || ciqEarned > 0 || ciqLost > 0) {
+    items.push(`🧠 CIQ: ${quizCiq} Punkte · ${_fmtCoins(quizCC)} CC aus Quiz · ${_fmtCoins(ciqEarned)} CC aus Angriffen erbeutet${ciqLost > 0 ? ` · ${_fmtCoins(ciqLost)} CC durch Angriffe verloren` : ''}${ciqSkills ? ' · Fähigkeiten: ' + ciqSkills : ''}`);
   }
 
   if (!items.length) return '';

@@ -110,7 +110,7 @@ const DB = (() => {
     const wPerDay = wRank + wBld;
     const gPerDay = groupPerDay || 0;
     const tPerDay = tradeBonusDay || 0;
-    const pPerDay = (typeof worldPassivePerDay === 'function') ? worldPassivePerDay(member) : 0; // 🏦 Stille Anlage
+    const pPerDay = (typeof worldPassivePerDay === 'function') ? worldPassivePerDay(member, worldByCountry) : 0; // 🏦 Stille Anlage
     const tot = rPerDay + bPerDay + wPerDay + gPerDay + tPerDay + pPerDay;
     if (tot <= 0) return [{ label: '⚙️ Passiv-Einkommen', amount: passiveEarned }];
     const bShare = Math.round(passiveEarned * (bPerDay / tot) * 100) / 100;
@@ -129,7 +129,7 @@ const DB = (() => {
     if (wShare > 0) out.push({ label: '🌍 Welt-Einfluss',       amount: wShare, detail: wDetail });
     if (tShare > 0) out.push({ label: '🤝 Handelsbündnis',      amount: tShare, detail: '+10% Einkommen aus dem Bündnis-Land' });
     if (gShare > 0) out.push({ label: '🏛️ Gruppenkasse (passiv)', amount: gShare, detail: `+${gPerDay} CC/Tag für alle` });
-    if (pShare > 0) out.push({ label: '🏦 Stille Anlage',        amount: pShare, detail: (typeof worldPassivePerDayDetail === 'function') ? worldPassivePerDayDetail(member) : '' });
+    if (pShare > 0) out.push({ label: '🏦 Stille Anlage',        amount: pShare, detail: (typeof worldPassivePerDayDetail === 'function') ? worldPassivePerDayDetail(member, worldByCountry) : '' });
     return out;
   }
 
@@ -283,6 +283,15 @@ const DB = (() => {
 
   // ── Passiv-Einkommen prüfen und gutschreiben ─────────────────────────────────
   // worldRankMap optional durchreichen, um Doppel-Fetch zu sparen.
+  // Braucht dieses Mitglied die Land-Gebäude-Daten (byCountry)? Ja bei eigenem Rang
+  // (Welt-Einfluss-Gebäude) ODER wenn es eine Stille Anlage hält — deren Ertrag bemisst
+  // sich seit dem Rework am Gebäude-Einkommen des Landes, also braucht auch ein reiner
+  // Anleger ohne Rang die Gebäude-Daten (sonst Ertrag fälschlich 0).
+  function _memberNeedsWorldBuildings(member, rankMap) {
+    return Object.keys(rankMap || {}).length
+      || (typeof worldPassiveTotal === 'function' && worldPassiveTotal(member) > 0);
+  }
+
   async function _checkAndClaimPassive(memberId, member, worldRankMap, worldByCountry) {
     const _cosmP = member.cosmetics || {};
     let researchPerDay = (typeof calcResearchPerDay === 'function') ? calcResearchPerDay(member.research || {}) : 0;
@@ -291,13 +300,13 @@ const DB = (() => {
     if (typeof ciqResearchPassiveMult === 'function') researchPerDay = Math.round(researchPerDay * ciqResearchPassiveMult(_cosmP) * 100) / 100;
     if (typeof ciqBuildingPassiveMult === 'function') buildingPerDay = Math.round(buildingPerDay * ciqBuildingPassiveMult(_cosmP) * 100) / 100;
     const rankMap = worldRankMap || await _fetchWorldRankMap(memberId);
-    const byCountry = worldByCountry || (Object.keys(rankMap).length ? await _fetchWorldBuildingsByCountry() : {});
+    const byCountry = worldByCountry || (_memberNeedsWorldBuildings(member, rankMap) ? await _fetchWorldBuildingsByCountry() : {});
     const _gm = _gardeMult(member);
     const worldPerDay = Math.round(((typeof calcWorldPerDay === 'function') ? calcWorldPerDay(rankMap) : 0) * _gm * 100) / 100;
     const worldBldPerDay = Math.round(((typeof calcWorldBuildingPerDay === 'function') ? calcWorldBuildingPerDay(rankMap, byCountry) : 0) * _gm * 100) / 100;
     const tradeBonus = await _allianceTradeBonus(rankMap, byCountry);
     const groupPerDay = (await _fetchGroupPerks()).perDay || 0; // Gruppenkasse-Passiv für alle
-    const passiveInvestDay = (typeof worldPassivePerDay === 'function') ? worldPassivePerDay(member) : 0; // 🏦 Stille Anlage
+    const passiveInvestDay = (typeof worldPassivePerDay === 'function') ? worldPassivePerDay(member, byCountry) : 0; // 🏦 Stille Anlage
     const perDay = researchPerDay + buildingPerDay + worldPerDay + worldBldPerDay + tradeBonus.day + groupPerDay + passiveInvestDay;
     if (perDay <= 0) return { earned: 0, tradeBonusDay: 0 };
 
@@ -396,7 +405,7 @@ const DB = (() => {
       if (!raw) return 0;
       const member = normalizeUser(raw);
       const worldRankMap = await _fetchWorldRankMap(memberId);
-      const worldByCountry = Object.keys(worldRankMap).length ? await _fetchWorldBuildingsByCountry() : {};
+      const worldByCountry = _memberNeedsWorldBuildings(member, worldRankMap) ? await _fetchWorldBuildingsByCountry() : {};
       const { earned, tradeBonusDay } = await _checkAndClaimPassive(memberId, member, worldRankMap, worldByCountry);
       if (earned > 0) {
         // Tages-Log (Forschung / Gebäude / Welt / Handelsbündnis / Gruppenkasse anteilig + Quellen-Detail) — Fehler nicht eskalieren
@@ -503,7 +512,7 @@ const DB = (() => {
   async function _computeSalary(member, byCountry, perks) {
     const research  = member.research || {};
     const rankMap   = await _fetchWorldRankMap(member.id);
-    const bc        = byCountry || (Object.keys(rankMap).length ? await _fetchWorldBuildingsByCountry() : {});
+    const bc        = byCountry || (_memberNeedsWorldBuildings(member, rankMap) ? await _fetchWorldBuildingsByCountry() : {});
     const pk        = perks || await _fetchGroupPerks();
     const gm        = _gardeMult(member);
     const tradeBonus = await _allianceTradeBonus(rankMap, bc);
@@ -512,7 +521,7 @@ const DB = (() => {
     const bldDay = (typeof calcBuildingPerDay === 'function')      ? calcBuildingPerDay(member.map_data?.buildings || {}) : 0;
     const wDay   = (typeof calcWorldPerDay === 'function')         ? calcWorldPerDay(rankMap) * gm : 0;
     const wbDay  = (typeof calcWorldBuildingPerDay === 'function') ? calcWorldBuildingPerDay(rankMap, bc) * gm : 0;
-    const pInvDay = (typeof worldPassivePerDay === 'function') ? worldPassivePerDay(member) : 0; // 🏦 Stille Anlage
+    const pInvDay = (typeof worldPassivePerDay === 'function') ? worldPassivePerDay(member, bc) : 0; // 🏦 Stille Anlage
     const perDay = Math.round((resDay + bldDay + wDay + wbDay + tradeBonus.day + (pk.perDay || 0) + pInvDay) * 100) / 100;
 
     const resCup = (typeof calcResearchPerCup === 'function')      ? calcResearchPerCup(research) : 0;
@@ -725,7 +734,7 @@ const DB = (() => {
     }
     // Welt-Einfluss-Bonus pro Tasse (eigene Länder-Ränge + rangabhängige Land-Gebäude) — robust, 0 falls Backend fehlt
     const worldRankMap = await _fetchWorldRankMap(memberId);
-    const worldByCountry = Object.keys(worldRankMap).length ? await _fetchWorldBuildingsByCountry() : {};
+    const worldByCountry = _memberNeedsWorldBuildings(member, worldRankMap) ? await _fetchWorldBuildingsByCountry() : {};
     const worldPerCupBase = Math.round((((typeof calcWorldPerCup === 'function' ? calcWorldPerCup(worldRankMap) : 0)
                       + (typeof calcWorldBuildingPerCup === 'function' ? calcWorldBuildingPerCup(worldRankMap, worldByCountry) : 0))
                       * _gardeMult(member)) * 100) / 100;
@@ -1226,6 +1235,15 @@ const DB = (() => {
     return data;
   }
 
+  // Schlanker Read-only-Zugriff aufs map_data eines (auch fremden) Mitglieds — für
+  // Fresh-Read-Merge, wenn ein clientseitiger Effekt fremdes map_data schreiben muss
+  // (z. B. Schatzräuber-Angreiferseite in imperium.js). {} bei Fehler/leer.
+  async function fetchMemberMapData(memberId) {
+    const { data, error } = await _sb.from('members').select('map_data').eq('id', memberId).single();
+    if (error) throw new Error(error.message);
+    return (data && data.map_data) || {};
+  }
+
   // ── Saison abschließen ───────────────────────────────────────────────────────
   async function closeSeason(seasonId) {
     // Atomarer Idempotenz-Guard: UPDATE greift nur, wenn die Saison noch aktiv ist.
@@ -1547,6 +1565,17 @@ const DB = (() => {
   // Kein Rang-Einfluss (world_investments unberührt). { ok, invested, coins } | { error }.
   async function investPassive(memberId, countryId, amount) {
     const { data, error } = await _sb.rpc('invest_passive', {
+      p_member_id: memberId, p_country_id: countryId, p_amount: parseFloat(amount)
+    });
+    if (error) return { error: error.message };
+    return data || { error: 'no_data' };
+  }
+
+  // 🏦 Stille Anlage auszahlen: atomar Kapital reduzieren, 80% an Investor, 20%
+  // Bauherren-Entschädigung an die Erbauer des Landes (server, withdraw_passive).
+  // Tages-Log für Investor UND Empfänger schreibt die RPC selbst.
+  async function withdrawPassive(memberId, countryId, amount) {
+    const { data, error } = await _sb.rpc('withdraw_passive', {
       p_member_id: memberId, p_country_id: countryId, p_amount: parseFloat(amount)
     });
     if (error) return { error: error.message };
@@ -1890,12 +1919,12 @@ const DB = (() => {
     // Neu:
     spendCoins, fetchTreasury, contributeToTreasury, syncTreasuryGoals,
     applyDailyLevy, checkWeeklyChallenge,
-    purchaseResearchItem, saveCosmetics, buyCiqPerk, applyCiqAttack,
+    purchaseResearchItem, saveCosmetics, buyCiqPerk, applyCiqAttack, fetchMemberMapData,
     updateMapData, addCoins, appendTodayLog, claimPassive, recordSalarySnapshot, recordSalarySnapshotsAll,
     saveDungeonData, dungeonFight, buyKriegerItem, repairArmor,
     payBaristaBartGroup, addPenaltyToTreasury, payEigeneTasseGroup,
     claimLoginBonus, claimDailyTask,
-    investInCountry, investPassive, fetchCountryStandings, fetchAllWorldInvestments,
+    investInCountry, investPassive, withdrawPassive, fetchCountryStandings, fetchAllWorldInvestments,
     fetchAllWorldBuildings, buildWorldStructure, buyGarde, fetchTaxStats,
     castSabotage, fetchSabotages,
     fetchAllWorldAlliances, proposeAlliance, respondAlliance, reconcileWorldAlliances, settleAllianceTributes,
