@@ -865,7 +865,7 @@ async function _handleCosmeticsSet(field, val, member) {
     if (newCoins === null) { showToast('Nicht genug CoffeeCoins!', 'error'); return; }
     cosm.boughtAvatars = { ...(cosm.boughtAvatars || {}), [val]: true };
     cosm.avatar = av.icon;
-    try { await DB.appendTodayLogFresh(member.id, [{ label: `🎨 Avatar: ${av.name}`, amount: -av.cost, detail: 'Cosmetics' }]); } catch (e) {}
+    try { await DB.appendTodayLogFresh(member.id, [{ label: `🎨 Avatar: ${av.name}`, amount: -av.cost, cat: 'cosmetics', detail: 'Cosmetics' }]); } catch (e) {}
     showToast(`✓ Avatar "${av.name}" gekauft! (-${av.cost} CC)`, 'success');
   }
 
@@ -876,7 +876,7 @@ async function _handleCosmeticsSet(field, val, member) {
     if (newCoins === null) { showToast('Nicht genug CoffeeCoins!', 'error'); return; }
     cosm.boughtTitel = { ...(cosm.boughtTitel || {}), [val]: true };
     cosm.zusatztitel = val;
-    try { await DB.appendTodayLogFresh(member.id, [{ label: `🏷️ Titel: ${t.name}`, amount: -t.cost, detail: 'Cosmetics' }]); } catch (e) {}
+    try { await DB.appendTodayLogFresh(member.id, [{ label: `🏷️ Titel: ${t.name}`, amount: -t.cost, cat: 'cosmetics', detail: 'Cosmetics' }]); } catch (e) {}
     showToast(`✓ Titel "${t.name}" gekauft! (-${t.cost} CC)`, 'success');
     try {
       await DB.postMessage(`${member.name} hat den Titel ${t.icon} ${t.name} erworben! ✨`, member.name);
@@ -994,7 +994,7 @@ function renderSprueche(member) {
       for (const p of availPacks) newUnlocked[p.id] = true;
       const newCosm = { ...(member.cosmetics || {}), unlockedPacks: newUnlocked };
       await DB.saveCosmetics(member.id, newCosm);
-      try { await DB.appendTodayLogFresh(member.id, [{ label: '🚀 Sprüche-Booster', amount: -boosterCost, detail: 'Cosmetics' }]); } catch (e) {}
+      try { await DB.appendTodayLogFresh(member.id, [{ label: '🚀 Sprüche-Booster', amount: -boosterCost, cat: 'cosmetics', detail: 'Cosmetics' }]); } catch (e) {}
       appData = await DB.fetchData();
       const updated = appData.users.find(u => u.id === member.id);
       if (updated) { currentUserData = { ...currentUserData, ...updated }; renderSprueche(updated); }
@@ -1010,7 +1010,7 @@ function renderSprueche(member) {
     if (newCoins === null) { showToast('Nicht genug CoffeeCoins!', 'error'); return; }
     const newCosm = { ...(member.cosmetics || {}), unlockedPacks: { ...(cosm.unlockedPacks || {}), [packId]: true } };
     await DB.saveCosmetics(member.id, newCosm);
-    try { await DB.appendTodayLogFresh(member.id, [{ label: '💬 Sprüche-Pack', amount: -50, detail: 'Cosmetics' }]); } catch (e) {}
+    try { await DB.appendTodayLogFresh(member.id, [{ label: '💬 Sprüche-Pack', amount: -50, cat: 'cosmetics', detail: 'Cosmetics' }]); } catch (e) {}
     appData = await DB.fetchData();
     const updated = appData.users.find(u => u.id === member.id);
     if (updated) { currentUserData = { ...currentUserData, ...updated }; renderSprueche(updated); }
@@ -1206,7 +1206,7 @@ function _buildKarte(member, el) {
     currentUserData = { ...(currentUserData || {}), coins: newCoins };
     _updateHeaderCoins({ coins: newCoins });
     state.mapData = DB.appendTodayLog({ ...state.mapData, steps_extra_date: new Date().toLocaleDateString('de-DE') },
-      [{ label: '👣 +5 Schritte gekauft', amount: -10, detail: 'Erkundungskarte' }]);
+      [{ label: '👣 +5 Schritte gekauft', amount: -10, cat: 'karte', detail: 'Erkundungskarte' }]);
     await DB.updateMapData(member.id, state.mapData).catch(() => {});
     currentUserData = { ...(currentUserData || {}), map_data: state.mapData };
     showToast('✅ +5 Schritte freigeschaltet!', 'success');
@@ -1470,7 +1470,7 @@ async function _handleKarteStep(tx, ty, member, state, seed, COLS, ROWS, MARGIN)
         activeEffects: [...(state.mapData.activeEffects || []),
           { type: 'step_malus', amount: eff.malus, expires: tom }]
       };
-      state.mapData = DB.appendTodayLog(state.mapData, [{ label: `${event.emoji} ${event.name}`, amount: bonusCC }]);
+      state.mapData = DB.appendTodayLog(state.mapData, [{ label: `${event.emoji} ${event.name}`, amount: bonusCC, cat: 'karte' }]);
       await DB.updateMapData(member.id, state.mapData).catch(() => {});
       currentUserData = { ...(currentUserData || {}), map_data: state.mapData };
     } else if (eff.type === 'step_malus' && eff.when === 'today') {
@@ -1502,7 +1502,7 @@ async function _handleKarteStep(tx, ty, member, state, seed, COLS, ROWS, MARGIN)
       // cc_risk hat den Log-Eintrag bereits oben (zusammen mit dem step_malus) gespeichert
       if (eff.type !== 'cc_risk') {
         try {
-          state.mapData = DB.appendTodayLog(state.mapData, [{ label: `${event.emoji} ${event.name}`, amount: bonusCC }]);
+          state.mapData = DB.appendTodayLog(state.mapData, [{ label: `${event.emoji} ${event.name}`, amount: bonusCC, cat: 'karte' }]);
           currentUserData = { ...(currentUserData || {}), map_data: state.mapData };
           await DB.updateMapData(member.id, state.mapData);
         } catch (e) { console.warn('Tages-Log (Event) Fehler:', e); }
@@ -1522,7 +1522,7 @@ async function _handleKarteStep(tx, ty, member, state, seed, COLS, ROWS, MARGIN)
           if (typeof DB.addPenaltyToTreasury === 'function') await DB.addPenaltyToTreasury(pay);
         } catch (e) { console.warn('Malus → Gruppenkasse Fehler:', e); }
         try {
-          state.mapData = DB.appendTodayLog(state.mapData, [{ label: `${event.emoji} ${event.name} → Gruppenkasse`, amount: -pay }]);
+          state.mapData = DB.appendTodayLog(state.mapData, [{ label: `${event.emoji} ${event.name} → Gruppenkasse`, amount: -pay, cat: 'strafen' }]);
           currentUserData = { ...(currentUserData || {}), map_data: state.mapData };
           await DB.updateMapData(member.id, state.mapData);
         } catch (e) { console.warn('Tages-Log (Strafe) Fehler:', e); }
@@ -1562,7 +1562,7 @@ async function _handleKarteUpgrade(key, cost, member, state, seed) {
   _updateHeaderCoins({ coins: newCoins });
 
   state.mapData = DB.appendTodayLog({ ...state.mapData, upgrades: { ...(state.mapData.upgrades || {}), [key]: true } },
-    [{ label: `🗺️ ${upg.name}`, amount: -cost, detail: 'Karten-Ausrüstung', invest: true }]);
+    [{ label: `🗺️ ${upg.name}`, amount: -cost, cat: 'karte', detail: 'Karten-Ausrüstung', invest: true }]);
   await DB.updateMapData(member.id, state.mapData).catch(() => {});
   currentUserData = { ...(currentUserData || {}), map_data: state.mapData };
 
@@ -1680,7 +1680,7 @@ function _showDungeonModal(member, state, seed) {
           dungeonStats: newStats,
         };
         // Tages-Log
-        state.mapData = DB.appendTodayLog(state.mapData, [{ label: `⚔️ Dungeon (${score || 0} Pkt.)`, amount: cc }]);
+        state.mapData = DB.appendTodayLog(state.mapData, [{ label: `⚔️ Dungeon (${score || 0} Pkt.)`, amount: cc, cat: 'karte' }]);
         currentUserData = { ...(currentUserData || {}), map_data: state.mapData };
         await DB.updateMapData(member.id, state.mapData).catch(() => {});
         // Coins
@@ -1824,7 +1824,7 @@ async function _handleKarteBuild(buildingKey, ax, ay, member, state, seed) {
   _updateHeaderCoins({ coins: newCoins });
 
   state.mapData = DB.appendTodayLog(karteStartBuild(buildingKey, ax, ay, state.mapData, Date.now()),
-    [{ label: `🏗️ Bau: ${def.name}`, amount: -cost, detail: 'Erkundungskarte', invest: true }]);
+    [{ label: `🏗️ Bau: ${def.name}`, amount: -cost, cat: 'karte', detail: 'Erkundungskarte', invest: true }]);
   try {
     await DB.updateMapData(member.id, state.mapData);
   } catch {
@@ -2202,7 +2202,7 @@ async function _handleKriegerTap(tx, ty, member, state, seed, COLS, ROWS, MARGIN
     try { await DB.postMessage(`🪙 ${_esc2(member.name)} hat im Dungeon ${gimmick.cc} CC gefunden!`, member.name); } catch (e) {}
     // Tages-Log (Profil "Heute erhalten") — frisch mergen (gegen Clobbering durch zeitgleiche Writes).
     try {
-      const mdLog = await DB.appendTodayLogFresh(member.id, [{ label: '🪙 Dungeon-Fund', amount: gimmick.cc }]);
+      const mdLog = await DB.appendTodayLogFresh(member.id, [{ label: '🪙 Dungeon-Fund', amount: gimmick.cc, cat: 'karte' }]);
       if (mdLog) { currentUserData = { ...(currentUserData || {}), map_data: mdLog }; member.map_data = mdLog; }
     } catch (e) { /* non-critical */ }
   } else if (gimmick?.voucher) {
@@ -2792,7 +2792,7 @@ function _kriegerRenderShop(member, state, body) {
         // Ausgabe im Tages-Log (tatsächlich gezahlter Betrag, inkl. evtl. Gutschein-Rabatt).
         try {
           const paid = newDD._costPaid ?? item.cost;
-          const mdLog = await DB.appendTodayLogFresh(member.id, [{ label: `🛒 ${item.name}`, amount: -paid, detail: 'Kaffee-Krieger-Ausrüstung', invest: true }]);
+          const mdLog = await DB.appendTodayLogFresh(member.id, [{ label: `🛒 ${item.name}`, amount: -paid, cat: 'krieger', detail: 'Kaffee-Krieger-Ausrüstung', invest: true }]);
           if (mdLog) { currentUserData = { ...(currentUserData || {}), map_data: mdLog }; member.map_data = mdLog; }
         } catch (e) { /* non-critical */ }
         _kriegerRenderShop(member, state, body);
@@ -2847,7 +2847,7 @@ function _kriegerRenderShop(member, state, body) {
         // Ausgabe im Tages-Log (Reparaturkosten).
         try {
           const item = kriegerItemByKey(key);
-          const mdLog = await DB.appendTodayLogFresh(member.id, [{ label: `🔨 Reparatur: ${item ? item.name : 'Rüstung'}`, amount: -cost, detail: 'Kaffee-Krieger-Ausrüstung' }]);
+          const mdLog = await DB.appendTodayLogFresh(member.id, [{ label: `🔨 Reparatur: ${item ? item.name : 'Rüstung'}`, amount: -cost, cat: 'krieger', detail: 'Kaffee-Krieger-Ausrüstung' }]);
           if (mdLog) { currentUserData = { ...(currentUserData || {}), map_data: mdLog }; member.map_data = mdLog; }
         } catch (e) { /* non-critical */ }
         showToast('🔨 Rüstung repariert — volle Haltbarkeit!', 'success');
@@ -2876,7 +2876,7 @@ function _kriegerRenderShop(member, state, body) {
         showToast(`🐴 ${comp.name} erworben${state.dd.companion === comp.key ? ' & ausgerüstet' : ''}!`, 'success');
         try { await DB.postMessage(`🐴 ${_esc2(member.name)} hat den Begleiter ${comp.icon} ${_esc2(comp.name)} erworben!`, member.name); } catch (e) {}
         try {
-          const mdLog = await DB.appendTodayLogFresh(member.id, [{ label: `🐴 Begleiter: ${comp.name}`, amount: -comp.cost, detail: 'Kaffee-Krieger-Ausgabe', invest: true }]);
+          const mdLog = await DB.appendTodayLogFresh(member.id, [{ label: `🐴 Begleiter: ${comp.name}`, amount: -comp.cost, cat: 'krieger', detail: 'Kaffee-Krieger-Ausgabe', invest: true }]);
           if (mdLog) { currentUserData = { ...(currentUserData || {}), map_data: mdLog }; member.map_data = mdLog; }
         } catch (e) { /* non-critical */ }
         _kriegerRenderShop(member, state, body);
@@ -2932,7 +2932,7 @@ function _kriegerRenderShop(member, state, body) {
         showToast(`🐎 ${mount.name} erworben${state.dd.mount === mount.key ? ' & aufgesessen' : ''}!`, 'success');
         try { await DB.postMessage(`🐎 ${_esc2(member.name)} hat das Reittier ${mount.icon} ${_esc2(mount.name)} erworben!`, member.name); } catch (e) {}
         try {
-          const mdLog = await DB.appendTodayLogFresh(member.id, [{ label: `🐎 Reittier: ${mount.name}`, amount: -mount.cost, detail: 'Kaffee-Krieger-Ausgabe', invest: true }]);
+          const mdLog = await DB.appendTodayLogFresh(member.id, [{ label: `🐎 Reittier: ${mount.name}`, amount: -mount.cost, cat: 'krieger', detail: 'Kaffee-Krieger-Ausgabe', invest: true }]);
           if (mdLog) { currentUserData = { ...(currentUserData || {}), map_data: mdLog }; member.map_data = mdLog; }
         } catch (e) { /* non-critical */ }
         // Achievement: erstes Reittier

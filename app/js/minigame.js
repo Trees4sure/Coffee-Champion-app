@@ -76,7 +76,7 @@ async function openDungeonMinigame(member, opts) {
   if (opts?.onStake) opts.onStake(); // 10 CC sofort im UI abziehen
   // Einsatz (10 CC) als Ausgabe ins Tages-Log/Netto — start_minigame zieht serverseitig ab (in die
   // Kasse), loggt aber KEIN todayLog. Auch bei Abbruch bleibt der Einsatz weg → hier korrekt geloggt.
-  try { await DB.appendTodayLogFresh(member.id, [{ label: '🎯 Kaffeejagd: Einsatz', amount: -10, detail: 'Minispiel' }]); } catch (e) {}
+  try { await DB.appendTodayLogFresh(member.id, [{ label: '🎯 Kaffeejagd: Einsatz', amount: -10, cat: 'minigame', detail: 'Minispiel' }]); } catch (e) {}
 
   // Countdown 3–2–1
   await _jagdCountdown();
@@ -113,7 +113,7 @@ async function openDungeonMinigame(member, opts) {
   const cc = claimResult?.coins_awarded ?? 0;
   // Auszahlung als Einnahme ins Tages-Log/Netto — claim_minigame schreibt die CC gut, loggt aber
   // KEIN todayLog. Netto der Runde = cc − 10 (deckt sich mit dem Ergebnis-Screen).
-  if (cc > 0) { try { await DB.appendTodayLogFresh(member.id, [{ label: '🎯 Kaffeejagd: Auszahlung', amount: cc, detail: 'Minispiel' }]); } catch (e) {} }
+  if (cc > 0) { try { await DB.appendTodayLogFresh(member.id, [{ label: '🎯 Kaffeejagd: Auszahlung', amount: cc, cat: 'minigame', detail: 'Minispiel' }]); } catch (e) {} }
 
   _jagdRenderResult(inner || overlay, Math.max(0, score), cc);
   await _sleep(3500);

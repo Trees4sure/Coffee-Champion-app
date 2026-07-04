@@ -95,7 +95,28 @@ const DB = (() => {
     const day  = today();
     const prev = (mapData?.todayLog?.date === day) ? (mapData.todayLog.entries || []) : [];
     const next = [...prev, ...entries.map(e => ({ ...e, t: new Date().toISOString() }))].slice(-30);
-    return { ...(mapData || {}), todayLog: { date: day, entries: next } };
+    const ledger = _accrueLedger(mapData?.ledger, entries);
+    return { ...(mapData || {}), todayLog: { date: day, entries: next }, ledger };
+  }
+
+  // ── Bilanz-Ledger: kumulative Lifetime-Summen je Kategorie (Einnahmen/Ausgaben/Investitionen) ──
+  // Wächst ab Einführung ("seit jetzt"). Erfasst NUR Einträge mit explizitem `cat` — retro-gezählte
+  // Posten (Krieger-Kampf → dungeon_data.totalCcEarned, Tränke → potionsSpent, Kartenschätze →
+  // totalTreasureCc, CIQ-Beute → ciqCcEarned) tragen bewusst KEIN cat und werden hier übersprungen,
+  // damit sie in der Anzeige nicht doppelt gezählt werden (dort aus ihrem eigenen Zähler ergänzt).
+  // Bucket: amount>0 → income · amount<0 & invest:true → invested · amount<0 sonst → spent.
+  function _accrueLedger(prevLedger, entries) {
+    const L = {
+      income:   { ...(prevLedger?.income   || {}) },
+      spent:    { ...(prevLedger?.spent    || {}) },
+      invested: { ...(prevLedger?.invested || {}) },
+    };
+    for (const e of (entries || [])) {
+      if (!e || !e.cat || !e.amount) continue;
+      const bucket = e.amount > 0 ? 'income' : (e.invest ? 'invested' : 'spent');
+      L[bucket][e.cat] = Math.round(((L[bucket][e.cat] || 0) + Math.abs(e.amount)) * 100) / 100;
+    }
+    return L;
   }
 
   // Frisch-Lesen + Anhängen + Schreiben in EINEM Schritt. Verhindert das Clobbering durch
@@ -139,12 +160,12 @@ const DB = (() => {
       (typeof worldBuildingPerDayDetail === 'function') ? worldBuildingPerDayDetail(worldRankMap, worldByCountry) : '',
     ].filter(Boolean).join(', ');
     const out = [];
-    if (rShare > 0) out.push({ label: '⚙️ Forschung (passiv)', amount: rShare, detail: (typeof researchPerDayDetail === 'function') ? researchPerDayDetail(member.research) : '' });
-    if (bShare > 0) out.push({ label: '🏗️ Gebäude-Einkommen',  amount: bShare, detail: (typeof buildingPerDayDetail === 'function') ? buildingPerDayDetail(member.map_data?.buildings || {}) : '' });
-    if (wShare > 0) out.push({ label: '🌍 Welt-Einfluss',       amount: wShare, detail: wDetail });
-    if (tShare > 0) out.push({ label: '🤝 Handelsbündnis',      amount: tShare, detail: '+10% Einkommen aus dem Bündnis-Land' });
-    if (gShare > 0) out.push({ label: '🏛️ Gruppenkasse (passiv)', amount: gShare, detail: `+${gPerDay} CC/Tag für alle` });
-    if (pShare > 0) out.push({ label: '🏦 Stille Anlage',        amount: pShare, detail: (typeof worldPassivePerDayDetail === 'function') ? worldPassivePerDayDetail(member, worldByCountry) : '' });
+    if (rShare > 0) out.push({ label: '⚙️ Forschung (passiv)', amount: rShare, cat: 'forschung', detail: (typeof researchPerDayDetail === 'function') ? researchPerDayDetail(member.research) : '' });
+    if (bShare > 0) out.push({ label: '🏗️ Gebäude-Einkommen',  amount: bShare, cat: 'karte', detail: (typeof buildingPerDayDetail === 'function') ? buildingPerDayDetail(member.map_data?.buildings || {}) : '' });
+    if (wShare > 0) out.push({ label: '🌍 Welt-Einfluss',       amount: wShare, cat: 'welt', detail: wDetail });
+    if (tShare > 0) out.push({ label: '🤝 Handelsbündnis',      amount: tShare, cat: 'welt', detail: '+10% Einkommen aus dem Bündnis-Land' });
+    if (gShare > 0) out.push({ label: '🏛️ Gruppenkasse (passiv)', amount: gShare, cat: 'gruppe', detail: `+${gPerDay} CC/Tag für alle` });
+    if (pShare > 0) out.push({ label: '🏦 Stille Anlage',        amount: pShare, cat: 'welt', detail: (typeof worldPassivePerDayDetail === 'function') ? worldPassivePerDayDetail(member, worldByCountry) : '' });
     return out;
   }
 
@@ -398,7 +419,7 @@ const DB = (() => {
       // Tages-Log frisch mergen — RPC/Fallback hat worldDividend + coins bereits geschrieben.
       try {
         const { data: f2 } = await _sb.from('members').select('map_data').eq('id', memberId).single();
-        const md = appendTodayLog((f2 && f2.map_data) || md0, [{ label: '🏛️ Erbauer-Dividende', amount }]);
+        const md = appendTodayLog((f2 && f2.map_data) || md0, [{ label: '🏛️ Erbauer-Dividende', amount, cat: 'welt' }]);
         await updateMapData(memberId, md);
       } catch (e) { console.warn('Dividende-Tageslog konnte nicht gespeichert werden:', e); }
       if (typeof showToast === 'function') showToast(`🏛️ Erbauer-Dividende: +${amount} CC`, 'success');
@@ -470,7 +491,7 @@ const DB = (() => {
       if (typeof ciqRewardMult === 'function') reward = Math.round(reward * ciqRewardMult((raw && raw.cosmetics) || {}));
       await _sb.rpc('add_coins', { p_member_id: memberId, p_amount: reward });
       const md2 = appendTodayLog({ ...md, loginBonus: { lastDate: day, streak } },
-                    [{ label: `📅 Login-Bonus (Tag ${streak})`, amount: reward }]);
+                    [{ label: `📅 Login-Bonus (Tag ${streak})`, amount: reward, cat: 'boni' }]);
       await updateMapData(memberId, md2);
       return { reward, streak };
     } catch (e) { console.warn('Login-Bonus fehlgeschlagen:', e.message); return 0; }
@@ -496,7 +517,7 @@ const DB = (() => {
       if (typeof ciqRewardMult === 'function') amt = Math.round(amt * ciqRewardMult((raw && raw.cosmetics) || {}));
       if (amt > 0) await _sb.rpc('add_coins', { p_member_id: memberId, p_amount: amt });
       const md2 = appendTodayLog({ ...md, taskClaims: claims },
-                    [{ label: '✨ Kaffee-Aufgabe', amount: amt }]);
+                    [{ label: '✨ Kaffee-Aufgabe', amount: amt, cat: 'boni' }]);
       await updateMapData(memberId, md2);
       // Erst bei ERFÜLLUNG in den Chat posten (nicht beim Login) — Name + Aufgabe.
       try {
@@ -847,32 +868,32 @@ const DB = (() => {
       // die werden von der RPC ebenfalls verdoppelt gutgeschrieben).
       const k = amt => kartellMult > 1 ? Math.round(amt * kartellMult * 100) / 100 : amt;
       if (baseCoins + morningBonus > 0) {
-        logEntries.push({ label: amount > 1 ? `☕ ${amount} Tassen` : '☕ Tasse', amount: k(Math.round((baseCoins + morningBonus) * 100) / 100) });
+        logEntries.push({ label: amount > 1 ? `☕ ${amount} Tassen` : '☕ Tasse', amount: k(Math.round((baseCoins + morningBonus) * 100) / 100), cat: 'tassen' });
       }
       if (researchBonus > 0) {
         const detail = (typeof researchPerCupDetail === 'function')
           ? researchPerCupDetail(member.research, amount, calcResearchPerCup(member.research)) : '';
-        logEntries.push({ label: '🔬 Forschung', amount: k(researchBonus), detail });
+        logEntries.push({ label: '🔬 Forschung', amount: k(researchBonus), cat: 'forschung', detail });
       }
       if (worldBonus > 0) {
         const detail = (typeof worldPerCupDetail === 'function')
           ? `${amount}× à ${worldPerCupBase}/Tasse · ${worldPerCupDetail(worldRankMap)}` : '';
-        logEntries.push({ label: '🌍 Welt-Einfluss', amount: k(worldBonus), detail });
+        logEntries.push({ label: '🌍 Welt-Einfluss', amount: k(worldBonus), cat: 'welt', detail });
       }
       if (allianceCupBonus > 0) {
-        logEntries.push({ label: '🤝 Handelsbündnis', amount: k(allianceCupBonus), detail: `${amount}× à ${tradeBonus.cup}/Tasse · +10% Einkommen aus dem Bündnis-Land` });
+        logEntries.push({ label: '🤝 Handelsbündnis', amount: k(allianceCupBonus), cat: 'welt', detail: `${amount}× à ${tradeBonus.cup}/Tasse · +10% Einkommen aus dem Bündnis-Land` });
       }
       if (groupBonus > 0) {
-        logEntries.push({ label: '🏛️ Gruppenkasse', amount: k(groupBonus), detail: `${amount}× à ${groupPerks.perCup}/Tasse (Gruppen-Effekt)` });
+        logEntries.push({ label: '🏛️ Gruppenkasse', amount: k(groupBonus), cat: 'gruppe', detail: `${amount}× à ${groupPerks.perCup}/Tasse (Gruppen-Effekt)` });
       }
       for (const a of allNew) {
-        if (a?.coinReward) logEntries.push({ label: `🏆 ${a.name || a.id}`, amount: k(a.coinReward) });
+        if (a?.coinReward) logEntries.push({ label: `🏆 ${a.name || a.id}`, amount: k(a.coinReward), cat: 'boni' });
       }
-      if (streakBonus > 0) logEntries.push({ label: `🔥 Streak ${newStreak}`, amount: k(streakBonus) });
-      if (ciqBonus > 0)    logEntries.push({ label: '🧠 CIQ-Fähigkeit', amount: k(ciqBonus), detail: ciqDetail });
+      if (streakBonus > 0) logEntries.push({ label: `🔥 Streak ${newStreak}`, amount: k(streakBonus), cat: 'boni' });
+      if (ciqBonus > 0)    logEntries.push({ label: '🧠 CIQ-Fähigkeit', amount: k(ciqBonus), cat: 'ciq', detail: ciqDetail });
       if (kartellMult > 1) logEntries.push({ label: '👑 Kaffeekartell aktiv', amount: 0, detail: 'Alle Tassen-Einnahmen oben bereits ×2 gerechnet' });
-      if (caffeinePenalty > 0) logEntries.push({ label: '🚩 Koffein-Strafe → Gruppenkasse', amount: -caffeinePenalty });
-      if (weekendLevy > 0)     logEntries.push({ label: '📅 Wochenend-Abgabe → Gruppenkasse', amount: -weekendLevy });
+      if (caffeinePenalty > 0) logEntries.push({ label: '🚩 Koffein-Strafe → Gruppenkasse', amount: -caffeinePenalty, cat: 'strafen' });
+      if (weekendLevy > 0)     logEntries.push({ label: '📅 Wochenend-Abgabe → Gruppenkasse', amount: -weekendLevy, cat: 'strafen' });
       if (passiveEarned > 0) {
         for (const e of _passiveLogEntries(member, passiveEarned, worldRankMap, worldByCountry, groupPerks.perDay, passiveTradeBonusDay)) logEntries.push(e);
       }
@@ -1031,7 +1052,7 @@ const DB = (() => {
           details.push({ name: member.name, amt });
           // Today-Log: Abzug im Profil des Mitglieds sichtbar machen
           try {
-            const updMd = appendTodayLog(member.map_data || {}, [{ label: '🏛️ Tagesabgabe → Kasse', amount: -amt }]);
+            const updMd = appendTodayLog(member.map_data || {}, [{ label: '🏛️ Tagesabgabe → Kasse', amount: -amt, cat: 'gruppe' }]);
             await _sb.from('members').update({ map_data: updMd }).eq('id', member.id);
           } catch (_le) { /* non-critical */ }
         } catch (e) { /* einzelnes Mitglied überspringen */ }
@@ -1143,7 +1164,7 @@ const DB = (() => {
       if (error) throw new Error(error.message);
       if (newCoins === null || newCoins === undefined) throw new Error('Nicht genug CoffeeCoins');
       // Ausgabe im Tages-Log (Transparenz → Netto-Gehalt).
-      try { await appendTodayLogFresh(memberId, [{ label: `🔬 Forschung: ${target.name || itemId}`, amount: -cost, detail: 'Forschungsbaum', invest: true }]); } catch (e) {}
+      try { await appendTodayLogFresh(memberId, [{ label: `🔬 Forschung: ${target.name || itemId}`, amount: -cost, cat: 'forschung', detail: 'Forschungsbaum', invest: true }]); } catch (e) {}
     }
 
     // Item in research speichern
@@ -1182,7 +1203,7 @@ const DB = (() => {
             await _sb.rpc('add_coins', { p_member_id: m.id, p_amount: cut });
             // In das Tages-Log des Hafen-Besitzers eintragen (Transparenz)
             try {
-              const ml = appendTodayLog(m.map_data, [{ label: '⚓ Handelshafen-Anteil', amount: cut }]);
+              const ml = appendTodayLog(m.map_data, [{ label: '⚓ Handelshafen-Anteil', amount: cut, cat: 'welt' }]);
               await _sb.rpc('save_map_data', { p_member_id: m.id, p_map_data: ml });
             } catch (e) { /* Log-Fehler nicht eskalieren */ }
           }
@@ -1239,7 +1260,7 @@ const DB = (() => {
       try {
         const { data: fresh } = await _sb.from('members').select('map_data').eq('id', memberId).single();
         const md = appendTodayLog((fresh && fresh.map_data) || raw.map_data,
-          [{ label: `🧠 ${def.name} freigeschaltet`, amount: -def.cc }]);
+          [{ label: `🧠 ${def.name} freigeschaltet`, amount: -def.cc, cat: 'ciq' }]);
         await updateMapData(memberId, md);
       } catch (e) { console.warn('CIQ-Kauf-Log konnte nicht gespeichert werden:', e); }
     }
@@ -1628,7 +1649,7 @@ const DB = (() => {
     if (error) throw new Error(error.message);
     // Ausgabe im Tages-Log (Transparenz → Netto-Gehalt). Welt-Investition = CC dauerhaft weg.
     if (data && !data.error) {
-      try { await appendTodayLogFresh(memberId, [{ label: `🌍 Welthandel: ${countryId}`, amount: -parseFloat(amount), detail: 'Welt-Investition', invest: true }]); } catch (e) {}
+      try { await appendTodayLogFresh(memberId, [{ label: `🌍 Welthandel: ${countryId}`, amount: -parseFloat(amount), cat: 'welt', detail: 'Welt-Investition', invest: true }]); } catch (e) {}
     }
     return data; // { ok, total_invested, coins_left } oder { error }
   }
@@ -1649,7 +1670,7 @@ const DB = (() => {
     // Ausgabe im Tages-Log (tatsächlich angelegter Betrag; kann durch Deckel < amount sein).
     if (data && !data.error) {
       const inv = (data.invested != null) ? data.invested : parseFloat(amount);
-      try { if (inv > 0) await appendTodayLogFresh(memberId, [{ label: `🏦 Stille Anlage: ${countryId}`, amount: -inv, detail: 'Investition', invest: true }]); } catch (e) {}
+      try { if (inv > 0) await appendTodayLogFresh(memberId, [{ label: `🏦 Stille Anlage: ${countryId}`, amount: -inv, cat: 'welt', detail: 'Investition', invest: true }]); } catch (e) {}
     }
     return data || { error: 'no_data' };
   }
@@ -1802,7 +1823,7 @@ const DB = (() => {
       if (paid.length) {
         try {
           const { data: fresh } = await _sb.from('members').select('map_data').eq('id', memberId).single();
-          const logEntries = paid.map(r => ({ label: `🕊️ Friedenstribut → ${r.receiver_name || '?'}`, amount: -r.amount_paid }));
+          const logEntries = paid.map(r => ({ label: `🕊️ Friedenstribut → ${r.receiver_name || '?'}`, amount: -r.amount_paid, cat: 'welt' }));
           const md = appendTodayLog((fresh && fresh.map_data) || member.map_data, logEntries);
           await updateMapData(memberId, md);
         } catch (e) { console.warn('Tribut-Log konnte nicht gespeichert werden:', e); }
@@ -1862,7 +1883,7 @@ const DB = (() => {
         if (!upg.barista_bart) continue;
         await _sb.rpc('add_coins', { p_member_id: m.id, p_amount: 1 });
         try {
-          const ml = appendTodayLog(m.map_data, [{ label: '🧔 Barista-Bart-Anteil', amount: 1 }]);
+          const ml = appendTodayLog(m.map_data, [{ label: '🧔 Barista-Bart-Anteil', amount: 1, cat: 'karte' }]);
           await _sb.rpc('save_map_data', { p_member_id: m.id, p_map_data: ml });
         } catch (e) { /* Log-Fehler nicht eskalieren */ }
         count++;
@@ -1909,7 +1930,7 @@ const DB = (() => {
         if (!(m.research || {}).eigene_tasse) continue;
         await _sb.rpc('add_coins', { p_member_id: m.id, p_amount: bonus });
         try {
-          const ml = appendTodayLog(m.map_data, [{ label: '+' + cups + ' Tassen (Eigene Tasse)', amount: bonus }]);
+          const ml = appendTodayLog(m.map_data, [{ label: '+' + cups + ' Tassen (Eigene Tasse)', amount: bonus, cat: 'tassen' }]);
           await _sb.rpc('save_map_data', { p_member_id: m.id, p_map_data: ml });
         } catch (e) {}
         count++;

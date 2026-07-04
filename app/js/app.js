@@ -812,7 +812,8 @@ function renderVermoegen(u) {
           <span class="vermoegen-amount">${fmt(val)} CC</span>
         </div>`).join('')}
     </div>
-    <div class="vermoegen-note">Investitionen (Forschung, Karte, Welthandel, Krieger) zählen nicht ins Netto-Gehalt — sie stecken hier im Vermögen.</div>`;
+    <div class="vermoegen-note">Investitionen (Forschung, Karte, Welthandel, Krieger) zählen nicht ins Netto-Gehalt — sie stecken hier im Vermögen.</div>
+    ${(() => { const bh = _ccBilanzHtml(u, false); return bh ? `<div class="section-title" style="margin-top:14px">📊 Bilanz je Rubrik</div>${bh}<div class="vermoegen-note">Einnahmen &amp; verbrauchte Ausgaben werden seit Einführung dieser Statistik erfasst; Schätze, Krieger-Kämpfe, Tränke und CIQ-Beute zeigen die volle Historie aus ihren Zählern.</div>` : ''; })()}`;
 }
 
 // ✨ Kaffee-Aufgabe der Tage (rotiert alle 3 Tage). Wird dynamisch ins Profil injiziert
@@ -1263,6 +1264,7 @@ function _informantPanelHtml() {
             <span style="color:var(--muted);font-size:.78rem">🪙 ${_fmtCoins(u.coins || 0)} · 💰 ${last.day ?? '–'}/Tag realisiert · ☕ +${_fmtCoins(perCup)}/Tasse</span>
           </div>
           ${_informantVermoegenHtml(u)}
+          ${_ccBilanzHtml(u, true)}
           ${stats}
           ${ciqPerks}
           ${breakdown || '<p class="empty-hint" style="margin:4px 0 0;font-size:.75rem">Keine laufenden Forschungs-/Gebäude-Einnahmen.</p>'}
@@ -1614,6 +1616,59 @@ function _ccVermoegen(u) {
   return parts;
 }
 function _ccVermoegenTotal(u) { return _ccVermoegen(u).total; }
+// 📊 Bilanz je Rubrik: Lifetime-Einnahmen / verbrauchte (nicht zurückkommende) Ausgaben /
+// Investitionen (→ stecken als Asset im Vermögen). Quelle = kumulativer map_data.ledger
+// (wächst seit Einführung) ERGÄNZT um die schon länger geführten Retro-Zähler, wo sie
+// existieren — jede Rubrik hat pro Feld genau EINE Quelle, damit nichts doppelt zählt:
+//   • Krieger-Kampf-Einnahmen  ← dungeon_data.totalCcEarned (Kampf trägt kein ledger-cat)
+//   • Krieger-Tränke (verbraucht) ← dungeon_data.potionsSpent  (Trank trägt kein ledger-cat)
+//   • Schätze-Einnahmen        ← map_data.totalTreasureCc     (Schatz trägt kein ledger-cat)
+//   • CIQ-Beute-Einnahmen      ← map_data.ciqCcEarned + Quiz-CC (Beute läuft serverseitig)
+function _ccBilanz(u) {
+  const L   = u.map_data?.ledger || {};
+  const inc = L.income || {}, sp = L.spent || {}, inv = L.invested || {};
+  const dd  = u.dungeon_data || {};
+  const quiz   = u.cosmetics?.quiz || {};
+  const quizCC = Object.values(quiz.history || {}).reduce((s, h) => s + (h.score || 0) * 4, 0);
+  const cats = [
+    { icon: '☕', label: 'Tassen',            income: inc.tassen || 0 },
+    { icon: '🔬', label: 'Forschung',         income: inc.forschung || 0, invested: inv.forschung || 0 },
+    { icon: '🗺️', label: 'Karte & Gebäude',   income: inc.karte || 0, spent: sp.karte || 0, invested: inv.karte || 0 },
+    { icon: '🌍', label: 'Welthandel',        income: inc.welt || 0, spent: sp.welt || 0, invested: inv.welt || 0 },
+    { icon: '⚔️', label: 'Kaffee-Krieger',    income: (dd.totalCcEarned || 0) + (inc.krieger || 0), spent: (dd.potionsSpent || 0) + (sp.krieger || 0), invested: inv.krieger || 0 },
+    { icon: '🧠', label: 'CIQ',               income: quizCC + (u.map_data?.ciqCcEarned || 0) + (inc.ciq || 0), spent: sp.ciq || 0, invested: inv.ciq || 0 },
+    { icon: '💎', label: 'Schätze',           income: u.map_data?.totalTreasureCc || 0 },
+    { icon: '🎣', label: 'Kaffeejagd',        income: inc.minigame || 0, spent: sp.minigame || 0 },
+    { icon: '🏛️', label: 'Gruppe',            income: inc.gruppe || 0, spent: sp.gruppe || 0 },
+    { icon: '🎖️', label: 'Boni & Aufgaben',   income: inc.boni || 0 },
+    { icon: '🎨', label: 'Kosmetik',          spent: sp.cosmetics || 0 },
+    { icon: '💸', label: 'Steuern & Strafen', spent: sp.strafen || 0 },
+  ].map(c => ({ income: 0, spent: 0, invested: 0, ...c }));
+  const shown = cats.filter(c => c.income || c.spent || c.invested);
+  const tot = shown.reduce((a, c) => ({ income: a.income + c.income, spent: a.spent + c.spent, invested: a.invested + c.invested }), { income: 0, spent: 0, invested: 0 });
+  return { cats: shown, total: tot };
+}
+// 📊 Bilanz-Sektion als HTML (geteilt von Profil-Vermögen + Informant). compact=true → kleinere Chips.
+function _ccBilanzHtml(u, compact) {
+  const b = _ccBilanz(u);
+  if (!b.cats.length) return '';
+  const f = n => Math.round(n).toLocaleString('de-DE');
+  const cell = (v, cls) => v ? `<span class="bilanz-v ${cls}">${cls === 'neg' ? '−' : '+'}${f(v)}</span>` : '<span class="bilanz-v bilanz-0">·</span>';
+  const rows = b.cats.map(c => `
+    <div class="bilanz-row">
+      <span class="bilanz-label">${c.icon} ${c.label}</span>
+      <span class="bilanz-vals">${cell(c.income, 'pos')}${cell(c.spent, 'neg')}${c.invested ? `<span class="bilanz-v inv">🏛️${f(c.invested)}</span>` : '<span class="bilanz-v bilanz-0">·</span>'}</span>
+    </div>`).join('');
+  return `
+    <div class="bilanz-box${compact ? ' bilanz-compact' : ''}">
+      <div class="bilanz-head"><span>Rubrik</span><span class="bilanz-vals"><span class="bilanz-v pos">Einnahmen</span><span class="bilanz-v neg">Verbraucht</span><span class="bilanz-v inv">Investiert</span></span></div>
+      ${rows}
+      <div class="bilanz-row bilanz-sum">
+        <span class="bilanz-label">Summe</span>
+        <span class="bilanz-vals">${cell(b.total.income, 'pos')}${cell(b.total.spent, 'neg')}${b.total.invested ? `<span class="bilanz-v inv">🏛️${f(b.total.invested)}</span>` : '<span class="bilanz-v bilanz-0">·</span>'}</span>
+      </div>
+    </div>`;
+}
 // Kaffee-Krieger (RPG) — Werte aus u.dungeon_data (NICHT map_data.dungeonStats, das ist die
 // Pixel-Karten-Dungeon-Statistik). Nichtspieler haben kein dungeon_data → 0, fallen also aus
 // dem _ccLeader-Ranking (val>0). Stufe 1 = erster Kampf begonnen.
