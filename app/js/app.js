@@ -93,12 +93,16 @@ function showApp() {
   switchView('rangliste');
   // Kaffee-Quiz: am 1./15. ggf. Einladungs-Modal zeigen (nur wenn noch nicht gespielt).
   if (typeof Quiz !== 'undefined') Quiz.checkAndMaybePopup();
-  // "Was ist neu"-Hinweis: leicht verzögert, damit er nicht mit dem Quiz-Modal kollidiert
-  // (Quiz-Invite hat Vorrang — falls es gerade offen ist, kommt der Hinweis beim nächsten Login).
+  // Feedback-Umfrage: am letzten Freitag im Monat ggf. Popup (Quiz hat Vorrang; überschneidet
+  // sich praktisch nie — Quiz = Mittwoch, Umfrage = Freitag. Guard prüft offenes Quiz-Modal).
+  if (typeof Survey !== 'undefined') Survey.checkAndMaybePopup();
+  // "Was ist neu"-Hinweis: leicht verzögert, damit er nicht mit einem Modal kollidiert
+  // (Quiz/Umfrage haben Vorrang — falls offen, kommt der Hinweis beim nächsten Login).
   setTimeout(() => {
     const qm = document.getElementById('quiz-modal');
-    const quizOpen = !!qm && !qm.classList.contains('hidden');
-    if (!quizOpen) checkAndMaybeShowWhatsNew();
+    const sm = document.getElementById('survey-modal');
+    const modalOpen = (!!qm && !qm.classList.contains('hidden')) || (!!sm && !sm.classList.contains('hidden'));
+    if (!modalOpen) checkAndMaybeShowWhatsNew();
   }, 700);
   // Passives Einkommen beim App-Start einlösen (entkoppelt von Tassen). Der
   // Gehalts-Snapshot läuft ERST danach (verkettet), nicht parallel: sein map_data-Write
@@ -1496,6 +1500,7 @@ function renderSeasons() {
       <div class="season-winner">${s.winner_name ? `🏆 ${_esc(s.winner_name)} (${s.winner_cups} Tassen)` : 'Noch kein Sieger'}</div>
     </div>`).join('') || '<p class="empty-hint">Noch keine Saisons.</p>';
   if (typeof Quiz !== 'undefined') Quiz.renderSeasonsSection();
+  if (typeof Survey !== 'undefined') Survey.renderSeasonsSection();
 }
 
 // ── Admin ─────────────────────────────────────────────────────────────────────
@@ -1511,6 +1516,7 @@ function renderAdmin() {
         <span>${u.totalCups} ☕</span>
         <span>${u.isAdmin ? '👑 Admin' : 'Teilnehmer'}</span>
       </div>`).join('') || '<p class="empty-hint">Keine Teilnehmer.</p>';
+  if (typeof Survey !== 'undefined') Survey.renderAdminSection();
 }
 
 async function adminCloseSeason() {

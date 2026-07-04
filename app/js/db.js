@@ -1951,6 +1951,39 @@ const DB = (() => {
     return data || {};
   }
 
+  // ── Feedback-Umfrage (plans/Umfrage.md) ──────────────────────────────────────
+  async function submitSurvey(memberId, periodKey, ratings, suggestions, freetext) {
+    const { data, error } = await _sb.rpc('submit_survey', {
+      p_member_id:  memberId,
+      p_group_id:   _groupId,
+      p_period_key: periodKey,
+      p_ratings:    ratings || {},
+      p_suggestions: suggestions || [],
+      p_freetext:   freetext || null,
+    });
+    if (error) throw new Error(error.message);
+    return data; // { ok, reward } | { error }
+  }
+  // Hat DIESES Mitglied in DIESER Periode schon abgestimmt? (leichter Popup-Gate-Check)
+  async function surveyMyResponse(memberId, periodKey) {
+    if (!_groupId) return null;
+    const { data, error } = await _sb.from('survey_responses')
+      .select('id').eq('group_id', _groupId).eq('member_id', memberId).eq('period_key', periodKey).maybeSingle();
+    if (error) return null;
+    return data || null;
+  }
+  // Alle Antworten der Gruppe (Ergebnis-Anzeige + Admin-Export). [] bei fehlender Tabelle.
+  async function fetchAllSurveyResponses() {
+    if (!_groupId) return [];
+    try {
+      const { data, error } = await _sb.from('survey_responses')
+        .select('member_id, period_key, ratings, suggestions, freetext, created_at')
+        .eq('group_id', _groupId).order('created_at', { ascending: false }).limit(500);
+      if (error) throw error;
+      return data || [];
+    } catch (e) { return []; }
+  }
+
   // ── Achievements direkt vergeben (z.B. für Dungeon-Erfolge) ─────────────────
   async function grantAchievements(memberId, newAchs) {
     const u = (typeof appData !== 'undefined' && appData?.users) ? appData.users.find(u => u.id === memberId) : null;
@@ -2010,6 +2043,7 @@ const DB = (() => {
     castSabotage, fetchSabotages,
     fetchAllWorldAlliances, proposeAlliance, respondAlliance, reconcileWorldAlliances, settleAllianceTributes,
     quizStatus, quizStart, quizAnswer, quizFinalize, quizGroupReveal,
+    submitSurvey, surveyMyResponse, fetchAllSurveyResponses,
     grantAchievements,
     startMinigame, claimMinigame, getMinigameStatus,
   };
