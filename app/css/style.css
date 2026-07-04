@@ -378,6 +378,14 @@ nav::-webkit-scrollbar { display: none; }
 .summary-card tr:last-child td { border-bottom: none; }
 .summary-card .winner-row td { color: var(--gold); font-weight: 700; }
 
+/* Dichte Kennzahl-Tabelle (Gehalt: 6 Spalten) — auf schmalen Screens horizontal scrollen,
+   statt die Spalten zu quetschen. Der Wrapper bleibt 100% breit; die Tabelle scrollt in ihm.
+   Header bleiben einzeilig, damit sie nicht mehrzeilig umbrechen. */
+.cc-table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.cc-salary-table { min-width: 460px; }
+.summary-card .cc-salary-table th { white-space: nowrap; padding: 8px 10px; }
+.summary-card .cc-salary-table td { white-space: nowrap; }
+
 /* ── Hall of Fame ──────────────────────────────────────────────────────────── */
 .hof-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
 .hof-card {
