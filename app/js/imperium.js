@@ -865,6 +865,7 @@ async function _handleCosmeticsSet(field, val, member) {
     if (newCoins === null) { showToast('Nicht genug CoffeeCoins!', 'error'); return; }
     cosm.boughtAvatars = { ...(cosm.boughtAvatars || {}), [val]: true };
     cosm.avatar = av.icon;
+    try { await DB.appendTodayLogFresh(member.id, [{ label: `🎨 Avatar: ${av.name}`, amount: -av.cost, detail: 'Cosmetics' }]); } catch (e) {}
     showToast(`✓ Avatar "${av.name}" gekauft! (-${av.cost} CC)`, 'success');
   }
 
@@ -875,6 +876,7 @@ async function _handleCosmeticsSet(field, val, member) {
     if (newCoins === null) { showToast('Nicht genug CoffeeCoins!', 'error'); return; }
     cosm.boughtTitel = { ...(cosm.boughtTitel || {}), [val]: true };
     cosm.zusatztitel = val;
+    try { await DB.appendTodayLogFresh(member.id, [{ label: `🏷️ Titel: ${t.name}`, amount: -t.cost, detail: 'Cosmetics' }]); } catch (e) {}
     showToast(`✓ Titel "${t.name}" gekauft! (-${t.cost} CC)`, 'success');
     try {
       await DB.postMessage(`${member.name} hat den Titel ${t.icon} ${t.name} erworben! ✨`, member.name);
@@ -992,6 +994,7 @@ function renderSprueche(member) {
       for (const p of availPacks) newUnlocked[p.id] = true;
       const newCosm = { ...(member.cosmetics || {}), unlockedPacks: newUnlocked };
       await DB.saveCosmetics(member.id, newCosm);
+      try { await DB.appendTodayLogFresh(member.id, [{ label: '🚀 Sprüche-Booster', amount: -boosterCost, detail: 'Cosmetics' }]); } catch (e) {}
       appData = await DB.fetchData();
       const updated = appData.users.find(u => u.id === member.id);
       if (updated) { currentUserData = { ...currentUserData, ...updated }; renderSprueche(updated); }
@@ -1007,6 +1010,7 @@ function renderSprueche(member) {
     if (newCoins === null) { showToast('Nicht genug CoffeeCoins!', 'error'); return; }
     const newCosm = { ...(member.cosmetics || {}), unlockedPacks: { ...(cosm.unlockedPacks || {}), [packId]: true } };
     await DB.saveCosmetics(member.id, newCosm);
+    try { await DB.appendTodayLogFresh(member.id, [{ label: '💬 Sprüche-Pack', amount: -50, detail: 'Cosmetics' }]); } catch (e) {}
     appData = await DB.fetchData();
     const updated = appData.users.find(u => u.id === member.id);
     if (updated) { currentUserData = { ...currentUserData, ...updated }; renderSprueche(updated); }
@@ -1201,7 +1205,8 @@ function _buildKarte(member, el) {
     state.memberCoins = newCoins;
     currentUserData = { ...(currentUserData || {}), coins: newCoins };
     _updateHeaderCoins({ coins: newCoins });
-    state.mapData = { ...state.mapData, steps_extra_date: new Date().toLocaleDateString('de-DE') };
+    state.mapData = DB.appendTodayLog({ ...state.mapData, steps_extra_date: new Date().toLocaleDateString('de-DE') },
+      [{ label: '👣 +5 Schritte gekauft', amount: -10, detail: 'Erkundungskarte' }]);
     await DB.updateMapData(member.id, state.mapData).catch(() => {});
     currentUserData = { ...(currentUserData || {}), map_data: state.mapData };
     showToast('✅ +5 Schritte freigeschaltet!', 'success');
@@ -1556,7 +1561,8 @@ async function _handleKarteUpgrade(key, cost, member, state, seed) {
   currentUserData = { ...(currentUserData || {}), coins: newCoins };
   _updateHeaderCoins({ coins: newCoins });
 
-  state.mapData = { ...state.mapData, upgrades: { ...(state.mapData.upgrades || {}), [key]: true } };
+  state.mapData = DB.appendTodayLog({ ...state.mapData, upgrades: { ...(state.mapData.upgrades || {}), [key]: true } },
+    [{ label: `🗺️ ${upg.name}`, amount: -cost, detail: 'Karten-Ausrüstung' }]);
   await DB.updateMapData(member.id, state.mapData).catch(() => {});
   currentUserData = { ...(currentUserData || {}), map_data: state.mapData };
 
@@ -1817,7 +1823,8 @@ async function _handleKarteBuild(buildingKey, ax, ay, member, state, seed) {
   currentUserData = { ...(currentUserData || {}), coins: newCoins };
   _updateHeaderCoins({ coins: newCoins });
 
-  state.mapData = karteStartBuild(buildingKey, ax, ay, state.mapData, Date.now());
+  state.mapData = DB.appendTodayLog(karteStartBuild(buildingKey, ax, ay, state.mapData, Date.now()),
+    [{ label: `🏗️ Bau: ${def.name}`, amount: -cost, detail: 'Erkundungskarte' }]);
   try {
     await DB.updateMapData(member.id, state.mapData);
   } catch {
@@ -1897,6 +1904,8 @@ function _buildKrieger(member, el) {
     <div class="krieger-subtabs" id="krieger-subtabs">
       <button class="krieger-subtab" data-ksub="dungeon">⚔️ Dungeon</button>
       <button class="krieger-subtab" data-ksub="shop">🛒 Ausrüstung</button>
+      <button class="krieger-subtab" data-ksub="potions">🧪 Tränke</button>
+      <button class="krieger-subtab" data-ksub="talents">🌟 Talente</button>
       <button class="krieger-subtab" data-ksub="progress">📊 Fortschritt</button>
     </div>
     <div id="krieger-body"></div>
@@ -1916,7 +1925,142 @@ function _kriegerRenderSubTab(member, state, seed, COLS, ROWS, MARGIN) {
   if (!body) return;
   if (_kriegerSubTab === 'dungeon')  _kriegerRenderDungeon(member, state, seed, COLS, ROWS, MARGIN, body);
   if (_kriegerSubTab === 'shop')     _kriegerRenderShop(member, state, body);
+  if (_kriegerSubTab === 'potions')  _kriegerRenderPotions(member, state, body);
+  if (_kriegerSubTab === 'talents')  _kriegerRenderTalents(member, state, body);
   if (_kriegerSubTab === 'progress') _kriegerRenderProgress(member, state, body);
+}
+
+// ── Sub-Tab: Tränke (Etappe 2) ───────────────────────────────────────────────
+// Kauf über spend_coins + save_dungeon_data (buyKriegerPotion). Bestand lebt in
+// dungeon_data.potions{key:anzahl}; Verbrauch/Effekt passiert serverseitig im Kampf.
+function _kriegerRenderPotions(member, state, body) {
+  const dd = state.dd;
+  const cards = (typeof KRIEGER_POTIONS !== 'undefined' ? KRIEGER_POTIONS : []).map(p => {
+    const have = (typeof kriegerPotionCount === 'function') ? kriegerPotionCount(dd, p.key) : ((dd.potions || {})[p.key] || 0);
+    const canBuy = state.memberCoins >= p.cost;
+    return `<div class="krieger-item-card${have > 0 ? ' owned' : ''}">
+      <div style="font-size:20px">${p.icon}</div>
+      <div style="font-size:11px;font-weight:700">${_esc2(p.name)}${have > 0 ? ` <span style="color:#FAC775">×${have}</span>` : ''}</div>
+      <div style="font-size:11px;color:var(--muted);margin:3px 0">${_esc2(p.desc)}</div>
+      <div style="margin-top:5px"><button class="cc-build-btn krieger-potion-buy" data-potion="${p.key}"${canBuy ? '' : ' disabled'}>Kaufen · ${p.cost} 🫘</button></div>
+    </div>`;
+  }).join('');
+
+  body.innerHTML = `
+    <p style="font-size:12px;color:var(--muted);text-align:center;margin:2px 0 10px">Max. 1 Trank pro Kampf — vor dem „Kämpfen" auswählbar. Auch als seltener Dungeon-Fund.</p>
+    <div class="krieger-shop-grid">${cards}</div>
+  `;
+
+  body.querySelectorAll('.krieger-potion-buy').forEach(btn => {
+    btn.onclick = async () => {
+      const potion = (typeof kriegerPotionByKey === 'function') ? kriegerPotionByKey(btn.dataset.potion) : null;
+      if (!potion) return;
+      btn.disabled = true;
+      try {
+        const newDD = await DB.buyKriegerPotion(member.id, potion, state.dd);
+        state.dd = newDD;
+        state.memberCoins -= potion.cost;
+        currentUserData = { ...(currentUserData || {}), coins: state.memberCoins, dungeon_data: state.dd };
+        _updateHeaderCoins({ coins: state.memberCoins });
+        // Ausgabe im Tages-Log (Transparenz: fließt als Minus ins Netto-Gehalt des Tages).
+        try {
+          const mdLog = await DB.appendTodayLogFresh(member.id, [{ label: `🧪 Trank: ${potion.name}`, amount: -potion.cost, detail: 'Kaffee-Krieger-Ausgabe' }]);
+          if (mdLog) { currentUserData = { ...(currentUserData || {}), map_data: mdLog }; member.map_data = mdLog; }
+        } catch (e) { /* non-critical */ }
+        showToast(`🧪 ${potion.name} gekauft!`, 'success');
+        _kriegerRenderPotions(member, state, body);
+      } catch (e) { showToast(e.message || 'Kauf fehlgeschlagen', 'error'); btn.disabled = false; }
+    };
+  });
+}
+
+// ── Sub-Tab: Talente ─────────────────────────────────────────────────────────
+// Talentpunkte werden aus dem Level abgeleitet (1 je 10 Stufen, nicht gespeichert);
+// Talente werden linear freigeschaltet (kriegerNextTalent = erstes noch nicht besessenes).
+// Die Effekte selbst wirken serverseitig in dungeon_fight — hier nur Vergabe/Anzeige.
+function _kriegerRenderTalents(member, state, body) {
+  const dd = state.dd;
+  const level    = dd.level || 1;
+  const assigned = dd.talents || {};
+  const points = (typeof kriegerTalentPoints === 'function') ? kriegerTalentPoints(dd) : 0;
+  const next   = (typeof kriegerNextTalent  === 'function') ? kriegerNextTalent(dd)  : null;
+
+  const cards = (typeof KRIEGER_TALENTS !== 'undefined' ? KRIEGER_TALENTS : []).map(t => {
+    const owned     = !!assigned[t.key];
+    const isNext    = !!(next && next.key === t.key);
+    const canAssign = isNext && points > 0 && level >= t.level;
+    let action;
+    if (owned) {
+      action = `<span class="ciq-state ciq-on">✓ freigeschaltet</span>`;
+    } else if (canAssign) {
+      action = `<button class="cc-build-btn krieger-talent-btn" data-talent="${t.key}">Freischalten · 1 🌟</button>`;
+    } else if (level < t.level) {
+      action = `<span class="ciq-state ciq-lock">🔒 ab Stufe ${t.level}</span>`;
+    } else if (isNext) {
+      action = `<span class="ciq-state ciq-lock">Kein Talentpunkt frei</span>`;
+    } else {
+      action = `<span class="ciq-state ciq-lock">🔒 vorheriges Talent zuerst</span>`;
+    }
+    return `<div class="krieger-item-card${owned ? ' owned' : ''}${!owned && level < t.level ? ' locked' : ''}">
+      <div style="font-size:20px">${t.icon}</div>
+      <div style="font-size:11px;font-weight:700">${_esc2(t.name)}</div>
+      <div class="krieger-item-stats">Stufe ${t.level}</div>
+      <div style="font-size:11px;color:var(--muted);margin:3px 0">${_esc2(t.desc)}</div>
+      <div style="margin-top:5px">${action}</div>
+    </div>`;
+  }).join('');
+
+  body.innerHTML = `
+    <div style="text-align:center;margin-bottom:12px">
+      <div style="font-size:12px;color:var(--muted)">1 Talentpunkt je 10 Krieger-Stufen</div>
+      <div style="font-size:15px;font-weight:700;color:#FAC775">🌟 Verfügbare Talentpunkte: ${points}</div>
+    </div>
+    <div class="krieger-shop-grid">${cards}</div>
+  `;
+
+  body.querySelectorAll('.krieger-talent-btn').forEach(btn => {
+    btn.onclick = () => _handleAssignTalent(member, state, body, btn.dataset.talent);
+  });
+}
+
+async function _handleAssignTalent(member, state, body, key) {
+  const dd  = state.dd;
+  const def = (typeof kriegerTalentDef === 'function') ? kriegerTalentDef(key) : null;
+  if (!def) return;
+  // Gate erneut prüfen (Anzeige könnte veraltet sein): nur das nächste Talent,
+  // Punkt frei, Level erreicht.
+  const next   = (typeof kriegerNextTalent  === 'function') ? kriegerNextTalent(dd)  : null;
+  const points = (typeof kriegerTalentPoints === 'function') ? kriegerTalentPoints(dd) : 0;
+  if (!next || next.key !== key) { showToast('Erst das vorherige Talent freischalten.', 'error'); return; }
+  if (points <= 0)               { showToast('Kein Talentpunkt frei.', 'error'); return; }
+  if ((dd.level || 1) < def.level) { showToast(`Talent erst ab Stufe ${def.level}.`, 'error'); return; }
+
+  const newTalents = { ...(dd.talents || {}), [key]: true };
+  const newDD = { ...dd, talents: newTalents };
+  try {
+    await DB.saveDungeonData(member.id, newDD);
+    state.dd = newDD;
+    currentUserData = { ...(currentUserData || {}), dungeon_data: state.dd };
+    showToast(`🌟 Talent „${def.name}" freigeschaltet!`, 'success');
+    try { await DB.postMessage(`🌟 ${_esc2(member.name)} hat das Krieger-Talent „${def.name}" freigeschaltet!`, member.name); } catch (e) {}
+    // Talent-Achievements (ad-hoc, dürfen die Vergabe nie blockieren)
+    try {
+      const existing = currentUserData?.achievements || {};
+      const toGrant = {};
+      const total = (typeof KRIEGER_TALENTS !== 'undefined' ? KRIEGER_TALENTS.length : 10);
+      if (!existing.krieger_talent_first) toGrant.krieger_talent_first = true;
+      if (!existing.krieger_talent_full && Object.keys(newTalents).length >= total) toGrant.krieger_talent_full = true;
+      if (Object.keys(toGrant).length > 0) {
+        await DB.grantAchievements(member.id, toGrant);
+        currentUserData = { ...currentUserData, achievements: { ...existing, ...toGrant } };
+        for (const id of Object.keys(toGrant)) {
+          const ach = (typeof ACHIEVEMENTS !== 'undefined' ? ACHIEVEMENTS : []).find(a => a.id === id);
+          if (ach) showToast(`🏆 Achievement: ${ach.name}! (+${ach.coinReward} CC)`, 'success');
+        }
+      }
+    } catch (e) { /* non-critical */ }
+    _kriegerRenderTalents(member, state, body);
+  } catch (e) { showToast(e.message || 'Freischalten fehlgeschlagen', 'error'); }
 }
 
 function _kriegerUpdateHud(state) {
@@ -2010,9 +2154,12 @@ async function _handleKriegerTap(tx, ty, member, state, seed, COLS, ROWS, MARGIN
   }
   // Erkundetes, leeres Feld: kostenlos dorthin zurücklaufen (kein Schrittverbrauch, kein
   // erneuter Fund) — sonst sitzt man fest, sobald alle Nachbarfelder erkundet sind.
+  // Direkt angrenzend → 1-Schritt-Walkback (unverändert); weiter weg → Fast-Travel (Etappe 4).
   if (explored) {
     if (kriegerCanWalkBack(tx, ty, state.dd)) {
       await _handleKriegerWalkBack(tx, ty, member, state, seed, COLS, ROWS, MARGIN);
+    } else {
+      await _handleKriegerFastTravel(tx, ty, member, state, seed, COLS, ROWS, MARGIN);
     }
     return;
   }
@@ -2034,6 +2181,11 @@ async function _handleKriegerTap(tx, ty, member, state, seed, COLS, ROWS, MARGIN
   // 🎁 Ausrüstungsfund: Gutschein lebt in dungeon_data, muss VOR dem Speichern gesetzt sein
   // (wird beim nächsten passenden Kauf in buyKriegerItem() eingelöst, siehe db.js).
   if (gimmick?.voucher) dd2 = { ...dd2, equipmentVoucher: gimmick.voucher };
+  // 🧪 Trank-Fund (Etappe 2): landet direkt im Bestand dd.potions[key], vor dem Speichern.
+  if (gimmick?.potion) {
+    const cur = (dd2.potions && dd2.potions[gimmick.potion]) || 0;
+    dd2 = { ...dd2, potions: { ...(dd2.potions || {}), [gimmick.potion]: cur + 1 } };
+  }
 
   const prevDd = state.dd;
   state.dd = dd2;
@@ -2048,16 +2200,18 @@ async function _handleKriegerTap(tx, ty, member, state, seed, COLS, ROWS, MARGIN
     try { await DB.addCoins(member.id, gimmick.cc); } catch (e) {}
     showToast(`🪙 +${gimmick.cc} CC im Dungeon gefunden!`, 'success');
     try { await DB.postMessage(`🪙 ${_esc2(member.name)} hat im Dungeon ${gimmick.cc} CC gefunden!`, member.name); } catch (e) {}
-    // Tages-Log (Profil "Heute erhalten") — derselbe fehlende Eintrag wie beim Kampf-CC oben.
+    // Tages-Log (Profil "Heute erhalten") — frisch mergen (gegen Clobbering durch zeitgleiche Writes).
     try {
-      const mdLog = DB.appendTodayLog(member.map_data || {}, [{ label: '🪙 Dungeon-Fund', amount: gimmick.cc }]);
-      await DB.updateMapData(member.id, mdLog);
-      currentUserData = { ...(currentUserData || {}), map_data: mdLog };
+      const mdLog = await DB.appendTodayLogFresh(member.id, [{ label: '🪙 Dungeon-Fund', amount: gimmick.cc }]);
+      if (mdLog) { currentUserData = { ...(currentUserData || {}), map_data: mdLog }; member.map_data = mdLog; }
     } catch (e) { /* non-critical */ }
   } else if (gimmick?.voucher) {
     const slotName = gimmick.voucher.slot === 'weapon' ? 'Waffen' : gimmick.voucher.slot === 'armor' ? 'Rüstungs' : 'Talisman';
     showToast(`${gimmick.emoji} ${gimmick.name}! Nächster ${slotName}-Kauf 50% günstiger.`, 'success');
     try { await DB.postMessage(`${gimmick.emoji} ${_esc2(member.name)} hat im Dungeon "${_esc2(gimmick.name)}" gefunden — 50% Rabatt auf den nächsten ${slotName}-Kauf!`, member.name); } catch (e) {}
+  } else if (gimmick?.potion) {
+    showToast(`${gimmick.emoji} ${gimmick.name}! Im 🧪 Tränke-Tab einsetzbar.`, 'success');
+    try { await DB.postMessage(`${gimmick.emoji} ${_esc2(member.name)} hat im Dungeon einen Trank gefunden: ${_esc2(gimmick.name)}.`, member.name); } catch (e) {}
   }
 
   // Viewport nachziehen + neu rendern (analog _handleKarteStep)
@@ -2096,6 +2250,32 @@ async function _handleKriegerWalkBack(tx, ty, member, state, seed, COLS, ROWS, M
   _kriegerUpdateHud(state);
 }
 
+// Fast-Travel (Etappe 4): auf ein beliebiges bereits erkundetes Feld — Pfad per BFS,
+// tile-weise animiert, KOSTENLOS (kein Schrittverbrauch). Persistiert nur EINMAL am Ende.
+let _kriegerTravelSeq = 0;
+async function _handleKriegerFastTravel(tx, ty, member, state, seed, COLS, ROWS, MARGIN) {
+  const path = (typeof kriegerFindPath === 'function')
+    ? kriegerFindPath(kriegerPos(state.dd), { x: tx, y: ty }, state.dd) : null;
+  if (!path || !path.length) return; // kein Pfad (dank Flood-Fill quasi nie) → still ignorieren
+  const myToken = ++_kriegerTravelSeq; // neuer Klick bricht eine laufende Animation ab
+  const canvas = document.getElementById('krieger-canvas');
+  for (const step of path) {
+    if (myToken !== _kriegerTravelSeq) return; // abgebrochen durch neuen Klick
+    state.dd = kriegerWalkBack(step.x, step.y, state.dd); // pos + lastDir, keine Mutation an explored/steps
+    const pvpX = step.x - state.vpX, pvpY = step.y - state.vpY;
+    if (pvpX < MARGIN)                 state.vpX = Math.max(0, step.x - MARGIN);
+    else if (pvpX > COLS - MARGIN - 1) state.vpX = Math.min(KRIEGER_WORLD - COLS, step.x - (COLS - MARGIN - 1));
+    if (pvpY < MARGIN)                 state.vpY = Math.max(0, step.y - MARGIN);
+    else if (pvpY > ROWS - MARGIN - 1) state.vpY = Math.min(KRIEGER_WORLD - ROWS, step.y - (ROWS - MARGIN - 1));
+    if (canvas) kriegerRender(canvas, state.dd, seed, state.vpX, state.vpY);
+    _kriegerUpdateHud(state);
+    await new Promise(r => setTimeout(r, 110));
+  }
+  if (myToken !== _kriegerTravelSeq) return;
+  currentUserData = { ...(currentUserData || {}), dungeon_data: state.dd };
+  try { await DB.saveDungeonData(member.id, state.dd); } catch (e) { /* Position bleibt lokal, unkritisch */ }
+}
+
 // Eigene Werte rein zur ANZEIGE (Prompt/HUD) — der tatsächliche Kampfausgang kommt
 // ausschließlich von der RPC, die dieselbe Formel serverseitig nachrechnet.
 function _kriegerOwnStats(dd) {
@@ -2120,18 +2300,41 @@ function _kriegerOwnStats(dd) {
   const level = dd.level || 1;
   atk += kriegerLevelAtkBonus(level); // Level-Kampfbonus (mirror dungeon_fight)
   def += kriegerLevelDefBonus(level);
-  return { atk, def, crit, hp: 80 + level * 4, setCulture };
+  // Statisch anzeigbare Talent-Boni (fein_gemahlen/vollmundig) — Spiegel zu dungeon_fight
+  const tb = (typeof kriegerTalentStatBonus === 'function') ? kriegerTalentStatBonus(dd) : { crit: 0, hpMult: 1 };
+  crit += tb.crit;
+  // Reittier-Kampf-Boost (Spiegel zu _krieger_mount_stats in dungeon_fight)
+  const mnt = (typeof kriegerActiveMount === 'function') ? kriegerActiveMount(dd) : null;
+  if (mnt) { atk += mnt.atk || 0; def += mnt.def || 0; crit += mnt.crit || 0; }
+  return { atk, def, crit, hp: Math.round((80 + level * 4) * tb.hpMult), setCulture };
 }
 
 function _showKriegerFightPrompt(member, state, tier, seed, COLS, ROWS, MARGIN, key) {
   const enemyDef = kriegerEnemyDef(tier);
   if (!enemyDef) return;
-  const flavorIdx = Math.floor(Math.random() * enemyDef.flavor.length); // rein optisch
+  const flavorIdx = Math.floor(Math.random() * enemyDef.flavor.length);
   const flavor = enemyDef.flavor[flavorIdx] || enemyDef.name;
   const flavorEmoji = flavor.split(' ')[0];
   const flavorName  = flavor.replace(/^\S+\s*/, '') || enemyDef.name;
+  // Gegner-Signatur-Fähigkeit dieses Flavors (bestimmt serverseitig via flavorIdx)
+  const ability = (enemyDef.abilities && typeof kriegerEnemyAbility === 'function')
+    ? kriegerEnemyAbility(enemyDef.abilities[flavorIdx]) : null;
   const own = _kriegerOwnStats(state.dd);
   const setBonus = own.setCulture ? KRIEGER_SET_BONUSES[own.setCulture] : null;
+
+  // Persistente HP (Etappe 2): aktueller Startwert + Gating
+  const hpMax = (typeof kriegerHpMax === 'function') ? kriegerHpMax(state.dd) : own.hp;
+  const hpNow = (typeof kriegerHp === 'function') ? kriegerHp(state.dd) : hpMax;
+  const hpPct = Math.max(0, Math.round(hpNow / (hpMax || 1) * 100));
+
+  // Vorrätige Tränke (max. 1 pro Kampf wählbar) — Cold Brew auch bei 0 HP zulässig (heilt vorher)
+  const ownedPotions = (typeof KRIEGER_POTIONS !== 'undefined' ? KRIEGER_POTIONS : [])
+    .map(p => ({ ...p, have: (typeof kriegerPotionCount === 'function') ? kriegerPotionCount(state.dd, p.key) : ((state.dd.potions || {})[p.key] || 0) }))
+    .filter(p => p.have > 0);
+  const hasColdBrew = ownedPotions.some(p => p.key === 'coldbrew');
+  // Bei 0 HP nur kämpfbar, wenn ein Cold Brew da ist (heilt serverseitig VOR dem no_hp-Gate).
+  const canFight = hpNow > 0 || hasColdBrew;
+  let selectedPotion = null;
 
   const popup = document.getElementById('krieger-popup');
   if (!popup) return;
@@ -2145,35 +2348,60 @@ function _showKriegerFightPrompt(member, state, tier, seed, COLS, ROWS, MARGIN, 
           <div style="text-align:center;font-weight:700">${_esc2(flavorName)} (${_esc2(enemyDef.name)})</div>
           <div style="display:flex;justify-content:space-between;font-size:12px;opacity:.85">
             <span>Gegner: ❤️${enemyDef.hp} ⚔️${enemyDef.atk} 🛡️${enemyDef.def}</span>
-            <span>Du: ❤️${own.hp} ⚔️${own.atk} 🛡️${own.def} 🎯${own.crit}%</span>
+            <span>Du: ⚔️${own.atk} 🛡️${own.def} 🎯${own.crit}%</span>
           </div>
+          <div class="krieger-hp-bar-wrap" style="height:7px;border-radius:4px;overflow:hidden;background:rgba(255,255,255,.1)"><div class="krieger-hp-bar player" style="width:${hpPct}%;height:100%;background:${hpNow <= hpMax * 0.34 ? '#e07a5f' : '#6bbf59'}"></div></div>
+          <div style="text-align:center;font-size:11px;opacity:.85">❤️ ${hpNow}/${hpMax} HP${canFight && hpNow <= hpMax * 0.34 ? ' — wenig! Heilung per Cold Brew oder morgen.' : ''}</div>
+          ${ability ? `<div style="font-size:11px;color:#e59b6b;text-align:center">${_esc2(ability.icon)} Fähigkeit: ${_esc2(ability.name)} — ${_esc2(ability.desc)}</div>` : ''}
           ${setBonus ? `<div style="font-size:11px;color:#FAC775;text-align:center">✨ Set-Bonus aktiv: ${_esc2(setBonus.name)} — ${_esc2(setBonus.desc)}</div>` : ''}
-          ${tier !== 'boss' ? '<div style="font-size:11px;opacity:.6;text-align:center">Niederlage = kein Verlust, du kannst es später erneut versuchen.</div>' : ''}
+          ${ownedPotions.length ? `
+          <div style="font-size:11px;opacity:.7;text-align:center;margin-top:2px">🧪 Trank einsetzen (optional, 1 pro Kampf):</div>
+          <div id="krieger-potion-picker" style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center">
+            ${ownedPotions.map(p => `<button class="cc-build-btn krieger-potion-pick" data-potion="${p.key}" style="flex:0 0 auto;font-size:11px;padding:4px 8px;opacity:.7">${p.icon} ${_esc2(p.name)} ×${p.have}</button>`).join('')}
+          </div>` : ''}
+          ${tier !== 'boss' ? '<div style="font-size:11px;opacity:.6;text-align:center">Niederlage = kein CC-Verlust, aber HP sinken (heilen morgen/per Trank).</div>' : ''}
         </div>
         <div style="display:flex;gap:8px;margin-top:10px" id="krieger-fight-actions">
-          <button class="cc-build-btn" id="krieger-fight-go" style="flex:1">⚔️ Kämpfen</button>
-          <button class="cc-karte-popup-close" id="krieger-fight-cancel" style="flex:1">Abbrechen</button>
+          ${canFight
+            ? `<button class="cc-build-btn" id="krieger-fight-go" style="flex:1">⚔️ Kämpfen</button>`
+            : `<div style="flex:1;text-align:center;font-size:12px;color:#e88;align-self:center">😵 Keine Kraft mehr — Cold Brew oder morgen wieder.</div>`}
+          <button class="cc-karte-popup-close" id="krieger-fight-cancel" style="flex:1">${canFight ? 'Abbrechen' : 'Schließen'}</button>
         </div>
       </div>
     </div>
   `;
   document.getElementById('krieger-fight-cancel').onclick = () => popup.classList.add('hidden');
-  document.getElementById('krieger-fight-go').onclick = () => _runKriegerFight(member, state, tier, seed, COLS, ROWS, MARGIN, key);
+  // Trank-Auswahl (Radio-Verhalten: erneuter Klick hebt auf). Cold Brew ist auch bei 0 HP wählbar.
+  popup.querySelectorAll('.krieger-potion-pick').forEach(b => {
+    b.onclick = () => {
+      const k = b.dataset.potion;
+      selectedPotion = (selectedPotion === k) ? null : k;
+      popup.querySelectorAll('.krieger-potion-pick').forEach(x => x.style.opacity = (x.dataset.potion === selectedPotion ? '1' : '.7'));
+      // Wenn keine Kraft und ein Nicht-Cold-Brew gewählt ist, bleibt der Kampf gesperrt (Server lehnt ab).
+    };
+  });
+  const goBtn = document.getElementById('krieger-fight-go');
+  if (goBtn) goBtn.onclick = () => _runKriegerFight(member, state, tier, seed, COLS, ROWS, MARGIN, key, flavorIdx, selectedPotion);
 }
 
-async function _runKriegerFight(member, state, tier, seed, COLS, ROWS, MARGIN, key) {
+async function _runKriegerFight(member, state, tier, seed, COLS, ROWS, MARGIN, key, flavorIdx, potionKey) {
   const popup = document.getElementById('krieger-popup');
   const btn = document.getElementById('krieger-fight-go');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Kämpft …'; }
 
+  // Goldene-Bohne-Fortschritt VOR dem Kampf festhalten (für Kapitel-Freischaltungs-Erkennung)
+  const _prevGolden = (typeof kriegerGoldenBeanProgress === 'function') ? kriegerGoldenBeanProgress(state.dd) : { done: 0, complete: false };
+
   let result;
-  try { result = await kriegerFight(member.id, tier); }
+  try { result = await kriegerFight(member.id, tier, flavorIdx, potionKey || null); }
   catch (e) { showToast(e.message || 'Kampf fehlgeschlagen', 'error'); if (btn) btn.disabled = false; return; }
   if (result?.error) {
     const msg = {
       boss_on_cooldown: 'Der Drache braucht noch Ruhe — erst in einer Woche wieder.',
       level_too_low:    `Dafür brauchst du mindestens Stufe ${result.min_level || '?'} (aktuell ${result.have ?? '?'}).`,
       unknown_enemy:    'Unbekannter Gegner.',
+      no_hp:            'Keine Kraft mehr — heile dich (Cold Brew) oder komm morgen wieder.',
+      no_potion:        'Dieser Trank ist nicht mehr im Bestand.',
     }[result.error] || 'Kampf fehlgeschlagen.';
     showToast(msg, 'info');
     if (btn) btn.disabled = false;
@@ -2194,10 +2422,32 @@ async function _runKriegerFight(member, state, tier, seed, COLS, ROWS, MARGIN, k
   const ehpBar = document.getElementById('krieger-ehp');
   const phpBar = document.getElementById('krieger-php');
   const enemyHpMax = enemyDef.hp;
-  const ownHpMax   = 80 + (state.dd.level || 1) * 4;
+  const ownHpMax   = (typeof kriegerHpMax === 'function') ? kriegerHpMax(state.dd) : (80 + (state.dd.level || 1) * 4);
+  // Spieler-Balken auf den AKTUELLEN Startwert setzen (persistente HP), nicht fix 100%.
+  if (phpBar) phpBar.style.width = Math.max(0, ((typeof kriegerHp === 'function' ? kriegerHp(state.dd) : ownHpMax) / (ownHpMax || 1)) * 100) + '%';
 
+  // Log-Zeilen für Spieler-Fähigkeiten/Kultur-Effekte (side:'ability', who:'player')
+  const PLAYER_SKILL_LABELS = {
+    ristretto:          { icon: '⚡', name: 'Ristretto-Vorschlag' },
+    ristretto_doppio:   { icon: '⚡', name: 'Ristretto Doppio (Trank)' },
+    doppelter_espresso: { icon: '☕', name: 'Doppelter Espresso' },
+    kaffeepause:        { icon: '☕', name: 'Kaffeepause' },
+  };
   const log = result.log || [];
   for (const entry of log) {
+    if (entry.side === 'ability') {
+      await new Promise(r => setTimeout(r, 300));
+      const meta = entry.who === 'enemy'
+        ? (typeof kriegerEnemyAbility === 'function' ? kriegerEnemyAbility(entry.skill) : null)
+        : PLAYER_SKILL_LABELS[entry.skill];
+      const line = document.createElement('div');
+      line.className = 'krieger-log-line ability';
+      line.style.cssText = 'font-size:11px;font-style:italic;' + (entry.who === 'enemy' ? 'color:#e59b6b' : 'color:#FAC775');
+      line.textContent = meta ? `${meta.icon} ${entry.who === 'enemy' ? 'Gegner' : 'Du'}: ${meta.name}!` : '✨ Fähigkeit ausgelöst';
+      logEl.appendChild(line);
+      logEl.scrollTop = logEl.scrollHeight;
+      continue;
+    }
     await new Promise(r => setTimeout(r, 400));
     const line = document.createElement('div');
     line.className = `krieger-log-line ${entry.side}`;
@@ -2213,10 +2463,14 @@ async function _runKriegerFight(member, state, tier, seed, COLS, ROWS, MARGIN, k
   const resultEl = document.getElementById('krieger-result');
   const levelUpHtml = result.leveled_up ? `<div class="krieger-levelup">🎉 Stufenaufstieg auf ${result.new_level}!</div>` : '';
   const setHtml = result.set_bonus ? `<div style="font-size:11px;color:#FAC775">✨ ${_esc2(KRIEGER_SET_BONUSES[result.set_bonus]?.name || result.set_bonus)}-Bonus angewendet</div>` : '';
+  const potHtml = result.potion_used && typeof kriegerPotionByKey === 'function' && kriegerPotionByKey(result.potion_used)
+    ? `<div style="font-size:11px;color:#9fd">${kriegerPotionByKey(result.potion_used).icon} ${_esc2(kriegerPotionByKey(result.potion_used).name)} eingesetzt</div>` : '';
+  const hpHtml = (result.hp != null && result.hp_max != null)
+    ? `<div style="font-size:12px;opacity:.85;margin-top:2px">❤️ ${result.hp}/${result.hp_max} HP übrig${result.hp <= 0 ? ' — bis morgen erschöpft (oder Cold Brew)' : ''}</div>` : '';
   resultEl.innerHTML = `
     <div class="${result.won ? 'krieger-result-win' : 'krieger-result-lose'}">${result.won ? '🏆 Sieg!' : '💀 Niederlage'}</div>
     <div style="margin-top:4px">+${result.cc_awarded} 🫘 CC &nbsp;·&nbsp; +${result.ep_awarded} EP</div>
-    ${levelUpHtml}${setHtml}
+    ${hpHtml}${potHtml}${levelUpHtml}${setHtml}
     <button class="cc-karte-popup-close" id="krieger-fight-close" style="margin-top:10px">Schließen</button>
   `;
   document.getElementById('krieger-fight-close').onclick = () => popup.classList.add('hidden');
@@ -2224,6 +2478,26 @@ async function _runKriegerFight(member, state, tier, seed, COLS, ROWS, MARGIN, k
   // State/Header aktualisieren
   state.dd = result.new_dungeon_data || { ...state.dd, level: result.new_level };
   if (result.cc_awarded > 0) state.memberCoins += result.cc_awarded;
+
+  // Talentpunkt-Signal (Server zählt in diesem Kampf überschrittene 10er-Stufen)
+  if (result.talent_points_gained > 0) {
+    showToast(`🌟 ${result.talent_points_gained} Talentpunkt${result.talent_points_gained > 1 ? 'e' : ''} erhalten — im 🌟 Talente-Tab einsetzen!`, 'success');
+  }
+  // Goldene Kaffeebohne: wurde ein neues Kapitel freigeschaltet?
+  let _goldenComplete = false;
+  try {
+    if (typeof kriegerGoldenBeanProgress === 'function') {
+      const g = kriegerGoldenBeanProgress(state.dd);
+      if (g.done > _prevGolden.done) {
+        const chap = (typeof KRIEGER_GOLDEN_BEAN !== 'undefined') ? KRIEGER_GOLDEN_BEAN[g.done - 1] : null;
+        if (chap) {
+          showToast(`🫘 Goldene Kaffeebohne — Kapitel ${g.done}/5 „${chap.title}" freigeschaltet!`, 'success');
+          try { await DB.postMessage(`🫘 ${_esc2(member.name)} hat Kapitel ${g.done}/5 der Legende der Goldenen Kaffeebohne freigeschaltet: „${chap.title}"`, member.name); } catch (e) { /* non-critical */ }
+        }
+      }
+      _goldenComplete = g.complete;
+    }
+  } catch (e) { /* non-critical */ }
 
   let dungeonDirty = false;
 
@@ -2277,9 +2551,8 @@ async function _runKriegerFight(member, state, tier, seed, COLS, ROWS, MARGIN, k
   // dürfen den Kampf-Flow nicht blockieren).
   if (result.cc_awarded > 0) {
     try {
-      const mdLog = DB.appendTodayLog(member.map_data || {}, [{ label: `⚔️ ${enemyDef.name}`, amount: result.cc_awarded }]);
-      await DB.updateMapData(member.id, mdLog);
-      currentUserData = { ...(currentUserData || {}), map_data: mdLog };
+      const mdLog = await DB.appendTodayLogFresh(member.id, [{ label: `⚔️ Sieg: ${enemyDef.name}`, amount: result.cc_awarded, detail: 'Kaffee-Krieger-Kampf' }]);
+      if (mdLog) { currentUserData = { ...(currentUserData || {}), map_data: mdLog }; member.map_data = mdLog; }
     } catch (e) { /* non-critical */ }
   }
 
@@ -2304,6 +2577,8 @@ async function _runKriegerFight(member, state, tier, seed, COLS, ROWS, MARGIN, k
     if (!existing.krieger_level_50   && (dd2.level || 1) >= 50)  toGrant.krieger_level_50   = true;
     if (!existing.krieger_level_100  && (dd2.level || 1) >= 100) toGrant.krieger_level_100  = true;
     if (!existing.krieger_boss_kill  && (dd2.bossKills || 0) >= 1) toGrant.krieger_boss_kill = true;
+    if (!existing.krieger_golden_bean && _goldenComplete)          toGrant.krieger_golden_bean = true;
+    if (!existing.krieger_potion_10  && (dd2.potionsUsed || 0) >= 10) toGrant.krieger_potion_10 = true;
     if (Object.keys(toGrant).length > 0) {
       await DB.grantAchievements(member.id, toGrant);
       currentUserData = { ...(currentUserData || {}), achievements: { ...existing, ...toGrant } };
@@ -2322,16 +2597,24 @@ function _kriegerRenderShop(member, state, body) {
   const equipped = dd.equipped || {};
   const level = dd.level || 1;
 
-  const slotIcons = { weapon: '⚔️', armor: '🛡️', talisman: '🧿', feet: '👢' };
-  const slotNames = { weapon: 'Waffe', armor: 'Rüstung', talisman: 'Talisman', feet: 'Stiefel' };
-  const loadoutHtml = ['weapon', 'armor', 'talisman', 'feet'].map(slot => {
+  const slotIcons = { weapon: '⚔️', armor: '🛡️', talisman: '🧿', feet: '👢', scan: '🔮' };
+  const slotNames = { weapon: 'Waffe', armor: 'Rüstung', talisman: 'Talisman', feet: 'Stiefel', scan: 'Sicht' };
+  const companionDef = (typeof kriegerActiveCompanion === 'function') ? kriegerActiveCompanion(dd) : null;
+  const mountDef = (typeof kriegerActiveMount === 'function') ? kriegerActiveMount(dd) : null;
+  const loadoutHtml = ['weapon', 'armor', 'talisman', 'feet', 'scan'].map(slot => {
     const key = equipped[slot];
     const item = key ? kriegerItemByKey(key) : null;
     return `<div class="krieger-slot${item ? ' filled' : ''}">
       <span class="krieger-slot-icon">${item ? item.icon : slotIcons[slot]}</span>
       <span>${item ? _esc2(item.name) : slotNames[slot] + ' leer'}</span>
     </div>`;
-  }).join('');
+  }).join('') + `<div class="krieger-slot${mountDef ? ' filled' : ''}">
+      <span class="krieger-slot-icon">${mountDef ? mountDef.icon : '🐎'}</span>
+      <span>${mountDef ? _esc2(mountDef.name) : 'Reittier leer'}</span>
+    </div><div class="krieger-slot${companionDef ? ' filled' : ''}">
+      <span class="krieger-slot-icon">${companionDef ? companionDef.icon : '🐴'}</span>
+      <span>${companionDef ? _esc2(companionDef.name) : 'Begleiter leer'}</span>
+    </div>`;
 
   const setCulture = kriegerActiveSetCulture(equipped);
   const setHint = setCulture
@@ -2368,10 +2651,12 @@ function _kriegerRenderShop(member, state, body) {
         item.crit ? `CRIT+${item.crit}%` : null,
         item.steps ? `👣+${item.steps} Schritte/Tag` : null,
       ].filter(Boolean).join(' · ');
+      const mechTxt = item.mechDesc ? `<div style="font-size:10px;color:#e59b6b;margin-top:2px">⚙️ ${_esc2(item.mechDesc)}</div>` : '';
       return `<div class="krieger-item-card${isOwned ? ' owned' : ''}${locked ? ' locked' : ''}">
         <div style="font-size:20px">${item.icon}</div>
         <div style="font-size:11px;font-weight:700">${_esc2(item.name)}</div>
         <div class="krieger-item-stats">${statTxt}</div>
+        ${mechTxt}
         <div style="margin-top:5px">${action}</div>
       </div>`;
     }).join('');
@@ -2397,7 +2682,82 @@ function _kriegerRenderShop(member, state, body) {
     }).join('') : '<div style="font-size:12px;color:var(--muted);text-align:center;padding:4px">Alle Rüstungen intakt. 👍</div>'}
   </div>`;
 
-  body.innerHTML = `<div class="krieger-loadout">${loadoutHtml}</div>${setHint}${schmiedHtml}${sections}`;
+  // 🐎 Reittiere (Etappe 5): Slot dd.mount — mehr Schritte + kleiner Kampf-Boost, 1 aktiv.
+  const mountHtml = `<div class="krieger-shop-section">
+    <div class="section-title" style="font-size:13px">🐎 Reittiere <span style="font-weight:400;font-size:11px;color:var(--muted)">· 1 aktiv, Schritte + Kampf-Boost</span></div>
+    <div class="krieger-shop-grid">
+      ${(typeof KRIEGER_MOUNTS !== 'undefined' ? KRIEGER_MOUNTS : []).map(m => {
+        const isOwned  = !!owned[m.key];
+        const isActive = dd.mount === m.key;
+        const locked   = level < m.minLevel;
+        const canBuy   = !isOwned && !locked && state.memberCoins >= m.cost;
+        let action;
+        if (isActive)      action = `<span class="ciq-state ciq-on">✓ aktiv</span> <button class="cc-build-btn krieger-mount-unequip" style="font-size:11px;padding:3px 8px">Absitzen</button>`;
+        else if (isOwned)  action = `<button class="cc-build-btn krieger-mount-equip" data-mount="${m.key}">Aufsitzen</button>`;
+        else if (locked)   action = `<span class="ciq-state ciq-lock">🔒 ab Stufe ${m.minLevel}</span>`;
+        else               action = `<button class="cc-build-btn krieger-mount-buy" data-mount="${m.key}"${canBuy ? '' : ' disabled'}>Kaufen · ${m.cost} 🫘</button>`;
+        return `<div class="krieger-item-card${isOwned ? ' owned' : ''}${locked ? ' locked' : ''}">
+          <div style="font-size:20px">${m.icon}</div>
+          <div style="font-size:11px;font-weight:700">${_esc2(m.name)}</div>
+          <div style="font-size:10px;color:var(--muted);margin:2px 0">${_esc2(m.desc)}</div>
+          <div style="margin-top:5px">${action}</div>
+        </div>`;
+      }).join('')}
+    </div>
+  </div>`;
+
+  // 🐴 Begleiter (Etappe 3): 4. Slot, kein Teil des Set-Bonus, nur 1 aktiv (dd.companion).
+  const companionHtml = `<div class="krieger-shop-section">
+    <div class="section-title" style="font-size:13px">🐴 Begleiter <span style="font-weight:400;font-size:11px;color:var(--muted)">· 1 aktiv, nicht Teil des Sets</span></div>
+    <div class="krieger-shop-grid">
+      ${(typeof KRIEGER_COMPANIONS !== 'undefined' ? KRIEGER_COMPANIONS : []).map(c => {
+        const isOwned  = !!owned[c.key];
+        const isActive = dd.companion === c.key;
+        const locked   = level < c.minLevel;
+        const canBuy   = !isOwned && !locked && state.memberCoins >= c.cost;
+        let action;
+        if (isActive)      action = `<span class="ciq-state ciq-on">✓ aktiv</span> <button class="cc-build-btn krieger-comp-unequip" style="font-size:11px;padding:3px 8px">Ablegen</button>`;
+        else if (isOwned)  action = `<button class="cc-build-btn krieger-comp-equip" data-comp="${c.key}">Ausrüsten</button>`;
+        else if (locked)   action = `<span class="ciq-state ciq-lock">🔒 ab Stufe ${c.minLevel}</span>`;
+        else               action = `<button class="cc-build-btn krieger-comp-buy" data-comp="${c.key}"${canBuy ? '' : ' disabled'}>Kaufen · ${c.cost} 🫘</button>`;
+        return `<div class="krieger-item-card${isOwned ? ' owned' : ''}${locked ? ' locked' : ''}">
+          <div style="font-size:20px">${c.icon}</div>
+          <div style="font-size:11px;font-weight:700">${_esc2(c.name)}</div>
+          <div style="font-size:10px;color:var(--muted);margin:2px 0">${_esc2(c.desc)}</div>
+          <div style="margin-top:5px">${action}</div>
+        </div>`;
+      }).join('')}
+    </div>
+  </div>`;
+
+  // 🔮 Kaffeesatz-Lesen (Etappe 4): Sicht-Items, Slot 'scan' (1 aktiv). Nutzt die generischen
+  // krieger-buy-btn / krieger-equip-btn-Handler unten (Scan-Items sind normale KRIEGER_ITEMS).
+  const scanItems = KRIEGER_ITEMS.filter(i => i.slot === 'scan');
+  const scanHtml = `<div class="krieger-shop-section">
+    <div class="section-title" style="font-size:13px">🔮 Kaffeesatz-Lesen <span style="font-weight:400;font-size:11px;color:var(--muted)">· Sicht, 1 aktiv</span></div>
+    <div class="krieger-shop-grid">
+      ${scanItems.map(item => {
+        const isOwned    = !!owned[item.key];
+        const isEquipped = equipped.scan === item.key;
+        const locked     = level < item.minLevel;
+        const canBuy     = !isOwned && !locked && state.memberCoins >= item.cost;
+        let action;
+        if (isOwned)      action = isEquipped
+          ? `<span class="ciq-state ciq-on">✓ aktiv</span>`
+          : `<button class="cc-build-btn krieger-equip-btn" data-equip="${item.key}" data-slot="scan">Ausrüsten</button>`;
+        else if (locked)  action = `<span class="ciq-state ciq-lock">🔒 ab Stufe ${item.minLevel}</span>`;
+        else              action = `<button class="cc-build-btn krieger-buy-btn" data-buy-item="${item.key}"${canBuy ? '' : ' disabled'}>Kaufen · ${item.cost} 🫘</button>`;
+        return `<div class="krieger-item-card${isOwned ? ' owned' : ''}${locked ? ' locked' : ''}">
+          <div style="font-size:20px">${item.icon}</div>
+          <div style="font-size:11px;font-weight:700">${_esc2(item.name)}</div>
+          <div style="font-size:10px;color:var(--muted);margin:2px 0">${_esc2(item.scanDesc || '')}</div>
+          <div style="margin-top:5px">${action}</div>
+        </div>`;
+      }).join('')}
+    </div>
+  </div>`;
+
+  body.innerHTML = `<div class="krieger-loadout">${loadoutHtml}</div>${setHint}${schmiedHtml}${scanHtml}${mountHtml}${companionHtml}${sections}`;
 
   body.querySelectorAll('.krieger-buy-btn').forEach(btn => {
     btn.onclick = async () => {
@@ -2417,6 +2777,24 @@ function _kriegerRenderShop(member, state, body) {
           ? `🛒 ${item.name} erworben! 🎁 Gutschein eingelöst (50% günstiger).`
           : `🛒 ${item.name} erworben!`, 'success');
         try { await DB.postMessage(`🛒 ${_esc2(member.name)} hat ${item.icon} ${_esc2(item.name)} erworben!`, member.name); } catch (e) {}
+        // 🗡️ Achievement: erste Tier-3-Waffe (Meisterwaffe)
+        if (item.tier === 3 && item.slot === 'weapon') {
+          try {
+            const existing = currentUserData?.achievements || {};
+            if (!existing.krieger_tier3_first) {
+              await DB.grantAchievements(member.id, { krieger_tier3_first: true });
+              currentUserData = { ...currentUserData, achievements: { ...existing, krieger_tier3_first: true } };
+              const ach = (typeof ACHIEVEMENTS !== 'undefined' ? ACHIEVEMENTS : []).find(a => a.id === 'krieger_tier3_first');
+              if (ach) showToast(`🏆 Achievement: ${ach.name}! (+${ach.coinReward} CC)`, 'success');
+            }
+          } catch (e) { /* non-critical */ }
+        }
+        // Ausgabe im Tages-Log (tatsächlich gezahlter Betrag, inkl. evtl. Gutschein-Rabatt).
+        try {
+          const paid = newDD._costPaid ?? item.cost;
+          const mdLog = await DB.appendTodayLogFresh(member.id, [{ label: `🛒 ${item.name}`, amount: -paid, detail: 'Kaffee-Krieger-Ausrüstung' }]);
+          if (mdLog) { currentUserData = { ...(currentUserData || {}), map_data: mdLog }; member.map_data = mdLog; }
+        } catch (e) { /* non-critical */ }
         _kriegerRenderShop(member, state, body);
       } catch (e) { showToast(e.message || 'Kauf fehlgeschlagen', 'error'); btn.disabled = false; }
     };
@@ -2466,9 +2844,138 @@ function _kriegerRenderShop(member, state, body) {
         state.memberCoins -= cost;
         currentUserData = { ...(currentUserData || {}), coins: state.memberCoins, dungeon_data: state.dd };
         _updateHeaderCoins({ coins: state.memberCoins });
+        // Ausgabe im Tages-Log (Reparaturkosten).
+        try {
+          const item = kriegerItemByKey(key);
+          const mdLog = await DB.appendTodayLogFresh(member.id, [{ label: `🔨 Reparatur: ${item ? item.name : 'Rüstung'}`, amount: -cost, detail: 'Kaffee-Krieger-Ausrüstung' }]);
+          if (mdLog) { currentUserData = { ...(currentUserData || {}), map_data: mdLog }; member.map_data = mdLog; }
+        } catch (e) { /* non-critical */ }
         showToast('🔨 Rüstung repariert — volle Haltbarkeit!', 'success');
         _kriegerRenderShop(member, state, body);
       } catch (e) { btn.disabled = false; showToast(e.message || 'Reparatur fehlgeschlagen', 'error'); }
+    };
+  });
+
+  // 🐴 Begleiter kaufen (auto-ausrüsten, wenn noch keiner aktiv)
+  body.querySelectorAll('.krieger-comp-buy').forEach(btn => {
+    btn.onclick = async () => {
+      const comp = (typeof kriegerCompanionByKey === 'function') ? kriegerCompanionByKey(btn.dataset.comp) : null;
+      if (!comp) return;
+      btn.disabled = true;
+      try {
+        let newDD = await DB.buyKriegerCompanion(member.id, comp, state.dd);
+        state.memberCoins -= comp.cost;
+        // Auto-ausrüsten, wenn bisher kein Begleiter aktiv ist (Komfort)
+        if (!newDD.companion) {
+          newDD = { ...newDD, companion: comp.key };
+          try { await DB.saveDungeonData(member.id, newDD); } catch (e) { /* non-critical */ }
+        }
+        state.dd = newDD;
+        currentUserData = { ...(currentUserData || {}), coins: state.memberCoins, dungeon_data: state.dd };
+        _updateHeaderCoins({ coins: state.memberCoins });
+        showToast(`🐴 ${comp.name} erworben${state.dd.companion === comp.key ? ' & ausgerüstet' : ''}!`, 'success');
+        try { await DB.postMessage(`🐴 ${_esc2(member.name)} hat den Begleiter ${comp.icon} ${_esc2(comp.name)} erworben!`, member.name); } catch (e) {}
+        try {
+          const mdLog = await DB.appendTodayLogFresh(member.id, [{ label: `🐴 Begleiter: ${comp.name}`, amount: -comp.cost, detail: 'Kaffee-Krieger-Ausgabe' }]);
+          if (mdLog) { currentUserData = { ...(currentUserData || {}), map_data: mdLog }; member.map_data = mdLog; }
+        } catch (e) { /* non-critical */ }
+        _kriegerRenderShop(member, state, body);
+      } catch (e) { showToast(e.message || 'Kauf fehlgeschlagen', 'error'); btn.disabled = false; }
+    };
+  });
+
+  // 🐴 Begleiter ausrüsten (1 aktiv)
+  body.querySelectorAll('.krieger-comp-equip').forEach(btn => {
+    btn.onclick = async () => {
+      const comp = (typeof kriegerCompanionByKey === 'function') ? kriegerCompanionByKey(btn.dataset.comp) : null;
+      if (!comp) return;
+      const newDD = { ...state.dd, companion: comp.key };
+      try {
+        await DB.saveDungeonData(member.id, newDD);
+        state.dd = newDD;
+        currentUserData = { ...(currentUserData || {}), dungeon_data: state.dd };
+        showToast(`🐴 ${comp.name} ausgerüstet!`, 'success');
+        _kriegerRenderShop(member, state, body);
+      } catch (e) { showToast(e.message || 'Ausrüsten fehlgeschlagen', 'error'); }
+    };
+  });
+
+  // 🐴 Begleiter ablegen
+  body.querySelectorAll('.krieger-comp-unequip').forEach(btn => {
+    btn.onclick = async () => {
+      const newDD = { ...state.dd, companion: null };
+      try {
+        await DB.saveDungeonData(member.id, newDD);
+        state.dd = newDD;
+        currentUserData = { ...(currentUserData || {}), dungeon_data: state.dd };
+        _kriegerRenderShop(member, state, body);
+      } catch (e) { showToast(e.message || 'Ablegen fehlgeschlagen', 'error'); }
+    };
+  });
+
+  // 🐎 Reittier kaufen (auto-aufsitzen, wenn noch keins aktiv)
+  body.querySelectorAll('.krieger-mount-buy').forEach(btn => {
+    btn.onclick = async () => {
+      const mount = (typeof kriegerMountByKey === 'function') ? kriegerMountByKey(btn.dataset.mount) : null;
+      if (!mount) return;
+      btn.disabled = true;
+      try {
+        let newDD = await DB.buyKriegerMount(member.id, mount, state.dd);
+        state.memberCoins -= mount.cost;
+        if (!newDD.mount) {
+          newDD = { ...newDD, mount: mount.key };
+          try { await DB.saveDungeonData(member.id, newDD); } catch (e) { /* non-critical */ }
+        }
+        state.dd = newDD;
+        currentUserData = { ...(currentUserData || {}), coins: state.memberCoins, dungeon_data: state.dd };
+        _updateHeaderCoins({ coins: state.memberCoins });
+        showToast(`🐎 ${mount.name} erworben${state.dd.mount === mount.key ? ' & aufgesessen' : ''}!`, 'success');
+        try { await DB.postMessage(`🐎 ${_esc2(member.name)} hat das Reittier ${mount.icon} ${_esc2(mount.name)} erworben!`, member.name); } catch (e) {}
+        try {
+          const mdLog = await DB.appendTodayLogFresh(member.id, [{ label: `🐎 Reittier: ${mount.name}`, amount: -mount.cost, detail: 'Kaffee-Krieger-Ausgabe' }]);
+          if (mdLog) { currentUserData = { ...(currentUserData || {}), map_data: mdLog }; member.map_data = mdLog; }
+        } catch (e) { /* non-critical */ }
+        // Achievement: erstes Reittier
+        try {
+          const existing = currentUserData?.achievements || {};
+          if (!existing.krieger_mount_first) {
+            await DB.grantAchievements(member.id, { krieger_mount_first: true });
+            currentUserData = { ...currentUserData, achievements: { ...existing, krieger_mount_first: true } };
+            const ach = (typeof ACHIEVEMENTS !== 'undefined' ? ACHIEVEMENTS : []).find(a => a.id === 'krieger_mount_first');
+            if (ach) showToast(`🏆 Achievement: ${ach.name}! (+${ach.coinReward} CC)`, 'success');
+          }
+        } catch (e) { /* non-critical */ }
+        _kriegerRenderShop(member, state, body);
+      } catch (e) { showToast(e.message || 'Kauf fehlgeschlagen', 'error'); btn.disabled = false; }
+    };
+  });
+
+  // 🐎 Reittier aufsitzen (1 aktiv)
+  body.querySelectorAll('.krieger-mount-equip').forEach(btn => {
+    btn.onclick = async () => {
+      const mount = (typeof kriegerMountByKey === 'function') ? kriegerMountByKey(btn.dataset.mount) : null;
+      if (!mount) return;
+      const newDD = { ...state.dd, mount: mount.key };
+      try {
+        await DB.saveDungeonData(member.id, newDD);
+        state.dd = newDD;
+        currentUserData = { ...(currentUserData || {}), dungeon_data: state.dd };
+        showToast(`🐎 ${mount.name} aufgesessen!`, 'success');
+        _kriegerRenderShop(member, state, body);
+      } catch (e) { showToast(e.message || 'Aufsitzen fehlgeschlagen', 'error'); }
+    };
+  });
+
+  // 🐎 Reittier absitzen
+  body.querySelectorAll('.krieger-mount-unequip').forEach(btn => {
+    btn.onclick = async () => {
+      const newDD = { ...state.dd, mount: null };
+      try {
+        await DB.saveDungeonData(member.id, newDD);
+        state.dd = newDD;
+        currentUserData = { ...(currentUserData || {}), dungeon_data: state.dd };
+        _kriegerRenderShop(member, state, body);
+      } catch (e) { showToast(e.message || 'Absitzen fehlgeschlagen', 'error'); }
     };
   });
 }
@@ -2484,17 +2991,35 @@ function _kriegerRenderProgress(member, state, body) {
     ? ownedItems.map(i => `<div class="cc-passiv-detail-row"><span>${i.icon} ${_esc2(i.name)}</span><span>${equipped[i.slot] === i.key ? '✓ ausgerüstet' : ''}</span></div>`).join('')
     : '<p class="empty-hint">Noch keine Ausrüstung.</p>';
 
+  // 🫘 Die Goldene Kaffeebohne — progressive 5-Kapitel-Questline
+  const gb = (typeof kriegerGoldenBeanProgress === 'function') ? kriegerGoldenBeanProgress(dd) : { done: 0, total: 5, complete: false };
+  const gbChapters = (typeof KRIEGER_GOLDEN_BEAN !== 'undefined' ? KRIEGER_GOLDEN_BEAN : []).map((ch, i) => {
+    const unlocked = i < gb.done;
+    return unlocked
+      ? `<div style="padding:7px 4px;border-bottom:1px solid rgba(255,255,255,.06)"><div style="font-weight:700;font-size:12px">📜 Kapitel ${ch.chapter}: ${_esc2(ch.title)}</div><div style="font-size:11px;color:var(--muted);margin-top:2px">${_esc2(ch.text)}</div></div>`
+      : `<div style="padding:7px 4px;border-bottom:1px solid rgba(255,255,255,.06);opacity:.5"><div style="font-weight:700;font-size:12px">🔒 Kapitel ${ch.chapter} — noch verborgen</div></div>`;
+  }).join('');
+
   body.innerHTML = `
     <div class="krieger-xp-wrap" style="height:8px;border-radius:4px;overflow:hidden"><div class="krieger-xp-bar" style="width:${prog.pct}%"></div></div>
     <p style="text-align:center;margin:6px 0 14px">Stufe <strong>${prog.level}</strong>${prog.need ? ` &nbsp;·&nbsp; ${prog.xp}/${prog.need} EP (${prog.pct}%)` : ' (Maximalstufe erreicht)'}</p>
     <div class="cc-passiv-detail">
       <div class="cc-passiv-detail-row"><span>⚔️ Kampfwerte (inkl. Level)</span><span>ATK ${_kriegerOwnStats(dd).atk} · DEF ${_kriegerOwnStats(dd).def} · CRIT ${_kriegerOwnStats(dd).crit}%</span></div>
       <div class="cc-passiv-detail-row"><span>📈 Level-Bonus</span><span>+${kriegerLevelAtkBonus(prog.level)} ATK · +${kriegerLevelDefBonus(prog.level)} DEF · +${prog.level * 4} HP</span></div>
+      <div class="cc-passiv-detail-row"><span>❤️ HP</span><span>${(typeof kriegerHp === 'function' ? kriegerHp(dd) : '—')}/${(typeof kriegerHpMax === 'function' ? kriegerHpMax(dd) : '—')}</span></div>
       <div class="cc-passiv-detail-row"><span>🏆 Siege</span><span>${dd.wins || 0}</span></div>
       <div class="cc-passiv-detail-row"><span>💀 Niederlagen</span><span>${dd.losses || 0}</span></div>
       <div class="cc-passiv-detail-row"><span>🐉 Boss-Kills</span><span>${dd.bossKills || 0}</span></div>
+      <div class="cc-passiv-detail-row"><span>🧪 Tränke verbraucht</span><span>${dd.potionsUsed || 0}${dd.potionsSpent ? ` · ${_fmtCoins(dd.potionsSpent)} CC ausgegeben` : ''}</span></div>
       ${setCulture ? `<div class="cc-passiv-detail-row"><span>✨ Aktives Set</span><span>${_esc2(KRIEGER_SET_BONUSES[setCulture].name)}</span></div>` : ''}
+      ${(typeof kriegerActiveMount === 'function' && kriegerActiveMount(dd)) ? `<div class="cc-passiv-detail-row"><span>🐎 Reittier</span><span>${kriegerActiveMount(dd).icon} ${_esc2(kriegerActiveMount(dd).name)}</span></div>` : ''}
+      ${(typeof kriegerActiveCompanion === 'function' && kriegerActiveCompanion(dd)) ? `<div class="cc-passiv-detail-row"><span>🐴 Begleiter</span><span>${kriegerActiveCompanion(dd).icon} ${_esc2(kriegerActiveCompanion(dd).name)}</span></div>` : ''}
+      ${(typeof kriegerActiveScan === 'function' && kriegerActiveScan(dd)) ? `<div class="cc-passiv-detail-row"><span>🔮 Sicht</span><span>${kriegerActiveScan(dd).icon} ${_esc2(kriegerActiveScan(dd).name)}</span></div>` : ''}
     </div>
+    <div class="section-title" style="font-size:13px;margin-top:14px">🫘 Die Goldene Kaffeebohne (${gb.done}/${gb.total})</div>
+    <p style="font-size:11px;color:var(--muted);text-align:center;margin:0 0 6px">Meilensteine: je 1 Sieg gegen Tier 1–4 &amp; den Espresso-Drachen 3× besiegen.</p>
+    ${gbChapters}
+    ${gb.complete ? '<p style="text-align:center;color:#FAC775;font-weight:700;margin-top:6px">✨ Die Legende ist vollständig!</p>' : ''}
     <div class="section-title" style="font-size:13px;margin-top:14px">🎒 Ausrüstung (${ownedItems.length}/${KRIEGER_ITEMS.length})</div>
     ${itemsHtml}
   `;

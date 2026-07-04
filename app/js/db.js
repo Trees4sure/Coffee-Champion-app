@@ -98,6 +98,21 @@ const DB = (() => {
     return { ...(mapData || {}), todayLog: { date: day, entries: next } };
   }
 
+  // Frisch-Lesen + Anhängen + Schreiben in EINEM Schritt. Verhindert das Clobbering durch
+  // zeitgleiche map_data-Writes (Passiv-Log/Gehalts-Snapshot laufen bei showApp) — dasselbe
+  // Muster wie in claimPassive/_writeSalaryPoint. Für Ereignis-Einträge (Kampf-CC, Dungeon-Funde,
+  // Trank-Ausgaben), die sonst auf einer veralteten member.map_data aufsetzen würden.
+  // Gibt die frisch gemergte map_data zurück (oder null bei Fehler/leer).
+  async function appendTodayLogFresh(memberId, entries) {
+    if (!memberId || !entries || !entries.length) return null;
+    try {
+      const { data: fresh } = await _sb.from('members').select('map_data').eq('id', memberId).single();
+      const md = appendTodayLog((fresh && fresh.map_data) || {}, entries);
+      await updateMapData(memberId, md);
+      return md;
+    } catch (e) { console.warn('appendTodayLogFresh fehlgeschlagen:', e.message); return null; }
+  }
+
   // Passiv-Einkommen anteilig nach Forschung / Gebäude / Welt-Einfluss / Handelsbündnis
   // aufschlüsseln, jeweils mit Quellen-Detail (woraus es entsteht — für „Heute erhalten").
   // tradeBonusDay: additiver 🤝-Bündnisanteil (aus _allianceTradeBonus), separat von
@@ -533,11 +548,17 @@ const DB = (() => {
     // Welt, Login, Aufgaben …) aus dem Tages-Log — so erfasst der Verlauf nicht nur
     // das passive Einkommen, sondern was tatsächlich reinkam.
     const tl    = member.map_data && member.map_data.todayLog;
-    const gross = (tl && tl.date === today())
+    const tlOk  = !!(tl && tl.date === today());
+    const gross = tlOk
       ? Math.round((tl.entries || []).reduce((s, e) => s + (e.amount > 0 ? e.amount : 0), 0) * 100) / 100
       : 0;
+    // NET = realisiertes Tages-Einkommen MINUS Ausgaben (negative Log-Einträge, z.B. Tränke,
+    // Steuer-Events, Garde-Kosten) = das „erweiterte Tages-Gehalt" für das Chart (Transparenz).
+    const net = tlOk
+      ? Math.round((tl.entries || []).reduce((s, e) => s + (e.amount || 0), 0) * 100) / 100
+      : 0;
 
-    return { day: perDay, cup: perCup, coins: Math.round(member.coins || 0), gross };
+    return { day: perDay, cup: perCup, coins: Math.round(member.coins || 0), gross, net };
   }
 
   // Snapshot-Punkt schreiben — liest map_data UNMITTELBAR vor dem Write frisch und
@@ -573,7 +594,7 @@ const DB = (() => {
     const md0    = (fresh && fresh.map_data) || {};
     const bucket = _salaryBucket();
     const hist   = Array.isArray(md0.salaryHistory) ? md0.salaryHistory.slice() : [];
-    const entry  = { ts: bucket, day: sal.day, cup: sal.cup, coins: sal.coins, gross: sal.gross };
+    const entry  = { ts: bucket, day: sal.day, cup: sal.cup, coins: sal.coins, gross: sal.gross, net: sal.net };
     const idx    = hist.findIndex(h => _salaryTsOf(h) === bucket);
     if (idx >= 0) hist[idx] = entry; else hist.push(entry);
     await updateMapData(memberId, { ...md0, salaryHistory: _pruneSalaryHistory(hist) });
@@ -1119,6 +1140,8 @@ const DB = (() => {
       const { data: newCoins, error } = await _sb.rpc('spend_coins', { p_member_id: memberId, p_amount: cost });
       if (error) throw new Error(error.message);
       if (newCoins === null || newCoins === undefined) throw new Error('Nicht genug CoffeeCoins');
+      // Ausgabe im Tages-Log (Transparenz → Netto-Gehalt).
+      try { await appendTodayLogFresh(memberId, [{ label: `🔬 Forschung: ${target.name || itemId}`, amount: -cost, detail: 'Forschungsbaum' }]); } catch (e) {}
     }
 
     // Item in research speichern
@@ -1498,12 +1521,31 @@ const DB = (() => {
     if (error) throw new Error(error.message);
   }
 
-  async function dungeonFight(memberId, enemyTier) {
+  async function dungeonFight(memberId, enemyTier, flavorIdx, potionKey) {
     const { data, error } = await _sb.rpc('dungeon_fight', {
       p_member_id: memberId, p_group_id: _groupId, p_enemy_tier: enemyTier,
+      p_flavor_idx: (flavorIdx === undefined ? null : flavorIdx),
+      p_potion_key: (potionKey === undefined ? null : potionKey),
+      p_today: new Date().toLocaleDateString('de-DE'),  // = _kriegerTodayKey(), persistente HP (Etappe 2)
     });
     if (error) throw new Error(error.message);
     return data;
+  }
+
+  // 🧪 Trank kaufen (Etappe 2): atomarer Coin-Abzug (spend_coins) + Bestand in dungeon_data.potions.
+  // Gleiches Muster/Vertrauensmodell wie buyKriegerItem. Verbrauch passiert serverseitig in dungeon_fight.
+  async function buyKriegerPotion(memberId, potion, currentDungeonData) {
+    if (!potion || !potion.key) throw new Error('Unbekannter Trank');
+    const { data: newCoins, error } = await _sb.rpc('spend_coins', { p_member_id: memberId, p_amount: potion.cost });
+    if (error) throw new Error(error.message);
+    if (newCoins === null || newCoins === undefined) throw new Error('Nicht genug CoffeeCoins');
+    const potions = { ...(currentDungeonData?.potions || {}) };
+    potions[potion.key] = (potions[potion.key] || 0) + 1;
+    // Kumulative Trank-Ausgaben (CC) mitführen — Transparenz im Fortschritt-Tab.
+    const potionsSpent = (currentDungeonData?.potionsSpent || 0) + (potion.cost || 0);
+    const newDD = { ...currentDungeonData, potions, potionsSpent };
+    await saveDungeonData(memberId, newDD);
+    return newDD;
   }
 
   // Kauf eines Krieger-Items: atomarer Coin-Abzug (bestehende spend_coins-RPC) +
@@ -1525,6 +1567,36 @@ const DB = (() => {
     if (applyDiscount) delete newDD.equipmentVoucher;
     await saveDungeonData(memberId, newDD);
     return { ...newDD, _costPaid: cost, _discountApplied: applyDiscount };
+  }
+
+  // 🐴 Begleiter kaufen (Etappe 3): atomarer Coin-Abzug + Besitz in dungeon_data.owned (wie Items).
+  // Ausrüsten (dd.companion) läuft separat über saveDungeonData im UI. Verbrauch/Wirkung serverseitig.
+  async function buyKriegerCompanion(memberId, companion, currentDungeonData) {
+    const owned = currentDungeonData?.owned || {};
+    if (!companion || !companion.key) throw new Error('Unbekannter Begleiter');
+    if (owned[companion.key]) throw new Error('Bereits im Besitz');
+    if ((currentDungeonData?.level || 1) < (companion.minLevel || 1)) throw new Error('Stufe zu niedrig');
+    const { data: newCoins, error } = await _sb.rpc('spend_coins', { p_member_id: memberId, p_amount: companion.cost });
+    if (error) throw new Error(error.message);
+    if (newCoins === null || newCoins === undefined) throw new Error('Nicht genug CoffeeCoins');
+    const newDD = { ...currentDungeonData, owned: { ...owned, [companion.key]: true } };
+    await saveDungeonData(memberId, newDD);
+    return newDD;
+  }
+
+  // 🐎 Reittier kaufen (Etappe 5): atomarer Coin-Abzug + Besitz in dungeon_data.owned.
+  // Ausrüsten (dd.mount) läuft separat über saveDungeonData im UI. Kampf-Boost serverseitig.
+  async function buyKriegerMount(memberId, mount, currentDungeonData) {
+    const owned = currentDungeonData?.owned || {};
+    if (!mount || !mount.key) throw new Error('Unbekanntes Reittier');
+    if (owned[mount.key]) throw new Error('Bereits im Besitz');
+    if ((currentDungeonData?.level || 1) < (mount.minLevel || 1)) throw new Error('Stufe zu niedrig');
+    const { data: newCoins, error } = await _sb.rpc('spend_coins', { p_member_id: memberId, p_amount: mount.cost });
+    if (error) throw new Error(error.message);
+    if (newCoins === null || newCoins === undefined) throw new Error('Nicht genug CoffeeCoins');
+    const newDD = { ...currentDungeonData, owned: { ...owned, [mount.key]: true } };
+    await saveDungeonData(memberId, newDD);
+    return newDD;
   }
 
   // 🔨 Rüstung reparieren: atomarer Coin-Abzug (spend_coins) + Haltbarkeit auf 100 setzen.
@@ -1552,6 +1624,10 @@ const DB = (() => {
       p_member_id: memberId, p_group_id: _groupId, p_country_id: countryId, p_amount: parseFloat(amount)
     });
     if (error) throw new Error(error.message);
+    // Ausgabe im Tages-Log (Transparenz → Netto-Gehalt). Welt-Investition = CC dauerhaft weg.
+    if (data && !data.error) {
+      try { await appendTodayLogFresh(memberId, [{ label: `🌍 Welthandel: ${countryId}`, amount: -parseFloat(amount), detail: 'Welt-Investition' }]); } catch (e) {}
+    }
     return data; // { ok, total_invested, coins_left } oder { error }
   }
 
@@ -1568,6 +1644,11 @@ const DB = (() => {
       p_member_id: memberId, p_country_id: countryId, p_amount: parseFloat(amount)
     });
     if (error) return { error: error.message };
+    // Ausgabe im Tages-Log (tatsächlich angelegter Betrag; kann durch Deckel < amount sein).
+    if (data && !data.error) {
+      const inv = (data.invested != null) ? data.invested : parseFloat(amount);
+      try { if (inv > 0) await appendTodayLogFresh(memberId, [{ label: `🏦 Stille Anlage: ${countryId}`, amount: -inv, detail: 'Investition' }]); } catch (e) {}
+    }
     return data || { error: 'no_data' };
   }
 
@@ -1920,8 +2001,8 @@ const DB = (() => {
     spendCoins, fetchTreasury, contributeToTreasury, syncTreasuryGoals,
     applyDailyLevy, checkWeeklyChallenge,
     purchaseResearchItem, saveCosmetics, buyCiqPerk, applyCiqAttack, fetchMemberMapData,
-    updateMapData, addCoins, appendTodayLog, claimPassive, recordSalarySnapshot, recordSalarySnapshotsAll,
-    saveDungeonData, dungeonFight, buyKriegerItem, repairArmor,
+    updateMapData, addCoins, appendTodayLog, appendTodayLogFresh, claimPassive, recordSalarySnapshot, recordSalarySnapshotsAll,
+    saveDungeonData, dungeonFight, buyKriegerItem, repairArmor, buyKriegerPotion, buyKriegerCompanion, buyKriegerMount,
     payBaristaBartGroup, addPenaltyToTreasury, payEigeneTasseGroup,
     claimLoginBonus, claimDailyTask,
     investInCountry, investPassive, withdrawPassive, fetchCountryStandings, fetchAllWorldInvestments,

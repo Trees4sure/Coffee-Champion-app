@@ -555,8 +555,9 @@ function renderLeaderboard() {
 // App-Start. Idempotent über map_data.whatsNewSeen = WHATS_NEW_VERSION (analog Login-Bonus/
 // Tagesaufgaben-Muster) — wer schon dran war, sieht es nicht erneut. Bei künftigen neuen
 // Features: WHATS_NEW_VERSION + WHATS_NEW_ITEMS aktualisieren, dann poppt es einmalig erneut auf.
-const WHATS_NEW_VERSION = '2026-07-06-anlage-rework';
+const WHATS_NEW_VERSION = '2026-07-09-kaffee-krieger';
 const WHATS_NEW_ITEMS = [
+  { icon: '⚔️', title: 'Kaffee-Krieger: große Erweiterung', text: 'Der Dungeon wird tiefer: Gegner haben jetzt eigene Signatur-Fähigkeiten, du schaltest mit jeder 10. Stufe ein Talent frei und sammelst die Legende der Goldenen Kaffeebohne. Neu im Shop: 🧪 Tränke (vor dem Kampf einsetzbar), meisterliche Tier-3-Waffen mit Sonder-Mechaniken, 🐴 Begleiter mit passiven Boni und 🐎 Reittiere (Streitross, Pegasus, Greif, Ur-Saurier) für mehr Schritte + einen Kampf-Boost. Deine ❤️ HP tragen jetzt über Kämpfe hinweg (Heilung per Cold Brew oder am nächsten Tag). Und auf der Karte: 🔮 Kaffeesatz-Lesen zeigt dir, was im Nebel lauert, plus Schnellreise auf jedes bereits erkundete Feld.' },
   { icon: '🏦', title: 'Stille Anlage neu aufgestellt', text: 'Deine Stille Anlage wirft jetzt keinen festen Zins mehr ab, sondern einen Anteil am Gebäude-Einkommen des Landes — je mehr du anlegst (bis 1.250 CC/Land), desto größer dein Anteil (bis 20 %). Länder ohne Gebäude werfen nichts ab. Und neu: du kannst dein Kapital jederzeit wieder auszahlen — dabei gehen 20 % als Entschädigung an die Erbauer des Landes, die dir die Erträge erst ermöglicht haben (leeres Land: 0 %).' },
 ];
 
@@ -1227,19 +1228,20 @@ function renderGehalt() {
   const tsOf   = h => h.ts || (h.d ? new Date(h.d + 'T00:00:00').getTime() : 0);
   const dayKey = t => { const d = new Date(t); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); };
 
-  // Realisiertes Einkommen heute (gesamt) — live aus dem Tages-Log jedes Mitglieds.
+  // Realisiertes Einkommen heute — live aus dem Tages-Log jedes Mitglieds.
   const todayKey = new Date().toISOString().slice(0, 10);
-  const grossToday = u => {
-    const tl = (appData.users.find(x => x.id === u.id) || u).map_data?.todayLog;
-    if (!tl || tl.date !== todayKey) return 0;
-    return Math.round((tl.entries || []).reduce((s, e) => s + (e.amount > 0 ? e.amount : 0), 0) * 100) / 100;
-  };
+  const _tlOf = u => { const tl = (appData.users.find(x => x.id === u.id) || u).map_data?.todayLog; return (tl && tl.date === todayKey) ? (tl.entries || []) : []; };
+  const grossToday = u => Math.round(_tlOf(u).reduce((s, e) => s + (e.amount > 0 ? e.amount : 0), 0) * 100) / 100; // Einnahmen
+  const spendToday = u => Math.round(_tlOf(u).reduce((s, e) => s + (e.amount < 0 ? -e.amount : 0), 0) * 100) / 100; // Ausgaben (positiv)
+  const netToday   = u => Math.round(_tlOf(u).reduce((s, e) => s + (e.amount || 0), 0) * 100) / 100;                // Netto = Einnahmen − Ausgaben
 
-  // Metrik: realisiertes Gesamteinkommen (gross), wenn irgendwo vorhanden — sonst passiv (day).
+  // Metrik: Netto-Gehalt (Einnahmen − Ausgaben) bevorzugt, dann brutto, sonst passiv.
+  const hasNet   = top5.some(u => histOf(u).some(h => h.net != null));
   const hasGross = top5.some(u => histOf(u).some(h => h.gross != null));
-  const metric   = hasGross ? 'gross' : 'day';
+  const metric   = hasNet ? 'net' : (hasGross ? 'gross' : 'day');
   document.getElementById('chart-main-title').textContent =
-    hasGross ? '💰 Einkommen/Tag (gesamt) – Verlauf' : '💰 Tages-Gehalt (passiv) – Verlauf';
+    hasNet ? '💰 Netto-Gehalt/Tag (Einnahmen − Ausgaben) – Verlauf'
+    : hasGross ? '💰 Einkommen/Tag (gesamt) – Verlauf' : '💰 Tages-Gehalt (passiv) – Verlauf';
 
   // Tagesweise gruppieren → je Tag der höchste Wert (bei gross = Tagesendstand, da kumulativ).
   const daySet = new Set();
@@ -1275,15 +1277,15 @@ function renderGehalt() {
   });
 
   document.getElementById('period-summary').innerHTML = `
-    <table><thead><tr><th>Name</th><th>📈 Heute gesamt</th><th>💰 /Tag passiv</th><th>☕ /Tasse</th><th>🪙 Guthaben</th></tr></thead><tbody>
+    <div class="cc-table-scroll"><table class="cc-salary-table"><thead><tr><th>Name</th><th>🧮 Netto heute</th><th>📈 Einnahmen</th><th>🧾 Ausgaben</th><th>💰 /Tag passiv</th><th>🪙 Guthaben</th></tr></thead><tbody>
     ${top5.map(u => {
       const sorted = histOf(u).slice().sort((a, b) => tsOf(a) - tsOf(b));
       const last = sorted[sorted.length - 1] || {};
-      const gt = grossToday(u);
-      return `<tr class="${u.id === currentUser?.id ? 'winner-row' : ''}"><td>${_esc(u.name)}</td><td>${gt > 0 ? _fmtCoins(gt) : '–'}</td><td>${last.day ?? '–'}</td><td>${last.cup ?? '–'}</td><td>${last.coins ?? '–'}</td></tr>`;
+      const gt = grossToday(u), sp = spendToday(u), nt = netToday(u);
+      return `<tr class="${u.id === currentUser?.id ? 'winner-row' : ''}"><td>${_esc(u.name)}</td><td><strong>${(gt || sp) ? _fmtCoins(nt) : '–'}</strong></td><td>${gt > 0 ? _fmtCoins(gt) : '–'}</td><td>${sp > 0 ? '−' + _fmtCoins(sp) : '–'}</td><td>${last.day ?? '–'}</td><td>${last.coins ?? '–'}</td></tr>`;
     }).join('')}
-    </tbody></table>
-    <p style="color:var(--muted);font-size:.72rem;padding:6px 4px 0">📈 „Heute gesamt" = alle heute realisierten CC (Tassen, Schätze, Forschung, Welt, Login, Aufgaben). Der Verlauf zeigt das Gesamteinkommen pro Tag, sobald genug Snapshots vorliegen.</p>
+    </tbody></table></div>
+    <p style="color:var(--muted);font-size:.72rem;padding:6px 4px 0">🧮 „Netto heute" = alle heute realisierten Einnahmen (Tassen, ⚔️ Kämpfe, 🪙 Schätze, Forschung, Welt, Login, Aufgaben) minus 🧾 Ausgaben (🧪 Tränke, Steuer-Events, Garde-Kosten). Der Verlauf zeigt dieses Netto-Gehalt pro Tag, sobald genug Snapshots vorliegen.</p>
     ${_informantPanelHtml()}`;
 }
 
@@ -1424,6 +1426,12 @@ function _ccWorldInvested(u) {
 function _ccGovernments(u) {
   return (typeof worldGovernments === 'function') ? worldGovernments(appData?.worldInvestments, u.id) : 0;
 }
+// Kaffee-Krieger (RPG) — Werte aus u.dungeon_data (NICHT map_data.dungeonStats, das ist die
+// Pixel-Karten-Dungeon-Statistik). Nichtspieler haben kein dungeon_data → 0, fallen also aus
+// dem _ccLeader-Ranking (val>0). Stufe 1 = erster Kampf begonnen.
+function _ccKriegerLevel(u) { return u.dungeon_data?.level    || 0; }
+function _ccKriegerWins(u)  { return u.dungeon_data?.wins     || 0; }
+function _ccKriegerBoss(u)  { return u.dungeon_data?.bossKills || 0; }
 // Aktuell führender Spieler für eine Metrik (Live-Snapshot, kein persistierter Rekord)
 function _ccLeader(users, fn) {
   let best = null, bestVal = -1;
@@ -1447,6 +1455,9 @@ function renderHallOfFame() {
   const il = _ccLeader(users, _ccWorldInvested);
   const gl = _ccLeader(users, _ccGovernments);
   const ql = _ccLeader(users, u => u.cosmetics?.quiz?.ciq || 0);
+  const kl = _ccLeader(users, _ccKriegerLevel);
+  const kw = _ccLeader(users, _ccKriegerWins);
+  const kb = _ccLeader(users, _ccKriegerBoss);
 
   const cards = [
     { icon: '☕', label: 'Meiste Tassen',      val: hof.max_cups_value,       name: hof.max_cups_name },
@@ -1461,6 +1472,9 @@ function renderHallOfFame() {
     { icon: '🧠', label: 'Höchster Kaffee-IQ', val: ql.val != null ? `${ql.val} CIQ` : null, name: ql.name },
     { icon: '🌍', label: 'Größter Weltinvestor', val: il.val != null ? `${il.val.toLocaleString('de-DE')} CC` : null, name: il.name },
     { icon: '🏛️', label: 'Meiste Regierungen', val: gl.val, name: gl.name },
+    { icon: '⚔️', label: 'Höchste Krieger-Stufe', val: kl.val, name: kl.name },
+    { icon: '🗡️', label: 'Meiste Kampf-Siege',   val: kw.val, name: kw.name },
+    { icon: '🐉', label: 'Meiste Boss-Kills',     val: kb.val, name: kb.name },
   ];
 
   document.getElementById('hof-container').innerHTML = cards.map(r => `
@@ -1600,10 +1614,13 @@ function renderPoster() {
     { icon:'🎨', label:'Cosmetics', L:_ccLeader(leaderboardData, _ccCosmCount),      fmt:v=>`${v}` },
     { icon:'🌍', label:'Weltinvestor', L:_ccLeader(leaderboardData, _ccWorldInvested), fmt:v=>`${v.toLocaleString('de-DE')} CC` },
     { icon:'🏛️', label:'Regierungen', L:_ccLeader(leaderboardData, _ccGovernments),    fmt:v=>`${v}` },
+    { icon:'⚔️', label:'Krieger-Stufe', L:_ccLeader(leaderboardData, _ccKriegerLevel),  fmt:v=>`${v}` },
+    { icon:'🗡️', label:'Kampf-Siege',   L:_ccLeader(leaderboardData, _ccKriegerWins),   fmt:v=>`${v}` },
+    { icon:'🐉', label:'Boss-Kills',    L:_ccLeader(leaderboardData, _ccKriegerBoss),   fmt:v=>`${v}` },
   ];
   const hasImp = impCats.some(c => c.L.val != null);
   const impCards = impCats.map(c => `<div class="imp-card"><div class="imp-ic">${c.icon}</div><div class="imp-lbl">${c.label}</div><div class="imp-val">${c.L.val!=null?c.fmt(c.L.val):'—'}</div><div class="imp-nm">${_esc(c.L.name||'—')}</div></div>`).join('');
-  const impSection = hasImp ? `<div class="imp"><div class="wall-hdr"><h2>🏛️ IMPERIUM-CHAMPIONS</h2><p>Vermögen · Karte · Gebäude · Forschung · Schätze · Style · Welt · Regierungen</p></div><div class="imp-grid">${impCards}</div></div>` : '';
+  const impSection = hasImp ? `<div class="imp"><div class="wall-hdr"><h2>🏛️ IMPERIUM-CHAMPIONS</h2><p>Vermögen · Karte · Gebäude · Forschung · Schätze · Style · Welt · Regierungen · Krieger</p></div><div class="imp-grid">${impCards}</div></div>` : '';
   const group = AUTH.getGroup();
   const html = `<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8"><title>Coffee Championship – ${dateStr}</title><link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Inter:wght@400;600;700&display=swap" rel="stylesheet"><style>*{box-sizing:border-box;margin:0;padding:0}body{background:#0d0b08;color:#f2ead8;font-family:'Inter',sans-serif;font-size:13px;padding:16px}.poster{max-width:960px;margin:0 auto;border:2px solid #d4aa37;border-radius:10px;overflow:hidden;background:#0d0b08}.hdr{background:linear-gradient(180deg,#1e1810 0%,#0d0b08 100%);border-bottom:2px solid #d4aa37;padding:20px 28px;display:flex;align-items:center;justify-content:space-between}.hdr-trophy{font-size:2.8rem;filter:drop-shadow(0 0 14px #d4aa3799)}.hdr-center{text-align:center;flex:1}.hdr h1{font-family:'Orbitron',sans-serif;font-size:2rem;font-weight:900;color:#d4aa37;letter-spacing:6px;text-shadow:0 0 30px #d4aa3799}.hdr-sub{color:#8a7a5a;font-size:0.72rem;letter-spacing:3px;text-transform:uppercase;margin-top:5px}.hdr-badge{text-align:center;background:#d4aa3715;border:1px solid #d4aa3755;border-radius:8px;padding:8px 16px}.hdr-badge .bl{color:#8a7a5a;font-size:0.6rem;letter-spacing:1px;text-transform:uppercase}.hdr-badge .bv{color:#d4aa37;font-size:0.9rem;font-weight:700;margin-top:2px}.body{display:flex}.lb{flex:1;padding:18px 22px;border-right:1px solid #2a2010}.sec-title{font-family:'Orbitron',sans-serif;color:#d4aa37;font-size:0.65rem;letter-spacing:2px;text-transform:uppercase;margin-bottom:10px;padding-bottom:7px;border-bottom:1px solid #2a2010}table{width:100%;border-collapse:collapse}td,th{padding:6px 5px;vertical-align:middle}th{color:#8a7a5a;font-size:0.65rem;letter-spacing:1px;text-transform:uppercase;border-bottom:1px solid #2a2010}tr{border-bottom:1px solid #1a1408}tr.top3 td{background:#1a1408}.r-rank{width:34px;text-align:center}.r-name{font-weight:600;color:#f2ead8}.r-cups{color:#d4aa37;font-size:0.82rem;white-space:nowrap}.r-title{color:#8a7a5a;font-size:0.72rem;text-align:right}.badge{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;font-weight:900;font-size:0.75rem}.gold{background:#d4aa37;color:#0d0b08}.silver{background:#a8a8a8;color:#0d0b08}.bronze{background:#cd7f32;color:#0d0b08}.rn{color:#8a7a5a;font-size:0.82rem;display:inline-block;width:22px;text-align:center}.ms-col{width:190px;padding:18px 14px}.ms{display:flex;align-items:center;gap:8px;background:#1c160d;border:1px solid #2a2010;border-radius:5px;padding:7px 9px;margin-bottom:7px;opacity:.35}.ms.reached{opacity:1;border-color:#d4aa37;background:#1e1808}.ms-cups{font-family:'Orbitron',sans-serif;color:#d4aa37;font-size:0.85rem;font-weight:700;min-width:34px}.ms-icon{font-size:1rem}.ms-title{color:#f2ead8;font-size:0.7rem}.ms-n{color:#8a7a5a;font-size:0.62rem;margin-top:2px}.wall{border-top:2px solid #2a2010;background:#141008;padding:18px 22px}.wall-hdr{text-align:center;margin-bottom:14px}.wall-hdr h2{font-family:'Orbitron',sans-serif;color:#d4aa37;font-size:1rem;letter-spacing:4px;text-shadow:0 0 16px #d4aa3766}.wall-hdr p{color:#8a7a5a;font-size:0.65rem;letter-spacing:2px;text-transform:uppercase;margin-top:4px}.wn{width:110px;font-weight:600;font-size:0.82rem}.bc{margin:1px;display:inline-block}.bc.off{opacity:.1;filter:grayscale(1)}.bc.on{filter:drop-shadow(0 0 2px #d4aa3788)}.extra{color:#d4aa37;font-size:0.75rem;font-weight:700;margin-left:6px}.wc{width:50px;text-align:right;color:#d4aa37;font-weight:700;font-size:0.82rem}.ftr{border-top:1px solid #2a2010;background:#0a0804;padding:12px 28px;display:flex;align-items:center;justify-content:space-between}.motto{font-family:'Orbitron',sans-serif;color:#d4aa37;font-size:0.62rem;letter-spacing:3px;text-transform:uppercase}.pbtn{background:#d4aa37;color:#0d0b08;border:none;padding:8px 22px;border-radius:6px;font-weight:700;cursor:pointer;font-size:0.85rem;font-family:'Inter',sans-serif}.imp{border-top:2px solid #2a2010;background:#0f0c08;padding:18px 22px}.imp-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.imp-card{background:#1c160d;border:1px solid #2a2010;border-radius:6px;padding:10px 8px;text-align:center}.imp-ic{font-size:1.2rem}.imp-lbl{color:#8a7a5a;font-size:0.58rem;letter-spacing:1px;text-transform:uppercase;margin-top:3px}.imp-val{font-family:'Orbitron',sans-serif;color:#d4aa37;font-size:0.85rem;font-weight:700;margin-top:3px}.imp-nm{color:#f2ead8;font-size:0.68rem;margin-top:2px}@media print{body{background:#0d0b08!important;padding:0}.poster{border:none;border-radius:0;max-width:100%}.pbtn{display:none}@page{size:A3 landscape;margin:8mm}}</style></head><body><div class="poster"><div class="hdr"><div class="hdr-trophy">🏆</div><div class="hdr-center"><h1>COFFEE CHAMPIONSHIP</h1><div class="hdr-sub">⚡ ${_esc(group?.name || 'Euer Team')} ⚡</div></div><div class="hdr-badge"><div class="bl">Saison</div><div class="bv">${dateStr}</div></div></div><div class="body"><div class="lb"><div class="sec-title">⚡ Rangliste</div><table><thead><tr><th>#</th><th>Name</th><th>☕ Tassen</th><th style="text-align:right">Titel</th></tr></thead><tbody>${rows}</tbody></table></div><div class="ms-col"><div class="sec-title">Meilensteine</div>${milestones}</div></div><div class="wall"><div class="wall-hdr"><h2>⚡ WALL OF CAFFEINE ⚡</h2><p>Jeder Schluck zählt · 1 Bohne = 10 Tassen</p></div><table><thead><tr><th style="text-align:left">Name</th><th>Fortschritt</th><th style="text-align:right">Tassen</th></tr></thead><tbody>${wallRows}</tbody></table></div>${impSection}<div class="ftr"><div class="motto">⚡ Mehr Kaffee · Mehr Power · Mehr wir ⚡</div><button class="pbtn" onclick="window.print()">🖨 Drucken</button></div></div></body></html>`;
   const win = window.open('', '_blank');

@@ -614,8 +614,9 @@ async function _worldRefreshAndReopen(country, member) {
 }
 
 async function _handleBuildWorld(country, member, def) {
+  const cost = _worldCost(member, def.cost);
   let res;
-  try { res = await DB.buildWorldStructure(member.id, country.id, def.id, _worldCost(member, def.cost), false); }
+  try { res = await DB.buildWorldStructure(member.id, country.id, def.id, cost, false); }
   catch (e) { showToast(e.message || 'Bau fehlgeschlagen', 'error'); return; }
   if (res?.error === 'insufficient_coins') { showToast('Nicht genug CoffeeCoins!', 'error'); return; }
   if (res?.error === 'already_built')      { showToast('Schon gebaut.', 'error'); return; }
@@ -624,6 +625,9 @@ async function _handleBuildWorld(country, member, def) {
   const taxMsg = res.tax_paid > 0 ? ` (${res.tax_paid} CC Steuer${res.tax_receiver ? ' an ' + res.tax_receiver : ''})` : '';
   showToast(`🏗️ ${def.name} in ${country.flag} ${country.name} gebaut!${taxMsg}`, 'success');
   try { await DB.postMessage(`${member.name} baut ${def.icon} ${def.name} in ${country.flag} ${country.name}!${taxMsg} 🏗️`, member.name); } catch (e) {}
+  // CC-Ausgabe ins Tages-Log/Netto — build_world_structure zieht p_cost serverseitig ab (Steuer
+  // wird daraus umgeleitet, nicht zusätzlich), loggt aber KEIN todayLog. Fresh-Merge gegen Clobbering.
+  try { await DB.appendTodayLogFresh(member.id, [{ label: `🏗️ Welt-Bau: ${def.name} — ${country.flag} ${country.name}`, amount: -cost, detail: 'Welt-Gebäude' }]); } catch (e) {}
   await _worldRefreshAndReopen(country, member);
 }
 
@@ -639,6 +643,8 @@ async function _handleUpgradeWorld(country, member, def) {
   const taxMsg = res.tax_paid > 0 ? ` (${res.tax_paid} CC Steuer${res.tax_receiver ? ' an ' + res.tax_receiver : ''})` : '';
   showToast(`⬆️ ${def.name} auf Level 2 ausgebaut!${taxMsg}`, 'success');
   try { await DB.postMessage(`${member.name} baut ${def.icon} ${def.name} in ${country.flag} ${country.name} aus!${taxMsg} ⬆️`, member.name); } catch (e) {}
+  // CC-Ausgabe ins Tages-Log/Netto (build_world_structure loggt server-seitig nicht) — Fresh-Merge.
+  try { await DB.appendTodayLogFresh(member.id, [{ label: `⬆️ Welt-Ausbau: ${def.name} — ${country.flag} ${country.name}`, amount: -cost, detail: 'Welt-Gebäude' }]); } catch (e) {}
   await _worldRefreshAndReopen(country, member);
 }
 
@@ -1154,8 +1160,10 @@ async function _handleBuyWorldDev(member, dev) {
   try { left = await DB.spendCoins(member.id, dev.cost); }
   catch (e) { showToast(e.message || 'Kauf fehlgeschlagen', 'error'); return; }
   if (left === null || left === undefined) { showToast('Nicht genug CoffeeCoins!', 'error'); return; }
-  const md = { ...(member.map_data || {}) };
+  let md = { ...(member.map_data || {}) };
   md.worldDev = { ...(md.worldDev || {}), [dev.id]: true };
+  // Ausgabe im selben Write anhängen (Transparenz → Netto-Gehalt).
+  try { md = DB.appendTodayLog(md, [{ label: `🔭 Entwicklung: ${dev.name}`, amount: -dev.cost, detail: 'Weltkarte' }]); } catch (e) {}
   try { await DB.updateMapData(member.id, md); } catch (e) { console.warn('worldDev save:', e); }
   if (currentUserData) currentUserData.map_data = md;
   member.map_data = md;
@@ -1221,7 +1229,8 @@ async function _handleFundDeposit(member) {
   try { left = await DB.spendCoins(member.id, amount); }
   catch (e) { showToast(e.message || 'Fehlgeschlagen', 'error'); return; }
   if (left === null || left === undefined) { showToast('Nicht genug CoffeeCoins!', 'error'); return; }
-  await _saveFund(member, { principal: f.principal + amount, lastDiv: f.lastDiv });
+  await _saveFund(member, { principal: f.principal + amount, lastDiv: f.lastDiv },
+    [{ label: '💹 Kaffeebörse: Einzahlung', amount: -amount, detail: 'Weltkarte' }]);
   showToast(`💹 ${amount} CC angelegt.`, 'success');
   await _worldRefreshTab(member);
 }
@@ -1261,5 +1270,8 @@ async function _handleSabotage(country, member, governor) {
   if (!res?.ok) { showToast('Sabotage fehlgeschlagen', 'error'); return; }
   showToast(`⚔️ Söldner sabotieren ${country.flag} ${country.name}!`, 'success');
   try { await DB.postMessage(`${member.name} schickt Söldner nach ${country.flag} ${country.name} — ${governor.member_name} verliert dort ${SABOTAGE_DAYS} Tage Einkommen! ⚔️`, member.name); } catch (e) {}
+  // CC-Ausgabe ins Tages-Log/Netto — cast_sabotage zieht p_cost serverseitig ab, loggt aber KEIN
+  // todayLog. Fresh-Merge gegen Clobbering.
+  try { await DB.appendTodayLogFresh(member.id, [{ label: `⚔️ Söldner-Sabotage — ${country.flag} ${country.name}`, amount: -SABOTAGE_COST, detail: 'Sabotage' }]); } catch (e) {}
   await _worldRefreshAndReopen(country, member);
 }

@@ -38,6 +38,12 @@ const ACHIEVEMENTS = [
   { id: 'krieger_level_100',   icon: '👑', name: 'Meister-Krieger',    desc: 'Krieger-Stufe 100 erreicht',         condition: null, coinReward: 150 },
   { id: 'krieger_boss_kill',   icon: '🐉', name: 'Drachentöter',       desc: 'Den Espresso-Drachen besiegt',       condition: null, coinReward: 80 },
   { id: 'krieger_set_complete',icon: '🎭', name: 'Kulturset komplett', desc: 'Ein vollständiges Ausrüstungs-Set ausgerüstet', condition: null, coinReward: 30 },
+  { id: 'krieger_talent_first',icon: '🌟', name: 'Talentiert',         desc: 'Erstes Krieger-Talent freigeschaltet',          condition: null, coinReward: 15 },
+  { id: 'krieger_talent_full', icon: '👑', name: 'Talent-Meister',     desc: 'Alle 10 Krieger-Talente freigeschaltet',        condition: null, coinReward: 120 },
+  { id: 'krieger_golden_bean', icon: '🫘', name: 'Goldene Kaffeebohne', desc: 'Die Legende der Goldenen Kaffeebohne vollendet', condition: null, coinReward: 250 },
+  { id: 'krieger_potion_10',   icon: '🧪', name: 'Kaffeemixer',         desc: '10 Tränke im Kampf verbraucht',                  condition: null, coinReward: 25 },
+  { id: 'krieger_tier3_first', icon: '🗡️', name: 'Meisterwaffe',        desc: 'Erste Tier-3-Waffe erworben',                    condition: null, coinReward: 40 },
+  { id: 'krieger_mount_first', icon: '🐎', name: 'Berittener Krieger',   desc: 'Erstes Reittier erworben',                       condition: null, coinReward: 40 },
 ];
 
 function checkAchievements(userData, newAchievements = {}) {
