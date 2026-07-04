@@ -12,6 +12,18 @@
 .today-log-detail { color: rgba(255,255,255,.45); font-size: 10.5px; line-height: 1.35;
                     padding: 1px 10px 3px; margin-top: -2px; word-break: break-word; overflow-wrap: anywhere; }
 
+/* ── Gesamtvermögen (Profil / Tagesstatistik) ──────────────────────────────── */
+.vermoegen-total  { font-size: 26px; font-weight: 800; color: var(--gold, #d4aa37);
+                    line-height: 1.1; margin: 2px 0 10px; }
+.vermoegen-total .vermoegen-cc { font-size: 14px; font-weight: 600; opacity: .7; }
+.vermoegen-list   { display: flex; flex-direction: column; gap: 4px; }
+.vermoegen-row    { display: flex; justify-content: space-between; align-items: center;
+                    padding: 6px 10px; background: rgba(255,255,255,.04); border-radius: 6px; font-size: 12px; }
+.vermoegen-label  { color: rgba(255,255,255,.7); }
+.vermoegen-amount { color: var(--gold, #d4aa37); font-weight: 600; }
+.vermoegen-note   { color: rgba(255,255,255,.45); font-size: 10.5px; line-height: 1.35;
+                    margin-top: 8px; word-break: break-word; overflow-wrap: anywhere; }
+
 /* ── Kaffee-Tagesaufgabe (Profil) ──────────────────────────────────────────── */
 .daily-task-card { display: flex; align-items: center; gap: 12px; padding: 12px 14px;
                    background: linear-gradient(135deg, rgba(212,170,55,.12), rgba(255,255,255,.04));
