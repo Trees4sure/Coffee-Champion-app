@@ -1221,10 +1221,12 @@ function _informantPanelHtml() {
     <div class="cc-informant-list">${rows}</div>`;
 }
 
-// 💰 Einkommens-Verlauf der Top-5-Mitglieder (Liniendiagramm). Zeigt das realisierte
-// GESAMT-Tageseinkommen (alle Quellen: Tassen, Schätze, Forschung, Welt, Login, Aufgaben),
-// solange dafür Snapshot-Daten (gross) vorliegen — sonst Fallback auf passives Tagesgehalt.
+// 💰 Einkommens-Verlauf der Top-5-Mitglieder (Liniendiagramm). Umschaltbar zwischen
+// 📈 Einnahmen (brutto, realisiertes GESAMT-Tageseinkommen) und 🧮 Netto (Einnahmen −
+// Ausgaben). Beide Werte (gross + net) liegen in JEDEM Snapshot — der Umschalter zeigt
+// daher auch die Altdaten der jeweils anderen Metrik. Fallback auf passives Tagesgehalt.
 // Datenquelle = map_data.salaryHistory (5h-Snapshot, baut sich ab Einführung auf).
+let _gehaltMetric = 'gross'; // 'gross' (Einnahmen/Brutto) | 'net' (Netto) — Nutzer-Umschalter
 function renderGehalt() {
   document.getElementById('period-label').textContent = 'Gehalts-Entwicklung';
   const top5 = leaderboardData.slice(0, 5);
@@ -1239,13 +1241,17 @@ function renderGehalt() {
   const spendToday = u => Math.round(_tlOf(u).reduce((s, e) => s + (e.amount < 0 ? -e.amount : 0), 0) * 100) / 100; // Ausgaben (positiv)
   const netToday   = u => Math.round(_tlOf(u).reduce((s, e) => s + (e.amount || 0), 0) * 100) / 100;                // Netto = Einnahmen − Ausgaben
 
-  // Metrik: Netto-Gehalt (Einnahmen − Ausgaben) bevorzugt, dann brutto, sonst passiv.
+  // Metrik per Umschalter (📈 Brutto / 🧮 Netto), Fallback auf Verfügbarkeit. Beide Werte
+  // liegen in jedem Snapshot → Umschalten zeigt auch die Altdaten der anderen Metrik.
   const hasNet   = top5.some(u => histOf(u).some(h => h.net != null));
   const hasGross = top5.some(u => histOf(u).some(h => h.gross != null));
-  const metric   = hasNet ? 'net' : (hasGross ? 'gross' : 'day');
+  const avail    = { gross: hasGross, net: hasNet, day: true };
+  let metric = _gehaltMetric;
+  if (!avail[metric]) metric = hasGross ? 'gross' : (hasNet ? 'net' : 'day');
   document.getElementById('chart-main-title').textContent =
-    hasNet ? '💰 Netto-Gehalt/Tag (Einnahmen − Ausgaben) – Verlauf'
-    : hasGross ? '💰 Einkommen/Tag (gesamt) – Verlauf' : '💰 Tages-Gehalt (passiv) – Verlauf';
+    metric === 'net'   ? '💰 Netto-Gehalt/Tag (Einnahmen − Ausgaben) – Verlauf'
+    : metric === 'gross' ? '💰 Einnahmen/Tag (brutto, gesamt) – Verlauf'
+    : '💰 Tages-Gehalt (passiv) – Verlauf';
 
   // Tagesweise gruppieren → je Tag der höchste Wert (bei gross = Tagesendstand, da kumulativ).
   const daySet = new Set();
@@ -1280,17 +1286,57 @@ function renderGehalt() {
     type: 'line', data: { labels, datasets }, options: chartOptions()
   });
 
-  document.getElementById('period-summary').innerHTML = `
-    <div class="cc-table-scroll"><table class="cc-salary-table"><thead><tr><th>Name</th><th>🧮 Netto heute</th><th>📈 Einnahmen</th><th>🧾 Ausgaben</th><th>💰 /Tag passiv</th><th>🪙 Guthaben</th></tr></thead><tbody>
-    ${top5.map(u => {
-      const sorted = histOf(u).slice().sort((a, b) => tsOf(a) - tsOf(b));
-      const last = sorted[sorted.length - 1] || {};
-      const gt = grossToday(u), sp = spendToday(u), nt = netToday(u);
-      return `<tr class="${u.id === currentUser?.id ? 'winner-row' : ''}"><td>${_esc(u.name)}</td><td><strong>${(gt || sp) ? _fmtCoins(nt) : '–'}</strong></td><td>${gt > 0 ? _fmtCoins(gt) : '–'}</td><td>${sp > 0 ? '−' + _fmtCoins(sp) : '–'}</td><td>${last.day ?? '–'}</td><td>${last.coins ?? '–'}</td></tr>`;
-    }).join('')}
+  // Umschalter Brutto/Netto — beide Metriken bleiben verfügbar, Auswahl merkt sich _gehaltMetric.
+  const _gbtn = (m, label) => {
+    const active = metric === m, dis = !avail[m];
+    const style = 'padding:5px 12px;border-radius:8px;font-size:.8rem;cursor:' + (dis ? 'not-allowed' : 'pointer')
+      + ';border:1px solid ' + (active ? 'var(--gold)' : 'var(--gold-dim)')
+      + ';background:' + (active ? 'var(--gold-dim)' : 'transparent')
+      + ';color:' + (active ? 'var(--gold)' : 'var(--muted)') + (dis ? ';opacity:.4' : '');
+    return `<button type="button" class="cc-gehalt-btn" data-metric="${m}"${dis ? ' disabled' : ''} style="${style}">${label}</button>`;
+  };
+  const toggleHtml = `<div style="display:flex;gap:6px;margin:0 0 10px;flex-wrap:wrap">${_gbtn('gross', '📈 Einnahmen (Brutto)')}${_gbtn('net', '🧮 Netto')}</div>`;
+
+  // Tabelle folgt dem Umschalter → nur die Spalten der gewählten Metrik (schmaler).
+  const vals = top5.map(u => {
+    const sorted = histOf(u).slice().sort((a, b) => tsOf(a) - tsOf(b));
+    const last = sorted[sorted.length - 1] || {};
+    return { u, gt: grossToday(u), sp: spendToday(u), nt: netToday(u), day: last.day, coins: last.coins };
+  });
+  let cols;
+  if (metric === 'net') {
+    cols = [
+      { h: '🧮 Netto heute', c: v => `<strong>${(v.gt || v.sp) ? _fmtCoins(v.nt) : '–'}</strong>` },
+      { h: '🧾 Ausgaben',    c: v => v.sp > 0 ? '−' + _fmtCoins(v.sp) : '–' },
+      { h: '💰 /Tag passiv', c: v => v.day ?? '–' },
+      { h: '🪙 Guthaben',    c: v => v.coins ?? '–' },
+    ];
+  } else if (metric === 'gross') {
+    cols = [
+      { h: '📈 Einnahmen heute', c: v => v.gt > 0 ? _fmtCoins(v.gt) : '–' },
+      { h: '💰 /Tag passiv',     c: v => v.day ?? '–' },
+      { h: '🪙 Guthaben',        c: v => v.coins ?? '–' },
+    ];
+  } else {
+    cols = [
+      { h: '💰 /Tag passiv', c: v => v.day ?? '–' },
+      { h: '🪙 Guthaben',    c: v => v.coins ?? '–' },
+    ];
+  }
+  const footer = metric === 'net'
+    ? '<strong>🧮 Netto</strong> = alle heute realisierten Einnahmen (Tassen, ⚔️ Kämpfe, 🪙 Schätze, Forschung, Welt, Login, Aufgaben) minus 🧾 Ausgaben (🧪 Tränke, Steuer-Events, Garde-Kosten, Investitionen). Für die Brutto-Einnahmen oben auf 📈 umschalten.'
+    : '<strong>📈 Einnahmen</strong> = das realisierte Brutto-Tageseinkommen (Tassen, ⚔️ Kämpfe, 🪙 Schätze, Forschung, Welt, Login, Aufgaben) — die ursprüngliche Grafik. Für Netto (nach Ausgaben) oben auf 🧮 umschalten.';
+
+  document.getElementById('period-summary').innerHTML = toggleHtml + `
+    <div class="cc-table-scroll"><table class="cc-salary-table" style="min-width:${(cols.length + 1) * 84}px"><thead><tr><th>Name</th>${cols.map(c => `<th>${c.h}</th>`).join('')}</tr></thead><tbody>
+    ${vals.map(v => `<tr class="${v.u.id === currentUser?.id ? 'winner-row' : ''}"><td>${_esc(v.u.name)}</td>${cols.map(c => `<td>${c.c(v)}</td>`).join('')}</tr>`).join('')}
     </tbody></table></div>
-    <p style="color:var(--muted);font-size:.72rem;padding:6px 4px 0">🧮 „Netto heute" = alle heute realisierten Einnahmen (Tassen, ⚔️ Kämpfe, 🪙 Schätze, Forschung, Welt, Login, Aufgaben) minus 🧾 Ausgaben (🧪 Tränke, Steuer-Events, Garde-Kosten). Der Verlauf zeigt dieses Netto-Gehalt pro Tag, sobald genug Snapshots vorliegen.</p>
+    <p style="color:var(--muted);font-size:.72rem;padding:6px 4px 0">${footer}</p>
     ${_informantPanelHtml()}`;
+
+  document.querySelectorAll('#period-summary .cc-gehalt-btn').forEach(b => {
+    b.onclick = () => { if (b.disabled) return; _gehaltMetric = b.dataset.metric; renderGehalt(); };
+  });
 }
 
 async function renderMonat(info) {
