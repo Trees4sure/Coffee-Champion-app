@@ -1127,13 +1127,23 @@ async function renderStats() {
 // keine neue Datenquelle, nur neu zusammengestellt. Künftige Minigames (Garten/Spähung/Café/
 // Logistik, siehe plans/PLAN_erlebnis_minigames.md) sollen hier je EINE weitere Zeile ergänzen,
 // sobald sie existieren.
+// 💰 Gesamtvermögen-Aufschlüsselung eines Spielers für den Informanten — dieselbe Aufteilung wie
+// die Profil-Box (renderVermoegen), aber kompakt als Icon-+-Betrag-Chips (JP 2026-07-11). So sieht
+// man mit aktivem Informanten die Vermögensverteilung ALLER Mitglieder, nicht nur die eigene.
+function _informantVermoegenHtml(u) {
+  if (typeof _ccVermoegen !== 'function') return '';
+  const v = _ccVermoegen(u);
+  const cats = [['🪙', v.coins], ['🔬', v.forschung], ['🗺️', v.karte], ['🌍', v.welt], ['⚔️', v.krieger]];
+  const chips = cats.map(([e, val]) =>
+    `<span style="background:rgba(212,170,55,.10);border:1px solid var(--gold-dim);border-radius:6px;padding:2px 7px;font-size:.72rem;white-space:nowrap">${e} ${_fmtCoins(val)}</span>`).join('');
+  return `<div style="margin:5px 0">
+    <div style="font-size:.74rem;color:var(--gold,#d4aa37);font-weight:600;margin-bottom:3px">💰 Gesamtvermögen: ${_fmtCoins(v.total)} CC</div>
+    <div style="display:flex;flex-wrap:wrap;gap:5px">${chips}</div>
+  </div>`;
+}
+
 function _informantStatsHtml(u) {
   const items = [];
-
-  if (typeof _ccVermoegen === 'function') {
-    const v = _ccVermoegen(u);
-    items.push(`💰 Gesamtvermögen: ${_fmtCoins(v.total)} CC (🪙 ${_fmtCoins(v.coins)} · 🔬 ${_fmtCoins(v.forschung)} · 🗺️ ${_fmtCoins(v.karte)} · 🌍 ${_fmtCoins(v.welt)} · ⚔️ ${_fmtCoins(v.krieger)})`);
-  }
 
   const rTotal = (typeof getAllResearchItems === 'function') ? getAllResearchItems().length : 0;
   const rOwned = (typeof getAllResearchItems === 'function')
@@ -1252,6 +1262,7 @@ function _informantPanelHtml() {
             <strong>${_esc(u.name)}</strong>
             <span style="color:var(--muted);font-size:.78rem">🪙 ${_fmtCoins(u.coins || 0)} · 💰 ${last.day ?? '–'}/Tag realisiert · ☕ +${_fmtCoins(perCup)}/Tasse</span>
           </div>
+          ${_informantVermoegenHtml(u)}
           ${stats}
           ${ciqPerks}
           ${breakdown || '<p class="empty-hint" style="margin:4px 0 0;font-size:.75rem">Keine laufenden Forschungs-/Gebäude-Einnahmen.</p>'}
