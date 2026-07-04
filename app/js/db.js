@@ -552,10 +552,12 @@ const DB = (() => {
     const gross = tlOk
       ? Math.round((tl.entries || []).reduce((s, e) => s + (e.amount > 0 ? e.amount : 0), 0) * 100) / 100
       : 0;
-    // NET = realisiertes Tages-Einkommen MINUS Ausgaben (negative Log-Einträge, z.B. Tränke,
-    // Steuer-Events, Garde-Kosten) = das „erweiterte Tages-Gehalt" für das Chart (Transparenz).
+    // NET = realisiertes Tages-Einkommen MINUS KONSUM-Ausgaben (negative Log-Einträge, z.B. Tränke,
+    // Reparatur, Steuer-Events, Strafen) = das „erweiterte Tages-Gehalt" für das Chart (Transparenz).
+    // Investitionen (invest:true — Forschung, Karte/Gebäude, Welthandel, Krieger-Ausrüstung) zählen
+    // NICHT ins Netto: sie mindern nicht das Gehalt, sondern wandern ins Gesamtvermögen (JP 2026-07-11).
     const net = tlOk
-      ? Math.round((tl.entries || []).reduce((s, e) => s + (e.amount || 0), 0) * 100) / 100
+      ? Math.round((tl.entries || []).reduce((s, e) => s + (e.invest ? 0 : (e.amount || 0)), 0) * 100) / 100
       : 0;
 
     return { day: perDay, cup: perCup, coins: Math.round(member.coins || 0), gross, net };
@@ -1141,7 +1143,7 @@ const DB = (() => {
       if (error) throw new Error(error.message);
       if (newCoins === null || newCoins === undefined) throw new Error('Nicht genug CoffeeCoins');
       // Ausgabe im Tages-Log (Transparenz → Netto-Gehalt).
-      try { await appendTodayLogFresh(memberId, [{ label: `🔬 Forschung: ${target.name || itemId}`, amount: -cost, detail: 'Forschungsbaum' }]); } catch (e) {}
+      try { await appendTodayLogFresh(memberId, [{ label: `🔬 Forschung: ${target.name || itemId}`, amount: -cost, detail: 'Forschungsbaum', invest: true }]); } catch (e) {}
     }
 
     // Item in research speichern
@@ -1626,7 +1628,7 @@ const DB = (() => {
     if (error) throw new Error(error.message);
     // Ausgabe im Tages-Log (Transparenz → Netto-Gehalt). Welt-Investition = CC dauerhaft weg.
     if (data && !data.error) {
-      try { await appendTodayLogFresh(memberId, [{ label: `🌍 Welthandel: ${countryId}`, amount: -parseFloat(amount), detail: 'Welt-Investition' }]); } catch (e) {}
+      try { await appendTodayLogFresh(memberId, [{ label: `🌍 Welthandel: ${countryId}`, amount: -parseFloat(amount), detail: 'Welt-Investition', invest: true }]); } catch (e) {}
     }
     return data; // { ok, total_invested, coins_left } oder { error }
   }
@@ -1647,7 +1649,7 @@ const DB = (() => {
     // Ausgabe im Tages-Log (tatsächlich angelegter Betrag; kann durch Deckel < amount sein).
     if (data && !data.error) {
       const inv = (data.invested != null) ? data.invested : parseFloat(amount);
-      try { if (inv > 0) await appendTodayLogFresh(memberId, [{ label: `🏦 Stille Anlage: ${countryId}`, amount: -inv, detail: 'Investition' }]); } catch (e) {}
+      try { if (inv > 0) await appendTodayLogFresh(memberId, [{ label: `🏦 Stille Anlage: ${countryId}`, amount: -inv, detail: 'Investition', invest: true }]); } catch (e) {}
     }
     return data || { error: 'no_data' };
   }

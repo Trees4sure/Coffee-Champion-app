@@ -765,6 +765,7 @@ function renderProfile() {
 
   renderDailyTask(u);
   renderCiqPerks(u);
+  renderVermoegen(u);
 
   document.getElementById('achievements-grid').innerHTML = ACHIEVEMENTS.map(a => `
     <div class="achievement-card ${u.achievements?.[a.id] ? 'unlocked' : 'locked'}" title="${_esc(a.desc)}">
@@ -776,6 +777,42 @@ function renderProfile() {
   const rank = leaderboardData.findIndex(x => x.id === currentUser.id) + 1;
   document.getElementById('season-rank').textContent = rank || '—';
   if (typeof Quiz !== 'undefined') Quiz.renderProfileSection(u);
+}
+
+// 💰 Gesamtvermögen — aufgestaffelte Box (Guthaben + Forschung + Karte + Welthandel + Krieger)
+// oben im Profil-Untertab „📊 Tagesstatistik", dynamisch injiziert (kein index.html-Edit).
+// Zeigt, wohin das CC gewandert ist: Investitionen mindern nicht das Netto-Gehalt, sondern
+// stecken hier im Vermögen.
+function renderVermoegen(u) {
+  const host = document.getElementById('profile-subtab-stats');
+  if (!host) return;
+  let sec = document.getElementById('vermoegen-section');
+  if (!sec) {
+    sec = document.createElement('div');
+    sec.id = 'vermoegen-section';
+    sec.className = 'progress-section';
+    host.insertBefore(sec, host.firstChild);
+  }
+  const v = _ccVermoegen(u);
+  const fmt = n => Math.round(n).toLocaleString('de-DE');
+  const rows = [
+    ['🪙', 'Guthaben',        v.coins],
+    ['🔬', 'Forschung',       v.forschung],
+    ['🗺️', 'Karte & Gebäude', v.karte],
+    ['🌍', 'Welthandel',      v.welt],
+    ['⚔️', 'Kaffee-Krieger',  v.krieger],
+  ];
+  sec.innerHTML = `
+    <div class="section-title">💰 Gesamtvermögen</div>
+    <div class="vermoegen-total">${fmt(v.total)} <span class="vermoegen-cc">CC</span></div>
+    <div class="vermoegen-list">
+      ${rows.map(([e, l, val]) => `
+        <div class="vermoegen-row">
+          <span class="vermoegen-label">${e} ${l}</span>
+          <span class="vermoegen-amount">${fmt(val)} CC</span>
+        </div>`).join('')}
+    </div>
+    <div class="vermoegen-note">Investitionen (Forschung, Karte, Welthandel, Krieger) zählen nicht ins Netto-Gehalt — sie stecken hier im Vermögen.</div>`;
 }
 
 // ✨ Kaffee-Aufgabe der Tage (rotiert alle 3 Tage). Wird dynamisch ins Profil injiziert
@@ -1093,6 +1130,11 @@ async function renderStats() {
 function _informantStatsHtml(u) {
   const items = [];
 
+  if (typeof _ccVermoegen === 'function') {
+    const v = _ccVermoegen(u);
+    items.push(`💰 Gesamtvermögen: ${_fmtCoins(v.total)} CC (🪙 ${_fmtCoins(v.coins)} · 🔬 ${_fmtCoins(v.forschung)} · 🗺️ ${_fmtCoins(v.karte)} · 🌍 ${_fmtCoins(v.welt)} · ⚔️ ${_fmtCoins(v.krieger)})`);
+  }
+
   const rTotal = (typeof getAllResearchItems === 'function') ? getAllResearchItems().length : 0;
   const rOwned = (typeof getAllResearchItems === 'function')
     ? getAllResearchItems().filter(i => (u.research || {})[i.id]).length : 0;
@@ -1238,8 +1280,8 @@ function renderGehalt() {
   const todayKey = new Date().toISOString().slice(0, 10);
   const _tlOf = u => { const tl = (appData.users.find(x => x.id === u.id) || u).map_data?.todayLog; return (tl && tl.date === todayKey) ? (tl.entries || []) : []; };
   const grossToday = u => Math.round(_tlOf(u).reduce((s, e) => s + (e.amount > 0 ? e.amount : 0), 0) * 100) / 100; // Einnahmen
-  const spendToday = u => Math.round(_tlOf(u).reduce((s, e) => s + (e.amount < 0 ? -e.amount : 0), 0) * 100) / 100; // Ausgaben (positiv)
-  const netToday   = u => Math.round(_tlOf(u).reduce((s, e) => s + (e.amount || 0), 0) * 100) / 100;                // Netto = Einnahmen − Ausgaben
+  const spendToday = u => Math.round(_tlOf(u).reduce((s, e) => s + ((e.amount < 0 && !e.invest) ? -e.amount : 0), 0) * 100) / 100; // Konsum-Ausgaben (ohne Investitionen)
+  const netToday   = u => Math.round(_tlOf(u).reduce((s, e) => s + (e.invest ? 0 : (e.amount || 0)), 0) * 100) / 100;             // Netto = Einnahmen − Konsum-Ausgaben (Investitionen zählen nicht)
 
   // Metrik per Umschalter (📈 Brutto / 🧮 Netto), Fallback auf Verfügbarkeit. Beide Werte
   // liegen in jedem Snapshot → Umschalten zeigt auch die Altdaten der anderen Metrik.
@@ -1324,7 +1366,7 @@ function renderGehalt() {
     ];
   }
   const footer = metric === 'net'
-    ? '<strong>🧮 Netto</strong> = alle heute realisierten Einnahmen (Tassen, ⚔️ Kämpfe, 🪙 Schätze, Forschung, Welt, Login, Aufgaben) minus 🧾 Ausgaben (🧪 Tränke, Steuer-Events, Garde-Kosten, Investitionen). Für die Brutto-Einnahmen oben auf 📈 umschalten.'
+    ? '<strong>🧮 Netto</strong> = alle heute realisierten Einnahmen (Tassen, ⚔️ Kämpfe, 🪙 Schätze, Forschung, Welt, Login, Aufgaben) minus 🧾 Ausgaben (🧪 Tränke, Reparatur, Steuer-Events, Strafen). Investitionen (Forschung, Karte, Welthandel, Krieger) zählen NICHT ins Netto — sie stecken im 💰 Gesamtvermögen (Profil). Für die Brutto-Einnahmen oben auf 📈 umschalten.'
     : '<strong>📈 Einnahmen</strong> = das realisierte Brutto-Tageseinkommen (Tassen, ⚔️ Kämpfe, 🪙 Schätze, Forschung, Welt, Login, Aufgaben) — die ursprüngliche Grafik. Für Netto (nach Ausgaben) oben auf 🧮 umschalten.';
 
   document.getElementById('period-summary').innerHTML = toggleHtml + `
@@ -1444,8 +1486,12 @@ function _ccBldCount(u) {
 function _ccResearchScore(u) {
   return (typeof calcResearchScore === 'function') ? calcResearchScore(u.research || {}) : 0;
 }
+// 👑 "Reichster Kaffeebaron" (Gesamtvermögen) = liquides Guthaben + ALLE wertbildenden
+// Investitionen: Forschung + Karte/Gebäude + Welthandel + Kaffee-Krieger. Bewusst der
+// vollständige Superset (das frühere _ccWealth ließ Welt + Krieger weg) — Investitionen
+// mindern nicht mehr das Netto-Gehalt (invest:true), sondern stecken hier im Vermögen.
 function _ccWealth(u) {
-  return Math.round((u.coins || 0) + _ccResearchScore(u) + _ccBldScore(u));
+  return _ccVermoegen(u).total;
 }
 function _ccTreasures(u) { return Object.keys(u.map_data?.treasures || {}).length; }
 // Lifetime-CC-Summe aus Kartenschätzen — map_data.totalTreasureCc, mitgeführt seit 2026-07-02
@@ -1476,6 +1522,87 @@ function _ccWorldInvested(u) {
 function _ccGovernments(u) {
   return (typeof worldGovernments === 'function') ? worldGovernments(appData?.worldInvestments, u.id) : 0;
 }
+// 🗺️ Wert der besessenen Karten-Ausrüstung (Item-Slots, map_data.upgrades).
+function _ccMapUpgradeValue(u) {
+  if (typeof KARTE_ITEMS === 'undefined') return 0;
+  const up = u.map_data?.upgrades || {};
+  let s = 0;
+  for (const it of KARTE_ITEMS) if (up[it.key]) s += it.cost || 0;
+  return s;
+}
+// ⚔️ Wert der besessenen Kaffee-Krieger-Ausrüstung: Waffen/Rüstung/Talisman/Schuhe/Scan +
+// Begleiter + Reittiere (alle in dungeon_data.owned). Tränke zählen NICHT (Verbrauchsgut).
+function _ccKriegerGear(u) {
+  const owned = u.dungeon_data?.owned || {};
+  const pools = [];
+  if (typeof KRIEGER_ITEMS      !== 'undefined') pools.push(KRIEGER_ITEMS);
+  if (typeof KRIEGER_COMPANIONS !== 'undefined') pools.push(KRIEGER_COMPANIONS);
+  if (typeof KRIEGER_MOUNTS     !== 'undefined') pools.push(KRIEGER_MOUNTS);
+  let s = 0;
+  for (const pool of pools) for (const it of pool) if (owned[it.key]) s += it.cost || 0;
+  return s;
+}
+// 🏛️ Wert der eigenen Welt-Gebäude (member-scharf aus appData.worldBuildings): Bau = def.cost,
+// Ausbau L2 = zusätzlich def.cost×0,5 (world.js) → L2 = 1,5×. Handelsattaché-Rabatt bewusst
+// ignoriert (Listenpreis als Anlagewert).
+function _ccWorldBuildingValue(u) {
+  if (typeof worldBuildingDef !== 'function') return 0;
+  let s = 0;
+  for (const b of (appData?.worldBuildings || [])) {
+    if (b.member_id !== u.id) continue;
+    const def = worldBuildingDef(b.country_id, b.building_id);
+    if (def) s += (def.cost || 0) * ((b.level === 2) ? 1.5 : 1);
+  }
+  return Math.round(s);
+}
+// ☕ Garde-Wert (NÄHERUNG): Garde ist nur als Stufe gespeichert (kein gezahlter CC-Betrag),
+// daher über die aktuelle Preisformel geschätzt (calcGardeCost + Ausbau bei Stufe 2).
+function _ccGardeValue(u) {
+  if (typeof calcGardeCost !== 'function') return 0;
+  const byCountry = (typeof worldBuildingsByCountry === 'function') ? worldBuildingsByCountry(appData?.worldBuildings || []) : {};
+  let s = 0;
+  for (const w of (appData?.worldInvestments || [])) {
+    if (w.member_id !== u.id || !w.garde_level) continue;
+    s += calcGardeCost(w.country_id, byCountry);
+    if (w.garde_level >= 2 && typeof calcGardeUpgradeCost === 'function') s += calcGardeUpgradeCost(w.country_id, byCountry);
+  }
+  return Math.round(s);
+}
+// 🏦 Stille-Anlage-Kapital (map_data.worldPassive) je Mitglied.
+function _ccStilleAnlage(u) {
+  return (typeof worldPassiveTotal === 'function') ? Math.round(worldPassiveTotal(u) || 0) : 0;
+}
+// 🔭 Welt-Entwicklungen (map_data.worldDev): dauerhafte Freischaltungen — Kaufpreis (WORLD_DEVS.cost)
+// als Anlagewert (analog Forschung). Der Kaffeebörse-Fund-Saldo (worldDev.fund) ist KEINE Dev,
+// sondern aktiv gehandeltes Kapital → bleibt Netto-Aktivität, nicht hier.
+function _ccWorldDevValue(u) {
+  if (typeof WORLD_DEVS === 'undefined') return 0;
+  const owned = u.map_data?.worldDev || {};
+  let s = 0;
+  for (const d of WORLD_DEVS) if (owned[d.id]) s += d.cost || 0;
+  return s;
+}
+// 🌍 Welthandel-Wert VOLL konserviert (JP 2026-07-11): investierter Einfluss (total_invested)
+// + eigene Welt-Gebäude + Garde (Näherung) + Stille-Anlage-Kapital + Welt-Entwicklungen. So
+// verschwindet kein ins Netto invest:true-gebuchtes CC, sondern taucht hier im Vermögen auf.
+function _ccWorldValue(u) {
+  return _ccWorldInvested(u) + _ccWorldBuildingValue(u) + _ccGardeValue(u)
+    + _ccStilleAnlage(u) + _ccWorldDevValue(u);
+}
+// 💰 Gesamtvermögen aufgestaffelt nach Kategorie (+ Summe). Aus aktuellem Besitz berechnet,
+// keine DB-Migration — reflektiert rückwirkend alles Besessene, egal wann gekauft.
+function _ccVermoegen(u) {
+  const parts = {
+    coins:     Math.round(u.coins || 0),
+    forschung: Math.round(_ccResearchScore(u)),
+    karte:     Math.round(_ccBldScore(u) + _ccMapUpgradeValue(u)),
+    welt:      Math.round(_ccWorldValue(u)),
+    krieger:   Math.round(_ccKriegerGear(u)),
+  };
+  parts.total = parts.coins + parts.forschung + parts.karte + parts.welt + parts.krieger;
+  return parts;
+}
+function _ccVermoegenTotal(u) { return _ccVermoegen(u).total; }
 // Kaffee-Krieger (RPG) — Werte aus u.dungeon_data (NICHT map_data.dungeonStats, das ist die
 // Pixel-Karten-Dungeon-Statistik). Nichtspieler haben kein dungeon_data → 0, fallen also aus
 // dem _ccLeader-Ranking (val>0). Stufe 1 = erster Kampf begonnen.
@@ -1513,7 +1640,7 @@ function renderHallOfFame() {
     { icon: '☕', label: 'Meiste Tassen',      val: hof.max_cups_value,       name: hof.max_cups_name },
     { icon: '🔥', label: 'Längste Serie',       val: hof.longest_streak_value, name: hof.longest_streak_name },
     { icon: '🏆', label: 'Meiste Monatssiege', val: hof.most_wins_value,       name: hof.most_wins_name },
-    { icon: '💰', label: 'Größtes Vermögen',   val: wl.val != null ? `${wl.val.toLocaleString('de-DE')} CC` : null, name: wl.name },
+    { icon: '👑', label: 'Reichster Kaffeebaron', val: wl.val != null ? `${wl.val.toLocaleString('de-DE')} CC` : null, name: wl.name },
     { icon: '🗺️', label: 'Karte erkundet',     val: el.val != null ? `${el.val}%` : null, name: el.name },
     { icon: '🏗️', label: 'Meiste Gebäude',     val: bl.val, name: bl.name },
     { icon: '🔬', label: 'Top-Forschung',      val: rl.val != null ? `${rl.val.toLocaleString('de-DE')} CC` : null, name: rl.name },
@@ -1658,7 +1785,7 @@ function renderPoster() {
   const wallRows = lb.map(u => { const f=Math.min(Math.floor(u.totalCups/10),10); const cells=Array.from({length:10},(_,i)=>`<span class="bc ${i<f?'on':'off'}">🫘</span>`).join(''); const extra=u.totalCups>100?`<span class="extra">+${u.totalCups-100}</span>`:''; return `<tr><td class="wn">${_esc(u.name)}</td><td class="wb">${cells}${extra}</td><td class="wc">${u.totalCups}</td></tr>`; }).join('');
   // Imperium-Champions (gleiche Kennzahlen wie die Hall of Fame)
   const impCats = [
-    { icon:'💰', label:'Vermögen',  L:_ccLeader(leaderboardData, _ccWealth),         fmt:v=>`${v.toLocaleString('de-DE')} CC` },
+    { icon:'👑', label:'Kaffeebaron', L:_ccLeader(leaderboardData, _ccWealth),        fmt:v=>`${v.toLocaleString('de-DE')} CC` },
     { icon:'🗺️', label:'Karte',     L:_ccLeader(leaderboardData, _ccExploredPct),    fmt:v=>`${v}%` },
     { icon:'🏗️', label:'Gebäude',   L:_ccLeader(leaderboardData, _ccBldCount),       fmt:v=>`${v}` },
     { icon:'🔬', label:'Forschung', L:_ccLeader(leaderboardData, _ccResearchScore),  fmt:v=>`${v.toLocaleString('de-DE')} CC` },

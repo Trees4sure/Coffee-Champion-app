@@ -1562,7 +1562,7 @@ async function _handleKarteUpgrade(key, cost, member, state, seed) {
   _updateHeaderCoins({ coins: newCoins });
 
   state.mapData = DB.appendTodayLog({ ...state.mapData, upgrades: { ...(state.mapData.upgrades || {}), [key]: true } },
-    [{ label: `🗺️ ${upg.name}`, amount: -cost, detail: 'Karten-Ausrüstung' }]);
+    [{ label: `🗺️ ${upg.name}`, amount: -cost, detail: 'Karten-Ausrüstung', invest: true }]);
   await DB.updateMapData(member.id, state.mapData).catch(() => {});
   currentUserData = { ...(currentUserData || {}), map_data: state.mapData };
 
@@ -1824,7 +1824,7 @@ async function _handleKarteBuild(buildingKey, ax, ay, member, state, seed) {
   _updateHeaderCoins({ coins: newCoins });
 
   state.mapData = DB.appendTodayLog(karteStartBuild(buildingKey, ax, ay, state.mapData, Date.now()),
-    [{ label: `🏗️ Bau: ${def.name}`, amount: -cost, detail: 'Erkundungskarte' }]);
+    [{ label: `🏗️ Bau: ${def.name}`, amount: -cost, detail: 'Erkundungskarte', invest: true }]);
   try {
     await DB.updateMapData(member.id, state.mapData);
   } catch {
@@ -2792,7 +2792,7 @@ function _kriegerRenderShop(member, state, body) {
         // Ausgabe im Tages-Log (tatsächlich gezahlter Betrag, inkl. evtl. Gutschein-Rabatt).
         try {
           const paid = newDD._costPaid ?? item.cost;
-          const mdLog = await DB.appendTodayLogFresh(member.id, [{ label: `🛒 ${item.name}`, amount: -paid, detail: 'Kaffee-Krieger-Ausrüstung' }]);
+          const mdLog = await DB.appendTodayLogFresh(member.id, [{ label: `🛒 ${item.name}`, amount: -paid, detail: 'Kaffee-Krieger-Ausrüstung', invest: true }]);
           if (mdLog) { currentUserData = { ...(currentUserData || {}), map_data: mdLog }; member.map_data = mdLog; }
         } catch (e) { /* non-critical */ }
         _kriegerRenderShop(member, state, body);
@@ -2876,7 +2876,7 @@ function _kriegerRenderShop(member, state, body) {
         showToast(`🐴 ${comp.name} erworben${state.dd.companion === comp.key ? ' & ausgerüstet' : ''}!`, 'success');
         try { await DB.postMessage(`🐴 ${_esc2(member.name)} hat den Begleiter ${comp.icon} ${_esc2(comp.name)} erworben!`, member.name); } catch (e) {}
         try {
-          const mdLog = await DB.appendTodayLogFresh(member.id, [{ label: `🐴 Begleiter: ${comp.name}`, amount: -comp.cost, detail: 'Kaffee-Krieger-Ausgabe' }]);
+          const mdLog = await DB.appendTodayLogFresh(member.id, [{ label: `🐴 Begleiter: ${comp.name}`, amount: -comp.cost, detail: 'Kaffee-Krieger-Ausgabe', invest: true }]);
           if (mdLog) { currentUserData = { ...(currentUserData || {}), map_data: mdLog }; member.map_data = mdLog; }
         } catch (e) { /* non-critical */ }
         _kriegerRenderShop(member, state, body);
@@ -2932,7 +2932,7 @@ function _kriegerRenderShop(member, state, body) {
         showToast(`🐎 ${mount.name} erworben${state.dd.mount === mount.key ? ' & aufgesessen' : ''}!`, 'success');
         try { await DB.postMessage(`🐎 ${_esc2(member.name)} hat das Reittier ${mount.icon} ${_esc2(mount.name)} erworben!`, member.name); } catch (e) {}
         try {
-          const mdLog = await DB.appendTodayLogFresh(member.id, [{ label: `🐎 Reittier: ${mount.name}`, amount: -mount.cost, detail: 'Kaffee-Krieger-Ausgabe' }]);
+          const mdLog = await DB.appendTodayLogFresh(member.id, [{ label: `🐎 Reittier: ${mount.name}`, amount: -mount.cost, detail: 'Kaffee-Krieger-Ausgabe', invest: true }]);
           if (mdLog) { currentUserData = { ...(currentUserData || {}), map_data: mdLog }; member.map_data = mdLog; }
         } catch (e) { /* non-critical */ }
         // Achievement: erstes Reittier
