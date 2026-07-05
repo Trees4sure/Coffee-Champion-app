@@ -1913,6 +1913,7 @@ function _buildKrieger(member, el) {
 
   el.querySelectorAll('.krieger-subtab').forEach(b => b.onclick = () => {
     _kriegerSubTab = b.dataset.ksub;
+    try { b.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' }); } catch (e) {}
     _kriegerRenderSubTab(member, state, seed, _COLS, _ROWS, _MARGIN);
   });
 
@@ -2079,6 +2080,7 @@ function _kriegerUpdateHud(state) {
 // ── Sub-Tab: Dungeon-Karte ───────────────────────────────────────────────────
 function _kriegerRenderDungeon(member, state, seed, COLS, ROWS, MARGIN, body) {
   const prog = kriegerProgress(state.dd);
+  const exLeft = KRIEGER_EXTRA_STEP_MAX - kriegerExtraStepsBought(state.dd);
   body.innerHTML = `
     <div class="krieger-hud">
       <span>📍 ${kriegerPos(state.dd).x}, ${kriegerPos(state.dd).y} &nbsp;·&nbsp; Stufe ${prog.level}</span>
@@ -2086,11 +2088,34 @@ function _kriegerRenderDungeon(member, state, seed, COLS, ROWS, MARGIN, body) {
     </div>
     <div class="krieger-xp-wrap"><div class="krieger-xp-bar" style="width:${prog.pct}%"></div></div>
     <canvas id="krieger-canvas" class="cc-karte-canvas" width="320" height="280" style="margin-top:8px"></canvas>
+    <button class="cc-karte-buy-steps" id="krieger-buy-steps" style="display:${exLeft > 0 ? '' : 'none'}">
+      +${KRIEGER_EXTRA_STEPS} Schritte kaufen &nbsp;&middot;&nbsp; ${KRIEGER_EXTRA_STEP_COST} 🫘 CC &nbsp;<span style="opacity:.65">(noch ${exLeft}×)</span>
+    </button>
     <p class="cc-karte-hint" style="opacity:.6;font-size:10px;margin-top:4px">⚔️ Tipp auf ein Gegner-/Boss-Feld zum Kämpfen &nbsp;·&nbsp; ziehen = Karte verschieben</p>
     <div id="krieger-popup" class="cc-karte-popup hidden"></div>
   `;
   const canvas = document.getElementById('krieger-canvas');
   if (canvas) kriegerRender(canvas, state.dd, seed, state.vpX, state.vpY);
+
+  // Schritte dazukaufen (bis 3×/Tag, +5 Schritte / 10 CC) — analog Karten-Kauf.
+  document.getElementById('krieger-buy-steps')?.addEventListener('click', async () => {
+    const bought = kriegerExtraStepsBought(state.dd);
+    if (bought >= KRIEGER_EXTRA_STEP_MAX) { showToast('Heute schon 3× gekauft — morgen wieder.', 'error'); return; }
+    const newCoins = await DB.spendCoins(member.id, KRIEGER_EXTRA_STEP_COST);
+    if (newCoins === null) { showToast('Nicht genug CoffeeCoins!', 'error'); return; }
+    state.memberCoins = newCoins;
+    currentUserData = { ...(currentUserData || {}), coins: newCoins };
+    _updateHeaderCoins({ coins: newCoins });
+    state.dd = { ...state.dd, steps_extra_date: _kriegerTodayKey(), steps_extra_count: bought + 1 };
+    try { await DB.saveDungeonData(member.id, state.dd); } catch (e) { /* non-critical */ }
+    // Ausgabe ins Tages-Log/Netto (Konsum, KEIN invest) — fließt in die Bilanz (cat:'krieger').
+    try {
+      const mdLog = await DB.appendTodayLogFresh(member.id, [{ label: `👣 +${KRIEGER_EXTRA_STEPS} Krieger-Schritte gekauft`, amount: -KRIEGER_EXTRA_STEP_COST, cat: 'krieger', detail: 'Kaffee-Krieger-Dungeon' }]);
+      if (mdLog) { currentUserData = { ...(currentUserData || {}), map_data: mdLog }; member.map_data = mdLog; }
+    } catch (e) { /* non-critical */ }
+    showToast(`✅ +${KRIEGER_EXTRA_STEPS} Schritte freigeschaltet!`, 'success');
+    _kriegerRenderDungeon(member, state, seed, COLS, ROWS, MARGIN, body);
+  });
 
   // ── Canvas-Interaktion (Tap = Schritt/Kampf, Ziehen = Karte verschieben) — 1:1 Muster wie _buildKarte ──
   let _down = false, _moved = false, _sx = 0, _sy = 0, _startVpX = 0, _startVpY = 0;

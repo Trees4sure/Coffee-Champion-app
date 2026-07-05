@@ -462,6 +462,8 @@ const DB = (() => {
       try {
         await _checkWorldBuilderDividend(memberId, member, worldByCountry);
       } catch (e) { console.warn('Erbauer-Dividende fehlgeschlagen (nicht kritisch):', e.message); }
+      // 🤝 Kaffee-Kredit: 15 % des Passiv-Einkommens tilgen (No-op ohne aktiven Kredit).
+      if (earned > 0) await applyLoanRepayment(memberId, earned);
       return earned;
     } catch (e) {
       console.warn('claimPassive fehlgeschlagen:', e.message);
@@ -953,6 +955,12 @@ const DB = (() => {
     if (donateGag) {
       try { await postMessage(`☕ ${member.name}: 25 Tassen die Woche — da musst du mal neuen Kaffee spenden! (in echt 😉)`, 'Kaffee-Kasse'); } catch (e) {}
     }
+
+    // 🤝 Kaffee-Kredit: 15 % des heutigen Gehalts-Einkommens (Tassen + Passiv) automatisch
+    // tilgen, falls der Schuldner einen aktiven Kredit hat. No-op sonst. NACH allen
+    // map_data-Writes oben (Server-Log der RPC wird sonst vom Client-Write geclobbert) und
+    // best-effort (blockiert nie die Tassen-Gutschrift).
+    await applyLoanRepayment(memberId, (totalCoins || 0) + (passiveEarned || 0));
 
     // Rückgabe: Array mit Achievement-Popups + Coin-Info als Eigenschaft
     allNew.coinsEarned   = totalCoins;
@@ -1686,6 +1694,55 @@ const DB = (() => {
     return data || { error: 'no_data' };
   }
 
+  // ── 🤝 Kaffee-Kredit (P2P-Kredit in der Gruppe) ──────────────────────────────
+  // Alle Geld-Bewegungen laufen atomar server-seitig (migration_2026-07-12_kredit.sql);
+  // Tages-Logs schreiben die RPCs selbst (auch für offline Geber/Schuldner).
+  async function requestLoan(memberId, target) {
+    const { data, error } = await _sb.rpc('request_loan', { p_borrower_id: memberId, p_target: parseFloat(target) });
+    if (error) return { error: error.message };
+    return data || { error: 'no_data' };
+  }
+  async function fundLoan(loanId, lenderId, amount) {
+    const { data, error } = await _sb.rpc('fund_loan', { p_loan_id: loanId, p_lender_id: lenderId, p_amount: parseFloat(amount) });
+    if (error) return { error: error.message };
+    return data || { error: 'no_data' };
+  }
+  // Wird nach jeder Gehalts-Gutschrift (Tassen/Passiv) aufgerufen — No-op ohne aktiven
+  // Kredit. Best-effort: ein Fehler hier darf die Einkommens-Gutschrift NIE eskalieren.
+  async function applyLoanRepayment(memberId, income) {
+    if (!memberId || !(income > 0)) return null;
+    try {
+      const { data } = await _sb.rpc('apply_loan_repayment', { p_borrower_id: memberId, p_income: parseFloat(income) });
+      return data || null;
+    } catch (e) { console.warn('Kredit-Tilgung fehlgeschlagen (nicht kritisch):', e.message); return null; }
+  }
+  async function repayLoanEarly(memberId, amount) {
+    const { data, error } = await _sb.rpc('repay_loan_early', { p_borrower_id: memberId, p_amount: parseFloat(amount) });
+    if (error) return { error: error.message };
+    return data || { error: 'no_data' };
+  }
+  async function cancelLoan(loanId, memberId) {
+    const { data, error } = await _sb.rpc('cancel_loan', { p_loan_id: loanId, p_borrower_id: memberId });
+    if (error) return { error: error.message };
+    return data || { error: 'no_data' };
+  }
+  // Offene Kreditanfragen der eigenen Gruppe (zum Finanzieren) — inkl. Schuldner-Name.
+  async function fetchGroupLoans() {
+    const { data, error } = await _sb.from('loans')
+      .select('*, borrower:members!loans_borrower_id_fkey(name)')
+      .eq('group_id', _groupId).in('status', ['open']).order('created_at', { ascending: true });
+    if (error) { console.warn('fetchGroupLoans:', error.message); return []; }
+    return data || [];
+  }
+  // Alle Beiträge, an denen ich als Geber beteiligt bin (für „Meine Ausleihen").
+  async function fetchMyContributions(memberId) {
+    const { data, error } = await _sb.from('loan_contributions')
+      .select('*, loan:loans(*, borrower:members!loans_borrower_id_fkey(name))')
+      .eq('lender_id', memberId);
+    if (error) { console.warn('fetchMyContributions:', error.message); return []; }
+    return data || [];
+  }
+
   async function fetchAllWorldInvestments() {
     const { data, error } = await _sb.from('world_investments')
       .select('member_id, country_id, total_invested, garde_level').eq('group_id', _groupId);
@@ -2062,6 +2119,7 @@ const DB = (() => {
     payBaristaBartGroup, addPenaltyToTreasury, payEigeneTasseGroup,
     claimLoginBonus, claimDailyTask,
     investInCountry, investPassive, withdrawPassive, fetchCountryStandings, fetchAllWorldInvestments,
+    requestLoan, fundLoan, applyLoanRepayment, repayLoanEarly, cancelLoan, fetchGroupLoans, fetchMyContributions,
     fetchAllWorldBuildings, buildWorldStructure, buyGarde, fetchTaxStats,
     castSabotage, fetchSabotages,
     fetchAllWorldAlliances, proposeAlliance, respondAlliance, reconcileWorldAlliances, settleAllianceTributes,

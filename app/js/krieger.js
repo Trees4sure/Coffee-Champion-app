@@ -490,10 +490,22 @@ function kriegerXpForLevel(level) { return 50 + 40 * level; }
 // werden können"): Startwert 5→10 angehoben, komplette Kurve um +5 verschoben (gleiche Form).
 // dd optional (2026-07-05): wenn übergeben, wird der Stiefel-Bonus (kriegerFeetBonus)
 // addiert. Bestandsschutz: ohne dd (alte Aufrufe) unverändertes Verhalten.
+// Schritte dazukaufen (analog Karte, 2026-07-12): bis 3×/Tag je +5 Schritte für 10 CC.
+// Gespeichert in dd.steps_extra_date (Tages-Key) + dd.steps_extra_count (0..3). Tages-Reset
+// implizit über Datumsvergleich. Fließt über kriegerExtraStepBonus in kriegerStepsAllowed.
+const KRIEGER_EXTRA_STEPS     = 5;
+const KRIEGER_EXTRA_STEP_COST = 10;
+const KRIEGER_EXTRA_STEP_MAX  = 3;
+function kriegerExtraStepsBought(dd) {
+  if (!dd?.steps_extra_date || dd.steps_extra_date !== _kriegerTodayKey()) return 0;
+  return Math.min(KRIEGER_EXTRA_STEP_MAX, dd.steps_extra_count || 0);
+}
+function kriegerExtraStepBonus(dd) { return kriegerExtraStepsBought(dd) * KRIEGER_EXTRA_STEPS; }
 function kriegerStepsAllowed(level, dd) {
   const lvl = level || 1;
   const base = lvl <= 10 ? 10 + (lvl - 1) * 2 : 28 + Math.floor((lvl - 10) / 5) * 5;
-  return base + (dd ? kriegerFeetBonus(dd) : 0) + (dd ? kriegerMountStepBonus(dd) : 0);
+  return base + (dd ? kriegerFeetBonus(dd) : 0) + (dd ? kriegerMountStepBonus(dd) : 0)
+              + (dd ? kriegerExtraStepBonus(dd) : 0);
 }
 function kriegerProgress(dd) {
   const level = dd?.level || 1, xp = dd?.xp || 0;
