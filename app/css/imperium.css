@@ -972,13 +972,25 @@
 .ciq-toggle-btn.open .ciq-toggle-arrow { transform: rotate(90deg); }
 
 /* ── Kaffee-Krieger ─────────────────────────────────────────────────────────── */
-.krieger-subtabs { display: flex; gap: 6px; margin-bottom: 12px; }
+/* Subtab-Leiste: horizontal scrollbar (5 Tabs passen am Handy nicht nebeneinander —
+   ohne Scroll war „Fortschritt" unerreichbar). nowrap + flex-shrink:0 verhindert Quetschen/Umbruch. */
+.krieger-subtabs {
+  display: flex; gap: 6px; margin-bottom: 12px;
+  flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin; padding-bottom: 4px;
+}
+.krieger-subtabs::-webkit-scrollbar { height: 4px; }
+.krieger-subtabs::-webkit-scrollbar-thumb { background: rgba(255,255,255,.15); border-radius: 4px; }
 .krieger-subtab {
-  padding: 7px 14px; font-size: .8rem; font-weight: 600;
+  padding: 7px 14px; font-size: .8rem; font-weight: 600; white-space: nowrap; flex: 0 0 auto;
   background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1);
   border-radius: 8px; color: rgba(255,255,255,.55); cursor: pointer;
 }
 .krieger-subtab.active { background: rgba(212,175,55,.18); border-color: rgba(212,175,55,.4); color: #FAC775; }
+@media (max-width: 480px) {
+  .krieger-subtabs { gap: 5px; }
+  .krieger-subtab { padding: 6px 10px; font-size: .74rem; }
+}
 
 .krieger-hud {
   display: flex; justify-content: space-between; align-items: center;
