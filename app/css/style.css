@@ -575,6 +575,10 @@ nav::-webkit-scrollbar { display: none; }
 /* ── "Was ist neu"-Popup (nutzt dieselben .quiz-*-Bausteine, eigene ID) ──────── */
 #whats-new-modal { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; }
 #whats-new-modal.hidden { display: none; }
+
+/* ── Kaffee-Kredit-Popup (nutzt dieselben .quiz-*-Bausteine, eigene ID) ──────── */
+#loan-modal { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; }
+#loan-modal.hidden { display: none; }
 .quiz-backdrop { position: absolute; inset: 0; background: #000000cc; backdrop-filter: blur(3px); }
 .quiz-box { position: relative; width: min(440px, 92vw); max-height: 88vh; overflow-y: auto; }
 .quiz-card {
