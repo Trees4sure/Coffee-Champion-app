@@ -212,9 +212,9 @@ const KRIEGER_ITEMS = [
   // ── Kaffeesatz-Lesen / Sicht (Etappe 4, Slot 'scan') — kulturunabhängig, KEINE Kampfwerte.
   // Deckt Feld-KATEGORIEN im Nebel auf (⚔️/🪙), nie exakte Belohnung. Rein clientseitig
   // (kein Eintrag in _krieger_item_stats nötig, da dungeon_fight sie nicht liest).
-  { key:'kaffeeglas_scan', slot:'scan', culture:null, tier:1, icon:'🔍', name:'Kaffee-Glas',        cost:200, minLevel:20, atk:0, def:0, crit:0, scan:'line',    scanDesc:'Deckt 5 Felder in der zuletzt gelaufenen Richtung auf.' },
-  { key:'wirbelsud_scan',  slot:'scan', culture:null, tier:2, icon:'🌀', name:'Wirbel-Sud',         cost:450, minLevel:40, atk:0, def:0, crit:0, scan:'ring',    scanDesc:'Deckt einen Ring bei Radius 3 um dich auf (aktualisiert sich beim Laufen).' },
-  { key:'orakel_scan',     slot:'scan', culture:null, tier:3, icon:'🔮', name:'Kaffeesatz-Orakel',  cost:850, minLevel:60, atk:0, def:0, crit:0, scan:'checker', scanDesc:'Deckt jedes 2. Feld in Radius 6 auf — große, aber lückenhafte Sicht.' },
+  { key:'kaffeeglas_scan', slot:'scan', culture:null, tier:1, icon:'🔍', name:'Kaffee-Glas',        cost:200, minLevel:5, atk:0, def:0, crit:0, scan:'line',    scanDesc:'Deckt 5 Felder in der zuletzt gelaufenen Richtung auf.' },
+  { key:'wirbelsud_scan',  slot:'scan', culture:null, tier:2, icon:'🌀', name:'Wirbel-Sud',         cost:450, minLevel:20, atk:0, def:0, crit:0, scan:'ring',    scanDesc:'Deckt einen Ring bei Radius 3 um dich auf (aktualisiert sich beim Laufen).' },
+  { key:'orakel_scan',     slot:'scan', culture:null, tier:3, icon:'🔮', name:'Kaffeesatz-Orakel',  cost:850, minLevel:45, atk:0, def:0, crit:0, scan:'checker', scanDesc:'Deckt jedes 2. Feld in Radius 6 auf — große, aber lückenhafte Sicht.' },
 ];
 
 // ── Begleiter (4. Slot, Etappe 3) ─────────────────────────────────────────────
@@ -222,10 +222,10 @@ const KRIEGER_ITEMS = [
 // (keine Regeländerung am bestehenden Set). Nur EINER gleichzeitig aktiv (dd.companion = key).
 // Besitz in dd.owned (wie Items), Wirkung serverseitig in dungeon_fight (Key-basiert).
 const KRIEGER_COMPANIONS = [
-  { key:'falke_mittelalter', culture:'mittelalter', icon:'🦅', name:'Wappenfalke',    cost:600, minLevel:40, desc:'+10% CoffeeCoins nach jedem Sieg.' },
-  { key:'pudel_europa',      culture:'europa',      icon:'🐩', name:'Salon-Pudel',    cost:600, minLevel:40, desc:'+10% EP nach jedem Sieg.' },
-  { key:'kamel_orient',      culture:'orient',      icon:'🐪', name:'Karawanen-Kamel',cost:600, minLevel:40, desc:'+50% Trost-EP bei einer Niederlage.' },
-  { key:'lama_suedamerika',  culture:'suedamerika', icon:'🦙', name:'Anden-Lama',     cost:600, minLevel:40, desc:'Heilt 2% Max-HP pro Kampfrunde.' },
+  { key:'falke_mittelalter', culture:'mittelalter', icon:'🦅', name:'Wappenfalke',    cost:600, minLevel:10, desc:'+10% CoffeeCoins nach jedem Sieg.' },
+  { key:'pudel_europa',      culture:'europa',      icon:'🐩', name:'Salon-Pudel',    cost:600, minLevel:10, desc:'+10% EP nach jedem Sieg.' },
+  { key:'kamel_orient',      culture:'orient',      icon:'🐪', name:'Karawanen-Kamel',cost:600, minLevel:10, desc:'+50% Trost-EP bei einer Niederlage.' },
+  { key:'lama_suedamerika',  culture:'suedamerika', icon:'🦙', name:'Anden-Lama',     cost:600, minLevel:10, desc:'Heilt 2% Max-HP pro Kampfrunde.' },
 ];
 function kriegerCompanionByKey(key) { return KRIEGER_COMPANIONS.find(c => c.key === key) || null; }
 function kriegerActiveCompanion(dd) { return kriegerCompanionByKey(dd?.companion); }
@@ -236,10 +236,10 @@ function kriegerActiveCompanion(dd) { return kriegerCompanionByKey(dd?.companion
 // (Anti-Tamper: nur wenn im Besitz). Nur EINES aktiv (dd.mount). Nicht Teil des Set-Bonus.
 // atk/def/crit MÜSSEN mit _krieger_mount_stats() in migration_2026-07-09 übereinstimmen.
 const KRIEGER_MOUNTS = [
-  { key:'pferd_mount',   icon:'🐴', name:'Streitross',  cost:700,  minLevel:30, steps:10, atk:5,  def:5,  crit:0, desc:'+10 Schritte/Tag · im Kampf +5 ATK & +5 DEF.' },
-  { key:'pegasus_mount', icon:'🦄', name:'Pegasus',     cost:1000, minLevel:50, steps:12, atk:0,  def:12, crit:0, desc:'+12 Schritte/Tag · im Kampf +12 DEF.' },
-  { key:'greif_mount',   icon:'🦅', name:'Greif',       cost:1100, minLevel:55, steps:14, atk:0,  def:0,  crit:8, desc:'+14 Schritte/Tag · im Kampf +8 CRIT-Chance.' },
-  { key:'dino_mount',    icon:'🦖', name:'Ur-Saurier',  cost:1300, minLevel:70, steps:8,  atk:14, def:0,  crit:0, desc:'+8 Schritte/Tag · im Kampf +14 ATK.' },
+  { key:'pferd_mount',   icon:'🐴', name:'Streitross',  cost:700,  minLevel:15, steps:10, atk:5,  def:5,  crit:0, desc:'+10 Schritte/Tag · im Kampf +5 ATK & +5 DEF.' },
+  { key:'pegasus_mount', icon:'🦄', name:'Pegasus',     cost:1000, minLevel:30, steps:12, atk:0,  def:12, crit:0, desc:'+12 Schritte/Tag · im Kampf +12 DEF.' },
+  { key:'greif_mount',   icon:'🦅', name:'Greif',       cost:1100, minLevel:40, steps:14, atk:0,  def:0,  crit:8, desc:'+14 Schritte/Tag · im Kampf +8 CRIT-Chance.' },
+  { key:'dino_mount',    icon:'🦖', name:'Ur-Saurier',  cost:1300, minLevel:55, steps:8,  atk:14, def:0,  crit:0, desc:'+8 Schritte/Tag · im Kampf +14 ATK.' },
 ];
 function kriegerMountByKey(key) { return KRIEGER_MOUNTS.find(m => m.key === key) || null; }
 function kriegerActiveMount(dd) { return kriegerMountByKey(dd?.mount); }
@@ -364,11 +364,21 @@ function kriegerActiveSetCulture(equipped) {
 // in migration_2026-07-04_krieger_erweiterung_e1.sql passen (gleiche Sync-Pflicht wie die Stats).
 const KRIEGER_ENEMIES = [
   { tier:'t1',   name:'Schaum-Gesindel', flavor:['🫧 Milchschaum-Wicht','👹 Bohnen-Goblin','🟤 Kaffeesatz-Schleim'], abilities:['aufschaeumen','bohnenwurf','zaeh'], hp:60,  atk:11, def:2,  ccMin:20,  ccMax:35,  ep:25,  minLevel:1,  maxDist:15 },
-  { tier:'t2',   name:'Mahlwerk-Bande',  flavor:['⚙️ Mahlwerk-Golem','👻 Filterpapier-Geist','🔨 Tamper-Troll'],      abilities:['stampfer','durchsichtig','verdichtung'], hp:110, atk:16, def:7,  ccMin:45,  ccMax:75,  ep:55,  minLevel:15, maxDist:35 },
-  { tier:'t3',   name:'Röster-Horde',    flavor:['🔥 Röstkammer-Zwerg','🕷️ Säure-Spinne','🐍 Crema-Hydra'],          abilities:['roestfeuer','aetzend','regeneration'], hp:200, atk:25, def:13, ccMin:90,  ccMax:140, ep:100, minLevel:30, maxDist:60 },
-  { tier:'t4',   name:'Koffein-Elite',   flavor:['⚡ Koffein-Berserker','👻 Espresso-Geist','🗿 Robusta-Titan'],      abilities:['adrenalinschub','geistform','bitterkern'], hp:340, atk:36, def:20, ccMin:170, ccMax:260, ep:170, minLevel:50, maxDist:90 },
-  { tier:'boss', name:'Der Espresso-Drache', flavor:['🐉 Der Espresso-Drache'], abilities:['flammenatem'], hp:650, atk:50, def:28, ccMin:350, ccMax:550, ep:350, minLevel:80, maxDist:9999 },
+  { tier:'t2',   name:'Mahlwerk-Bande',  flavor:['⚙️ Mahlwerk-Golem','👻 Filterpapier-Geist','🔨 Tamper-Troll'],      abilities:['stampfer','durchsichtig','verdichtung'], hp:110, atk:16, def:7,  ccMin:45,  ccMax:75,  ep:55,  minLevel:8,  maxDist:35 },
+  { tier:'t3',   name:'Röster-Horde',    flavor:['🔥 Röstkammer-Zwerg','🕷️ Säure-Spinne','🐍 Crema-Hydra'],          abilities:['roestfeuer','aetzend','regeneration'], hp:200, atk:25, def:13, ccMin:90,  ccMax:140, ep:100, minLevel:18, maxDist:60 },
+  { tier:'t4',   name:'Koffein-Elite',   flavor:['⚡ Koffein-Berserker','👻 Espresso-Geist','🗿 Robusta-Titan'],      abilities:['adrenalinschub','geistform','bitterkern'], hp:340, atk:36, def:20, ccMin:170, ccMax:260, ep:170, minLevel:32, maxDist:90 },
+  { tier:'boss', name:'Der Espresso-Drache', flavor:['🐉 Der Espresso-Drache'], abilities:['flammenatem'], hp:650, atk:50, def:28, ccMin:350, ccMax:550, ep:350, minLevel:55, maxDist:9999 },
 ];
+
+// Flavor-Staffelung (Spiegel zu _krieger_flavor_mod in dungeon_fight): die 3 Flavor-
+// Varianten je Tier geben gestaffelte Werte — idx0 ×0.7 (schwach), idx1 ×1.0, idx2 ×1.4
+// (zäh). Boss + fehlender Index → ×1.0. Skaliert HP/ATK/DEF (Anzeige) und serverseitig EP.
+function kriegerFlavorMod(tier, idx) {
+  if (tier === 'boss' || idx == null) return 1;
+  if (idx === 0) return 0.7;
+  if (idx === 2) return 1.4;
+  return 1;
+}
 
 // Anzeige-Metadaten zu jeder Gegner-Signatur-Fähigkeit (Kampfvorschau + Log-Zeilen).
 const KRIEGER_ENEMY_ABILITIES = {
@@ -388,28 +398,31 @@ const KRIEGER_ENEMY_ABILITIES = {
 };
 function kriegerEnemyAbility(key) { return KRIEGER_ENEMY_ABILITIES[key] || null; }
 
-// ── Talentbaum (1 Punkt je 10 Stufen, lineare Freischaltung) ─────────────────
-// Effekte werden serverseitig in dungeon_fight angewendet (Schadensformel); der
+// ── Talentbaum (1 Punkt je 5 Stufen, lineare Freischaltung) ──────────────────
+// Effekte werden serverseitig in dungeon_fight angewendet (Schadensformel/EP); der
 // Client spiegelt nur die statisch anzeigbaren Boni (fein_gemahlen/vollmundig) in
 // _kriegerOwnStats. Talentpunkte werden aus dem Level ABGELEITET (nicht gespeichert):
-//   verfügbar = floor(level/10) − Anzahl vergebener Talente.
+//   verfügbar = floor(level/5) − Anzahl vergebener Talente.
+// Gates 2026-07-12 halbiert (L5..L55 statt L10..L100) + neues 'lehrmeister' (+15% EP,
+// serverseitig in dungeon_fight). Reihenfolge = lineare Freischaltreihenfolge.
 const KRIEGER_TALENTS = [
-  { level:10,  key:'kaffeepause',     icon:'☕', name:'Kaffeepause',       desc:'Einmalige Selbstheilung (15% Max-HP) bei halber HP.' },
-  { level:20,  key:'ristretto',       icon:'⚡', name:'Ristretto-Vorschlag',desc:'Garantierter Bonus-Schaden in Runde 1 (Alpha-Strike).' },
-  { level:30,  key:'roestmeister_wut',icon:'🔥', name:'Röstmeister-Wut',   desc:'Dein Schaden steigt, je niedriger deine HP fällt.' },
-  { level:40,  key:'zweite_kanne',    icon:'🫖', name:'Zweite Kanne',      desc:'15% Chance, einen genutzten Trank nicht zu verbrauchen.' },
-  { level:50,  key:'filterkaffee',    icon:'⏳', name:'Filterkaffee-Geduld',desc:'+2 max. Kampfrunden (mehr Comeback-Chance).' },
-  { level:60,  key:'fein_gemahlen',   icon:'🎯', name:'Fein gemahlen',     desc:'CRIT-Chance pauschal +5 Prozentpunkte.' },
-  { level:70,  key:'nachschlag',      icon:'🔁', name:'Nachschlag',        desc:'10% Chance, nach einem Sieg sofort erneut anzugreifen.' },
-  { level:80,  key:'kalte_nerven',    icon:'🧊', name:'Kalte Nerven',      desc:'Der erste gegnerische Signatur-Skill im Kampf ist wirkungslos.' },
-  { level:90,  key:'vollmundig',      icon:'💪', name:'Vollmundig',        desc:'+8% Max-HP.' },
-  { level:100, key:'meisterroester',  icon:'👑', name:'Meisterröster',     desc:'Alle anderen Talente wirken +50% stärker.' },
+  { level:5,   key:'kaffeepause',     icon:'☕', name:'Kaffeepause',       desc:'Einmalige Selbstheilung (15% Max-HP) bei halber HP.' },
+  { level:10,  key:'lehrmeister',     icon:'📖', name:'Lehrmeister',       desc:'+15% EP nach jedem Kampf (dauerhaft schnelleres Aufsteigen).' },
+  { level:15,  key:'ristretto',       icon:'⚡', name:'Ristretto-Vorschlag',desc:'Garantierter Bonus-Schaden in Runde 1 (Alpha-Strike).' },
+  { level:20,  key:'roestmeister_wut',icon:'🔥', name:'Röstmeister-Wut',   desc:'Dein Schaden steigt, je niedriger deine HP fällt.' },
+  { level:25,  key:'zweite_kanne',    icon:'🫖', name:'Zweite Kanne',      desc:'15% Chance, einen genutzten Trank nicht zu verbrauchen.' },
+  { level:30,  key:'filterkaffee',    icon:'⏳', name:'Filterkaffee-Geduld',desc:'+2 max. Kampfrunden (mehr Comeback-Chance).' },
+  { level:35,  key:'fein_gemahlen',   icon:'🎯', name:'Fein gemahlen',     desc:'CRIT-Chance pauschal +5 Prozentpunkte.' },
+  { level:40,  key:'nachschlag',      icon:'🔁', name:'Nachschlag',        desc:'10% Chance, nach einem Sieg sofort erneut anzugreifen.' },
+  { level:45,  key:'kalte_nerven',    icon:'🧊', name:'Kalte Nerven',      desc:'Der erste gegnerische Signatur-Skill im Kampf ist wirkungslos.' },
+  { level:50,  key:'vollmundig',      icon:'💪', name:'Vollmundig',        desc:'+8% Max-HP.' },
+  { level:55,  key:'meisterroester',  icon:'👑', name:'Meisterröster',     desc:'Alle anderen Talente wirken +50% stärker.' },
 ];
 function kriegerTalentDef(key) { return KRIEGER_TALENTS.find(t => t.key === key) || null; }
 function kriegerAssignedTalentCount(dd) { return Object.keys(dd?.talents || {}).length; }
 // Verfügbare, noch nicht vergebene Talentpunkte — aus dem Level abgeleitet (nie negativ).
 function kriegerTalentPoints(dd) {
-  return Math.max(0, Math.floor((dd?.level || 1) / 10) - kriegerAssignedTalentCount(dd));
+  return Math.max(0, Math.floor((dd?.level || 1) / 5) - kriegerAssignedTalentCount(dd));
 }
 
 // ── Persistente HP (Etappe 2, 2026-07-07) ─────────────────────────────────────
@@ -496,6 +509,8 @@ function kriegerXpForLevel(level) { return 50 + 40 * level; }
 const KRIEGER_EXTRA_STEPS     = 5;
 const KRIEGER_EXTRA_STEP_COST = 10;
 const KRIEGER_EXTRA_STEP_MAX  = 3;
+// Volle Erholung: HP sofort auf 100 % für 60 CC (Alternative zu Cold Brew / „morgen wieder").
+const KRIEGER_FULL_HEAL_COST  = 60;
 function kriegerExtraStepsBought(dd) {
   if (!dd?.steps_extra_date || dd.steps_extra_date !== _kriegerTodayKey()) return 0;
   return Math.min(KRIEGER_EXTRA_STEP_MAX, dd.steps_extra_count || 0);
@@ -636,8 +651,8 @@ function kriegerExploreTile(tx, ty, dd, worldSeed) {
 // ── Kampf-Client (ruft NUR die serverseitige RPC auf — keine Client-Logik) ──────
 // flavorIdx (0-basiert, index-gleich zu enemyDef.flavor/abilities) bestimmt serverseitig
 // die Gegner-Signatur-Fähigkeit. NULL/undefined = keine Fähigkeit (Rückwärtskompatibilität).
-async function kriegerFight(memberId, enemyTier, flavorIdx, potionKey) {
-  return DB.dungeonFight(memberId, enemyTier, flavorIdx, potionKey); // { won, log, cc_awarded, ep_awarded, new_level, leveled_up, set_bonus, rounds, enemy_ability, talent_points_gained, hp, hp_max, potion_used, new_dungeon_data } | { error }
+async function kriegerFight(memberId, enemyTier, flavorIdx, potionKey, potionKey2) {
+  return DB.dungeonFight(memberId, enemyTier, flavorIdx, potionKey, potionKey2); // { won, log, cc_awarded, ep_awarded, new_level, leveled_up, set_bonus, rounds, enemy_ability, talent_points_gained, hp, hp_max, potion_used, potion_used2, new_dungeon_data } | { error }
 }
 
 // ── Canvas-Rendering (analog karteRender in karte.js, aber Labyrinth statt Biom-System):

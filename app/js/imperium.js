@@ -2081,6 +2081,8 @@ function _kriegerUpdateHud(state) {
 function _kriegerRenderDungeon(member, state, seed, COLS, ROWS, MARGIN, body) {
   const prog = kriegerProgress(state.dd);
   const exLeft = KRIEGER_EXTRA_STEP_MAX - kriegerExtraStepsBought(state.dd);
+  const _hpMax0 = (typeof kriegerHpMax === 'function') ? kriegerHpMax(state.dd) : (80 + prog.level * 4);
+  const _hpNow0 = (typeof kriegerHp === 'function') ? kriegerHp(state.dd) : _hpMax0;
   body.innerHTML = `
     <div class="krieger-hud">
       <span>📍 ${kriegerPos(state.dd).x}, ${kriegerPos(state.dd).y} &nbsp;·&nbsp; Stufe ${prog.level}</span>
@@ -2090,6 +2092,9 @@ function _kriegerRenderDungeon(member, state, seed, COLS, ROWS, MARGIN, body) {
     <canvas id="krieger-canvas" class="cc-karte-canvas" width="320" height="280" style="margin-top:8px"></canvas>
     <button class="cc-karte-buy-steps" id="krieger-buy-steps" style="display:${exLeft > 0 ? '' : 'none'}">
       +${KRIEGER_EXTRA_STEPS} Schritte kaufen &nbsp;&middot;&nbsp; ${KRIEGER_EXTRA_STEP_COST} 🫘 CC &nbsp;<span style="opacity:.65">(noch ${exLeft}×)</span>
+    </button>
+    <button class="cc-karte-buy-steps" id="krieger-buy-heal" style="display:${_hpNow0 < _hpMax0 ? '' : 'none'}">
+      🛌 Volle Erholung (❤️ ${_hpNow0}/${_hpMax0}) &nbsp;&middot;&nbsp; ${KRIEGER_FULL_HEAL_COST} 🫘 CC
     </button>
     <p class="cc-karte-hint" style="opacity:.6;font-size:10px;margin-top:4px">⚔️ Tipp auf ein Gegner-/Boss-Feld zum Kämpfen &nbsp;·&nbsp; ziehen = Karte verschieben</p>
     <div id="krieger-popup" class="cc-karte-popup hidden"></div>
@@ -2114,6 +2119,28 @@ function _kriegerRenderDungeon(member, state, seed, COLS, ROWS, MARGIN, body) {
       if (mdLog) { currentUserData = { ...(currentUserData || {}), map_data: mdLog }; member.map_data = mdLog; }
     } catch (e) { /* non-critical */ }
     showToast(`✅ +${KRIEGER_EXTRA_STEPS} Schritte freigeschaltet!`, 'success');
+    _kriegerRenderDungeon(member, state, seed, COLS, ROWS, MARGIN, body);
+  });
+
+  // Volle Erholung kaufen (HP → 100 % für 60 CC). dd.hp ist server-autoritativ, aber wie alle
+  // dd-Schreibvorgänge client-vertraut (Kauf kostet echte CC); der Server clampt beim nächsten
+  // Kampf ohnehin auf sein hpMax (LEAST(hpMax, dd.hp)).
+  document.getElementById('krieger-buy-heal')?.addEventListener('click', async () => {
+    const hpMax = (typeof kriegerHpMax === 'function') ? kriegerHpMax(state.dd) : (80 + (state.dd.level || 1) * 4);
+    const hpNow = (typeof kriegerHp === 'function') ? kriegerHp(state.dd) : hpMax;
+    if (hpNow >= hpMax) { showToast('Du bist bereits voll erholt.', 'info'); return; }
+    const newCoins = await DB.spendCoins(member.id, KRIEGER_FULL_HEAL_COST);
+    if (newCoins === null) { showToast('Nicht genug CoffeeCoins!', 'error'); return; }
+    state.memberCoins = newCoins;
+    currentUserData = { ...(currentUserData || {}), coins: newCoins };
+    _updateHeaderCoins({ coins: newCoins });
+    state.dd = { ...state.dd, hp: hpMax, hpMax: hpMax, hpDate: _kriegerTodayKey() };
+    try { await DB.saveDungeonData(member.id, state.dd); } catch (e) { /* non-critical */ }
+    try {
+      const mdLog = await DB.appendTodayLogFresh(member.id, [{ label: '🛌 Volle Erholung (Krieger)', amount: -KRIEGER_FULL_HEAL_COST, cat: 'krieger', detail: 'Kaffee-Krieger-Dungeon' }]);
+      if (mdLog) { currentUserData = { ...(currentUserData || {}), map_data: mdLog }; member.map_data = mdLog; }
+    } catch (e) { /* non-critical */ }
+    showToast('🛌 Vollständig erholt — ❤️ 100 %!', 'success');
     _kriegerRenderDungeon(member, state, seed, COLS, ROWS, MARGIN, body);
   });
 
@@ -2341,6 +2368,12 @@ function _showKriegerFightPrompt(member, state, tier, seed, COLS, ROWS, MARGIN, 
   const flavor = enemyDef.flavor[flavorIdx] || enemyDef.name;
   const flavorEmoji = flavor.split(' ')[0];
   const flavorName  = flavor.replace(/^\S+\s*/, '') || enemyDef.name;
+  // Flavor-Staffelung (Spiegel zu _krieger_flavor_mod): skalierte Gegnerwerte anzeigen.
+  const fmod = (typeof kriegerFlavorMod === 'function') ? kriegerFlavorMod(tier, flavorIdx) : 1;
+  const eHp  = Math.max(1, Math.round(enemyDef.hp  * fmod));
+  const eAtk = Math.max(1, Math.round(enemyDef.atk * fmod));
+  const eDef = Math.max(0, Math.round(enemyDef.def * fmod));
+  const fLabel = fmod < 1 ? ' · schwach' : (fmod > 1 ? ' · zäh' : '');
   // Gegner-Signatur-Fähigkeit dieses Flavors (bestimmt serverseitig via flavorIdx)
   const ability = (enemyDef.abilities && typeof kriegerEnemyAbility === 'function')
     ? kriegerEnemyAbility(enemyDef.abilities[flavorIdx]) : null;
@@ -2359,7 +2392,7 @@ function _showKriegerFightPrompt(member, state, tier, seed, COLS, ROWS, MARGIN, 
   const hasColdBrew = ownedPotions.some(p => p.key === 'coldbrew');
   // Bei 0 HP nur kämpfbar, wenn ein Cold Brew da ist (heilt serverseitig VOR dem no_hp-Gate).
   const canFight = hpNow > 0 || hasColdBrew;
-  let selectedPotion = null;
+  let selectedBuff = null, selectedHeal = null; // Cold Brew (Heilung) + 1 Buff getrennt wählbar
 
   const popup = document.getElementById('krieger-popup');
   if (!popup) return;
@@ -2370,9 +2403,9 @@ function _showKriegerFightPrompt(member, state, tier, seed, COLS, ROWS, MARGIN, 
         <div class="cc-karte-popup-hdr">${tier === 'boss' ? '🐉 BOSSKAMPF' : '⚔️ Gegner entdeckt'}</div>
         <div class="cc-karte-popup-body" style="flex-direction:column;align-items:stretch;gap:8px">
           <div style="text-align:center;font-size:2em">${_esc2(flavorEmoji)}</div>
-          <div style="text-align:center;font-weight:700">${_esc2(flavorName)} (${_esc2(enemyDef.name)})</div>
+          <div style="text-align:center;font-weight:700">${_esc2(flavorName)} (${_esc2(enemyDef.name)})<span style="font-weight:400;opacity:.7;font-size:.85em">${fLabel}</span></div>
           <div style="display:flex;justify-content:space-between;font-size:12px;opacity:.85">
-            <span>Gegner: ❤️${enemyDef.hp} ⚔️${enemyDef.atk} 🛡️${enemyDef.def}</span>
+            <span>Gegner: ❤️${eHp} ⚔️${eAtk} 🛡️${eDef}</span>
             <span>Du: ⚔️${own.atk} 🛡️${own.def} 🎯${own.crit}%</span>
           </div>
           <div class="krieger-hp-bar-wrap" style="height:7px;border-radius:4px;overflow:hidden;background:rgba(255,255,255,.1)"><div class="krieger-hp-bar player" style="width:${hpPct}%;height:100%;background:${hpNow <= hpMax * 0.34 ? '#e07a5f' : '#6bbf59'}"></div></div>
@@ -2380,7 +2413,7 @@ function _showKriegerFightPrompt(member, state, tier, seed, COLS, ROWS, MARGIN, 
           ${ability ? `<div style="font-size:11px;color:#e59b6b;text-align:center">${_esc2(ability.icon)} Fähigkeit: ${_esc2(ability.name)} — ${_esc2(ability.desc)}</div>` : ''}
           ${setBonus ? `<div style="font-size:11px;color:#FAC775;text-align:center">✨ Set-Bonus aktiv: ${_esc2(setBonus.name)} — ${_esc2(setBonus.desc)}</div>` : ''}
           ${ownedPotions.length ? `
-          <div style="font-size:11px;opacity:.7;text-align:center;margin-top:2px">🧪 Trank einsetzen (optional, 1 pro Kampf):</div>
+          <div style="font-size:11px;opacity:.7;text-align:center;margin-top:2px">🧪 Tränke (optional): 🧊 Cold Brew + 1 Buff gleichzeitig möglich</div>
           <div id="krieger-potion-picker" style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center">
             ${ownedPotions.map(p => `<button class="cc-build-btn krieger-potion-pick" data-potion="${p.key}" style="flex:0 0 auto;font-size:11px;padding:4px 8px;opacity:.7">${p.icon} ${_esc2(p.name)} ×${p.have}</button>`).join('')}
           </div>` : ''}
@@ -2396,20 +2429,22 @@ function _showKriegerFightPrompt(member, state, tier, seed, COLS, ROWS, MARGIN, 
     </div>
   `;
   document.getElementById('krieger-fight-cancel').onclick = () => popup.classList.add('hidden');
-  // Trank-Auswahl (Radio-Verhalten: erneuter Klick hebt auf). Cold Brew ist auch bei 0 HP wählbar.
+  // Trank-Auswahl: Cold Brew (Heilung) UND 1 Buff getrennt wählbar (je erneuter Klick hebt auf).
+  // Buffs sind untereinander exklusiv (Radio); Cold Brew ist ein eigener Slot (auch bei 0 HP wählbar).
   popup.querySelectorAll('.krieger-potion-pick').forEach(b => {
     b.onclick = () => {
       const k = b.dataset.potion;
-      selectedPotion = (selectedPotion === k) ? null : k;
-      popup.querySelectorAll('.krieger-potion-pick').forEach(x => x.style.opacity = (x.dataset.potion === selectedPotion ? '1' : '.7'));
-      // Wenn keine Kraft und ein Nicht-Cold-Brew gewählt ist, bleibt der Kampf gesperrt (Server lehnt ab).
+      if (k === 'coldbrew') selectedHeal = (selectedHeal === k) ? null : k;
+      else                  selectedBuff = (selectedBuff === k) ? null : k;
+      popup.querySelectorAll('.krieger-potion-pick').forEach(x =>
+        x.style.opacity = (x.dataset.potion === selectedHeal || x.dataset.potion === selectedBuff) ? '1' : '.7');
     };
   });
   const goBtn = document.getElementById('krieger-fight-go');
-  if (goBtn) goBtn.onclick = () => _runKriegerFight(member, state, tier, seed, COLS, ROWS, MARGIN, key, flavorIdx, selectedPotion);
+  if (goBtn) goBtn.onclick = () => _runKriegerFight(member, state, tier, seed, COLS, ROWS, MARGIN, key, flavorIdx, selectedBuff, selectedHeal);
 }
 
-async function _runKriegerFight(member, state, tier, seed, COLS, ROWS, MARGIN, key, flavorIdx, potionKey) {
+async function _runKriegerFight(member, state, tier, seed, COLS, ROWS, MARGIN, key, flavorIdx, potionKey, potionKey2) {
   const popup = document.getElementById('krieger-popup');
   const btn = document.getElementById('krieger-fight-go');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Kämpft …'; }
@@ -2418,7 +2453,7 @@ async function _runKriegerFight(member, state, tier, seed, COLS, ROWS, MARGIN, k
   const _prevGolden = (typeof kriegerGoldenBeanProgress === 'function') ? kriegerGoldenBeanProgress(state.dd) : { done: 0, complete: false };
 
   let result;
-  try { result = await kriegerFight(member.id, tier, flavorIdx, potionKey || null); }
+  try { result = await kriegerFight(member.id, tier, flavorIdx, potionKey || null, potionKey2 || null); }
   catch (e) { showToast(e.message || 'Kampf fehlgeschlagen', 'error'); if (btn) btn.disabled = false; return; }
   if (result?.error) {
     const msg = {
@@ -2427,6 +2462,7 @@ async function _runKriegerFight(member, state, tier, seed, COLS, ROWS, MARGIN, k
       unknown_enemy:    'Unbekannter Gegner.',
       no_hp:            'Keine Kraft mehr — heile dich (Cold Brew) oder komm morgen wieder.',
       no_potion:        'Dieser Trank ist nicht mehr im Bestand.',
+      buff_stack:       'Nur Cold Brew + 1 Buff möglich — nicht zwei Buffs.',
     }[result.error] || 'Kampf fehlgeschlagen.';
     showToast(msg, 'info');
     if (btn) btn.disabled = false;
@@ -2446,7 +2482,10 @@ async function _runKriegerFight(member, state, tier, seed, COLS, ROWS, MARGIN, k
   const logEl  = document.getElementById('krieger-log');
   const ehpBar = document.getElementById('krieger-ehp');
   const phpBar = document.getElementById('krieger-php');
-  const enemyHpMax = enemyDef.hp;
+  // Flavor-Staffelung (Spiegel zu _krieger_flavor_mod): HP-Balken-Skala an die
+  // serverseitig skalierte Gegner-HP anpassen, sonst passt die Animation nicht.
+  const _fmod = (typeof kriegerFlavorMod === 'function') ? kriegerFlavorMod(tier, flavorIdx) : 1;
+  const enemyHpMax = Math.max(1, Math.round(enemyDef.hp * _fmod));
   const ownHpMax   = (typeof kriegerHpMax === 'function') ? kriegerHpMax(state.dd) : (80 + (state.dd.level || 1) * 4);
   // Spieler-Balken auf den AKTUELLEN Startwert setzen (persistente HP), nicht fix 100%.
   if (phpBar) phpBar.style.width = Math.max(0, ((typeof kriegerHp === 'function' ? kriegerHp(state.dd) : ownHpMax) / (ownHpMax || 1)) * 100) + '%';
