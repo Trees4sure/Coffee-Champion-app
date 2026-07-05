@@ -462,7 +462,7 @@ const DB = (() => {
       try {
         await _checkWorldBuilderDividend(memberId, member, worldByCountry);
       } catch (e) { console.warn('Erbauer-Dividende fehlgeschlagen (nicht kritisch):', e.message); }
-      // 🤝 Kaffee-Kredit: 15 % des Passiv-Einkommens tilgen (No-op ohne aktiven Kredit).
+      // 🤝 Kaffee-Kredit: 25 % des Passiv-Einkommens tilgen (No-op ohne aktiven Kredit).
       if (earned > 0) await applyLoanRepayment(memberId, earned);
       return earned;
     } catch (e) {
@@ -956,7 +956,7 @@ const DB = (() => {
       try { await postMessage(`☕ ${member.name}: 25 Tassen die Woche — da musst du mal neuen Kaffee spenden! (in echt 😉)`, 'Kaffee-Kasse'); } catch (e) {}
     }
 
-    // 🤝 Kaffee-Kredit: 15 % des heutigen Gehalts-Einkommens (Tassen + Passiv) automatisch
+    // 🤝 Kaffee-Kredit: 25 % des heutigen Gehalts-Einkommens (Tassen + Passiv) automatisch
     // tilgen, falls der Schuldner einen aktiven Kredit hat. No-op sonst. NACH allen
     // map_data-Writes oben (Server-Log der RPC wird sonst vom Client-Write geclobbert) und
     // best-effort (blockiert nie die Tassen-Gutschrift).
@@ -1726,19 +1726,19 @@ const DB = (() => {
     if (error) return { error: error.message };
     return data || { error: 'no_data' };
   }
-  // Offene Kreditanfragen der eigenen Gruppe (zum Finanzieren) — inkl. Schuldner-Name.
+  // Offene Kreditanfragen der eigenen Gruppe (zum Finanzieren). Schuldner-Namen löst der
+  // Client aus appData.users auf (kein PostgREST-FK-Embed → robuster gegen Constraint-Namen).
   async function fetchGroupLoans() {
     const { data, error } = await _sb.from('loans')
-      .select('*, borrower:members!loans_borrower_id_fkey(name)')
-      .eq('group_id', _groupId).in('status', ['open']).order('created_at', { ascending: true });
+      .select('*').eq('group_id', _groupId).eq('status', 'open').order('created_at', { ascending: true });
     if (error) { console.warn('fetchGroupLoans:', error.message); return []; }
     return data || [];
   }
-  // Alle Beiträge, an denen ich als Geber beteiligt bin (für „Meine Ausleihen").
+  // Alle Beiträge, an denen ich als Geber beteiligt bin (für „Meine Ausleihen") + der
+  // zugehörige Kredit (Vorwärts-Embed über die loan_id-FK = PostgREST-Standard, robust).
   async function fetchMyContributions(memberId) {
     const { data, error } = await _sb.from('loan_contributions')
-      .select('*, loan:loans(*, borrower:members!loans_borrower_id_fkey(name))')
-      .eq('lender_id', memberId);
+      .select('*, loan:loans(*)').eq('lender_id', memberId);
     if (error) { console.warn('fetchMyContributions:', error.message); return []; }
     return data || [];
   }

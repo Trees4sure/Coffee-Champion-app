@@ -104,6 +104,9 @@ function showApp() {
     const modalOpen = (!!qm && !qm.classList.contains('hidden')) || (!!sm && !sm.classList.contains('hidden'));
     if (!modalOpen) checkAndMaybeShowWhatsNew();
   }, 700);
+  // 🤝 Offene Kreditanfragen der Gruppe einmalig als Popup zeigen (nach What's-New;
+  // checkAndMaybePopup gated selbst gegen offene Quiz-/Umfrage-/What's-New-/Loan-Modals).
+  setTimeout(() => { if (typeof Loans !== 'undefined') Loans.checkAndMaybePopup(); }, 1400);
   // Passives Einkommen beim App-Start einlösen (entkoppelt von Tassen). Der
   // Gehalts-Snapshot läuft ERST danach (verkettet), nicht parallel: sein map_data-Write
   // (`{...md0, salaryHistory}`) würde sonst den frisch von claimPassive geschriebenen
@@ -262,6 +265,9 @@ async function refreshData() {
     const el = document.getElementById('last-refreshed');
     if (el) el.textContent = 'Aktualisiert: ' + new Date().toLocaleTimeString('de-DE', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
   } catch (e) { console.warn('Refresh fehlgeschlagen:', e.message); }
+  // 🤝 Neue Kreditanfragen auch bei offener App zeigen (nicht nur bei Login/Wechsel).
+  // Self-gated: Einmal-pro-Spieler-Sperre + kein Popup wenn schon ein Modal offen ist.
+  if (typeof Loans !== 'undefined') Loans.checkAndMaybePopup();
   // Passives Einkommen für lange offene Sessions (intern auf 15 Min / 1 Std gedrosselt).
   // Snapshot verkettet DANACH (nicht parallel), sonst clobbert sein map_data-Write den
   // frisch geschriebenen Passiv-Eintrag im Tages-Log. Bucket-gedrosselt, idempotent.
@@ -275,6 +281,7 @@ async function refreshData() {
 const CC_NEWS_SENDERS = new Set([
   'Gruppenkasse', 'Kaffee-Aufgabe', 'Koffein-Polizei', 'Work-Life-Balance-Polizei', 'Kaffee-Kasse',
   'Büro-Krieg', 'CIQ-Labor', 'Förderstelle', 'Anonymer Tipp', 'Kaffee-Markt', 'Saison-Abschluss',
+  'Kaffee-Kredit',
 ]);
 function _isNewsMsg(m) { return CC_NEWS_SENDERS.has(m.member_name); }
 let _msgTab = 'chat';
@@ -559,10 +566,11 @@ function renderLeaderboard() {
 // App-Start. Idempotent über map_data.whatsNewSeen = WHATS_NEW_VERSION (analog Login-Bonus/
 // Tagesaufgaben-Muster) — wer schon dran war, sieht es nicht erneut. Bei künftigen neuen
 // Features: WHATS_NEW_VERSION + WHATS_NEW_ITEMS aktualisieren, dann poppt es einmalig erneut auf.
-const WHATS_NEW_VERSION = '2026-07-09-kaffee-krieger';
+const WHATS_NEW_VERSION = '2026-07-12-kaffee-kredit';
 const WHATS_NEW_ITEMS = [
   { icon: '⚔️', title: 'Kaffee-Krieger: große Erweiterung', text: 'Der Dungeon wird tiefer: Gegner haben jetzt eigene Signatur-Fähigkeiten, du schaltest mit jeder 10. Stufe ein Talent frei und sammelst die Legende der Goldenen Kaffeebohne. Neu im Shop: 🧪 Tränke (vor dem Kampf einsetzbar), meisterliche Tier-3-Waffen mit Sonder-Mechaniken, 🐴 Begleiter mit passiven Boni und 🐎 Reittiere (Streitross, Pegasus, Greif, Ur-Saurier) für mehr Schritte + einen Kampf-Boost. Deine ❤️ HP tragen jetzt über Kämpfe hinweg (Heilung per Cold Brew oder am nächsten Tag). Und auf der Karte: 🔮 Kaffeesatz-Lesen zeigt dir, was im Nebel lauert, plus Schnellreise auf jedes bereits erkundete Feld.' },
   { icon: '🏦', title: 'Stille Anlage neu aufgestellt', text: 'Deine Stille Anlage wirft jetzt keinen festen Zins mehr ab, sondern einen Anteil am Gebäude-Einkommen des Landes — je mehr du anlegst (bis 1.250 CC/Land), desto größer dein Anteil (bis 20 %). Länder ohne Gebäude werfen nichts ab. Und neu: du kannst dein Kapital jederzeit wieder auszahlen — dabei gehen 20 % als Entschädigung an die Erbauer des Landes, die dir die Erträge erst ermöglicht haben (leeres Land: 0 %).' },
+  { icon: '🤝', title: 'Kaffee-Kredit: einander aushelfen', text: 'Zu finden unter Profil → 📊 Tagesstatistik: Du kannst jetzt einen Kredit über bis zu 500 CC anfragen — Mitspieler zahlen ein (auch mehrere gemeinsam) und du bekommst das Geld sofort. Getilgt wird automatisch mit 25 % jedes deiner Einkommen, bis Kredit + 20 % Zins zurückgezahlt sind; wer will, zahlt vorzeitig ab. Als Geber bekommst du deinen Einsatz plus 20 % Zins anteilig zurück, sobald der Schuldner verdient — so stärkt ihr euer Team und zieht Schwächere mit hoch.' },
 ];
 
 function checkAndMaybeShowWhatsNew() {
@@ -766,6 +774,7 @@ function renderProfile() {
   renderDailyTask(u);
   renderCiqPerks(u);
   renderVermoegen(u);
+  if (typeof Loans !== 'undefined') Loans.renderSection();
 
   document.getElementById('achievements-grid').innerHTML = ACHIEVEMENTS.map(a => `
     <div class="achievement-card ${u.achievements?.[a.id] ? 'unlocked' : 'locked'}" title="${_esc(a.desc)}">
@@ -802,6 +811,9 @@ function renderVermoegen(u) {
     ['🌍', 'Welthandel',      v.welt],
     ['⚔️', 'Kaffee-Krieger',  v.krieger],
   ];
+  // 🤝 Kredit-Netto nur zeigen, wenn vorhanden: Restschuld (Schuldner, negativ) bzw.
+  // offene Tilgung, die dem Geber noch zufließt (positiv).
+  if (v.kredit) rows.push(['🤝', v.kredit < 0 ? 'Restschuld' : 'Offene Tilgung', v.kredit]);
   sec.innerHTML = `
     <div class="section-title">💰 Gesamtvermögen</div>
     <div class="vermoegen-total">${fmt(v.total)} <span class="vermoegen-cc">CC</span></div>
@@ -809,7 +821,7 @@ function renderVermoegen(u) {
       ${rows.map(([e, l, val]) => `
         <div class="vermoegen-row">
           <span class="vermoegen-label">${e} ${l}</span>
-          <span class="vermoegen-amount">${fmt(val)} CC</span>
+          <span class="vermoegen-amount"${val < 0 ? ' style="color:#e0795a"' : ''}>${fmt(val)} CC</span>
         </div>`).join('')}
     </div>
     <div class="vermoegen-note">Investitionen (Forschung, Karte, Welthandel, Krieger) zählen nicht ins Netto-Gehalt — sie stecken hier im Vermögen.</div>
@@ -1135,8 +1147,11 @@ function _informantVermoegenHtml(u) {
   if (typeof _ccVermoegen !== 'function') return '';
   const v = _ccVermoegen(u);
   const cats = [['🪙', v.coins], ['🔬', v.forschung], ['🗺️', v.karte], ['🌍', v.welt], ['⚔️', v.krieger]];
-  const chips = cats.map(([e, val]) =>
-    `<span style="background:rgba(212,170,55,.10);border:1px solid var(--gold-dim);border-radius:6px;padding:2px 7px;font-size:.72rem;white-space:nowrap">${e} ${_fmtCoins(val)}</span>`).join('');
+  if (v.kredit) cats.push(['🤝', v.kredit]); // Kredit-Netto: Restschuld (neg) bzw. offene Tilgung (pos)
+  const chips = cats.map(([e, val]) => {
+    const neg = val < 0;
+    return `<span style="background:${neg ? 'rgba(224,121,90,.12)' : 'rgba(212,170,55,.10)'};border:1px solid ${neg ? 'rgba(224,121,90,.4)' : 'var(--gold-dim)'};border-radius:6px;padding:2px 7px;font-size:.72rem;white-space:nowrap${neg ? ';color:#e0795a' : ''}">${e} ${_fmtCoins(val)}</span>`;
+  }).join('');
   return `<div style="margin:5px 0">
     <div style="font-size:.74rem;color:var(--gold,#d4aa37);font-weight:600;margin-bottom:3px">💰 Gesamtvermögen: ${_fmtCoins(v.total)} CC</div>
     <div style="display:flex;flex-wrap:wrap;gap:5px">${chips}</div>
@@ -1605,14 +1620,20 @@ function _ccWorldValue(u) {
 // 💰 Gesamtvermögen aufgestaffelt nach Kategorie (+ Summe). Aus aktuellem Besitz berechnet,
 // keine DB-Migration — reflektiert rückwirkend alles Besessene, egal wann gekauft.
 function _ccVermoegen(u) {
+  // 🤝 Kaffee-Kredit-Netto: offener Geber-Anspruch (Aktivum, +) − offene Restschuld
+  // (Verbindlichkeit, −). Zähler kommen aus den Kredit-RPCs (map_data.loanClaim/loanDebt).
+  // So zählt geliehenes Kapital nicht als Reichtum (Schuldner negativ) und der Rückzahlungs-
+  // anspruch bleibt beim Geber sichtbar. Bestandsspieler ohne Kredit → 0.
+  const kredit = Math.round((+u.map_data?.loanClaim || 0) - (+u.map_data?.loanDebt || 0));
   const parts = {
     coins:     Math.round(u.coins || 0),
     forschung: Math.round(_ccResearchScore(u)),
     karte:     Math.round(_ccBldScore(u) + _ccMapUpgradeValue(u)),
     welt:      Math.round(_ccWorldValue(u)),
     krieger:   Math.round(_ccKriegerGear(u)),
+    kredit,
   };
-  parts.total = parts.coins + parts.forschung + parts.karte + parts.welt + parts.krieger;
+  parts.total = parts.coins + parts.forschung + parts.karte + parts.welt + parts.krieger + parts.kredit;
   return parts;
 }
 function _ccVermoegenTotal(u) { return _ccVermoegen(u).total; }
