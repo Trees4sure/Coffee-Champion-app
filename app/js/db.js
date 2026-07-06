@@ -1568,16 +1568,19 @@ const DB = (() => {
   // Gleiches Muster/Vertrauensmodell wie buyKriegerItem. Verbrauch passiert serverseitig in dungeon_fight.
   async function buyKriegerPotion(memberId, potion, currentDungeonData) {
     if (!potion || !potion.key) throw new Error('Unbekannter Trank');
-    const { data: newCoins, error } = await _sb.rpc('spend_coins', { p_member_id: memberId, p_amount: potion.cost });
+    // Handelsprivileg-Set (2026-07-13): −15% auf Tränke, wenn das Handel-Set getragen wird.
+    const cost = (typeof kriegerDiscountedCost === 'function')
+      ? kriegerDiscountedCost(potion.cost, currentDungeonData) : potion.cost;
+    const { data: newCoins, error } = await _sb.rpc('spend_coins', { p_member_id: memberId, p_amount: cost });
     if (error) throw new Error(error.message);
     if (newCoins === null || newCoins === undefined) throw new Error('Nicht genug CoffeeCoins');
     const potions = { ...(currentDungeonData?.potions || {}) };
     potions[potion.key] = (potions[potion.key] || 0) + 1;
     // Kumulative Trank-Ausgaben (CC) mitführen — Transparenz im Fortschritt-Tab.
-    const potionsSpent = (currentDungeonData?.potionsSpent || 0) + (potion.cost || 0);
+    const potionsSpent = (currentDungeonData?.potionsSpent || 0) + (cost || 0);
     const newDD = { ...currentDungeonData, potions, potionsSpent };
     await saveDungeonData(memberId, newDD);
-    return newDD;
+    return { ...newDD, _costPaid: cost };
   }
 
   // Kauf eines Krieger-Items: atomarer Coin-Abzug (bestehende spend_coins-RPC) +
@@ -1591,7 +1594,10 @@ const DB = (() => {
     // Ausbau), unabhängig von der Kultur. Nur EIN Gutschein kann je aktiv sein (siehe krieger.js).
     const voucher = currentDungeonData?.equipmentVoucher;
     const applyDiscount = !!(voucher && voucher.slot === item.slot);
-    const cost = applyDiscount ? Math.round(item.cost * (1 - (voucher.pct || 0.5))) : item.cost;
+    let cost = applyDiscount ? Math.round(item.cost * (1 - (voucher.pct || 0.5))) : item.cost;
+    // Handelsprivileg-Set (2026-07-13): −15% auf Ausrüstung, wenn das Handel-Set getragen wird.
+    // Stapelt multiplikativ mit dem Ausrüstungsfund-Gutschein. Anzeige nutzt dieselbe Helferin.
+    if (typeof kriegerDiscountedCost === 'function') cost = kriegerDiscountedCost(cost, currentDungeonData);
     const { data: newCoins, error } = await _sb.rpc('spend_coins', { p_member_id: memberId, p_amount: cost });
     if (error) throw new Error(error.message);
     if (newCoins === null || newCoins === undefined) throw new Error('Nicht genug CoffeeCoins');

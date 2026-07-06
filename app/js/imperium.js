@@ -1938,12 +1938,15 @@ function _kriegerRenderPotions(member, state, body) {
   const dd = state.dd;
   const cards = (typeof KRIEGER_POTIONS !== 'undefined' ? KRIEGER_POTIONS : []).map(p => {
     const have = (typeof kriegerPotionCount === 'function') ? kriegerPotionCount(dd, p.key) : ((dd.potions || {})[p.key] || 0);
-    const canBuy = state.memberCoins >= p.cost;
+    // Handelsprivileg-Set (2026-07-13): −15% Anzeige-/Kaufpreis auf Tränke (gleiche Helferin wie db.js).
+    const effCost = (typeof kriegerDiscountedCost === 'function') ? kriegerDiscountedCost(p.cost, dd) : p.cost;
+    const canBuy = state.memberCoins >= effCost;
+    const priceTxt = effCost < p.cost ? `⚖️ <s>${p.cost}</s> ${effCost}` : `${p.cost}`;
     return `<div class="krieger-item-card${have > 0 ? ' owned' : ''}">
       <div style="font-size:20px">${p.icon}</div>
       <div style="font-size:11px;font-weight:700">${_esc2(p.name)}${have > 0 ? ` <span style="color:#FAC775">×${have}</span>` : ''}</div>
       <div style="font-size:11px;color:var(--muted);margin:3px 0">${_esc2(p.desc)}</div>
-      <div style="margin-top:5px"><button class="cc-build-btn krieger-potion-buy" data-potion="${p.key}"${canBuy ? '' : ' disabled'}>Kaufen · ${p.cost} 🫘</button></div>
+      <div style="margin-top:5px"><button class="cc-build-btn krieger-potion-buy" data-potion="${p.key}"${canBuy ? '' : ' disabled'}>Kaufen · ${priceTxt} 🫘</button></div>
     </div>`;
   }).join('');
 
@@ -1960,12 +1963,13 @@ function _kriegerRenderPotions(member, state, body) {
       try {
         const newDD = await DB.buyKriegerPotion(member.id, potion, state.dd);
         state.dd = newDD;
-        state.memberCoins -= potion.cost;
+        const paid = newDD._costPaid ?? potion.cost;
+        state.memberCoins -= paid;
         currentUserData = { ...(currentUserData || {}), coins: state.memberCoins, dungeon_data: state.dd };
         _updateHeaderCoins({ coins: state.memberCoins });
         // Ausgabe im Tages-Log (Transparenz: fließt als Minus ins Netto-Gehalt des Tages).
         try {
-          const mdLog = await DB.appendTodayLogFresh(member.id, [{ label: `🧪 Trank: ${potion.name}`, amount: -potion.cost, detail: 'Kaffee-Krieger-Ausgabe' }]);
+          const mdLog = await DB.appendTodayLogFresh(member.id, [{ label: `🧪 Trank: ${potion.name}`, amount: -paid, detail: 'Kaffee-Krieger-Ausgabe' }]);
           if (mdLog) { currentUserData = { ...(currentUserData || {}), map_data: mdLog }; member.map_data = mdLog; }
         } catch (e) { /* non-critical */ }
         showToast(`🧪 ${potion.name} gekauft!`, 'success');
@@ -2696,7 +2700,10 @@ function _kriegerRenderShop(member, state, body) {
       const isEquipped = equipped[item.slot] === item.key;
       const locked     = level < item.minLevel;
       const hasVoucher = !!(voucher && voucher.slot === item.slot);
-      const effCost    = hasVoucher ? Math.round(item.cost * (1 - (voucher.pct || 0.5))) : item.cost;
+      const voucherCost = hasVoucher ? Math.round(item.cost * (1 - (voucher.pct || 0.5))) : item.cost;
+      // Handelsprivileg-Set (2026-07-13): −15% Anzeige-/Kaufpreis, wenn das Handel-Set getragen wird
+      // (gleiche Helferin wie db.js → Anzeige == tatsächlich belasteter Betrag). Stapelt mit Gutschein.
+      const effCost    = (typeof kriegerDiscountedCost === 'function') ? kriegerDiscountedCost(voucherCost, dd) : voucherCost;
       const canBuy     = !isOwned && !locked && state.memberCoins >= effCost;
       let action;
       if (isOwned) {
@@ -2706,7 +2713,7 @@ function _kriegerRenderShop(member, state, body) {
       } else if (locked) {
         action = `<span class="ciq-state ciq-lock">🔒 ab Stufe ${item.minLevel}</span>`;
       } else {
-        const priceTxt = hasVoucher ? `🎁 <s>${item.cost}</s> ${effCost}` : `${item.cost}`;
+        const priceTxt = effCost < item.cost ? `${hasVoucher ? '🎁' : '⚖️'} <s>${item.cost}</s> ${effCost}` : `${item.cost}`;
         action = `<button class="cc-build-btn krieger-buy-btn" data-buy-item="${item.key}"${canBuy ? '' : ' disabled'}>Kaufen · ${priceTxt} 🫘</button>`;
       }
       const statTxt = [
@@ -2724,8 +2731,16 @@ function _kriegerRenderShop(member, state, body) {
         <div style="margin-top:5px">${action}</div>
       </div>`;
     }).join('');
+    // Set-Effekt-Transparenz (PLAN_krieger_set_transparenz): den Set-Bonus je Kultur schon vorab
+    // zeigen, nicht erst wenn das Set komplett getragen wird. Text aus KRIEGER_SET_BONUSES (Single
+    // Source of Truth) — fehlender Eintrag → Zeile entfällt (Crash-Sicherheit).
+    const setDef = (typeof KRIEGER_SET_BONUSES !== 'undefined') ? KRIEGER_SET_BONUSES?.[culture] : null;
+    const setCaption = setDef
+      ? `<div class="krieger-set-caption">✨ Set „${_esc2(setDef.name)}" (Waffe + Rüstung + Talisman): ${_esc2(setDef.desc)}</div>`
+      : '';
     return `<div class="krieger-shop-section">
       <div class="section-title" style="font-size:13px">${KRIEGER_CULTURE_NAMES[culture]}</div>
+      ${setCaption}
       <div class="krieger-shop-grid">${cards}</div>
     </div>`;
   }).join('');

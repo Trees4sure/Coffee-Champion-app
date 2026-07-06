@@ -195,6 +195,53 @@ const KRIEGER_ITEMS = [
   { key:'goldscheibe_suedamerika_t2', slot:'talisman', culture:'suedamerika', tier:2, icon:'☀️', name:'Goldene Sonnenscheibe', cost:480, minLevel:20, atk:8, def:8, crit:8 },
   { key:'kondorstiefel_suedamerika_t2', slot:'feet', culture:'suedamerika', tier:2, icon:'🩴', name:'Kondorfeder-Stiefel', cost:420, minLevel:20, atk:0, def:0, crit:0, steps:12 },
 
+  // ══ Utility-Kulturen (2026-07-13) ══════════════════════════════════════════════════════════
+  // 4 neue Kulturen mit NICHT-Kampf-Set-Boni (dungeon_fight bleibt unangetastet; Set-Effekt rein
+  // clientseitig). Die 3 Kernteile (weapon/armor/talisman) gehen dennoch mit ihren Kampfwerten in
+  // den serverseitigen Kampf ein → müssen in _krieger_item_stats/_krieger_item_culture (SQL,
+  // migration_2026-07-13) gespiegelt sein. 'feet' bleibt clientseitig (kein SQL-Eintrag).
+  // Kein Tier 3 (JP-Entscheidung: Kernset + Stiefel, T1+T2).
+
+  // ── Steppe/Nomaden 🐺 · Set „Steppenwind" (+8 Schritte/Tag) — Bogen: ATK/CRIT, wenig DEF ──
+  { key:'bogen_steppe_t1',    slot:'weapon',   culture:'steppe', tier:1, icon:'🏹', name:'Reflexbogen',            cost:150, minLevel:1,  atk:9,  def:-1, crit:2 },
+  { key:'lamellen_steppe_t1', slot:'armor',    culture:'steppe', tier:1, icon:'🧥', name:'Lamellenrüstung',        cost:130, minLevel:1,  atk:0,  def:6,  crit:0 },
+  { key:'feder_steppe_t1',    slot:'talisman', culture:'steppe', tier:1, icon:'🪶', name:'Adlerfeder-Talisman',    cost:140, minLevel:1,  atk:0,  def:0,  crit:5 },
+  { key:'stiefel_steppe_t1',  slot:'feet',     culture:'steppe', tier:1, icon:'👟', name:'Steppenstiefel',         cost:130, minLevel:1,  atk:0,  def:0,  crit:0, steps:5 },
+  { key:'bogen_steppe_t2',    slot:'weapon',   culture:'steppe', tier:2, icon:'🏹', name:'Kompositbogen',          cost:480, minLevel:20, atk:24, def:-2, crit:4 },
+  { key:'lamellen_steppe_t2', slot:'armor',    culture:'steppe', tier:2, icon:'🧥', name:'Schwere Lamellenrüstung',cost:420, minLevel:20, atk:0,  def:18, crit:2 },
+  { key:'feder_steppe_t2',    slot:'talisman', culture:'steppe', tier:2, icon:'🪶', name:'Adlerschwinge-Talisman', cost:440, minLevel:20, atk:0,  def:0,  crit:12 },
+  { key:'stiefel_steppe_t2',  slot:'feet',     culture:'steppe', tier:2, icon:'👟', name:'Nomadenstiefel',         cost:420, minLevel:20, atk:0,  def:0,  crit:0, steps:12 },
+
+  // ── Handelsgilde/Hanse ⚖️ · Set „Handelsprivileg" (−15% Ausrüstung & Tränke) — DEF-Tank ──
+  { key:'degen_handel_t1',  slot:'weapon',   culture:'handel', tier:1, icon:'⚔️', name:'Kontor-Degen',        cost:150, minLevel:1,  atk:6,  def:2,  crit:0 },
+  { key:'robe_handel_t1',   slot:'armor',    culture:'handel', tier:1, icon:'🧥', name:'Zunft-Robe',          cost:140, minLevel:1,  atk:0,  def:8,  crit:0 },
+  { key:'siegel_handel_t1', slot:'talisman', culture:'handel', tier:1, icon:'💰', name:'Handelssiegel',       cost:130, minLevel:1,  atk:0,  def:3,  crit:1 },
+  { key:'schuhe_handel_t1', slot:'feet',     culture:'handel', tier:1, icon:'👞', name:'Kontor-Schuhe',       cost:130, minLevel:1,  atk:0,  def:0,  crit:0, steps:5 },
+  { key:'degen_handel_t2',  slot:'weapon',   culture:'handel', tier:2, icon:'⚔️', name:'Meister-Kontor-Degen',cost:460, minLevel:20, atk:16, def:6,  crit:0 },
+  { key:'robe_handel_t2',   slot:'armor',    culture:'handel', tier:2, icon:'🧥', name:'Hanse-Robe',          cost:440, minLevel:20, atk:0,  def:24, crit:0 },
+  { key:'siegel_handel_t2', slot:'talisman', culture:'handel', tier:2, icon:'💰', name:'Großhandelssiegel',   cost:440, minLevel:20, atk:0,  def:8,  crit:4 },
+  { key:'schuhe_handel_t2', slot:'feet',     culture:'handel', tier:2, icon:'👞', name:'Patrizier-Schuhe',    cost:420, minLevel:20, atk:0,  def:0,  crit:0, steps:12 },
+
+  // ── Freibeuter/Piraten ☠️ · Set „Freibeuterglück" (+50% Fund-Chance im Dungeon) — ATK/CRIT-Raider ──
+  { key:'entermesser_freibeuter_t1', slot:'weapon',   culture:'freibeuter', tier:1, icon:'🗡️', name:'Entermesser',        cost:150, minLevel:1,  atk:8,  def:0,  crit:3 },
+  { key:'mantel_freibeuter_t1',      slot:'armor',    culture:'freibeuter', tier:1, icon:'🧥', name:'Freibeuter-Mantel',  cost:130, minLevel:1,  atk:0,  def:5,  crit:1 },
+  { key:'kompass_freibeuter_t1',     slot:'talisman', culture:'freibeuter', tier:1, icon:'🧭', name:'Schatzkompass',      cost:140, minLevel:1,  atk:1,  def:0,  crit:4 },
+  { key:'seestiefel_freibeuter_t1',  slot:'feet',     culture:'freibeuter', tier:1, icon:'🥾', name:'Seestiefel',         cost:130, minLevel:1,  atk:0,  def:0,  crit:0, steps:5 },
+  { key:'entermesser_freibeuter_t2', slot:'weapon',   culture:'freibeuter', tier:2, icon:'🗡️', name:'Kapitäns-Säbel',     cost:480, minLevel:20, atk:20, def:0,  crit:6 },
+  { key:'mantel_freibeuter_t2',      slot:'armor',    culture:'freibeuter', tier:2, icon:'🧥', name:'Kapitäns-Mantel',    cost:420, minLevel:20, atk:0,  def:14, crit:4 },
+  { key:'kompass_freibeuter_t2',     slot:'talisman', culture:'freibeuter', tier:2, icon:'🧭', name:'Goldkompass',        cost:440, minLevel:20, atk:4,  def:0,  crit:12 },
+  { key:'seestiefel_freibeuter_t2',  slot:'feet',     culture:'freibeuter', tier:2, icon:'🥾', name:'Kaperfahrer-Stiefel',cost:420, minLevel:20, atk:0,  def:0,  crit:0, steps:12 },
+
+  // ── Kundschafter/Späher 🔭 · Set „Späherauge" (deckt passiv die Umgebung r=2 auf) — CRIT-Präzision ──
+  { key:'dolch_spaeher_t1',       slot:'weapon',   culture:'spaeher', tier:1, icon:'🗡️', name:'Späher-Dolch',      cost:150, minLevel:1,  atk:7,  def:0,  crit:4 },
+  { key:'tarnumhang_spaeher_t1',  slot:'armor',    culture:'spaeher', tier:1, icon:'🧥', name:'Tarnumhang',        cost:130, minLevel:1,  atk:0,  def:4,  crit:2 },
+  { key:'fernrohr_spaeher_t1',    slot:'talisman', culture:'spaeher', tier:1, icon:'🔭', name:'Fernrohr-Talisman', cost:140, minLevel:1,  atk:0,  def:0,  crit:6 },
+  { key:'pfadstiefel_spaeher_t1', slot:'feet',     culture:'spaeher', tier:1, icon:'🥾', name:'Pfadfinderstiefel', cost:130, minLevel:1,  atk:0,  def:0,  crit:0, steps:5 },
+  { key:'dolch_spaeher_t2',       slot:'weapon',   culture:'spaeher', tier:2, icon:'🗡️', name:'Meucheldolch',      cost:480, minLevel:20, atk:18, def:0,  crit:8 },
+  { key:'tarnumhang_spaeher_t2',  slot:'armor',    culture:'spaeher', tier:2, icon:'🧥', name:'Schattenumhang',    cost:420, minLevel:20, atk:0,  def:12, crit:6 },
+  { key:'fernrohr_spaeher_t2',    slot:'talisman', culture:'spaeher', tier:2, icon:'🔭', name:'Adlerauge-Fernrohr', cost:440, minLevel:20, atk:0,  def:0,  crit:16 },
+  { key:'pfadstiefel_spaeher_t2', slot:'feet',     culture:'spaeher', tier:2, icon:'🥾', name:'Kundschafterstiefel',cost:420, minLevel:20, atk:0,  def:0,  crit:0, steps:12 },
+
   // ── Tier 3 „Meisterlich" (ab Stufe 60) — 2 Waffen/Kultur: Pfad A klassisch, Pfad B mit Mechanik-Twist ──
   // KEIN Lock/Pfadzwang (JP-Entscheidung): beide frei kauf-/ausrüstbar. `mech` steuert serverseitige
   // Sonder-Logik in dungeon_fight (Waffen-Key-Prefix streitkolben/armbrust/wurfmesser/kriegsbogen) — die
@@ -298,24 +345,33 @@ function kriegerActiveScan(dd) {
 // Felder, die das ausgerüstete Scan-Item aufdeckt (unbeschränkt; Render filtert auf Nebel+Viewport).
 function kriegerScanTiles(dd) {
   const scan = kriegerActiveScan(dd);
-  if (!scan) return [];
+  const spaeher = kriegerSetActive(dd, 'spaeher'); // Späherauge-Set: passiver Umgebungs-Scan
+  if (!scan && !spaeher) return [];
   const p = kriegerPos(dd);
   const out = [];
   const push = (x, y) => { if (x > 0 && x < KRIEGER_WORLD - 1 && y > 0 && y < KRIEGER_WORLD - 1) out.push({ x, y }); };
-  if (scan.scan === 'line') {
+  if (scan && scan.scan === 'line') {
     let dx = dd?.lastDir?.dx || 0, dy = dd?.lastDir?.dy || 0;
     if (dx === 0 && dy === 0) dx = 1; // Fallback: nach rechts, falls noch nie gelaufen
     for (let k = 1; k <= 5; k++) push(p.x + dx * k, p.y + dy * k);
-  } else if (scan.scan === 'ring') {
+  } else if (scan && scan.scan === 'ring') {
     const r = 3;
     for (let x = p.x - r; x <= p.x + r; x++) for (let y = p.y - r; y <= p.y + r; y++) {
       if (Math.max(Math.abs(x - p.x), Math.abs(y - p.y)) === r) push(x, y);
     }
-  } else if (scan.scan === 'checker') {
+  } else if (scan && scan.scan === 'checker') {
     const r = 6;
     for (let x = p.x - r; x <= p.x + r; x++) for (let y = p.y - r; y <= p.y + r; y++) {
       const cd = Math.max(Math.abs(x - p.x), Math.abs(y - p.y));
       if (cd >= 1 && cd <= r && ((x + y) % 2 === 0)) push(x, y);
+    }
+  }
+  // Späherauge (2026-07-13): gefüllter Umgebungs-Block (Chebyshev ≤ r), unabhängig vom Scan-Item.
+  if (spaeher) {
+    const r = KRIEGER_SPAEHER_SET_RADIUS;
+    for (let x = p.x - r; x <= p.x + r; x++) for (let y = p.y - r; y <= p.y + r; y++) {
+      const cd = Math.max(Math.abs(x - p.x), Math.abs(y - p.y));
+      if (cd >= 1 && cd <= r) push(x, y);
     }
   }
   return out;
@@ -326,6 +382,10 @@ const KRIEGER_CULTURE_NAMES = {
   europa:      '🏰 Europäisch',
   orient:      '🌙 Orientalisch',
   suedamerika: '🦙 Südamerikanisch',
+  steppe:      '🐺 Steppe',
+  handel:      '⚖️ Handelsgilde',
+  freibeuter:  '☠️ Freibeuter',
+  spaeher:     '🔭 Kundschafter',
 };
 
 const KRIEGER_SET_BONUSES = {
@@ -333,6 +393,11 @@ const KRIEGER_SET_BONUSES = {
   europa:      { name: 'Hofdiplomatie',  desc: 'Sieg gibt +20% CC' },
   orient:      { name: 'Wüstensturm',    desc: 'CRIT-Chance +10 Prozentpunkte' },
   suedamerika: { name: 'Sonnenkraft',    desc: 'Sieg gibt +20% EP' },
+  // Utility-Sets (2026-07-13): Nicht-Kampf-Boni, rein clientseitig (dungeon_fight unberührt).
+  steppe:      { name: 'Steppenwind',    desc: '+8 Schritte/Tag im Dungeon' },
+  handel:      { name: 'Handelsprivileg',desc: '−15% Preis auf Ausrüstung & Tränke' },
+  freibeuter:  { name: 'Freibeuterglück',desc: '+50% Fund-Chance im Dungeon (Tränke/Ausrüstung/CC)' },
+  spaeher:     { name: 'Späherauge',     desc: 'deckt passiv die Umgebung (Radius 2) im Nebel auf' },
 };
 
 function kriegerItemsBySlot(slot) { return KRIEGER_ITEMS.filter(i => i.slot === slot); }
@@ -355,6 +420,21 @@ function kriegerActiveSetCulture(equipped) {
   return null;
 }
 
+// ── Utility-Set-Boni (2026-07-13) ─────────────────────────────────────────────
+// 4 neue Kulturen mit NICHT-Kampf-Set-Boni. Alle Effekte rein clientseitig (dungeon_fight
+// bleibt unangetastet). Aktiv, sobald weapon+armor+talisman derselben Kultur getragen werden.
+const KRIEGER_STEPPE_SET_STEPS     = 8;    // Steppenwind: +Schritte/Tag im Dungeon
+const KRIEGER_HANDEL_SET_DISCOUNT  = 0.15; // Handelsprivileg: −15% auf Ausrüstung & Tränke
+const KRIEGER_FREIBEUTER_FIND_MULT = 1.5;  // Freibeuterglück: ×1.5 Fund-Chance
+const KRIEGER_SPAEHER_SET_RADIUS   = 2;    // Späherauge: passiver Umgebungs-Scan (Chebyshev r)
+function kriegerSetActive(dd, culture) {
+  return kriegerActiveSetCulture(dd?.equipped) === culture;
+}
+function kriegerSetStepBonus(dd) { return kriegerSetActive(dd, 'steppe') ? KRIEGER_STEPPE_SET_STEPS : 0; }
+function kriegerPriceFactor(dd)  { return kriegerSetActive(dd, 'handel') ? (1 - KRIEGER_HANDEL_SET_DISCOUNT) : 1; }
+function kriegerDiscountedCost(baseCost, dd) { return Math.round((baseCost || 0) * kriegerPriceFactor(dd)); }
+function kriegerFindMult(dd)     { return kriegerSetActive(dd, 'freibeuter') ? KRIEGER_FREIBEUTER_FIND_MULT : 1; }
+
 // ── Gegner (MUSS exakt mit _krieger_enemy_stats in SQL übereinstimmen) ──────
 // CC-Belohnungen 2026-06-30 nach unten korrigiert (User-Feedback "darf nicht zu viel sein"),
 // 2026-07-04 wieder auf die ursprünglichen Plan-Werte angehoben (lohnte sich nicht gegenüber
@@ -363,10 +443,14 @@ function kriegerActiveSetCulture(equipped) {
 // abilities[] MUSS index-gleich zu flavor[] und exakt zu _krieger_enemy_ability(tier,idx)
 // in migration_2026-07-04_krieger_erweiterung_e1.sql passen (gleiche Sync-Pflicht wie die Stats).
 const KRIEGER_ENEMIES = [
+  // Level-Gates 2026-07-13 gesenkt (Balance-Fix, PLAN_krieger_levelgates_senken.md): die t1-Zone
+  // (Distanz ≤15) liefert laut Labyrinth-Simulation im Schnitt nur ~780 erreichbare EP — die alte
+  // t2-Schwelle (Stufe 8 / 1.470 EP) war damit aus reinem t1-Content oft gar nicht erreichbar.
+  // Nur minLevel gesenkt (t2 8→4, t3 18→9, t4 32→16); Distanz-Zonen/Stats/Boss unverändert.
   { tier:'t1',   name:'Schaum-Gesindel', flavor:['🫧 Milchschaum-Wicht','👹 Bohnen-Goblin','🟤 Kaffeesatz-Schleim'], abilities:['aufschaeumen','bohnenwurf','zaeh'], hp:60,  atk:11, def:2,  ccMin:20,  ccMax:35,  ep:25,  minLevel:1,  maxDist:15 },
-  { tier:'t2',   name:'Mahlwerk-Bande',  flavor:['⚙️ Mahlwerk-Golem','👻 Filterpapier-Geist','🔨 Tamper-Troll'],      abilities:['stampfer','durchsichtig','verdichtung'], hp:110, atk:16, def:7,  ccMin:45,  ccMax:75,  ep:55,  minLevel:8,  maxDist:35 },
-  { tier:'t3',   name:'Röster-Horde',    flavor:['🔥 Röstkammer-Zwerg','🕷️ Säure-Spinne','🐍 Crema-Hydra'],          abilities:['roestfeuer','aetzend','regeneration'], hp:200, atk:25, def:13, ccMin:90,  ccMax:140, ep:100, minLevel:18, maxDist:60 },
-  { tier:'t4',   name:'Koffein-Elite',   flavor:['⚡ Koffein-Berserker','👻 Espresso-Geist','🗿 Robusta-Titan'],      abilities:['adrenalinschub','geistform','bitterkern'], hp:340, atk:36, def:20, ccMin:170, ccMax:260, ep:170, minLevel:32, maxDist:90 },
+  { tier:'t2',   name:'Mahlwerk-Bande',  flavor:['⚙️ Mahlwerk-Golem','👻 Filterpapier-Geist','🔨 Tamper-Troll'],      abilities:['stampfer','durchsichtig','verdichtung'], hp:110, atk:16, def:7,  ccMin:45,  ccMax:75,  ep:55,  minLevel:4,  maxDist:35 },
+  { tier:'t3',   name:'Röster-Horde',    flavor:['🔥 Röstkammer-Zwerg','🕷️ Säure-Spinne','🐍 Crema-Hydra'],          abilities:['roestfeuer','aetzend','regeneration'], hp:200, atk:25, def:13, ccMin:90,  ccMax:140, ep:100, minLevel:9,  maxDist:60 },
+  { tier:'t4',   name:'Koffein-Elite',   flavor:['⚡ Koffein-Berserker','👻 Espresso-Geist','🗿 Robusta-Titan'],      abilities:['adrenalinschub','geistform','bitterkern'], hp:340, atk:36, def:20, ccMin:170, ccMax:260, ep:170, minLevel:16, maxDist:90 },
   { tier:'boss', name:'Der Espresso-Drache', flavor:['🐉 Der Espresso-Drache'], abilities:['flammenatem'], hp:650, atk:50, def:28, ccMin:350, ccMax:550, ep:350, minLevel:55, maxDist:9999 },
 ];
 
@@ -520,7 +604,7 @@ function kriegerStepsAllowed(level, dd) {
   const lvl = level || 1;
   const base = lvl <= 10 ? 10 + (lvl - 1) * 2 : 28 + Math.floor((lvl - 10) / 5) * 5;
   return base + (dd ? kriegerFeetBonus(dd) : 0) + (dd ? kriegerMountStepBonus(dd) : 0)
-              + (dd ? kriegerExtraStepBonus(dd) : 0);
+              + (dd ? kriegerExtraStepBonus(dd) : 0) + (dd ? kriegerSetStepBonus(dd) : 0);
 }
 function kriegerProgress(dd) {
   const level = dd?.level || 1, xp = dd?.xp || 0;
@@ -614,7 +698,9 @@ function kriegerExploreTile(tx, ty, dd, worldSeed) {
       encounter = { tier, flavorIdx };
     } else {
       const rGim = _tileRng(tx, ty, 7373, worldSeed)();
-      if (rGim < KRIEGER_GIMMICK_P) {
+      // Freibeuterglück-Set (2026-07-13): erhöht die Fund-Chance clientseitig (×1.5), deterministisch
+      // pro Feld+Tag — ein zuvor „leeres" Feld kann so zum Fund werden. Encounter-Chance bleibt gleich.
+      if (rGim < KRIEGER_GIMMICK_P * kriegerFindMult(dd)) {
         const rType = _tileRng(tx, ty, 9494, worldSeed)();
         if (rType < KRIEGER_VOUCHER_CHANCE && !dd?.equipmentVoucher) {
           const vi = Math.floor(_tileRng(tx, ty, 10101, worldSeed)() * KRIEGER_VOUCHER_FINDS.length);
