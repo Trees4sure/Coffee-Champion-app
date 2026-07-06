@@ -1039,6 +1039,12 @@
 .krieger-slot-icon { font-size: 22px; display: block; margin-bottom: 4px; }
 
 .krieger-shop-section { margin-bottom: 16px; }
+/* Set-Effekt-Vorschau je Kultur-Sektion (PLAN_krieger_set_transparenz, 2026-07-13) */
+.krieger-set-caption {
+  font-size: 11px; color: #FAC775; line-height: 1.35;
+  margin: 2px 0 8px; padding: 4px 8px;
+  background: rgba(212,175,55,.07); border-left: 2px solid rgba(212,175,55,.4); border-radius: 4px;
+}
 .krieger-shop-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 7px; }
 .krieger-item-card {
   background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1);
