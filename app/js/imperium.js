@@ -2368,15 +2368,28 @@ function _kriegerOwnStats(dd) {
 function _showKriegerFightPrompt(member, state, tier, seed, COLS, ROWS, MARGIN, key) {
   const enemyDef = kriegerEnemyDef(tier);
   if (!enemyDef) return;
-  const flavorIdx = Math.floor(Math.random() * enemyDef.flavor.length);
+  // Deterministisch aus den Feld-Koordinaten (2026-07-13b): gleiches Feld → immer
+  // gleicher Flavor + gleiche Stufe (behebt den Reroll-Exploit). Boss: fest Flavor 0 / Stufe 60.
+  const _kc = String(key || '').split(',');
+  const _tx = parseInt(_kc[0], 10), _ty = parseInt(_kc[1], 10);
+  const _coordsOk = Number.isFinite(_tx) && Number.isFinite(_ty);
+  const flavorIdx = (tier === 'boss') ? 0
+    : (_coordsOk && typeof kriegerEnemyFlavorIdx === 'function'
+        ? kriegerEnemyFlavorIdx(_tx, _ty, tier, seed)
+        : Math.floor(Math.random() * enemyDef.flavor.length));
+  const eLevel = (tier === 'boss') ? 60
+    : (_coordsOk && typeof kriegerEnemyLevel === 'function'
+        ? kriegerEnemyLevel(_tx, _ty, tier, seed)
+        : 0);
   const flavor = enemyDef.flavor[flavorIdx] || enemyDef.name;
   const flavorEmoji = flavor.split(' ')[0];
   const flavorName  = flavor.replace(/^\S+\s*/, '') || enemyDef.name;
-  // Flavor-Staffelung (Spiegel zu _krieger_flavor_mod): skalierte Gegnerwerte anzeigen.
+  // Skalierte Gegnerwerte (Flavor-Mod + Level-Bonus) — Spiegel zu dungeon_fight.
   const fmod = (typeof kriegerFlavorMod === 'function') ? kriegerFlavorMod(tier, flavorIdx) : 1;
-  const eHp  = Math.max(1, Math.round(enemyDef.hp  * fmod));
-  const eAtk = Math.max(1, Math.round(enemyDef.atk * fmod));
-  const eDef = Math.max(0, Math.round(enemyDef.def * fmod));
+  const _es = (typeof kriegerEnemyStatsScaled === 'function')
+    ? kriegerEnemyStatsScaled(tier, flavorIdx, eLevel)
+    : { hp: Math.max(1, Math.round(enemyDef.hp * fmod)), atk: Math.max(1, Math.round(enemyDef.atk * fmod)), def: Math.max(0, Math.round(enemyDef.def * fmod)) };
+  const eHp = _es.hp, eAtk = _es.atk, eDef = _es.def;
   const fLabel = fmod < 1 ? ' · schwach' : (fmod > 1 ? ' · zäh' : '');
   // Gegner-Signatur-Fähigkeit dieses Flavors (bestimmt serverseitig via flavorIdx)
   const ability = (enemyDef.abilities && typeof kriegerEnemyAbility === 'function')
@@ -2407,7 +2420,7 @@ function _showKriegerFightPrompt(member, state, tier, seed, COLS, ROWS, MARGIN, 
         <div class="cc-karte-popup-hdr">${tier === 'boss' ? '🐉 BOSSKAMPF' : '⚔️ Gegner entdeckt'}</div>
         <div class="cc-karte-popup-body" style="flex-direction:column;align-items:stretch;gap:8px">
           <div style="text-align:center;font-size:2em">${_esc2(flavorEmoji)}</div>
-          <div style="text-align:center;font-weight:700">${_esc2(flavorName)} (${_esc2(enemyDef.name)})<span style="font-weight:400;opacity:.7;font-size:.85em">${fLabel}</span></div>
+          <div style="text-align:center;font-weight:700">${_esc2(flavorName)} (${_esc2(enemyDef.name)})<span style="font-weight:400;opacity:.7;font-size:.85em">${eLevel > 0 ? ' · Stufe ' + eLevel : ''}${fLabel}</span></div>
           <div style="display:flex;justify-content:space-between;font-size:12px;opacity:.85">
             <span>Gegner: ❤️${eHp} ⚔️${eAtk} 🛡️${eDef}</span>
             <span>Du: ⚔️${own.atk} 🛡️${own.def} 🎯${own.crit}%</span>
@@ -2445,10 +2458,10 @@ function _showKriegerFightPrompt(member, state, tier, seed, COLS, ROWS, MARGIN, 
     };
   });
   const goBtn = document.getElementById('krieger-fight-go');
-  if (goBtn) goBtn.onclick = () => _runKriegerFight(member, state, tier, seed, COLS, ROWS, MARGIN, key, flavorIdx, selectedBuff, selectedHeal);
+  if (goBtn) goBtn.onclick = () => _runKriegerFight(member, state, tier, seed, COLS, ROWS, MARGIN, key, flavorIdx, selectedBuff, selectedHeal, eLevel);
 }
 
-async function _runKriegerFight(member, state, tier, seed, COLS, ROWS, MARGIN, key, flavorIdx, potionKey, potionKey2) {
+async function _runKriegerFight(member, state, tier, seed, COLS, ROWS, MARGIN, key, flavorIdx, potionKey, potionKey2, eLevel) {
   const popup = document.getElementById('krieger-popup');
   const btn = document.getElementById('krieger-fight-go');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Kämpft …'; }
@@ -2457,7 +2470,7 @@ async function _runKriegerFight(member, state, tier, seed, COLS, ROWS, MARGIN, k
   const _prevGolden = (typeof kriegerGoldenBeanProgress === 'function') ? kriegerGoldenBeanProgress(state.dd) : { done: 0, complete: false };
 
   let result;
-  try { result = await kriegerFight(member.id, tier, flavorIdx, potionKey || null, potionKey2 || null); }
+  try { result = await kriegerFight(member.id, tier, flavorIdx, potionKey || null, potionKey2 || null, eLevel == null ? 0 : eLevel); }
   catch (e) { showToast(e.message || 'Kampf fehlgeschlagen', 'error'); if (btn) btn.disabled = false; return; }
   if (result?.error) {
     const msg = {
@@ -2486,10 +2499,12 @@ async function _runKriegerFight(member, state, tier, seed, COLS, ROWS, MARGIN, k
   const logEl  = document.getElementById('krieger-log');
   const ehpBar = document.getElementById('krieger-ehp');
   const phpBar = document.getElementById('krieger-php');
-  // Flavor-Staffelung (Spiegel zu _krieger_flavor_mod): HP-Balken-Skala an die
+  // Flavor-Staffelung + Gegner-Level (Spiegel zu dungeon_fight): HP-Balken-Skala an die
   // serverseitig skalierte Gegner-HP anpassen, sonst passt die Animation nicht.
   const _fmod = (typeof kriegerFlavorMod === 'function') ? kriegerFlavorMod(tier, flavorIdx) : 1;
-  const enemyHpMax = Math.max(1, Math.round(enemyDef.hp * _fmod));
+  const _esRun = (typeof kriegerEnemyStatsScaled === 'function')
+    ? kriegerEnemyStatsScaled(tier, flavorIdx, (eLevel == null ? 0 : eLevel)) : null;
+  const enemyHpMax = _esRun ? _esRun.hp : Math.max(1, Math.round(enemyDef.hp * _fmod));
   const ownHpMax   = (typeof kriegerHpMax === 'function') ? kriegerHpMax(state.dd) : (80 + (state.dd.level || 1) * 4);
   // Spieler-Balken auf den AKTUELLEN Startwert setzen (persistente HP), nicht fix 100%.
   if (phpBar) phpBar.style.width = Math.max(0, ((typeof kriegerHp === 'function' ? kriegerHp(state.dd) : ownHpMax) / (ownHpMax || 1)) * 100) + '%';
@@ -2533,12 +2548,16 @@ async function _runKriegerFight(member, state, tier, seed, COLS, ROWS, MARGIN, k
   const setHtml = result.set_bonus ? `<div style="font-size:11px;color:#FAC775">✨ ${_esc2(KRIEGER_SET_BONUSES[result.set_bonus]?.name || result.set_bonus)}-Bonus angewendet</div>` : '';
   const potHtml = result.potion_used && typeof kriegerPotionByKey === 'function' && kriegerPotionByKey(result.potion_used)
     ? `<div style="font-size:11px;color:#9fd">${kriegerPotionByKey(result.potion_used).icon} ${_esc2(kriegerPotionByKey(result.potion_used).name)} eingesetzt</div>` : '';
+  const savedHtml = (result.potions_saved > 0)
+    ? `<div style="font-size:11px;color:#9fd">🫖 Zweite Kanne: ${result.potions_saved} Trank${result.potions_saved > 1 ? 'e' : ''} nicht verbraucht!</div>` : '';
+  const nachHtml = result.nachschlag
+    ? `<div style="font-size:11px;color:#FAC775">🔁 Nachschlag! Doppelte Beute (CC + EP)</div>` : '';
   const hpHtml = (result.hp != null && result.hp_max != null)
     ? `<div style="font-size:12px;opacity:.85;margin-top:2px">❤️ ${result.hp}/${result.hp_max} HP übrig${result.hp <= 0 ? ' — bis morgen erschöpft (oder Cold Brew)' : ''}</div>` : '';
   resultEl.innerHTML = `
     <div class="${result.won ? 'krieger-result-win' : 'krieger-result-lose'}">${result.won ? '🏆 Sieg!' : '💀 Niederlage'}</div>
     <div style="margin-top:4px">+${result.cc_awarded} 🫘 CC &nbsp;·&nbsp; +${result.ep_awarded} EP</div>
-    ${hpHtml}${potHtml}${levelUpHtml}${setHtml}
+    ${hpHtml}${potHtml}${savedHtml}${nachHtml}${levelUpHtml}${setHtml}
     <button class="cc-karte-popup-close" id="krieger-fight-close" style="margin-top:10px">Schließen</button>
   `;
   document.getElementById('krieger-fight-close').onclick = () => popup.classList.add('hidden');

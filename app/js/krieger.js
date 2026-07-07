@@ -272,7 +272,7 @@ const KRIEGER_COMPANIONS = [
   { key:'falke_mittelalter', culture:'mittelalter', icon:'🦅', name:'Wappenfalke',    cost:600, minLevel:10, desc:'+10% CoffeeCoins nach jedem Sieg.' },
   { key:'pudel_europa',      culture:'europa',      icon:'🐩', name:'Salon-Pudel',    cost:600, minLevel:10, desc:'+10% EP nach jedem Sieg.' },
   { key:'kamel_orient',      culture:'orient',      icon:'🐪', name:'Karawanen-Kamel',cost:600, minLevel:10, desc:'+50% Trost-EP bei einer Niederlage.' },
-  { key:'lama_suedamerika',  culture:'suedamerika', icon:'🦙', name:'Anden-Lama',     cost:600, minLevel:10, desc:'Heilt 2% Max-HP pro Kampfrunde.' },
+  { key:'lama_suedamerika',  culture:'suedamerika', icon:'🦙', name:'Anden-Lama',     cost:600, minLevel:10, desc:'Heilt 2% Max-HP/Runde unter 50% HP (teilt sich den 50%-MaxHP-Deckel mit Sonnenkraft).' },
 ];
 function kriegerCompanionByKey(key) { return KRIEGER_COMPANIONS.find(c => c.key === key) || null; }
 function kriegerActiveCompanion(dd) { return kriegerCompanionByKey(dd?.companion); }
@@ -389,10 +389,10 @@ const KRIEGER_CULTURE_NAMES = {
 };
 
 const KRIEGER_SET_BONUSES = {
-  mittelalter: { name: 'Eisern',         desc: 'Erste 2 gegnerische Treffer pro Kampf −50% Schaden' },
-  europa:      { name: 'Hofdiplomatie',  desc: 'Sieg gibt +20% CC' },
-  orient:      { name: 'Wüstensturm',    desc: 'CRIT-Chance +10 Prozentpunkte' },
-  suedamerika: { name: 'Sonnenkraft',    desc: 'Sieg gibt +20% EP' },
+  mittelalter: { name: 'Eisern',         desc: 'Erste 2 gegnerische Treffer pro Kampf −50% Schaden, alle weiteren −10%' },
+  europa:      { name: 'Hofdiplomatie',  desc: '25% Chance auf einen Extra-Angriff pro Runde + Sieg gibt +20% CC' },
+  orient:      { name: 'Wüstensturm',    desc: 'CRIT-Chance +10 Prozentpunkte, CRITs treffen ×2,5 (statt ×2)' },
+  suedamerika: { name: 'Sonnenkraft',    desc: 'Heilt 3% MaxHP/Runde unter 50% HP (max. 50% MaxHP/Kampf) + Sieg gibt +20% EP' },
   // Utility-Sets (2026-07-13): Nicht-Kampf-Boni, rein clientseitig (dungeon_fight unberührt).
   steppe:      { name: 'Steppenwind',    desc: '+8 Schritte/Tag im Dungeon' },
   handel:      { name: 'Handelsprivileg',desc: '−15% Preis auf Ausrüstung & Tränke' },
@@ -462,6 +462,51 @@ function kriegerFlavorMod(tier, idx) {
   if (idx === 0) return 0.7;
   if (idx === 2) return 1.4;
   return 1;
+}
+
+// ── Gegner-Level-System (Balance-Rework 2026-07-13b) ─────────────────────────
+// Jeder Gegner hat ein eigenes, tier-gebändertes Level, deterministisch aus den
+// Tile-Koordinaten gewürfelt (löst zugleich den Flavor-Reroll-Exploit: gleiches
+// Feld → immer gleiche Stufe/gleicher Flavor). Wirkt spiegelbildlich zum Spieler
+// auf ATK/DEF/HP und erhöht die EP. Bänder MÜSSEN zu _krieger_enemy_level_band in
+// migration_2026-07-13b_krieger_gegner_level.sql passen (Server clampt darauf).
+const KRIEGER_ENEMY_LEVEL_BANDS = { t1:[1,10], t2:[5,18], t3:[12,28], t4:[22,45], boss:[60,60] };
+
+// Deterministisches Gegner-Level für ein Feld (eigener Salt 3131, NICHT von anderen
+// _tileRng-Salts belegt). Boss = fest 60.
+function kriegerEnemyLevel(tx, ty, tier, worldSeed) {
+  const band = KRIEGER_ENEMY_LEVEL_BANDS[tier] || [0, 0];
+  const lo = band[0], hi = band[1];
+  if (hi <= lo) return lo;
+  if (typeof _tileRng !== 'function') return lo;
+  return lo + Math.floor(_tileRng(tx, ty, 3131, worldSeed)() * (hi - lo + 1));
+}
+
+// Deterministischer Flavor-Index für ein Feld — GLEICHER Salt (6262) wie in
+// kriegerExploreTile, damit die Prompt-Anzeige exakt zum gespeicherten Fund passt.
+function kriegerEnemyFlavorIdx(tx, ty, tier, worldSeed) {
+  const def = kriegerEnemyDef(tier);
+  const n = (def && def.flavor) ? def.flavor.length : 1;
+  if (typeof _tileRng !== 'function') return 0;
+  return Math.floor(_tileRng(tx, ty, 6262, worldSeed)() * n);
+}
+
+// Skalierte Gegnerwerte (Flavor-Mod + Level-Bonus) für die Prompt-Anzeige — Spiegel
+// der SQL-Formel: erst Flavor-Mod runden, DANN die Level-Boni addieren.
+function kriegerEnemyStatsScaled(tier, flavorIdx, eLevel) {
+  const def = kriegerEnemyDef(tier);
+  if (!def) return { hp: 1, atk: 1, def: 0 };
+  const fmod = kriegerFlavorMod(tier, flavorIdx);
+  let hp  = Math.max(1, Math.round(def.hp  * fmod));
+  let atk = Math.max(1, Math.round(def.atk * fmod));
+  let dfn = Math.max(0, Math.round(def.def * fmod));
+  const lv = Math.max(0, eLevel | 0);
+  if (lv > 0) {
+    atk += Math.floor(lv / 4);
+    dfn += Math.floor(lv / 5);
+    hp  += lv * 2;
+  }
+  return { hp, atk, def: dfn };
 }
 
 // Anzeige-Metadaten zu jeder Gegner-Signatur-Fähigkeit (Kampfvorschau + Log-Zeilen).
@@ -737,8 +782,8 @@ function kriegerExploreTile(tx, ty, dd, worldSeed) {
 // ── Kampf-Client (ruft NUR die serverseitige RPC auf — keine Client-Logik) ──────
 // flavorIdx (0-basiert, index-gleich zu enemyDef.flavor/abilities) bestimmt serverseitig
 // die Gegner-Signatur-Fähigkeit. NULL/undefined = keine Fähigkeit (Rückwärtskompatibilität).
-async function kriegerFight(memberId, enemyTier, flavorIdx, potionKey, potionKey2) {
-  return DB.dungeonFight(memberId, enemyTier, flavorIdx, potionKey, potionKey2); // { won, log, cc_awarded, ep_awarded, new_level, leveled_up, set_bonus, rounds, enemy_ability, talent_points_gained, hp, hp_max, potion_used, potion_used2, new_dungeon_data } | { error }
+async function kriegerFight(memberId, enemyTier, flavorIdx, potionKey, potionKey2, enemyLevel) {
+  return DB.dungeonFight(memberId, enemyTier, flavorIdx, potionKey, potionKey2, enemyLevel); // { won, log, cc_awarded, ep_awarded, new_level, leveled_up, set_bonus, rounds, enemy_ability, enemy_level, talent_points_gained, hp, hp_max, potion_used, potion_used2, new_dungeon_data } | { error }
 }
 
 // ── Canvas-Rendering (analog karteRender in karte.js, aber Labyrinth statt Biom-System):

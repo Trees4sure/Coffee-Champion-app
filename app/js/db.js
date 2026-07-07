@@ -1552,13 +1552,14 @@ const DB = (() => {
     if (error) throw new Error(error.message);
   }
 
-  async function dungeonFight(memberId, enemyTier, flavorIdx, potionKey, potionKey2) {
+  async function dungeonFight(memberId, enemyTier, flavorIdx, potionKey, potionKey2, enemyLevel) {
     const { data, error } = await _sb.rpc('dungeon_fight', {
       p_member_id: memberId, p_group_id: _groupId, p_enemy_tier: enemyTier,
       p_flavor_idx: (flavorIdx === undefined ? null : flavorIdx),
       p_potion_key:  (potionKey  == null ? null : potionKey),
       p_potion_key2: (potionKey2 == null ? null : potionKey2),   // 2. Trank (Cold Brew + 1 Buff)
       p_today: new Date().toLocaleDateString('de-DE'),  // = _kriegerTodayKey(), persistente HP (Etappe 2)
+      p_enemy_level: (enemyLevel == null ? null : enemyLevel),   // Gegner-Level (2026-07-13b); null = alter Client
     });
     if (error) throw new Error(error.message);
     return data;
