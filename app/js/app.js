@@ -574,10 +574,15 @@ function renderLeaderboard() {
 // WHATS_NEW_GO_LIVE (lokale Zeit), davor bleibt es still. Danach einmalig pro Spieler beim
 // nächsten App-Start (idempotent über map_data.whatsNewSeen). Bei leerer Liste poppt dank
 // Guard nichts. Zum Deaktivieren: WHATS_NEW_ITEMS = [] und/oder GO_LIVE in die Zukunft setzen.
-const WHATS_NEW_VERSION = '2026-07-14-kaffee-garten';
+const WHATS_NEW_VERSION = '2026-07-15-kaffeemobil-boerse';
 // Go-Live-Zeitpunkt (LOKALE Zeit, ISO ohne "Z" → wird als Ortszeit interpretiert):
-const WHATS_NEW_GO_LIVE = new Date('2026-07-11T13:00:00'); // morgen (11.07.) 13:00 Uhr
+const WHATS_NEW_GO_LIVE = new Date('2026-07-11T13:00:00'); // 11.07. 13:00 Uhr
 const WHATS_NEW_ITEMS = [
+  {
+    icon: '🚐',
+    title: 'Kaffeemobil: Welteroberung',
+    text: 'Schick dein Kaffeemobil auf große Fahrt: reise über eine echte, geteilte Weltkarte von Stadt zu Stadt, sammle Reiseboni (je weiter, desto mehr) und bereise mit deinem Kaffee die ganze Welt. Zu finden im Imperium-Tab, sobald du die Forschung „Fahrender Händler" besitzt (braucht Kaffeemobil + Barista-Kurs).'
+  },
   {
     icon: '🪴',
     title: 'Kaffee-Garten',
@@ -587,6 +592,16 @@ const WHATS_NEW_ITEMS = [
     icon: '🤝',
     title: 'Handelsbündnis: wechselseitige Dividende',
     text: 'Schließen zwei Länder ein Handelsbündnis, erhalten jetzt BEIDE Partner eine 🤝 Handelsdividende aus dem Umsatz des jeweils anderen Landes — eine echte wechselseitige Ausschüttung statt nur einseitig. Bestehende Pakte profitieren automatisch.'
+  },
+  {
+    icon: '💹',
+    title: 'Kaffeebörse: automatisch & wählbar',
+    text: 'Deine Börsen-Dividende kommt jetzt automatisch einmal pro Tag — kein tägliches Einsammeln mehr. Neu: Du wählst, ob sie aufs Guthaben geht oder reinvestiert wird (Zinseszins bis zum Maximum).'
+  },
+  {
+    icon: '💤',
+    title: 'Länger weg? Kein Problem',
+    text: 'Passives Einkommen wird jetzt für bis zu 14 Tage Abwesenheit nachgezahlt — Urlaub kostet dich keinen Ertrag mehr.'
   }
 ];
 
