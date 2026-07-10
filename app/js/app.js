@@ -115,6 +115,8 @@ function showApp() {
   // (clientseitig auf 1×/5h-Bucket gedrosselt, Bucket-idempotent). So zeigt der Verlauf
   // die ganze Gruppe — nicht nur, wer die App zuletzt geöffnet hat.
   claimPassiveAndRefresh().then(() => { if (currentUser?.id) DB.recordSalarySnapshotsAll(); });
+  // 🚐 Kaffeemobil: fällige Reise-Ankunft global einlösen (auch ohne offenen Tab)
+  if (typeof kmMaybeArrive === 'function') kmMaybeArrive();
 }
 
 // Passives Einkommen einlösen und bei Gutschrift Anzeige aktualisieren.
@@ -272,6 +274,8 @@ async function refreshData() {
   // Snapshot verkettet DANACH (nicht parallel), sonst clobbert sein map_data-Write den
   // frisch geschriebenen Passiv-Eintrag im Tages-Log. Bucket-gedrosselt, idempotent.
   claimPassiveAndRefresh().then(() => { if (currentUser?.id) DB.recordSalarySnapshotsAll(); });
+  // 🚐 Kaffeemobil: fällige Reise-Ankunft global einlösen (auch ohne offenen Tab)
+  if (typeof kmMaybeArrive === 'function') kmMaybeArrive();
 }
 
 // ── Nachrichten ───────────────────────────────────────────────────────────────
@@ -790,6 +794,7 @@ function renderProfile() {
   renderGartenLexikon(u);
   renderCiqPerks(u);
   renderVermoegen(u);
+  renderMobilProfil(u);
   if (typeof Loans !== 'undefined') Loans.renderSection();
 
   document.getElementById('achievements-grid').innerHTML = ACHIEVEMENTS.map(a => `
@@ -843,6 +848,42 @@ function renderVermoegen(u) {
     </div>
     <div class="vermoegen-note">Investitionen (Forschung, Karte, Welthandel, Krieger) zählen nicht ins Netto-Gehalt — sie stecken hier im Vermögen.</div>
     ${(() => { const bh = _ccBilanzHtml(u, false); return bh ? `<div class="section-title" style="margin-top:14px">📊 Bilanz je Rubrik</div>${bh}<div class="vermoegen-note">Einnahmen &amp; verbrauchte Ausgaben werden seit Einführung dieser Statistik erfasst; Schätze, Krieger-Kämpfe, Tränke und CIQ-Beute zeigen die volle Historie aus ihren Zählern.</div>` : ''; })()}`;
+}
+
+// 🚐 Kaffeemobil-Profil (Erlebnis-Minigame #2). Dynamisch in den Untertab „📊 Statistik"
+// injiziert (kein index.html-Edit), nur mit der Freischaltung. Zeigt Standort/Reise,
+// eroberte Städte, Reisen und Reiseertrag. _kmGraph (Städtenamen/Gesamtzahl) ist optional —
+// falls die Karte noch nie geöffnet wurde, fällt die Anzeige robust auf IDs/ohne Gesamtzahl zurück.
+function renderMobilProfil(u) {
+  const host = document.getElementById('profile-subtab-stats');
+  if (!host) return;
+  let sec = document.getElementById('mobil-profil-section');
+  const on = !!(u.research && u.research.kaffeemobil && u.research.barista_kurs && u.research.fahrender_haendler);
+  if (!on) { if (sec) sec.remove(); return; }
+  if (!sec) {
+    sec = document.createElement('div');
+    sec.id = 'mobil-profil-section';
+    sec.className = 'progress-section';
+    host.appendChild(sec);
+  }
+  const mob   = u.mobil || {};
+  const uniq  = mob.uniqueCount || Object.keys(mob.visited || {}).length || 1;
+  const total = (typeof _kmGraph !== 'undefined' && _kmGraph) ? Object.keys(_kmGraph.cities).length : null;
+  const trips = mob.totalTrips || 0;
+  const earned = Math.round(mob.totalEarned || 0);
+  const trip  = (mob.trip && typeof mob.trip === 'object') ? mob.trip : null;
+  const nm = id => (typeof _kmGraph !== 'undefined' && _kmGraph && _kmGraph.cities[id]) ? _kmGraph.cities[id].name : id;
+  const loc = trip
+    ? `🚚 Unterwegs nach ${_esc(nm(trip.to))}${(typeof kmCountdown === 'function') ? ` · Ankunft in ${kmCountdown(Date.parse(trip.arriveAt) - Date.now())}` : ''}`
+    : `📍 Aktuell in ${_esc(nm(mob.at || 'hamburg'))}`;
+  sec.innerHTML = `
+    <div class="section-title">🚐 Kaffeemobil</div>
+    <p class="dt-meta">${loc}</p>
+    <div class="vermoegen-list">
+      <div class="vermoegen-row"><span class="vermoegen-label">🏆 Erobert</span><span class="vermoegen-amount">${uniq}${total ? ` / ${total}` : ''} Städte</span></div>
+      <div class="vermoegen-row"><span class="vermoegen-label">🛣️ Reisen</span><span class="vermoegen-amount">${trips}</span></div>
+      <div class="vermoegen-row"><span class="vermoegen-label">🪙 Reiseertrag gesamt</span><span class="vermoegen-amount">${earned.toLocaleString('de-DE')} CC</span></div>
+    </div>`;
 }
 
 // 📖 Kaffee-Lexikon-Fortschritt (Kaffee-Garten, Erlebnis-Minigame #1). Dynamisch in den
@@ -1263,6 +1304,11 @@ function _informantStatsHtml(u) {
   if (quizCiq > 0 || quizCC > 0 || ciqEarned > 0 || ciqLost > 0) {
     items.push(`🧠 CIQ: ${quizCiq} Punkte · ${_fmtCoins(quizCC)} CC aus Quiz · ${_fmtCoins(ciqEarned)} CC aus Angriffen erbeutet${ciqLost > 0 ? ` · ${_fmtCoins(ciqLost)} CC durch Angriffe verloren` : ''}${ciqSkills ? ' · Fähigkeiten: ' + ciqSkills : ''}`);
   }
+
+  // 🚐 Kaffeemobil
+  const mCities = (typeof _ccMobilCities === 'function') ? _ccMobilCities(u) : 0;
+  const mTrips  = (u.mobil && u.mobil.totalTrips) || 0;
+  if (mCities > 1 || mTrips > 0) items.push(`🚐 Kaffeemobil: ${mCities} Städte · ${mTrips} Reisen`);
 
   if (!items.length) return '';
   return `<div class="cc-informant-stats" style="display:flex;flex-wrap:wrap;gap:6px;margin:4px 0">
@@ -1752,6 +1798,12 @@ function _ccLeader(users, fn) {
   return (best && bestVal > 0) ? { val: bestVal, name: best.name } : { val: null, name: null };
 }
 
+// 🚐 Kaffeemobil: Anzahl eroberter (verschiedener) Städte — Metrik für HoF/Poster/Informant.
+function _ccMobilCities(u) {
+  const m = u && u.mobil; if (!m) return 0;
+  return m.uniqueCount || Object.keys(m.visited || {}).length || 0;
+}
+
 function renderHallOfFame() {
   const hof   = appData?.halloffame || {};
   const users = appData?.users || [];
@@ -1768,6 +1820,7 @@ function renderHallOfFame() {
   const kl = _ccLeader(users, _ccKriegerLevel);
   const kw = _ccLeader(users, _ccKriegerWins);
   const kb = _ccLeader(users, _ccKriegerBoss);
+  const ml = _ccLeader(users, _ccMobilCities);
 
   const cards = [
     { icon: '☕', label: 'Meiste Tassen',      val: hof.max_cups_value,       name: hof.max_cups_name },
@@ -1785,6 +1838,7 @@ function renderHallOfFame() {
     { icon: '⚔️', label: 'Höchste Krieger-Stufe', val: kl.val, name: kl.name },
     { icon: '🗡️', label: 'Meiste Kampf-Siege',   val: kw.val, name: kw.name },
     { icon: '🐉', label: 'Meiste Boss-Kills',     val: kb.val, name: kb.name },
+    { icon: '🚐', label: 'Welt-Eroberer',        val: ml.val, name: ml.name },
   ];
 
   document.getElementById('hof-container').innerHTML = cards.map(r => `
@@ -1929,6 +1983,7 @@ function renderPoster() {
     { icon:'⚔️', label:'Krieger-Stufe', L:_ccLeader(leaderboardData, _ccKriegerLevel),  fmt:v=>`${v}` },
     { icon:'🗡️', label:'Kampf-Siege',   L:_ccLeader(leaderboardData, _ccKriegerWins),   fmt:v=>`${v}` },
     { icon:'🐉', label:'Boss-Kills',    L:_ccLeader(leaderboardData, _ccKriegerBoss),   fmt:v=>`${v}` },
+    { icon:'🚐', label:'Welt-Eroberer', L:_ccLeader(leaderboardData, _ccMobilCities),   fmt:v=>`${v}` },
   ];
   const hasImp = impCats.some(c => c.L.val != null);
   const impCards = impCats.map(c => `<div class="imp-card"><div class="imp-ic">${c.icon}</div><div class="imp-lbl">${c.label}</div><div class="imp-val">${c.L.val!=null?c.fmt(c.L.val):'—'}</div><div class="imp-nm">${_esc(c.L.name||'—')}</div></div>`).join('');

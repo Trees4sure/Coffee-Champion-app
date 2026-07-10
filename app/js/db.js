@@ -86,6 +86,7 @@ const DB = (() => {
       map_data:  u.map_data              || {},
       dungeon_data: u.dungeon_data       || {},
       garden:    u.garden                || {},
+      mobil:     u.mobil                 || {},
     };
   }
 
@@ -2148,6 +2149,34 @@ const DB = (() => {
     return data; // { ok, garden } | { error }
   }
 
+  // ── 🚐 Kaffeemobil (Erlebnis-Minigame #2) ────────────────────────────────────
+  // Der Graph (Städte/Kanten) ist server-seitiger Content — einmal lesen, Client cached.
+  async function fetchMobilGraph() {
+    const [c, e] = await Promise.all([
+      _sb.from('mobil_cities').select('id,name,continent,x,y,dist_rank,is_port,is_air'),
+      _sb.from('mobil_edges').select('a,b,kind,cost_cc,duration_min'),
+    ]);
+    if (c.error) throw new Error(c.error.message);
+    if (e.error) throw new Error(e.error.message);
+    return { cities: c.data || [], edges: e.data || [] };
+  }
+  // Reise starten — Kosten/Dauer/Ankunftszeit server-autoritativ; Client liefert nur die Ziel-ID.
+  async function startTrip(memberId, toId) {
+    const { data, error } = await _sb.rpc('start_trip', {
+      p_member_id: memberId, p_group_id: _groupId, p_to: toId,
+    });
+    if (error) throw new Error(error.message);
+    return data; // { ok, from, to, kind, cost, arriveAt, coins, mobil } | { error }
+  }
+  // Ankunft einlösen — Reward/Stadt/Zähler server-seitig; nur wenn arriveAt erreicht (Server-Uhr).
+  async function claimArrival(memberId) {
+    const { data, error } = await _sb.rpc('claim_arrival', {
+      p_member_id: memberId, p_group_id: _groupId,
+    });
+    if (error) throw new Error(error.message);
+    return data; // { ok, city, reward, firstVisit, uniqueCount, farthest, dist, mobil } | { error }
+  }
+
   return {
     init, setGroup, createGroup, joinGroup,
     fetchData, registerUser, addCups, closeSeason, autoCloseSeasonIfDue,
@@ -2174,5 +2203,6 @@ const DB = (() => {
     grantAchievements,
     startMinigame, claimMinigame, getMinigameStatus,
     unlockGardenElement, saveGardenPlacements,
+    fetchMobilGraph, startTrip, claimArrival,
   };
 })();

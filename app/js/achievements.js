@@ -45,6 +45,16 @@ const ACHIEVEMENTS = [
   { id: 'krieger_tier3_first', icon: '🗡️', name: 'Meisterwaffe',        desc: 'Erste Tier-3-Waffe erworben',                    condition: null, coinReward: 40 },
   { id: 'krieger_mount_first', icon: '🐎', name: 'Berittener Krieger',   desc: 'Erstes Reittier erworben',                       condition: null, coinReward: 40 },
   { id: 'garten_epoch_all',    icon: '🪴', name: 'Garten-Kurator',       desc: 'Alle 84 Einträge des Kaffee-Lexikons gesammelt', condition: null, coinReward: 500 },
+  // 🚐 Kaffeemobil: Welteroberung (Erlebnis-Minigame #2) — alle event-granted (condition:null)
+  { id: 'mobil_first',       icon: '🚐', name: 'Erste Ausfahrt',    desc: 'Erste Reise mit dem Kaffeemobil abgeschlossen',      condition: null, coinReward: 30  },
+  { id: 'mobil_trips_10',    icon: '🛣️', name: 'Vielfahrer',        desc: '10 Reisen mit dem Kaffeemobil',                       condition: null, coinReward: 60  },
+  { id: 'mobil_trips_50',    icon: '🌐', name: 'Dauerreisender',    desc: '50 Reisen mit dem Kaffeemobil',                       condition: null, coinReward: 200 },
+  { id: 'mobil_trips_100',   icon: '🏅', name: 'Kaffeekurier',      desc: '100 Reisen mit dem Kaffeemobil',                      condition: null, coinReward: 400 },
+  { id: 'mobil_germany',     icon: '🇩🇪', name: 'Heimat erobert',    desc: 'Alle 16 deutschen Landeshauptstädte besucht',         condition: null, coinReward: 150 },
+  { id: 'mobil_europe',      icon: '🇪🇺', name: 'Europa erobert',    desc: 'Alle europäischen Hauptstädte besucht',               condition: null, coinReward: 300 },
+  { id: 'mobil_continents',  icon: '🧭', name: 'Weltenbummler',     desc: 'Auf jedem Kontinent mindestens eine Stadt erobert',   condition: null, coinReward: 250 },
+  { id: 'mobil_origins',     icon: '☕', name: 'Ursprungs-Route',    desc: 'Addis Abeba, Bogotá, Jakarta & Hanoi bereist (Kaffee-Ursprünge)', condition: null, coinReward: 200 },
+  { id: 'mobil_world',       icon: '👑', name: 'Welteroberer',      desc: '50 verschiedene Städte erobert',                      condition: null, coinReward: 500 },
 ];
 
 function checkAchievements(userData, newAchievements = {}) {

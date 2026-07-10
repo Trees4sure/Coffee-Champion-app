@@ -87,6 +87,7 @@ const RESEARCH_COMBOS = [
   { id: 'ki_kaffee_genie',     name: 'KI-Kaffee-Genie',   icon: '🤖', requires: ['iot_roester','weltreise'],                          cost: 0,   perCup: 0,  perDay: 0,   special: 'technik_x3',       desc: 'Technik ×3 + Titel "KI-Röstmeister"' },
   { id: 'weltkonzern',         name: 'Weltkonzern',        icon: '👑', requires: ['exportplantage','logistikzentrum','kaffeekette'],   cost: 0,   perCup: 0,  perDay: 0,   special: 'all_x3',           desc: 'ALLE Boni ×3 — End-Game!' },
   { id: 'welthandelslizenz',   name: 'Welthandels-Lizenz', icon: '🌍', requires: ['kaffeesamen','wasserquelle','handmuehle','ton','toepferei','fahrradkurier','kompost','kaffee_buch'], cost: 200, perCup: 0, perDay: 0, special: 'unlock_world', desc: 'Schaltet die 🌍 Weltkarte frei — alle Tier-1-Forschungen nötig' },
+  { id: 'fahrender_haendler',  name: 'Fahrender Händler',  icon: '🚐', requires: ['kaffeemobil','barista_kurs'],                     cost: 750, perCup: 0, perDay: 0, special: 'unlock_mobil', desc: 'Schaltet das 🚐 Kaffeemobil frei — erobere mit deinem Kaffee die Welt' },
 ];
 
 // ── Balancing 2026-06-20 (v2): pro Tasse ab Tier 2 knapper ───────────────────────

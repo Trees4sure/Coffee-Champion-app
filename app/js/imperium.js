@@ -110,6 +110,7 @@ async function renderImperium() {
       <button class="imp-tab" data-tab="welt">🌍 Weltkarte</button>
       <button class="imp-tab" data-tab="krieger">⚔️ Krieger</button>
       ${(research.kaffeegarten && research.lim_edition) ? '<button class="imp-tab" data-tab="garden">🪴 Garten</button>' : ''}
+      ${(research.kaffeemobil && research.barista_kurs && research.fahrender_haendler) ? '<button class="imp-tab" data-tab="mobil">🚐 Kaffeemobil</button>' : ''}
       <button class="imp-tab" data-tab="stats">📊 Statistik</button>
       <button class="imp-tab" data-tab="kasse">🏛️ Kasse</button>
       <button class="imp-tab" data-tab="cosmetics">🎨 Cosmetics</button>
@@ -124,7 +125,7 @@ async function renderImperium() {
     document.querySelectorAll('.imp-tab').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     // Karte/Welt/Krieger-Tab: immer aktuellsten Stand (currentUserData hat map_data/dungeon_data/coins-Updates)
-    const freshMember = (btn.dataset.tab === 'karte' || btn.dataset.tab === 'welt' || btn.dataset.tab === 'krieger' || btn.dataset.tab === 'garden') ? (currentUserData || member) : member;
+    const freshMember = (btn.dataset.tab === 'karte' || btn.dataset.tab === 'welt' || btn.dataset.tab === 'krieger' || btn.dataset.tab === 'garden' || btn.dataset.tab === 'mobil') ? (currentUserData || member) : member;
     _renderImperiumTab(btn.dataset.tab, freshMember);
   });
 
@@ -142,6 +143,7 @@ async function _renderImperiumTab(tab, member) {
   if (tab === 'cosmetics') el.innerHTML = _buildCosmetics(member);
   if (tab === 'krieger')   { el.innerHTML = ''; _buildKrieger(member, el); return; }
   if (tab === 'garden')    el.innerHTML = _buildGarten(member);
+  if (tab === 'mobil')     { el.innerHTML = ''; if (typeof _buildKaffeemobil === 'function') _buildKaffeemobil(member, el); return; }
   // Event-Delegation für Kaufbuttons
   el.onclick = async (e) => {
     const btn = e.target.closest('[data-buy]');
