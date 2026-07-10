@@ -566,14 +566,16 @@ function renderLeaderboard() {
 // App-Start. Idempotent über map_data.whatsNewSeen = WHATS_NEW_VERSION (analog Login-Bonus/
 // Tagesaufgaben-Muster) — wer schon dran war, sieht es nicht erneut. Bei künftigen neuen
 // Features: WHATS_NEW_VERSION + WHATS_NEW_ITEMS aktualisieren, dann poppt es einmalig erneut auf.
+// Popup vorerst STUMM: Krieger-Kulturen war schon, Garten/Handelsbündnis bewusst ohne Popup (JP).
+// Zum Wieder-Aktivieren (z. B. Garten offiziell vorstellen): WHATS_NEW_VERSION auf einen NEUEN Wert
+// setzen (z. B. '2026-07-14-kaffee-garten') und WHATS_NEW_ITEMS mit dem/den Eintrag/Einträgen füllen.
+// Bei leerer Liste poppt dank Guard in checkAndMaybeShowWhatsNew() nichts (kein leeres Popup).
 const WHATS_NEW_VERSION = '2026-07-13-krieger-kulturen';
-const WHATS_NEW_ITEMS = [
-  { icon: '⚔️', title: 'Kaffee-Krieger: 4 neue Kulturen', text: 'Im Ausrüstungs-Shop warten vier komplett neue Kultur-Sets mit eigenem Charakter — statt nur mehr Kampfkraft geben sie clevere Spiel-Boni, sobald du Waffe + Rüstung + Talisman einer Kultur trägst: 🐺 Steppe „Steppenwind" (+8 Schritte/Tag im Dungeon), ⚖️ Handelsgilde „Handelsprivileg" (−15 % auf Ausrüstung & Tränke), ☠️ Freibeuter „Freibeuterglück" (+50 % Fund-Chance im Dungeon) und 🔭 Kundschafter „Späherauge" (deckt passiv deine Umgebung im Nebel auf). Jede Kultur gibt es in Tier 1 (ab Stufe 1) und Tier 2 (ab Stufe 20) inkl. passender Stiefel. Der Set-Effekt steht jetzt schon vorab bei jeder Kultur im Shop.' },
-  { icon: '📈', title: 'Kaffee-Krieger: leichterer Aufstieg', text: 'Die Mindeststufen für stärkere Gegner wurden gesenkt — die Mahlwerk-Bande (t2) ist jetzt schon ab Stufe 4 kämpfbar, die Röster-Horde (t3) ab Stufe 9 und die Koffein-Elite (t4) ab Stufe 16. Bereits entdeckte, bisher gesperrte Gegner-Felder in deinem Dungeon sind damit sofort kämpfbar — schau vorbei!' },
-];
+const WHATS_NEW_ITEMS = [];
 
 function checkAndMaybeShowWhatsNew() {
   if (!currentUserData || typeof currentUser === 'undefined' || !currentUser?.id) return;
+  if (!WHATS_NEW_ITEMS.length) return; // keine Ankündigung aktiv → gar kein (leeres) Popup
   if (currentUserData.map_data?.whatsNewSeen === WHATS_NEW_VERSION) return;
   _showWhatsNewModal();
 }
@@ -771,6 +773,7 @@ function renderProfile() {
   }
 
   renderDailyTask(u);
+  renderGartenLexikon(u);
   renderCiqPerks(u);
   renderVermoegen(u);
   if (typeof Loans !== 'undefined') Loans.renderSection();
@@ -810,6 +813,7 @@ function renderVermoegen(u) {
     ['🌍', 'Welthandel',      v.welt],
     ['⚔️', 'Kaffee-Krieger',  v.krieger],
   ];
+  if (v.erlebnis) rows.push(['🎡', 'Erlebnisse', v.erlebnis]);
   // 🤝 Kredit-Netto nur zeigen, wenn vorhanden: Restschuld (Schuldner, negativ) bzw.
   // offene Tilgung, die dem Geber noch zufließt (positiv).
   if (v.kredit) rows.push(['🤝', v.kredit < 0 ? 'Restschuld' : 'Offene Tilgung', v.kredit]);
@@ -825,6 +829,32 @@ function renderVermoegen(u) {
     </div>
     <div class="vermoegen-note">Investitionen (Forschung, Karte, Welthandel, Krieger) zählen nicht ins Netto-Gehalt — sie stecken hier im Vermögen.</div>
     ${(() => { const bh = _ccBilanzHtml(u, false); return bh ? `<div class="section-title" style="margin-top:14px">📊 Bilanz je Rubrik</div>${bh}<div class="vermoegen-note">Einnahmen &amp; verbrauchte Ausgaben werden seit Einführung dieser Statistik erfasst; Schätze, Krieger-Kämpfe, Tränke und CIQ-Beute zeigen die volle Historie aus ihren Zählern.</div>` : ''; })()}`;
+}
+
+// 📖 Kaffee-Lexikon-Fortschritt (Kaffee-Garten, Erlebnis-Minigame #1). Dynamisch in den
+// Untertab „🏆 Achievements" injiziert (kein index.html-Edit), nur wenn der Kaffeegarten
+// erforscht ist. Das eigentliche Sammeln passiert im 🪴 Garten-Tab (Imperium).
+function renderGartenLexikon(u) {
+  const tab = document.getElementById('profile-subtab-achievements');
+  if (!tab) return;
+  let sec = document.getElementById('garten-lexikon-section');
+  const hasGarden = !!(u.research && u.research.kaffeegarten && u.research.lim_edition);
+  if (!hasGarden || typeof gardenLexikonCount !== 'function') { if (sec) sec.remove(); return; }
+  if (!sec) {
+    sec = document.createElement('div');
+    sec.id = 'garten-lexikon-section';
+    sec.className = 'progress-section';
+    const anchor = document.getElementById('daily-task-section');
+    if (anchor && anchor.nextSibling) tab.insertBefore(sec, anchor.nextSibling);
+    else tab.insertBefore(sec, tab.firstChild);
+  }
+  const have  = gardenLexikonCount(u.garden);
+  const total = GARDEN_TOTAL;
+  const pct   = Math.round((have / total) * 100);
+  sec.innerHTML = `
+    <div class="section-title">📖 Kaffee-Lexikon</div>
+    <div class="cc-progress-bar"><div class="cc-progress-fill" style="width:${pct}%"></div></div>
+    <p class="dt-meta" style="margin-top:6px">${have}/${total} Einträge entdeckt${have === total ? ' — Garten-Kurator! 🪴' : ''}. Sammle sie im 🪴 Garten (Imperium).</p>`;
 }
 
 // ✨ Kaffee-Aufgabe der Tage (rotiert alle 3 Tage). Wird dynamisch ins Profil injiziert
@@ -1630,9 +1660,11 @@ function _ccVermoegen(u) {
     karte:     Math.round(_ccBldScore(u) + _ccMapUpgradeValue(u)),
     welt:      Math.round(_ccWorldValue(u)),
     krieger:   Math.round(_ccKriegerGear(u)),
+    // 🎡 Erlebnisse (Kaffee-Garten u.a. Erlebnis-Minigames) — Summe der Freischaltkosten
+    erlebnis:  Math.round((typeof gardenValue === 'function') ? gardenValue(u.garden) : 0),
     kredit,
   };
-  parts.total = parts.coins + parts.forschung + parts.karte + parts.welt + parts.krieger + parts.kredit;
+  parts.total = parts.coins + parts.forschung + parts.karte + parts.welt + parts.krieger + parts.erlebnis + parts.kredit;
   return parts;
 }
 function _ccVermoegenTotal(u) { return _ccVermoegen(u).total; }
@@ -1659,6 +1691,7 @@ function _ccBilanz(u) {
     { icon: '🧠', label: 'CIQ',               income: quizCC + (u.map_data?.ciqCcEarned || 0) + (inc.ciq || 0), spent: sp.ciq || 0, invested: inv.ciq || 0 },
     { icon: '💎', label: 'Schätze',           income: u.map_data?.totalTreasureCc || 0 },
     { icon: '🎣', label: 'Kaffeejagd',        income: inc.minigame || 0, spent: sp.minigame || 0 },
+    { icon: '🎡', label: 'Erlebnisse',        income: inc.erlebnis || 0, spent: sp.erlebnis || 0, invested: inv.erlebnis || 0 },
     { icon: '🏛️', label: 'Gruppe',            income: inc.gruppe || 0, spent: sp.gruppe || 0 },
     { icon: '🎖️', label: 'Boni & Aufgaben',   income: inc.boni || 0 },
     { icon: '🎨', label: 'Kosmetik',          spent: sp.cosmetics || 0 },

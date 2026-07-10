@@ -85,6 +85,7 @@ const DB = (() => {
       cosmetics: u.cosmetics             || {},
       map_data:  u.map_data              || {},
       dungeon_data: u.dungeon_data       || {},
+      garden:    u.garden                || {},
     };
   }
 
@@ -147,14 +148,16 @@ const DB = (() => {
     const gPerDay = groupPerDay || 0;
     const tPerDay = tradeBonusDay || 0;
     const pPerDay = (typeof worldPassivePerDay === 'function') ? worldPassivePerDay(member, worldByCountry) : 0; // 🏦 Stille Anlage
-    const tot = rPerDay + bPerDay + wPerDay + gPerDay + tPerDay + pPerDay;
+    const gaPerDay = (typeof gardenPerDay === 'function') ? gardenPerDay(member.garden, member.research) : 0; // 🪴 Kaffee-Garten
+    const tot = rPerDay + bPerDay + wPerDay + gPerDay + tPerDay + pPerDay + gaPerDay;
     if (tot <= 0) return [{ label: '⚙️ Passiv-Einkommen', amount: passiveEarned }];
     const bShare = Math.round(passiveEarned * (bPerDay / tot) * 100) / 100;
     const wShare = Math.round(passiveEarned * (wPerDay / tot) * 100) / 100;
     const gShare = Math.round(passiveEarned * (gPerDay / tot) * 100) / 100;
     const tShare = Math.round(passiveEarned * (tPerDay / tot) * 100) / 100;
     const pShare = Math.round(passiveEarned * (pPerDay / tot) * 100) / 100;
-    const rShare = Math.round((passiveEarned - bShare - wShare - gShare - tShare - pShare) * 100) / 100;
+    const gaShare = Math.round(passiveEarned * (gaPerDay / tot) * 100) / 100;
+    const rShare = Math.round((passiveEarned - bShare - wShare - gShare - tShare - pShare - gaShare) * 100) / 100;
     const wDetail = [
       (typeof worldPerDayDetail === 'function') ? worldPerDayDetail(worldRankMap) : '',
       (typeof worldBuildingPerDayDetail === 'function') ? worldBuildingPerDayDetail(worldRankMap, worldByCountry) : '',
@@ -163,9 +166,10 @@ const DB = (() => {
     if (rShare > 0) out.push({ label: '⚙️ Forschung (passiv)', amount: rShare, cat: 'forschung', detail: (typeof researchPerDayDetail === 'function') ? researchPerDayDetail(member.research) : '' });
     if (bShare > 0) out.push({ label: '🏗️ Gebäude-Einkommen',  amount: bShare, cat: 'karte', detail: (typeof buildingPerDayDetail === 'function') ? buildingPerDayDetail(member.map_data?.buildings || {}) : '' });
     if (wShare > 0) out.push({ label: '🌍 Welt-Einfluss',       amount: wShare, cat: 'welt', detail: wDetail });
-    if (tShare > 0) out.push({ label: '🤝 Handelsbündnis',      amount: tShare, cat: 'welt', detail: '+10% Einkommen aus dem Bündnis-Land' });
+    if (tShare > 0) out.push({ label: '🤝 Handelsdividende',    amount: tShare, cat: 'welt', detail: '+10% des Einkommens aus dem Partner-Land' });
     if (gShare > 0) out.push({ label: '🏛️ Gruppenkasse (passiv)', amount: gShare, cat: 'gruppe', detail: `+${gPerDay} CC/Tag für alle` });
     if (pShare > 0) out.push({ label: '🏦 Stille Anlage',        amount: pShare, cat: 'welt', detail: (typeof worldPassivePerDayDetail === 'function') ? worldPassivePerDayDetail(member, worldByCountry) : '' });
+    if (gaShare > 0) out.push({ label: '🪴 Garten (passiv)',      amount: gaShare, cat: 'erlebnis', detail: `${gaPerDay} CC/Tag aus dem Kaffee-Garten` });
     return out;
   }
 
@@ -247,11 +251,14 @@ const DB = (() => {
   }
 
   // 🤝 Handelsbündnis: LÄNDERbezogen (nicht personenbezogen) — +10% auf das Einkommen AUS
-  // DEM JEWEILIGEN LAND, für wen auch immer es GERADE regiert (rankMap prüft das live, nicht
-  // member_a/member_b — "das Geld bekommt der regierende Mitspieler"). Additiver Bonus (kein
-  // Multiplikator wie bei _gardeMult), weil er nur die eine betroffene Länder-Zeile im rankMap
-  // betrifft, nicht das gesamte Welt-Einkommen. Wert muss zu ALLIANCE_TYPES.handel.bonusPct in
-  // alliances.js passen. Robust: {cup:0,day:0} bei fehlender Tabelle/Migration.
+  // Wechselseitige Handels-Dividende: Für jedes aktive Handelsbündnis, bei dem ICH gerade eines
+  // der beiden Länder regiere, bekomme ich +10% des Einkommens aus dem PARTNER-Land (dem anderen
+  // der beiden Pakt-Länder) — additiv obendrauf (das Partner-Einkommen wird nicht angetastet).
+  // Symmetrisch by design: der Partner bekommt spiegelbildlich 10% aus meinem Land. Länderbezogen
+  // (rankMap prüft live, wer country_a/country_b regiert — "das Geld bekommt der regierende
+  // Mitspieler"). Additiver Bonus (kein Multiplikator wie _gardeMult). Der Satz 0.10 muss zu
+  // ALLIANCE_TYPES.handel.bonusPct in alliances.js passen. Robust: {cup:0,day:0} bei fehlender
+  // Tabelle/Migration.
   async function _allianceTradeBonus(rankMap, byCountry) {
     try {
       const { data, error } = await _sb.from('world_alliances')
@@ -259,14 +266,16 @@ const DB = (() => {
       if (error) throw error;
       let cup = 0, day = 0;
       for (const pact of (data || [])) {
-        for (const cid of [pact.country_a, pact.country_b]) {
-          if ((rankMap || {})[cid] !== 1) continue;
-          const sub = { [cid]: 1 };
-          cup += (((typeof calcWorldPerCup === 'function') ? calcWorldPerCup(sub) : 0)
-                + ((typeof calcWorldBuildingPerCup === 'function') ? calcWorldBuildingPerCup(sub, byCountry) : 0)) * 0.10;
-          day += (((typeof calcWorldPerDay === 'function') ? calcWorldPerDay(sub) : 0)
-                + ((typeof calcWorldBuildingPerDay === 'function') ? calcWorldBuildingPerDay(sub, byCountry) : 0)) * 0.10;
-        }
+        // Welches Land regiere ICH? Die Dividende kommt vom PARTNER-Land (dem anderen).
+        const iGovernA = (rankMap || {})[pact.country_a] === 1;
+        const iGovernB = (rankMap || {})[pact.country_b] === 1;
+        if (!iGovernA && !iGovernB) continue;          // Pakt gehört gerade nicht mir
+        const partnerCid = iGovernA ? pact.country_b : pact.country_a; // ← Partner-Land
+        const sub = { [partnerCid]: 1 };
+        cup += (((typeof calcWorldPerCup === 'function') ? calcWorldPerCup(sub) : 0)
+              + ((typeof calcWorldBuildingPerCup === 'function') ? calcWorldBuildingPerCup(sub, byCountry) : 0)) * 0.10;
+        day += (((typeof calcWorldPerDay === 'function') ? calcWorldPerDay(sub) : 0)
+              + ((typeof calcWorldBuildingPerDay === 'function') ? calcWorldBuildingPerDay(sub, byCountry) : 0)) * 0.10;
       }
       return { cup: Math.round(cup * 100) / 100, day: Math.round(day * 100) / 100 };
     } catch (e) { return { cup: 0, day: 0 }; }
@@ -343,7 +352,8 @@ const DB = (() => {
     const tradeBonus = await _allianceTradeBonus(rankMap, byCountry);
     const groupPerDay = (await _fetchGroupPerks()).perDay || 0; // Gruppenkasse-Passiv für alle
     const passiveInvestDay = (typeof worldPassivePerDay === 'function') ? worldPassivePerDay(member, byCountry) : 0; // 🏦 Stille Anlage
-    const perDay = researchPerDay + buildingPerDay + worldPerDay + worldBldPerDay + tradeBonus.day + groupPerDay + passiveInvestDay;
+    const gardenDay = (typeof gardenPerDay === 'function') ? gardenPerDay(member.garden, member.research) : 0; // 🪴 Kaffee-Garten (Passiv-Kanal)
+    const perDay = researchPerDay + buildingPerDay + worldPerDay + worldBldPerDay + tradeBonus.day + groupPerDay + passiveInvestDay + gardenDay;
     if (perDay <= 0) return { earned: 0, tradeBonusDay: 0 };
 
     const cosm = member.cosmetics || {};
@@ -792,6 +802,11 @@ const DB = (() => {
     // Gruppenkasse-Bonus pro Tasse (freigeschaltete Gruppen-Ziele) — wirkt für alle gleich
     const groupPerks = await _fetchGroupPerks();
     const groupBonus = Math.round(amount * (groupPerks.perCup || 0) * 100) / 100;
+    // 🪴 Kaffee-Garten (Erlebnis-Minigame): Tassen-Kanal, inkl. Forschungs-Multiplikatoren
+    // (gardenPerCup). Als eigene totalCoins-Komponente → bekommt den Kartell-×2 wie jedes
+    // andere Tassen-Einkommen, erscheint als eigene Tages-Log-Zeile.
+    const gardenPerCupEff = (typeof gardenPerCup === 'function') ? gardenPerCup(member.garden, member.research) : 0;
+    const gardenCupBonus  = Math.round(amount * gardenPerCupEff * 100) / 100;
     let achCoinTotal = 0;
     for (const a of allNew) achCoinTotal += (a.coinReward || 0);
 
@@ -823,7 +838,7 @@ const DB = (() => {
       const _activeMembers = Object.keys(newStats || {}).length;
       const _blds = member.map_data?.buildings || {};
       const _buildingCount = Object.values(_blds).filter(b => b && (b.completesAt || 0) <= _nowMs).length;
-      const _ctx = { cupIncome: baseCoins + morningBonus + researchBonus + worldBonus + allianceCupBonus + groupBonus, amount, activeMembers: _activeMembers, buildingCount: _buildingCount, now: _nowMs };
+      const _ctx = { cupIncome: baseCoins + morningBonus + researchBonus + worldBonus + allianceCupBonus + groupBonus + gardenCupBonus, amount, activeMembers: _activeMembers, buildingCount: _buildingCount, now: _nowMs };
       ciqBonus = ciqCupBonus(_cosm, _ctx);
       if (ciqBonus > 0 && typeof ciqCupBonusDetail === 'function') ciqDetail = ciqCupBonusDetail(_cosm, _ctx);
     }
@@ -833,7 +848,7 @@ const DB = (() => {
     // wird (siehe unten) — sonst würden die Log-Zeilen nur die HALBE totalCoins-Summe
     // ausweisen, die tatsächlich gutgeschrieben wird.
     const kartellMult = (typeof ciqKartellMult === 'function') ? ciqKartellMult(_cosm) : 1;
-    let totalCoins = baseCoins + morningBonus + researchBonus + worldBonus + allianceCupBonus + groupBonus + achCoinTotal + streakBonus + ciqBonus;
+    let totalCoins = baseCoins + morningBonus + researchBonus + worldBonus + allianceCupBonus + groupBonus + gardenCupBonus + achCoinTotal + streakBonus + ciqBonus;
     if (kartellMult > 1) totalCoins = Math.round(totalCoins * kartellMult * 100) / 100;
 
     if (totalCoins > 0) {
@@ -857,7 +872,7 @@ const DB = (() => {
     // an die Gruppenkasse abgeben → Tassen sammeln am Wochenende lohnt sich netto nicht.
     // Aufs verfügbare Guthaben gedeckelt (nie Minus, berücksichtigt eine evtl. Koffein-Strafe).
     const isWeekend = (now.getDay() === 0 || now.getDay() === 6); // So=0, Sa=6 (Ortszeit)
-    const weekendCupIncome = Math.round((baseCoins + morningBonus + researchBonus + worldBonus + allianceCupBonus + groupBonus) * 100) / 100;
+    const weekendCupIncome = Math.round((baseCoins + morningBonus + researchBonus + worldBonus + allianceCupBonus + groupBonus + gardenCupBonus) * 100) / 100;
     const weekendLevy = isWeekend
       ? Math.round(Math.max(0, Math.min(weekendCupIncome, (member.coins || 0) + totalCoins - caffeinePenalty)) * 100) / 100
       : 0;
@@ -883,7 +898,10 @@ const DB = (() => {
         logEntries.push({ label: '🌍 Welt-Einfluss', amount: k(worldBonus), cat: 'welt', detail });
       }
       if (allianceCupBonus > 0) {
-        logEntries.push({ label: '🤝 Handelsbündnis', amount: k(allianceCupBonus), cat: 'welt', detail: `${amount}× à ${tradeBonus.cup}/Tasse · +10% Einkommen aus dem Bündnis-Land` });
+        logEntries.push({ label: '🤝 Handelsdividende', amount: k(allianceCupBonus), cat: 'welt', detail: `${amount}× à ${tradeBonus.cup}/Tasse · +10% aus dem Partner-Land` });
+      }
+      if (gardenCupBonus > 0) {
+        logEntries.push({ label: '🪴 Garten', amount: k(gardenCupBonus), cat: 'erlebnis', detail: `${amount}× à ${gardenPerCupEff}/Tasse (Kaffee-Garten)` });
       }
       if (groupBonus > 0) {
         logEntries.push({ label: '🏛️ Gruppenkasse', amount: k(groupBonus), cat: 'gruppe', detail: `${amount}× à ${groupPerks.perCup}/Tasse (Gruppen-Effekt)` });
@@ -2110,6 +2128,26 @@ const DB = (() => {
     return data || {}; // { can_play, in_first_week, next_play, played_today, claimed, coins_awarded, score }
   }
 
+  // ── 🪴 Kaffee-Garten (Erlebnis-Minigame #1) ─────────────────────────────────
+  // Freischalten: Preis + CC-Abzug + Epochen-Bonus laufen serverseitig in der RPC
+  // (unlock_garden_element). Der Client loggt danach nur ins Tages-Log (Transparenz).
+  async function unlockGardenElement(memberId, elementId) {
+    const { data, error } = await _sb.rpc('unlock_garden_element', {
+      p_member_id: memberId, p_group_id: _groupId, p_element_id: elementId,
+    });
+    if (error) throw new Error(error.message);
+    return data; // { ok, cost, epoch, epoch_complete, epoch_bonus, garden } | { error }
+  }
+
+  // Rein kosmetische Anordnung (keine CC-Bewegung); serverseitig auf unlocked + max 12/Epoche gehärtet.
+  async function saveGardenPlacements(memberId, placements) {
+    const { data, error } = await _sb.rpc('save_garden_placements', {
+      p_member_id: memberId, p_group_id: _groupId, p_placements: placements || {},
+    });
+    if (error) throw new Error(error.message);
+    return data; // { ok, garden } | { error }
+  }
+
   return {
     init, setGroup, createGroup, joinGroup,
     fetchData, registerUser, addCups, closeSeason, autoCloseSeasonIfDue,
@@ -2135,5 +2173,6 @@ const DB = (() => {
     submitSurvey, surveyMyResponse, fetchAllSurveyResponses,
     grantAchievements,
     startMinigame, claimMinigame, getMinigameStatus,
+    unlockGardenElement, saveGardenPlacements,
   };
 })();

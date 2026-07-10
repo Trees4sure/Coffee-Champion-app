@@ -9,10 +9,11 @@
 // sich bei Rang-1-Verlust auf) — 🤝 Handel ist dagegen LÄNDERbezogen: einmal
 // geschlossen, läuft es weiter, egal wer country_a/country_b regiert ("das Geld
 // bekommt der regierende Mitspieler"). Antragsteller bietet beim Handel ein
-// CC-Geschenk an (fließt erst bei Annahme), danach +10% auf das Einkommen AUS
-// DEM JEWEILIGEN LAND (nicht global) für beide aktuellen Regenten. Bonus-/
-// Tribut-Prozentsätze sind hier UND in db.js (_allianceTradeBonus /
-// settleAllianceTributes) hinterlegt — müssen synchron gehalten werden.
+// CC-Geschenk an (fließt erst bei Annahme, skaliert mit dem Länderwert), danach
+// eine WECHSELSEITIGE DIVIDENDE: beide Seiten erhalten je +10% des Einkommens aus
+// dem LAND DES PARTNERS (additiv, nicht vom Partner abgezweigt) — man profitiert
+// vom Erfolg des Partnerlandes. Bonus-/Tribut-Prozentsätze sind hier UND in db.js
+// (_allianceTradeBonus / settleAllianceTributes) hinterlegt — synchron halten.
 // ═══════════════════════════════════════════════════════════════════════════
 
 const ALLIANCE_MIN_OFFER = 35;        // Basis-Mindest-CC-Geschenk beim Handelsbündnis-Antrag
@@ -28,7 +29,7 @@ function allianceMinOffer(targetCountryId, investments, byCountry) {
 
 const ALLIANCE_TYPES = [
   { id: 'handel', icon: '🤝', name: 'Handelsbündnis', durationDays: 14, bonusPct: 0.10, needsAccept: true,
-    desc: `Du bietest mind. ${ALLIANCE_MIN_OFFER} CC als Geschenk an (mehr bei stark ausgebauten Ländern) — nimmt er/sie an, laufen 14 Tage lang +10% auf das Einkommen AUS DIESEM LAND für beide Seiten. Länderbezogen: wechselt die Regierung, profitiert automatisch der neue Regent — das Bündnis bricht dadurch nicht ab.` },
+    desc: `Du bietest mind. ${ALLIANCE_MIN_OFFER} CC als Geschenk an (mehr bei stark ausgebauten Ländern) — nimmt er/sie an, erhalten 14 Tage lang BEIDE Seiten je +10% des Einkommens aus dem Land des jeweils anderen (zusätzlich zum eigenen). Wähle also ein starkes Partnerland. Länderbezogen: wechselt die Regierung, profitiert automatisch der neue Regent — das Bündnis bricht dadurch nicht ab.` },
   { id: 'frieden', icon: '🕊️', name: 'Friedensbündnis', durationDays: 7, tributPct: 0.10, needsAccept: true,
     desc: 'Du zahlst 10% deines wöchentlichen Welt-Einkommens Tribut — dafür kann dich der Empfänger 7 Tage lang nicht per Investment aus Rang 1 verdrängen.' },
   { id: 'schutz', icon: '🛡️', name: 'Schutzbündnis', durationDays: 14, needsAccept: true,
