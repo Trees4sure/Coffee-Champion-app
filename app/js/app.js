@@ -566,16 +566,30 @@ function renderLeaderboard() {
 // App-Start. Idempotent über map_data.whatsNewSeen = WHATS_NEW_VERSION (analog Login-Bonus/
 // Tagesaufgaben-Muster) — wer schon dran war, sieht es nicht erneut. Bei künftigen neuen
 // Features: WHATS_NEW_VERSION + WHATS_NEW_ITEMS aktualisieren, dann poppt es einmalig erneut auf.
-// Popup vorerst STUMM: Krieger-Kulturen war schon, Garten/Handelsbündnis bewusst ohne Popup (JP).
-// Zum Wieder-Aktivieren (z. B. Garten offiziell vorstellen): WHATS_NEW_VERSION auf einen NEUEN Wert
-// setzen (z. B. '2026-07-14-kaffee-garten') und WHATS_NEW_ITEMS mit dem/den Eintrag/Einträgen füllen.
-// Bei leerer Liste poppt dank Guard in checkAndMaybeShowWhatsNew() nichts (kein leeres Popup).
-const WHATS_NEW_VERSION = '2026-07-13-krieger-kulturen';
-const WHATS_NEW_ITEMS = [];
+// Aktiv: 🪴 Kaffee-Garten + 🤝 Handelsbündnis-Dividende. Zeit-gesteuert — das Popup erscheint erst ab
+// WHATS_NEW_GO_LIVE (lokale Zeit), davor bleibt es still. Danach einmalig pro Spieler beim
+// nächsten App-Start (idempotent über map_data.whatsNewSeen). Bei leerer Liste poppt dank
+// Guard nichts. Zum Deaktivieren: WHATS_NEW_ITEMS = [] und/oder GO_LIVE in die Zukunft setzen.
+const WHATS_NEW_VERSION = '2026-07-14-kaffee-garten';
+// Go-Live-Zeitpunkt (LOKALE Zeit, ISO ohne "Z" → wird als Ortszeit interpretiert):
+const WHATS_NEW_GO_LIVE = new Date('2026-07-11T13:00:00'); // morgen (11.07.) 13:00 Uhr
+const WHATS_NEW_ITEMS = [
+  {
+    icon: '🪴',
+    title: 'Kaffee-Garten',
+    text: 'Lege dein persönliches Diorama der Kaffeegeschichte an: 84 Sammel-Elemente in 7 Epochen füllen dein 📖 Kaffee-Lexikon — und werfen dauerhaft CoffeeCoins ab (passiv pro Tag + extra pro Tasse). Zu finden im Imperium-Tab, sobald du die Forschung „Kaffeegarten" und die „Limitierte Edition" besitzt.'
+  },
+  {
+    icon: '🤝',
+    title: 'Handelsbündnis: wechselseitige Dividende',
+    text: 'Schließen zwei Länder ein Handelsbündnis, erhalten jetzt BEIDE Partner eine 🤝 Handelsdividende aus dem Umsatz des jeweils anderen Landes — eine echte wechselseitige Ausschüttung statt nur einseitig. Bestehende Pakte profitieren automatisch.'
+  }
+];
 
 function checkAndMaybeShowWhatsNew() {
   if (!currentUserData || typeof currentUser === 'undefined' || !currentUser?.id) return;
   if (!WHATS_NEW_ITEMS.length) return; // keine Ankündigung aktiv → gar kein (leeres) Popup
+  if (Date.now() < WHATS_NEW_GO_LIVE.getTime()) return; // erst ab Go-Live-Zeitpunkt zeigen
   if (currentUserData.map_data?.whatsNewSeen === WHATS_NEW_VERSION) return;
   _showWhatsNewModal();
 }
