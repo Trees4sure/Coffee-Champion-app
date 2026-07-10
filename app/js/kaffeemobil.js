@@ -39,6 +39,7 @@ let _kmRaf   = null;      // Animations-Frame
 let _kmLastPaint = 0;     // Throttle
 let _kmClaiming = false;  // In-Flight-Guard für Ankunft
 let _kmBusy  = false;     // In-Flight-Guard für Reisestart
+let _kmPopupTimer = null; // Auto-Ausblenden des Ankunfts-Popups
 
 // ── Graph laden/cachen ───────────────────────────────────────────────────────
 async function kmEnsureGraph() {
@@ -385,7 +386,8 @@ async function kmCheckArrival(member) {
     const c = _kmGraph ? _kmGraph.cities[res.city] : null;
     try { await DB.appendTodayLogFresh(currentUser.id, [{ label: `🏁 Angekommen in ${(c||{}).name || res.city}`, amount: res.reward || 0, cat: 'erlebnis', detail: res.firstVisit ? 'Erstbesuch' : 'Kaffeemobil' }]); } catch (e) {}
     await kmSyncAfterAction(res);
-    showToast(`🏁 Angekommen in ${(c||{}).name || res.city}! +${res.reward} CC${res.firstVisit ? ' ⭐ Erstbesuch' : ''}`, 'success');
+    // Kleines Ankunfts-Popup für den Reisenden selbst (auch im Hintergrund/anderer Tab).
+    kmShowArrival((c || {}).name || res.city, res.reward || 0, res.firstVisit);
     // Erstbesuch in die Gruppe posten — nie kritisch
     if (res.firstVisit) {
       const nm = (typeof currentUserData !== 'undefined' && currentUserData && currentUserData.name) || 'Jemand';
@@ -395,6 +397,32 @@ async function kmCheckArrival(member) {
     return true;
   } catch (e) { console.warn('kmCheckArrival:', e.message); return false; }
   finally { _kmClaiming = false; }
+}
+
+// ── Ankunfts-Popup (kleine, nicht-blockierende Karte) ────────────────────────
+// Erscheint für den Reisenden selbst bei Ankunft — auch wenn der Kaffeemobil-Tab
+// gerade nicht offen ist (Hintergrund-Ankunft via app.js). Hängt sich selbst an
+// <body> (unabhängig vom Karte-Tab), nutzt aber dieselben .cc-karte-popup-Styles.
+function kmShowArrival(cityName, reward, firstVisit) {
+  try {
+    let el = document.getElementById('cc-mobil-popup');
+    if (!el) { el = document.createElement('div'); el.id = 'cc-mobil-popup'; document.body.appendChild(el); }
+    el.className = 'cc-karte-popup cc-karte-popup--auto';
+    el.innerHTML = `
+      <div class="cc-karte-popup-inner">
+        <div class="cc-karte-popup-hdr">🏁 ANGEKOMMEN!</div>
+        <div class="cc-karte-popup-body">
+          <span class="cc-karte-popup-emoji">🚐</span>
+          <div class="cc-karte-popup-text">
+            <strong>${_kmEsc(cityName || 'Ziel')}${firstVisit ? ' ⭐' : ''}</strong>
+            <em>${firstVisit ? 'Erstbesuch — Entdecker-Bonus!' : 'Gute Reise gehabt.'}</em>
+            <span class="cc-karte-popup-cc">+${reward} 🫘 CC Reisebonus</span>
+          </div>
+        </div>
+      </div>`;
+    clearTimeout(_kmPopupTimer);
+    _kmPopupTimer = setTimeout(() => { const p = document.getElementById('cc-mobil-popup'); if (p) p.classList.add('hidden'); }, 3400);
+  } catch (e) { /* non-critical */ }
 }
 
 // ── Nach Aktion: appData/Coins/Member syncen ─────────────────────────────────
