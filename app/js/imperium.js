@@ -288,7 +288,7 @@ function _buildGarten(member) {
 
   return `<div class="cc-garden">
     <div class="cc-garden-intro">
-      <p class="cc-garden-lead">🪴 <strong>Kaffee-Garten</strong> — ein Diorama der Kaffeegeschichte. Jedes Element erzählt ein Stück Historie, füllt dein <strong>Kaffee-Lexikon</strong> und wirft <strong>Einkommen</strong> ab (Passiv/Tag + pro Tasse). Volle Epoche = <strong>+50 CC</strong>.</p>
+      <p class="cc-garden-lead">🪴 <strong>Kaffee-Garten</strong> — ein Diorama der Kaffeegeschichte. Jedes Element erzählt ein Stück Historie, füllt dein <strong>Kaffee-Lexikon</strong> und wirft <strong>Einkommen</strong> ab (Passiv/Tag + pro Tasse). Volle Epoche = <strong>+100 CC</strong>.</p>
       <div class="cc-garden-progress">
         <div class="cc-garden-prog-lbl">📖 Kaffee-Lexikon: <strong>${have}/${total}</strong> Einträge · Sammlungswert ${_fmtCoins(value)} CC</div>
         <div class="cc-progress-bar"><div class="cc-progress-fill" style="width:${pct}%"></div></div>
