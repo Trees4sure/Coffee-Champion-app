@@ -351,6 +351,7 @@ async function _buildWeltkarte(member, el) {
     const fd = devsEl.querySelector('[data-fund-deposit]');  if (fd) fd.onclick = () => _handleFundDeposit(member);
     const fw = devsEl.querySelector('[data-fund-withdraw]'); if (fw) fw.onclick = () => _handleFundWithdraw(member);
     const fv = devsEl.querySelector('[data-fund-dividend]'); if (fv) fv.onclick = () => _handleFundDividend(member);
+    devsEl.querySelectorAll('[data-fund-mode]').forEach(b => { b.onclick = () => _handleFundMode(member, b.dataset.fundMode); });
   }
   _wireAccordions();
 
@@ -1071,7 +1072,7 @@ function _fundRate(memberId) {
 }
 function _fundOf(member) {
   const f = member && member.map_data && member.map_data.worldDev && member.map_data.worldDev.fund;
-  return { principal: (f && f.principal) || 0, lastDiv: (f && f.lastDiv) || '' };
+  return { principal: (f && f.principal) || 0, lastDiv: (f && f.lastDiv) || '', mode: (f && f.mode) || 'payout' };
 }
 
 function _spionageInfo(investments, byCountry, member) {
@@ -1190,20 +1191,26 @@ function _renderBoerse(member) {
   const div = Math.floor(f.principal * rate);
   const claimed = f.lastDiv === _todayKeyW();
   const room = Math.max(0, FUND_MAX - f.principal);
+  const reinvest = f.mode === 'reinvest';
   return `<div class="cc-boerse">
     <div class="cc-boerse-stat">
       <span>📦 Angelegt: <strong>${_wfmt(f.principal)} CC</strong></span>
       <span>📈 Heute: <strong>${(rate * 100).toFixed(1)} %</strong> → ${_wfmt(div)} CC</span>
+    </div>
+    <div class="cc-boerse-mode">
+      <span class="cc-boerse-mode-lbl">Dividende:</span>
+      <button class="cc-boerse-modebtn${reinvest ? '' : ' active'}" data-fund-mode="payout">💸 Aufs Guthaben</button>
+      <button class="cc-boerse-modebtn${reinvest ? ' active' : ''}" data-fund-mode="reinvest">🔁 Reinvestieren</button>
     </div>
     <div class="cc-boerse-actions">
       <input type="number" id="cc-fund-amount" min="1" step="10" placeholder="CC (max ${room})">
       <button class="cc-build-btn cc-world-bbtn" data-fund-deposit="1">Einzahlen</button>
     </div>
     <div class="cc-boerse-actions">
-      <button class="cc-build-btn cc-world-bbtn" data-fund-dividend="1"${(claimed || div < 1) ? ' disabled' : ''}>${claimed ? '✓ Dividende heute' : '💰 Dividende ' + _wfmt(div) + ' 🫘'}</button>
+      <button class="cc-build-btn cc-world-bbtn" data-fund-dividend="1"${(claimed || div < 1) ? ' disabled' : ''}>${claimed ? '✓ Heute gutgeschrieben' : '💰 Jetzt einsammeln ' + _wfmt(div) + ' 🫘'}</button>
       <button class="cc-build-btn cc-world-bbtn" data-fund-withdraw="1"${f.principal < 1 ? ' disabled' : ''}>Auszahlen</button>
     </div>
-    <p class="cc-wdev-desc">Rendite schwankt täglich (0,5–1,7 %), einmal pro Tag einsammelbar. Max. ${_wfmt(FUND_MAX)} CC.</p>
+    <p class="cc-wdev-desc">Rendite schwankt täglich (0,5–1,7 %) und wird <strong>automatisch 1×/Tag</strong> ${reinvest ? '<strong>reinvestiert</strong> (bis ' + _wfmt(FUND_MAX) + ' CC, Überschuss aufs Guthaben)' : 'aufs <strong>Guthaben</strong>'} gutgeschrieben. „Jetzt einsammeln" nur, wenn du nicht auf den Tageslauf warten willst. Max. ${_wfmt(FUND_MAX)} CC.</p>
   </div>`;
 }
 
@@ -1229,7 +1236,7 @@ async function _handleFundDeposit(member) {
   try { left = await DB.spendCoins(member.id, amount); }
   catch (e) { showToast(e.message || 'Fehlgeschlagen', 'error'); return; }
   if (left === null || left === undefined) { showToast('Nicht genug CoffeeCoins!', 'error'); return; }
-  await _saveFund(member, { principal: f.principal + amount, lastDiv: f.lastDiv },
+  await _saveFund(member, { principal: f.principal + amount, lastDiv: f.lastDiv, mode: f.mode },
     [{ label: '💹 Kaffeebörse: Einzahlung', amount: -amount, detail: 'Weltkarte' }]);
   showToast(`💹 ${amount} CC angelegt.`, 'success');
   await _worldRefreshTab(member);
@@ -1241,20 +1248,44 @@ async function _handleFundWithdraw(member) {
   try { await DB.addCoins(member.id, f.principal); }
   catch (e) { showToast(e.message || 'Fehlgeschlagen', 'error'); return; }
   showToast(`💹 ${_wfmt(f.principal)} CC ausgezahlt.`, 'success');
-  await _saveFund(member, { principal: 0, lastDiv: f.lastDiv });
+  await _saveFund(member, { principal: 0, lastDiv: f.lastDiv, mode: f.mode });
   await _worldRefreshTab(member);
 }
 
+// „Jetzt einsammeln" — manueller Vorgriff auf die automatische Tages-Dividende. Verhält sich
+// genau wie der Auto-Claim in db.js (_checkAndClaimFundDividend), inkl. Modus (ausschüttend/
+// thesaurierend). Nach dem Klick ist lastDiv=heute, der Auto-Claim überspringt den Tag dann.
 async function _handleFundDividend(member) {
   const f = _fundOf(member);
   const today = _todayKeyW();
-  if (f.lastDiv === today) { showToast('Dividende heute schon kassiert.', 'error'); return; }
+  if (f.lastDiv === today) { showToast('Dividende heute schon gutgeschrieben.', 'error'); return; }
   const div = Math.floor(f.principal * _fundRate(member.id));
   if (div < 1) { showToast('Noch keine Dividende — lege mehr an.', 'error'); return; }
-  try { await DB.addCoins(member.id, div); }
-  catch (e) { showToast(e.message || 'Fehlgeschlagen', 'error'); return; }
-  await _saveFund(member, { principal: f.principal, lastDiv: today }, [{ label: '💹 Börsen-Dividende', amount: div }]);
-  showToast(`💹 ${div} CC Dividende!`, 'success');
+  if (f.mode === 'reinvest') {
+    const room = Math.max(0, FUND_MAX - f.principal);
+    const add  = Math.min(div, room);
+    const overflow = div - add;
+    if (overflow > 0) { try { await DB.addCoins(member.id, overflow); } catch (e) { showToast(e.message || 'Fehlgeschlagen', 'error'); return; } }
+    const logs = [{ label: '💹 Börsen-Dividende (reinvestiert)', amount: add, detail: 'Kaffeebörse' }];
+    if (overflow > 0) logs.push({ label: '💹 Börsen-Dividende', amount: overflow, detail: 'Kaffeebörse (über Max)' });
+    await _saveFund(member, { principal: f.principal + add, lastDiv: today, mode: 'reinvest' }, logs);
+    showToast(`💹 ${div} CC reinvestiert${overflow > 0 ? ` (${_wfmt(overflow)} aufs Guthaben)` : ''}!`, 'success');
+  } else {
+    try { await DB.addCoins(member.id, div); }
+    catch (e) { showToast(e.message || 'Fehlgeschlagen', 'error'); return; }
+    await _saveFund(member, { principal: f.principal, lastDiv: today, mode: 'payout' }, [{ label: '💹 Börsen-Dividende', amount: div, detail: 'Kaffeebörse' }]);
+    showToast(`💹 ${div} CC Dividende!`, 'success');
+  }
+  await _worldRefreshTab(member);
+}
+
+// Umschalter ausschüttend ⇄ thesaurierend (pro Konto, in map_data.worldDev.fund.mode).
+async function _handleFundMode(member, mode) {
+  if (mode !== 'payout' && mode !== 'reinvest') return;
+  const f = _fundOf(member);
+  if (f.mode === mode) return;
+  await _saveFund(member, { principal: f.principal, lastDiv: f.lastDiv, mode });
+  showToast(mode === 'reinvest' ? '🔁 Dividende wird ab jetzt reinvestiert.' : '💸 Dividende geht ab jetzt aufs Guthaben.', 'success');
   await _worldRefreshTab(member);
 }
 

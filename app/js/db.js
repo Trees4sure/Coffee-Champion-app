@@ -96,7 +96,29 @@ const DB = (() => {
     if (!entries || !entries.length) return mapData || {};
     const day  = today();
     const prev = (mapData?.todayLog?.date === day) ? (mapData.todayLog.entries || []) : [];
-    const next = [...prev, ...entries.map(e => ({ ...e, t: new Date().toISOString() }))].slice(-30);
+    const list = prev.slice();
+    const nowIso = new Date().toISOString();
+    for (const raw of entries) {
+      const e = { ...raw, t: nowIso };
+      // Aggregierbare Einträge (z.B. Dungeon-Funde, Kartenschätze) werden in EINEM Tages-Eintrag
+      // zusammengefasst statt jedes Mal neu angehängt — sonst verdrängen viele kleine Funde die
+      // übrigen Einträge aus dem Limit. Gleicher `aggKey` → Betrag + Anzahl (`count`) aufsummiert,
+      // Label „<aggBase> ×N", und der Eintrag wandert ans Ende (bleibt „frisch" → überlebt slice).
+      if (e.aggKey) {
+        const base = e.aggBase || e.label;
+        const idx = list.findIndex(x => x.aggKey === e.aggKey);
+        if (idx >= 0) {
+          const ex = list.splice(idx, 1)[0];
+          const cnt = (ex.count || 1) + 1;
+          list.push({ ...ex, amount: Math.round(((ex.amount || 0) + (e.amount || 0)) * 100) / 100,
+                      count: cnt, aggBase: base, label: `${base} ×${cnt}`, detail: e.detail || ex.detail, t: nowIso });
+          continue;
+        }
+        e.count = 1; e.aggBase = base; e.label = base;
+      }
+      list.push(e);
+    }
+    const next = list.slice(-50);
     const ledger = _accrueLedger(mapData?.ledger, entries);
     return { ...(mapData || {}), todayLog: { date: day, entries: next }, ledger };
   }
@@ -363,7 +385,7 @@ const DB = (() => {
     if (hoursDiff < 1) return { earned: 0, tradeBonusDay: 0 }; // Max einmal pro Stunde
 
     const earned  = Math.round(perDay * (hoursDiff / 24) * 100) / 100;
-    let capped    = Math.min(earned, perDay * 4); // Max 4 Tages-Passiv auf einmal (deckt Wochenende/Abwesenheit ab)
+    let capped    = Math.min(earned, perDay * 14); // Max 14 Tages-Passiv auf einmal (deckt Urlaub/längere Abwesenheit ab)
     // 🧠 CIQ Kaffeekartell (Selbst-Buff, 1h): alle eigenen CC-Einnahmen verdoppelt (auch Passiv).
     if (typeof ciqKartellMult === 'function') capped = Math.round(capped * ciqKartellMult(_cosmP) * 100) / 100;
     if (capped < 0.01) return { earned: 0, tradeBonusDay: 0 };
@@ -437,10 +459,53 @@ const DB = (() => {
     }
   }
 
+  // ── 💹 Kaffeebörse: automatische Tages-Dividende ─────────────────────────────
+  // Früher rein manuell (Klick auf „💰 Dividende"). Jetzt einmal pro Tag automatisch beim
+  // Login/Poll — je nach fund.mode ausschüttend (aufs Guthaben) ODER thesaurierend
+  // (reinvestiert ins principal bis FUND_MAX, Überschuss aufs Guthaben). KEIN Backlog:
+  // pro Tag genau eine Gutschrift (lastDiv-Gate), verpasste Tage werden nicht nachgezahlt.
+  // Nutzt die world.js-Globals _fundRate/_todayKeyW/FUND_MAX — WICHTIG: der Fonds-Tageskey
+  // ist _todayKeyW() (de-DE-Format), NICHT das ISO-today() hier; sonst greift das lastDiv-Gate
+  // nie und es würde bei jedem Aufruf erneut gezahlt. No-op ohne Fonds/ohne world.js.
+  async function _checkAndClaimFundDividend(memberId, member) {
+    if (typeof _fundRate !== 'function' || typeof _todayKeyW !== 'function' || typeof FUND_MAX === 'undefined') return;
+    const fund0 = member.map_data?.worldDev?.fund;
+    if (!fund0 || (fund0.principal || 0) < 1) return;
+    const day = _todayKeyW();
+    if (fund0.lastDiv === day) return;                       // Vorabprüfung — heute schon
+    // map_data frisch lesen (gegen Clobbering durch zeitgleiche Writes) und Fonds-Update +
+    // Tages-Log in EINEM Write mergen.
+    const { data: fresh } = await _sb.from('members').select('map_data').eq('id', memberId).single();
+    const md0 = (fresh && fresh.map_data) || member.map_data || {};
+    const f0  = (md0.worldDev && md0.worldDev.fund) || fund0;
+    if (f0.lastDiv === day) return;                          // zwischenzeitlich schon (Race)
+    const p0 = f0.principal || 0;
+    if (p0 < 1) return;
+    const mode = f0.mode || 'payout';
+    const div  = Math.floor(p0 * _fundRate(memberId));
+    const setFund = (fund, logs) => {
+      const mdFund = { ...md0, worldDev: { ...(md0.worldDev || {}), fund } };
+      return updateMapData(memberId, (logs && logs.length) ? appendTodayLog(mdFund, logs) : mdFund);
+    };
+    if (div < 1) { await setFund({ ...f0, lastDiv: day, mode }, null); return; } // zu klein → nur Marker
+    if (mode === 'reinvest') {
+      const room = Math.max(0, FUND_MAX - p0);
+      const add  = Math.min(div, room);
+      const overflow = div - add;                            // über FUND_MAX → aufs Guthaben
+      if (overflow > 0) await _sb.rpc('add_coins', { p_member_id: memberId, p_amount: overflow });
+      const logs = [{ label: '💹 Börsen-Dividende (reinvestiert)', amount: add, detail: 'Kaffeebörse' }];
+      if (overflow > 0) logs.push({ label: '💹 Börsen-Dividende', amount: overflow, detail: 'Kaffeebörse (über Max)' });
+      await setFund({ ...f0, principal: p0 + add, lastDiv: day, mode }, logs);
+    } else {
+      await _sb.rpc('add_coins', { p_member_id: memberId, p_amount: div });
+      await setFund({ ...f0, principal: p0, lastDiv: day, mode }, [{ label: '💹 Börsen-Dividende', amount: div, detail: 'Kaffeebörse' }]);
+    }
+  }
+
   // ── Passives Einkommen EIGENSTÄNDIG einlösen (entkoppelt von Tassen) ──────────
   // Damit das passive Einkommen wirklich passiv ist: wird beim App-Start und
   // periodisch aufgerufen, nicht nur beim Tassen-Eintrag. Zeitbasiert (kein Cron),
-  // _checkAndClaimPassive begrenzt selbst auf max. 1×/Stunde und 2 Tages-Passiv.
+  // _checkAndClaimPassive begrenzt selbst auf max. 1×/Stunde und 14 Tages-Passiv.
   // _passiveBusy verhindert, dass sich zwei eigene Aufrufe (Login + erster Poll)
   // überlappen und doppelt auszahlen.
   let _passiveBusy = false;
@@ -473,6 +538,10 @@ const DB = (() => {
       try {
         await _checkWorldBuilderDividend(memberId, member, worldByCountry);
       } catch (e) { console.warn('Erbauer-Dividende fehlgeschlagen (nicht kritisch):', e.message); }
+      // 💹 Kaffeebörse: automatische Tages-Dividende (ausschüttend/thesaurierend) — auch bei earned==0.
+      try {
+        await _checkAndClaimFundDividend(memberId, member);
+      } catch (e) { console.warn('Börsen-Dividende fehlgeschlagen (nicht kritisch):', e.message); }
       // 🤝 Kaffee-Kredit: 25 % des Passiv-Einkommens tilgen (No-op ohne aktiven Kredit).
       if (earned > 0) await applyLoanRepayment(memberId, earned);
       return earned;

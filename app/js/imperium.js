@@ -1541,7 +1541,7 @@ async function _handleKarteStep(tx, ty, member, state, seed, COLS, ROWS, MARGIN)
       DB.payBaristaBartGroup(member.id).catch(() => {});
     }
     try {
-      const logEntries = [{ label: `🗺️ ${treasure.name}`, amount: totalCC }];
+      const logEntries = [{ label: `🗺️ ${treasure.name}`, amount: totalCC, aggKey: 'karte_treasure', aggBase: '🗺️ Kartenschätze', detail: 'Karten-Erkundung' }];
       if (raubStolen > 0) logEntries.push({ label: '💎 Schatzräuber-Abzweig', amount: -raubStolen });
       state.mapData = DB.appendTodayLog(state.mapData, logEntries);
       // Lifetime-Summe für den Informant-Bericht (_ccTreasureCc in app.js) — additiv, keine SQL nötig.
@@ -2370,7 +2370,7 @@ async function _handleKriegerTap(tx, ty, member, state, seed, COLS, ROWS, MARGIN
     try { await DB.postMessage(`🪙 ${_esc2(member.name)} hat im Dungeon ${gimmick.cc} CC gefunden!`, member.name); } catch (e) {}
     // Tages-Log (Profil "Heute erhalten") — frisch mergen (gegen Clobbering durch zeitgleiche Writes).
     try {
-      const mdLog = await DB.appendTodayLogFresh(member.id, [{ label: '🪙 Dungeon-Fund', amount: gimmick.cc, cat: 'karte' }]);
+      const mdLog = await DB.appendTodayLogFresh(member.id, [{ label: '🪙 Dungeon-Fund', amount: gimmick.cc, cat: 'karte', aggKey: 'krieger_dungeon_fund', aggBase: '🪙 Dungeon-Funde', detail: 'Kaffee-Krieger-Dungeon' }]);
       if (mdLog) { currentUserData = { ...(currentUserData || {}), map_data: mdLog }; member.map_data = mdLog; }
     } catch (e) { /* non-critical */ }
   } else if (gimmick?.voucher) {

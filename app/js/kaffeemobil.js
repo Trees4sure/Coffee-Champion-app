@@ -155,7 +155,7 @@ function kmRender() {
     const here = _kmGraph.cities[kmAt(m)] || {};
     status = `<div class="cc-mobil-status">
         📍 Aktuell in <strong>${_kmEsc(here.name)}</strong>
-        · 🏆 erobert: <strong>${kmUnique(m)}/${total}</strong> Städte
+        · 🏆 bereist: <strong>${kmUnique(m)}/${total}</strong> Städte
       </div>`;
   }
 
@@ -383,13 +383,13 @@ async function kmCheckArrival(member) {
     const res = await DB.claimArrival(currentUser.id);
     if (res && res.error) { if (res.error !== 'still_traveling') console.warn('claim_arrival:', res.error); return false; }
     const c = _kmGraph ? _kmGraph.cities[res.city] : null;
-    try { await DB.appendTodayLogFresh(currentUser.id, [{ label: `🏁 Angekommen in ${(c||{}).name || res.city}`, amount: res.reward || 0, cat: 'erlebnis', detail: res.firstVisit ? 'Erste Eroberung' : 'Kaffeemobil' }]); } catch (e) {}
+    try { await DB.appendTodayLogFresh(currentUser.id, [{ label: `🏁 Angekommen in ${(c||{}).name || res.city}`, amount: res.reward || 0, cat: 'erlebnis', detail: res.firstVisit ? 'Erstbesuch' : 'Kaffeemobil' }]); } catch (e) {}
     await kmSyncAfterAction(res);
-    showToast(`🏁 Angekommen in ${(c||{}).name || res.city}! +${res.reward} CC${res.firstVisit ? ' ⭐ Erste Eroberung' : ''}`, 'success');
-    // Eroberung (Erstbesuch) in die Gruppe posten — nie kritisch
+    showToast(`🏁 Angekommen in ${(c||{}).name || res.city}! +${res.reward} CC${res.firstVisit ? ' ⭐ Erstbesuch' : ''}`, 'success');
+    // Erstbesuch in die Gruppe posten — nie kritisch
     if (res.firstVisit) {
       const nm = (typeof currentUserData !== 'undefined' && currentUserData && currentUserData.name) || 'Jemand';
-      try { await DB.postMessage(`🚐 ${nm} hat ${(c||{}).name || res.city} erobert!`, nm); } catch (e) {}
+      try { await DB.postMessage(`🚐 ${nm} hat ${(c||{}).name || res.city} bereist!`, nm); } catch (e) {}
     }
     await kmGrantAchievements(res.mobil || (_kmMember && _kmMember.mobil));
     return true;

@@ -880,7 +880,7 @@ function renderMobilProfil(u) {
     <div class="section-title">🚐 Kaffeemobil</div>
     <p class="dt-meta">${loc}</p>
     <div class="vermoegen-list">
-      <div class="vermoegen-row"><span class="vermoegen-label">🏆 Erobert</span><span class="vermoegen-amount">${uniq}${total ? ` / ${total}` : ''} Städte</span></div>
+      <div class="vermoegen-row"><span class="vermoegen-label">🏆 Bereist</span><span class="vermoegen-amount">${uniq}${total ? ` / ${total}` : ''} Städte</span></div>
       <div class="vermoegen-row"><span class="vermoegen-label">🛣️ Reisen</span><span class="vermoegen-amount">${trips}</span></div>
       <div class="vermoegen-row"><span class="vermoegen-label">🪙 Reiseertrag gesamt</span><span class="vermoegen-amount">${earned.toLocaleString('de-DE')} CC</span></div>
     </div>`;
