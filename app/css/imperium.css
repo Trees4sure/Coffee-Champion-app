@@ -1108,3 +1108,61 @@
 .cc-garden-income { font-size: .74rem; color: #cfeee2; margin-top: 7px; }
 .cc-garden-income strong { color: #9FE1CB; }
 .cc-garden-income-note { color: var(--muted, #8a7a5a); font-size: .66rem; }
+
+/* ═══ 🚐 Kaffeemobil: Welteroberung (Erlebnis-Minigame #2) ═══ */
+.cc-mobil-lead { font-size:.85rem; line-height:1.45; color:var(--muted); margin:4px 0 10px; }
+.cc-mobil-status { background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.09);
+  border-radius:10px; padding:9px 12px; font-size:.9rem; margin-bottom:10px; }
+.cc-mobil-status.traveling { border-color:#ffd15c66; background:rgba(255,209,92,.08); }
+.km-eta { color:var(--muted); font-size:.82rem; }
+.km-progress { height:5px; border-radius:3px; background:rgba(255,255,255,.12); margin-top:6px; overflow:hidden; }
+.km-progress-bar { height:100%; width:0; background:linear-gradient(90deg,#ffd15c,#e0902a); transition:width .4s linear; }
+
+.cc-mobil-maprow { position:relative; }
+/* Karte = echte Leaflet-Slippy-Map (dieselbe Basiskarte wie im Weltimperium) */
+.cc-mobil-map { width:100%; height:380px; display:block; background:#0a1520;
+  border:1px solid rgba(255,255,255,.1); border-radius:12px; overflow:hidden; }
+.cc-mobil-map.leaflet-container { background:#0a1520; font:inherit; }
+/* Overlay-Buttons müssen über den Leaflet-Panes (bis z-index ~700) liegen */
+.cc-mobil-controls { position:absolute; top:8px; right:8px; z-index:1000; display:flex; flex-direction:column; gap:5px; }
+.km-ctrl { width:34px; height:34px; border-radius:8px; border:1px solid rgba(255,255,255,.18);
+  background:rgba(20,23,28,.85); color:#fff; font-size:1rem; cursor:pointer; }
+.km-ctrl:hover { background:rgba(40,44,52,.95); }
+
+/* Städte-Marker: erreichbare Ziele als Zeiger */
+.km-city-go { cursor:pointer; }
+/* Städtenamen als dunkle Tooltips (Leaflet-Default ist hell) */
+.leaflet-tooltip.km-city-tip { background:rgba(16,20,26,.9); border:1px solid rgba(255,255,255,.14);
+  color:#e8e8e8; font-size:.7rem; font-weight:500; padding:1px 6px; border-radius:6px;
+  box-shadow:0 1px 4px rgba(0,0,0,.4); white-space:nowrap; }
+.leaflet-tooltip.km-city-tip.cur { color:#ffd15c; font-weight:700; border-color:#ffd15c66; }
+.leaflet-tooltip.km-city-tip::before { display:none; } /* kein heller Pfeil */
+/* 🚐-Mobil als DivIcon */
+.km-mobil-icon { font-size:16px; line-height:24px; text-align:center; filter:drop-shadow(0 1px 2px rgba(0,0,0,.6)); }
+.km-mobil-icon.mine { font-size:21px; }
+
+.cc-mobil-dest { margin-top:12px; }
+.km-dest-title { margin:6px 0 8px; font-size:.95rem; }
+.km-dest-hint { color:var(--muted); font-size:.85rem; padding:6px 2px; }
+.cc-mobil-dest-row { display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:9px;
+  background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.07); margin-bottom:6px; }
+.cc-mobil-dest-row.cd { opacity:.7; }
+.km-dest-main { flex:1 1 auto; min-width:0; }
+.km-dest-name { font-weight:600; display:block; }
+.km-dest-meta { font-size:.76rem; color:var(--muted); }
+.km-dest-nums { display:flex; flex-direction:column; align-items:flex-end; font-size:.85rem; flex:0 0 auto; }
+.km-dest-cost { color:#e58; }
+.km-dest-rew { color:#6c9; font-weight:600; }
+.km-go { flex:0 0 auto; padding:7px 12px; border-radius:8px; border:none; cursor:pointer;
+  background:#e0902a; color:#1b1d22; font-weight:600; }
+.km-go:hover { background:#ffb347; }
+.km-go[disabled], .km-go.cd, .km-go.poor { background:rgba(255,255,255,.12); color:var(--muted); cursor:default; }
+.km-legend { font-size:.75rem; color:var(--muted); margin-top:8px; }
+
+.cc-mobil-confirm { margin-top:12px; padding:14px; border-radius:12px;
+  background:rgba(255,209,92,.08); border:1px solid #ffd15c55; }
+.km-cf-head { font-size:1rem; margin-bottom:6px; }
+.km-cf-body { font-size:.88rem; line-height:1.5; color:var(--muted); margin-bottom:12px; }
+.km-cf-actions { display:flex; gap:10px; }
+.km-cf-cancel { padding:8px 14px; border-radius:8px; border:1px solid rgba(255,255,255,.18);
+  background:transparent; color:#fff; cursor:pointer; }
