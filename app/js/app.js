@@ -591,7 +591,7 @@ const WHATS_NEW_ITEMS = [
   {
     icon: '⚔️',
     title: 'Kaffee-Krieger: Balance & Kultur-Rollen',
-    text: 'Jede Kultur hat jetzt eine klare Rolle: 🛡️ Mittelalter schlägt mit Rüstungsdurchschlag durch zähe Gegner, 🏰 Europa gibt +50% Kampf-CC, 🌙 Orient heilt bei jedem Krit, 🐺 Steppe eröffnet mit einer Gratis-Salve, ⚖️ Handel bekommt −25% Preise + Trank-Rückvergütung. Heilungen sind auf feste HP umgestellt (fairer), der zähe Tamper-Troll ist wieder besiegbar — und der Dungeon spammt den Chat nicht mehr, sondern postet eine Zusammenfassung, wenn du ihn verlässt.'
+    text: 'Jede Kultur hat jetzt eine klare Rolle: 🛡️ Mittelalter schlägt mit Rüstungsdurchschlag durch zähe Gegner, 🏰 Europa gibt +50% Kampf-CC, 🌙 Orient heilt bei jedem Krit, 🐺 Steppe eröffnet mit einer Gratis-Salve, ⚖️ Handel bekommt −25% Preise + Trank-Rückvergütung. Heilungen sind auf feste HP umgestellt (fairer), der zähe Tamper-Troll ist wieder besiegbar. Der Dungeon spammt den Chat nicht mehr, sondern fasst Kämpfe, Funde und Käufe zusammen, wenn du ihn verlässt. Neu: zwei Sammler-Achievements 🌍/🏅 für die Tier-1- bzw. Tier-2-Ausrüstung aller acht Kulturen.'
   },
   {
     icon: '🚐',

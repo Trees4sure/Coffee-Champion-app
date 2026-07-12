@@ -419,6 +419,14 @@ const KRIEGER_SET_BONUSES = {
 function kriegerItemsBySlot(slot) { return KRIEGER_ITEMS.filter(i => i.slot === slot); }
 function kriegerItemByKey(key)    { return KRIEGER_ITEMS.find(i => i.key === key) || null; }
 
+// Alle kulturgebundenen Items eines Tiers besessen? (Sammler-Achievements 2026-07-16b) — deckt die
+// 8 Kulturen × 4 Slots je Tier ab (Scan-Items culture:null zählen bewusst nicht mit).
+function kriegerOwnsAllTier(dd, tier) {
+  const owned = dd?.owned || {};
+  const items = KRIEGER_ITEMS.filter(i => i.culture && i.tier === tier);
+  return items.length > 0 && items.every(i => owned[i.key]);
+}
+
 // Stiefel-Bonus (2026-07-05, User-Wunsch): ausgerüstetes 'feet'-Item erhöht das tägliche
 // Dungeon-Schritte-Budget dauerhaft. Rein additiv zum +5-Sieg-Bonus aus _runKriegerFight —
 // beide stapeln sich normal, da Sieg-Bonus die VERBRAUCHTEN Schritte senkt, Stiefel dagegen

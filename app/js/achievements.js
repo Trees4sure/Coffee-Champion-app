@@ -44,6 +44,8 @@ const ACHIEVEMENTS = [
   { id: 'krieger_potion_10',   icon: '🧪', name: 'Kaffeemixer',         desc: '10 Tränke im Kampf verbraucht',                  condition: null, coinReward: 25 },
   { id: 'krieger_tier3_first', icon: '🗡️', name: 'Meisterwaffe',        desc: 'Erste Tier-3-Waffe erworben',                    condition: null, coinReward: 40 },
   { id: 'krieger_mount_first', icon: '🐎', name: 'Berittener Krieger',   desc: 'Erstes Reittier erworben',                       condition: null, coinReward: 40 },
+  { id: 'krieger_all_t1',      icon: '🌍', name: 'Kulturen-Sammler',     desc: 'Tier-1-Ausrüstung aller 8 Kulturen besessen',    condition: null, coinReward: 80 },
+  { id: 'krieger_all_t2',      icon: '🏅', name: 'Meister-Sammler',      desc: 'Tier-2-Ausrüstung aller 8 Kulturen besessen',    condition: null, coinReward: 200 },
   { id: 'garten_epoch_all',    icon: '🪴', name: 'Garten-Kurator',       desc: 'Alle 84 Einträge des Kaffee-Lexikons gesammelt', condition: null, coinReward: 500 },
   // 🚐 Kaffeemobil: Welteroberung (Erlebnis-Minigame #2) — alle event-granted (condition:null)
   { id: 'mobil_first',       icon: '🚐', name: 'Erste Ausfahrt',    desc: 'Erste Reise mit dem Kaffeemobil abgeschlossen',      condition: null, coinReward: 30  },

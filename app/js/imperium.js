@@ -2379,7 +2379,7 @@ async function _handleKriegerTap(tx, ty, member, state, seed, COLS, ROWS, MARGIN
     currentUserData = { ...(currentUserData || {}), coins: state.memberCoins };
     _updateHeaderCoins({ coins: state.memberCoins });
     try { await DB.addCoins(member.id, gimmick.cc); } catch (e) {}
-    if (_krSession) _krSession.ccFinds += gimmick.cc;  // in die Dungeon-Session-Summe („CC gefunden")
+    try { const s = _krSessionEnsure(member.name, true); s.ccFinds += gimmick.cc; _krSessionBumpTimer(); } catch (e) { /* non-critical */ }  // „CC gefunden" in die Session-Summe
     showToast(`🪙 +${gimmick.cc} CC im Dungeon gefunden!`, 'success');
     // Chat-Entlastung (2026-07-15, User: „Dungeon-Funde überschwemmen den Chat"): die häufigen
     // CC-Kleinfunde werden NICHT mehr im Chat gepostet — sie stehen weiter im Tages-Log
@@ -2393,10 +2393,12 @@ async function _handleKriegerTap(tx, ty, member, state, seed, COLS, ROWS, MARGIN
   } else if (gimmick?.voucher) {
     const slotName = gimmick.voucher.slot === 'weapon' ? 'Waffen' : gimmick.voucher.slot === 'armor' ? 'Rüstungs' : 'Talisman';
     showToast(`${gimmick.emoji} ${gimmick.name}! Nächster ${slotName}-Kauf 50% günstiger.`, 'success');
-    try { await DB.postMessage(`${gimmick.emoji} ${_esc2(member.name)} hat im Dungeon "${_esc2(gimmick.name)}" gefunden — 50% Rabatt auf den nächsten ${slotName}-Kauf!`, member.name); } catch (e) {}
+    // Chat-Entlastung (2026-07-16b): Gutschein-Funde nicht mehr einzeln posten → in die Session-Summe.
+    try { const s = _krSessionEnsure(member.name, true); s.vouchersFound += 1; _krSessionBumpTimer(); } catch (e) { /* non-critical */ }
   } else if (gimmick?.potion) {
     showToast(`${gimmick.emoji} ${gimmick.name}! Im 🧪 Tränke-Tab einsetzbar.`, 'success');
-    try { await DB.postMessage(`${gimmick.emoji} ${_esc2(member.name)} hat im Dungeon einen Trank gefunden: ${_esc2(gimmick.name)}.`, member.name); } catch (e) {}
+    // Chat-Entlastung (2026-07-16b): Trank-Funde nicht mehr einzeln posten → in die Session-Summe.
+    try { const s = _krSessionEnsure(member.name, true); s.potionsFound += 1; _krSessionBumpTimer(); } catch (e) { /* non-critical */ }
   }
 
   // Viewport nachziehen + neu rendern (analog _handleKarteStep)
@@ -2598,15 +2600,29 @@ function _showKriegerFightPrompt(member, state, tier, seed, COLS, ROWS, MARGIN, 
 let _krSession = null;
 let _krSessionTimer = null;
 let _krSessionName = '';
-const _KR_SESSION_IDLE_MS = 90000;
+const _KR_SESSION_IDLE_MS = 180000; // 3 Min Inaktivität bis zur Zusammenfassung (2026-07-16b: 90→180, JP-Wunsch)
 
-function _krSessionEnsure(name) {
+// doEntry=true bei echtem Dungeon-Betreten (Kampf/Erkundungsfund) → postet EINMAL „betritt das
+// Dungeon". Käufe rufen mit doEntry=false (reines Einkaufen ist kein Dungeon-Besuch).
+function _krSessionEnsure(name, doEntry) {
   if (!_krSession) {
-    _krSession = { fights:0, wins:0, losses:0, ccCombat:0, ccFinds:0, ep:0, levelStart:null, levelEnd:null, potions:0, bossKills:0 };
+    _krSession = { entered:false, fights:0, wins:0, losses:0, ccCombat:0, ccFinds:0, ep:0,
+                   levelStart:null, levelEnd:null, potions:0, bossKills:0,
+                   vouchersFound:0, potionsFound:0, purchases:0, purchaseLabels:[] };
     _krSessionName = name || 'Krieger';
+  }
+  if (doEntry && !_krSession.entered) {
+    _krSession.entered = true;
     try { DB.postMessage(`⚔️ ${(typeof _esc2==='function'?_esc2(_krSessionName):_krSessionName)} betritt das Dungeon …`, _krSessionName); } catch (e) { /* non-critical */ }
   }
   return _krSession;
+}
+// Käufe (Ausrüstung/Begleiter/Reittier) in den Sammler legen (2026-07-16b) — statt je Kauf ein Chat-Post.
+function _krSessionAddPurchase(name, label) {
+  const s = _krSessionEnsure(name, false);
+  s.purchases += 1;
+  if (label && s.purchaseLabels.length < 20) s.purchaseLabels.push(label);
+  _krSessionBumpTimer();
 }
 function _krSessionBumpTimer() {
   if (_krSessionTimer) clearTimeout(_krSessionTimer);
@@ -2615,17 +2631,33 @@ function _krSessionBumpTimer() {
 async function _kriegerFlushSession() {
   if (_krSessionTimer) { clearTimeout(_krSessionTimer); _krSessionTimer = null; }
   const s = _krSession; _krSession = null;
-  if (!s || s.fights === 0) return;
+  if (!s) return;
+  const dungeonActivity = s.fights || s.ccFinds || s.vouchersFound || s.potionsFound || s.entered;
+  if (!dungeonActivity && !s.purchases) return;
   const esc = (typeof _esc2 === 'function') ? _esc2 : (x => x);
-  const totalCC = Math.round((s.ccCombat + s.ccFinds) * 100) / 100;
-  const levels  = (s.levelEnd != null && s.levelStart != null) ? Math.max(0, s.levelEnd - s.levelStart) : 0;
-  const parts = [`${s.wins} Feinde besiegt`];
-  if (totalCC > 0) parts.push(`${totalCC} CC (⚔️ ${Math.round(s.ccCombat)} Kampf · 🗺️ ${Math.round(s.ccFinds)} Funde)`);
-  if (s.ep > 0)      parts.push(`${s.ep} EP`);
-  if (levels > 0)    parts.push(`${levels} Level`);
-  if (s.potions > 0) parts.push(`${s.potions} Tränke`);
-  if (s.losses > 0)  parts.push(`${s.losses} Niederlagen`);
-  try { await DB.postMessage(`☕ ${esc(_krSessionName)} verlässt das Dungeon — ${parts.join(', ')}.`, _krSessionName); } catch (e) { /* non-critical */ }
+  const name = esc(_krSessionName);
+  // Käufe als kompakte Liste (Icon+Name), gedeckelt.
+  const buyList = (s.purchaseLabels || []).slice(0, 8).map(esc).join(', ')
+    + (((s.purchaseLabels || []).length > 8) ? ` +${s.purchaseLabels.length - 8}` : '');
+
+  if (dungeonActivity) {
+    const totalCC = Math.round((s.ccCombat + s.ccFinds) * 100) / 100;
+    const levels  = (s.levelEnd != null && s.levelStart != null) ? Math.max(0, s.levelEnd - s.levelStart) : 0;
+    const parts = [];
+    if (s.wins || s.fights)  parts.push(`${s.wins} Feinde besiegt`);
+    if (totalCC > 0)         parts.push(`${totalCC} CC (⚔️ ${Math.round(s.ccCombat)} Kampf · 🗺️ ${Math.round(s.ccFinds)} Funde)`);
+    if (s.ep > 0)            parts.push(`${s.ep} EP`);
+    if (levels > 0)          parts.push(`${levels} Level`);
+    if (s.potions > 0)       parts.push(`${s.potions} Tränke`);
+    if (s.vouchersFound > 0) parts.push(`${s.vouchersFound} 🎁 Gutschein${s.vouchersFound > 1 ? 'e' : ''}`);
+    if (s.potionsFound > 0)  parts.push(`${s.potionsFound} 🧪 Trankfund${s.potionsFound > 1 ? 'e' : ''}`);
+    if (s.losses > 0)        parts.push(`${s.losses} Niederlagen`);
+    if (s.purchases > 0)     parts.push(`🛒 ${s.purchases} gekauft${buyList ? ` (${buyList})` : ''}`);
+    try { await DB.postMessage(`☕ ${name} verlässt das Dungeon — ${parts.join(', ')}.`, _krSessionName); } catch (e) { /* non-critical */ }
+  } else if (s.purchases > 0) {
+    // Reiner Einkauf (kein Dungeon-Besuch dazwischen).
+    try { await DB.postMessage(`🛒 ${name} hat ${s.purchases} Ausrüstungsteil${s.purchases > 1 ? 'e' : ''} gekauft${buyList ? `: ${buyList}` : ''}.`, _krSessionName); } catch (e) { /* non-critical */ }
+  }
 }
 // App schließen / Tab in den Hintergrund → offene Session sofort abschließen.
 if (typeof window !== 'undefined' && !window._krSessionHooked) {
@@ -2858,7 +2890,7 @@ async function _runKriegerFight(member, state, tier, seed, COLS, ROWS, MARGIN, k
   // Stattdessen ein In-Memory-Session-Sammler, der beim Verlassen des Dungeons EINE Zusammenfassung
   // postet (siehe _kriegerFlushSession). Nur der Boss-Kill bleibt als eigener epischer Broadcast.
   try {
-    const s = _krSessionEnsure(member.name);
+    const s = _krSessionEnsure(member.name, true);
     s.fights += 1;
     if (result.won) s.wins += 1; else s.losses += 1;
     s.ccCombat += (result.cc_awarded || 0);
@@ -3102,7 +3134,8 @@ function _kriegerRenderShop(member, state, body) {
         showToast(newDD._discountApplied
           ? `🛒 ${item.name} erworben! 🎁 Gutschein eingelöst (50% günstiger).`
           : `🛒 ${item.name} erworben!`, 'success');
-        try { await DB.postMessage(`🛒 ${_esc2(member.name)} hat ${item.icon} ${_esc2(item.name)} erworben!`, member.name); } catch (e) {}
+        // Chat-Entlastung (2026-07-16b): Einzelkäufe nicht mehr posten → in die Session-Zusammenfassung.
+        try { _krSessionAddPurchase(member.name, `${item.icon} ${item.name}`); } catch (e) {}
         // 🗡️ Achievement: erste Tier-3-Waffe (Meisterwaffe)
         if (item.tier === 3 && item.slot === 'weapon') {
           try {
@@ -3115,6 +3148,21 @@ function _kriegerRenderShop(member, state, body) {
             }
           } catch (e) { /* non-critical */ }
         }
+        // 🌍/🏅 Sammler-Achievements (2026-07-16b): alle T1- bzw. alle T2-Kultur-Items besessen.
+        try {
+          const existing = currentUserData?.achievements || {};
+          const toGrant = {};
+          if (!existing.krieger_all_t1 && typeof kriegerOwnsAllTier === 'function' && kriegerOwnsAllTier(state.dd, 1)) toGrant.krieger_all_t1 = true;
+          if (!existing.krieger_all_t2 && typeof kriegerOwnsAllTier === 'function' && kriegerOwnsAllTier(state.dd, 2)) toGrant.krieger_all_t2 = true;
+          if (Object.keys(toGrant).length) {
+            await DB.grantAchievements(member.id, toGrant);
+            currentUserData = { ...currentUserData, achievements: { ...existing, ...toGrant } };
+            for (const id of Object.keys(toGrant)) {
+              const ach = (typeof ACHIEVEMENTS !== 'undefined' ? ACHIEVEMENTS : []).find(a => a.id === id);
+              if (ach) showToast(`🏆 Achievement: ${ach.name}! (+${ach.coinReward} CC)`, 'success');
+            }
+          }
+        } catch (e) { /* non-critical */ }
         // Ausgabe im Tages-Log (tatsächlich gezahlter Betrag, inkl. evtl. Gutschein-Rabatt).
         try {
           const paid = newDD._costPaid ?? item.cost;
@@ -3233,7 +3281,7 @@ function _kriegerRenderShop(member, state, body) {
         currentUserData = { ...(currentUserData || {}), coins: state.memberCoins, dungeon_data: state.dd };
         _updateHeaderCoins({ coins: state.memberCoins });
         showToast(`🐴 ${comp.name} erworben${state.dd.companion === comp.key ? ' & ausgerüstet' : ''}!`, 'success');
-        try { await DB.postMessage(`🐴 ${_esc2(member.name)} hat den Begleiter ${comp.icon} ${_esc2(comp.name)} erworben!`, member.name); } catch (e) {}
+        try { _krSessionAddPurchase(member.name, `${comp.icon} ${comp.name}`); } catch (e) {}
         try {
           const mdLog = await DB.appendTodayLogFresh(member.id, [{ label: `🐴 Begleiter: ${comp.name}`, amount: -comp.cost, cat: 'krieger', detail: 'Kaffee-Krieger-Ausgabe', invest: true }]);
           if (mdLog) { currentUserData = { ...(currentUserData || {}), map_data: mdLog }; member.map_data = mdLog; }
@@ -3289,7 +3337,7 @@ function _kriegerRenderShop(member, state, body) {
         currentUserData = { ...(currentUserData || {}), coins: state.memberCoins, dungeon_data: state.dd };
         _updateHeaderCoins({ coins: state.memberCoins });
         showToast(`🐎 ${mount.name} erworben${state.dd.mount === mount.key ? ' & aufgesessen' : ''}!`, 'success');
-        try { await DB.postMessage(`🐎 ${_esc2(member.name)} hat das Reittier ${mount.icon} ${_esc2(mount.name)} erworben!`, member.name); } catch (e) {}
+        try { _krSessionAddPurchase(member.name, `${mount.icon} ${mount.name}`); } catch (e) {}
         try {
           const mdLog = await DB.appendTodayLogFresh(member.id, [{ label: `🐎 Reittier: ${mount.name}`, amount: -mount.cost, cat: 'krieger', detail: 'Kaffee-Krieger-Ausgabe', invest: true }]);
           if (mdLog) { currentUserData = { ...(currentUserData || {}), map_data: mdLog }; member.map_data = mdLog; }
