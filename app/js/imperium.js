@@ -2085,6 +2085,7 @@ function _kriegerRenderPotions(member, state, body) {
           if (mdLog) { currentUserData = { ...(currentUserData || {}), map_data: mdLog }; member.map_data = mdLog; }
         } catch (e) { /* non-critical */ }
         showToast(`🧪 ${potion.name} gekauft!`, 'success');
+        try { _krSessionAddPotionBuy(member.name, potion.key); } catch (e) { /* non-critical */ }
         _kriegerRenderPotions(member, state, body);
       } catch (e) { showToast(e.message || 'Kauf fehlgeschlagen', 'error'); btn.disabled = false; }
     };
@@ -2607,7 +2608,7 @@ const _KR_SESSION_IDLE_MS = 180000; // 3 Min Inaktivität bis zur Zusammenfassun
 function _krSessionEnsure(name, doEntry) {
   if (!_krSession) {
     _krSession = { entered:false, fights:0, wins:0, losses:0, ccCombat:0, ccFinds:0, ep:0,
-                   levelStart:null, levelEnd:null, potions:0, bossKills:0,
+                   levelStart:null, levelEnd:null, potionsUsed:{}, potionsBought:{}, bossKills:0,
                    vouchersFound:0, potionsFound:0, purchases:0, purchaseLabels:[] };
     _krSessionName = name || 'Krieger';
   }
@@ -2624,6 +2625,19 @@ function _krSessionAddPurchase(name, label) {
   if (label && s.purchaseLabels.length < 20) s.purchaseLabels.push(label);
   _krSessionBumpTimer();
 }
+// Trank gekauft (2026-07-16c) — nach Typ gezählt, für die Zusammenfassung „welche + wie viele".
+function _krSessionAddPotionBuy(name, key) {
+  const s = _krSessionEnsure(name, false);
+  s.potionsBought[key] = (s.potionsBought[key] || 0) + 1;
+  _krSessionBumpTimer();
+}
+// Trank-Zähl-Map → „2× ☕ Espresso, 1× 🧊 Cold Brew".
+function _krFmtPotions(map) {
+  return Object.entries(map || {}).map(([k, n]) => {
+    const p = (typeof kriegerPotionByKey === 'function') ? kriegerPotionByKey(k) : null;
+    return `${n}× ${p ? p.icon + ' ' + p.name : k}`;
+  }).join(', ');
+}
 function _krSessionBumpTimer() {
   if (_krSessionTimer) clearTimeout(_krSessionTimer);
   _krSessionTimer = setTimeout(() => { _kriegerFlushSession(); }, _KR_SESSION_IDLE_MS);
@@ -2632,13 +2646,16 @@ async function _kriegerFlushSession() {
   if (_krSessionTimer) { clearTimeout(_krSessionTimer); _krSessionTimer = null; }
   const s = _krSession; _krSession = null;
   if (!s) return;
+  const boughtPotions = Object.keys(s.potionsBought || {}).length > 0;
   const dungeonActivity = s.fights || s.ccFinds || s.vouchersFound || s.potionsFound || s.entered;
-  if (!dungeonActivity && !s.purchases) return;
+  if (!dungeonActivity && !s.purchases && !boughtPotions) return;
   const esc = (typeof _esc2 === 'function') ? _esc2 : (x => x);
   const name = esc(_krSessionName);
   // Käufe als kompakte Liste (Icon+Name), gedeckelt.
   const buyList = (s.purchaseLabels || []).slice(0, 8).map(esc).join(', ')
     + (((s.purchaseLabels || []).length > 8) ? ` +${s.purchaseLabels.length - 8}` : '');
+  const usedPotList   = esc(_krFmtPotions(s.potionsUsed));
+  const boughtPotList = esc(_krFmtPotions(s.potionsBought));
 
   if (dungeonActivity) {
     const totalCC = Math.round((s.ccCombat + s.ccFinds) * 100) / 100;
@@ -2648,15 +2665,19 @@ async function _kriegerFlushSession() {
     if (totalCC > 0)         parts.push(`${totalCC} CC (⚔️ ${Math.round(s.ccCombat)} Kampf · 🗺️ ${Math.round(s.ccFinds)} Funde)`);
     if (s.ep > 0)            parts.push(`${s.ep} EP`);
     if (levels > 0)          parts.push(`${levels} Level`);
-    if (s.potions > 0)       parts.push(`${s.potions} Tränke`);
+    if (usedPotList)         parts.push(`🧪 genutzt: ${usedPotList}`);
     if (s.vouchersFound > 0) parts.push(`${s.vouchersFound} 🎁 Gutschein${s.vouchersFound > 1 ? 'e' : ''}`);
     if (s.potionsFound > 0)  parts.push(`${s.potionsFound} 🧪 Trankfund${s.potionsFound > 1 ? 'e' : ''}`);
     if (s.losses > 0)        parts.push(`${s.losses} Niederlagen`);
     if (s.purchases > 0)     parts.push(`🛒 ${s.purchases} gekauft${buyList ? ` (${buyList})` : ''}`);
+    if (boughtPotList)       parts.push(`🧪 gekauft: ${boughtPotList}`);
     try { await DB.postMessage(`☕ ${name} verlässt das Dungeon — ${parts.join(', ')}.`, _krSessionName); } catch (e) { /* non-critical */ }
-  } else if (s.purchases > 0) {
+  } else if (s.purchases > 0 || boughtPotions) {
     // Reiner Einkauf (kein Dungeon-Besuch dazwischen).
-    try { await DB.postMessage(`🛒 ${name} hat ${s.purchases} Ausrüstungsteil${s.purchases > 1 ? 'e' : ''} gekauft${buyList ? `: ${buyList}` : ''}.`, _krSessionName); } catch (e) { /* non-critical */ }
+    const shopParts = [];
+    if (s.purchases > 0) shopParts.push(`${s.purchases} Ausrüstungsteil${s.purchases > 1 ? 'e' : ''}${buyList ? ` (${buyList})` : ''}`);
+    if (boughtPotList)   shopParts.push(`🧪 ${boughtPotList}`);
+    try { await DB.postMessage(`🛒 ${name} war einkaufen: ${shopParts.join(' · ')}.`, _krSessionName); } catch (e) { /* non-critical */ }
   }
 }
 // App schließen / Tab in den Hintergrund → offene Session sofort abschließen.
@@ -2895,7 +2916,9 @@ async function _runKriegerFight(member, state, tier, seed, COLS, ROWS, MARGIN, k
     if (result.won) s.wins += 1; else s.losses += 1;
     s.ccCombat += (result.cc_awarded || 0);
     s.ep       += (result.ep_awarded || 0);
-    s.potions  += ((result.potion_used ? 1 : 0) + (result.potion_used2 ? 1 : 0));
+    for (const pk of [result.potion_used, result.potion_used2].filter(Boolean)) {
+      s.potionsUsed[pk] = (s.potionsUsed[pk] || 0) + 1;
+    }
     if (s.levelStart == null) s.levelStart = _preLevel;
     s.levelEnd = result.new_level;
     _krSessionBumpTimer();
