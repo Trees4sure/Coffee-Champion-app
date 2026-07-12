@@ -1071,6 +1071,12 @@
 .krieger-result-win  { color: #ffd700; font-size: 1.6em; font-weight: 700; }
 .krieger-result-lose { color: rgba(255,255,255,.6); font-size: 1.4em; font-weight: 700; }
 .krieger-levelup { color: #FAC775; font-size: 1.1em; font-weight: 700; margin-top: 6px; }
+/* Kleines Hinweis-Kärtchen im Kampf-Ergebnis (Schritt-Erstattungs-Deckel erreicht, 2026-07-16d) */
+.krieger-legs-note {
+  margin: 9px 0 2px; padding: 8px 11px; border-radius: 9px; font-size: 12px; line-height: 1.4;
+  color: #f6e6cd; background: rgba(190, 96, 42, 0.20); border: 1px solid rgba(210, 128, 66, 0.55);
+  text-align: center; animation: kriegerLogIn .3s forwards;
+}
 
 /* ── 🪴 Kaffee-Garten (Erlebnis-Minigame #1) ─────────────────────────────── */
 .cc-garden { padding: 4px 2px 20px; }
