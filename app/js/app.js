@@ -49,6 +49,11 @@ let charts          = {};
 const views = ['rangliste','profil','statistiken','halloffame','saisons','nachrichten','admin','imperium','qrcode']
 
 function switchView(view) {
+  // Beim Verlassen des Imperium-Tabs eine offene Kaffee-Krieger-Dungeon-Session abschließen
+  // (postet die Chat-Zusammenfassung; 2026-07-16 Chat-Entlastung).
+  if (activeView === 'imperium' && view !== 'imperium' && typeof _kriegerFlushSession === 'function') {
+    try { _kriegerFlushSession(); } catch (e) { /* non-critical */ }
+  }
   views.forEach(v => {
     document.getElementById(`view-${v}`).classList.toggle('active', v === view);
     document.querySelector(`[data-view="${v}"]`)?.classList.toggle('active', v === view);
@@ -577,10 +582,17 @@ function renderLeaderboard() {
 // 2026-07-12: Version gebumpt für den Kaffee-Krieger-Umbau. Die 5 bisherigen Einträge BLEIBEN
 // bewusst erhalten (Nachzügler, die das vorige Popup nie gesehen haben, verlieren sie sonst —
 // whatsNewSeen merkt sich nur EINE Version). Wer die 5 schon kannte, sieht sie einmal erneut + Krieger.
-const WHATS_NEW_VERSION = '2026-07-12-kaffee-krieger';
+const WHATS_NEW_VERSION = '2026-07-16-krieger-balance';
 // Go-Live-Zeitpunkt (LOKALE Zeit, ISO ohne "Z" → wird als Ortszeit interpretiert):
-const WHATS_NEW_GO_LIVE = new Date('2026-07-12T13:00:00'); // heute 12.07. 13:00 Uhr
+const WHATS_NEW_GO_LIVE = new Date('2026-07-13T08:00:00'); // 13.07. 08:00 Uhr (morgen früh)
+// Version-Bump 2026-07-16: neuer ⚔️-Balance-Eintrag ganz oben. Die bisherigen Einträge BLEIBEN
+// erhalten (whatsNewSeen merkt nur EINE Version → sonst gingen sie für Nachzügler verloren).
 const WHATS_NEW_ITEMS = [
+  {
+    icon: '⚔️',
+    title: 'Kaffee-Krieger: Balance & Kultur-Rollen',
+    text: 'Jede Kultur hat jetzt eine klare Rolle: 🛡️ Mittelalter schlägt mit Rüstungsdurchschlag durch zähe Gegner, 🏰 Europa gibt +50% Kampf-CC, 🌙 Orient heilt bei jedem Krit, 🐺 Steppe eröffnet mit einer Gratis-Salve, ⚖️ Handel bekommt −25% Preise + Trank-Rückvergütung. Heilungen sind auf feste HP umgestellt (fairer), der zähe Tamper-Troll ist wieder besiegbar — und der Dungeon spammt den Chat nicht mehr, sondern postet eine Zusammenfassung, wenn du ihn verlässt.'
+  },
   {
     icon: '🚐',
     title: 'Kaffeemobil: Welteroberung',

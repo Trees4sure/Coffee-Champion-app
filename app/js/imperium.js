@@ -2379,6 +2379,7 @@ async function _handleKriegerTap(tx, ty, member, state, seed, COLS, ROWS, MARGIN
     currentUserData = { ...(currentUserData || {}), coins: state.memberCoins };
     _updateHeaderCoins({ coins: state.memberCoins });
     try { await DB.addCoins(member.id, gimmick.cc); } catch (e) {}
+    if (_krSession) _krSession.ccFinds += gimmick.cc;  // in die Dungeon-Session-Summe („CC gefunden")
     showToast(`🪙 +${gimmick.cc} CC im Dungeon gefunden!`, 'success');
     // Chat-Entlastung (2026-07-15, User: „Dungeon-Funde überschwemmen den Chat"): die häufigen
     // CC-Kleinfunde werden NICHT mehr im Chat gepostet — sie stehen weiter im Tages-Log
@@ -2589,6 +2590,50 @@ function _showKriegerFightPrompt(member, state, tier, seed, COLS, ROWS, MARGIN, 
   if (goBtn) goBtn.onclick = () => _runKriegerFight(member, state, tier, seed, COLS, ROWS, MARGIN, key, flavorIdx, selectedBuff, selectedHeal, eLevel);
 }
 
+// ── Dungeon-Session-Chat (2026-07-16) ────────────────────────────────────────
+// Statt eines Chat-Posts pro Kampf: ein In-Memory-Sammler über eine „Dungeon-Session".
+// Beim ersten Kampf eine Betreten-Nachricht, beim Verlassen EINE Zusammenfassung. Ende-
+// Trigger: 90 s Inaktivität, Tab-Wechsel (app.js), Visibility-Hidden/Unload (unten registriert).
+// Rein clientseitig, keine Persistenz nötig (Reload verliert höchstens eine offene Summary).
+let _krSession = null;
+let _krSessionTimer = null;
+let _krSessionName = '';
+const _KR_SESSION_IDLE_MS = 90000;
+
+function _krSessionEnsure(name) {
+  if (!_krSession) {
+    _krSession = { fights:0, wins:0, losses:0, ccCombat:0, ccFinds:0, ep:0, levelStart:null, levelEnd:null, potions:0, bossKills:0 };
+    _krSessionName = name || 'Krieger';
+    try { DB.postMessage(`⚔️ ${(typeof _esc2==='function'?_esc2(_krSessionName):_krSessionName)} betritt das Dungeon …`, _krSessionName); } catch (e) { /* non-critical */ }
+  }
+  return _krSession;
+}
+function _krSessionBumpTimer() {
+  if (_krSessionTimer) clearTimeout(_krSessionTimer);
+  _krSessionTimer = setTimeout(() => { _kriegerFlushSession(); }, _KR_SESSION_IDLE_MS);
+}
+async function _kriegerFlushSession() {
+  if (_krSessionTimer) { clearTimeout(_krSessionTimer); _krSessionTimer = null; }
+  const s = _krSession; _krSession = null;
+  if (!s || s.fights === 0) return;
+  const esc = (typeof _esc2 === 'function') ? _esc2 : (x => x);
+  const totalCC = Math.round((s.ccCombat + s.ccFinds) * 100) / 100;
+  const levels  = (s.levelEnd != null && s.levelStart != null) ? Math.max(0, s.levelEnd - s.levelStart) : 0;
+  const parts = [`${s.wins} Feinde besiegt`];
+  if (totalCC > 0) parts.push(`${totalCC} CC (⚔️ ${Math.round(s.ccCombat)} Kampf · 🗺️ ${Math.round(s.ccFinds)} Funde)`);
+  if (s.ep > 0)      parts.push(`${s.ep} EP`);
+  if (levels > 0)    parts.push(`${levels} Level`);
+  if (s.potions > 0) parts.push(`${s.potions} Tränke`);
+  if (s.losses > 0)  parts.push(`${s.losses} Niederlagen`);
+  try { await DB.postMessage(`☕ ${esc(_krSessionName)} verlässt das Dungeon — ${parts.join(', ')}.`, _krSessionName); } catch (e) { /* non-critical */ }
+}
+// App schließen / Tab in den Hintergrund → offene Session sofort abschließen.
+if (typeof window !== 'undefined' && !window._krSessionHooked) {
+  window._krSessionHooked = true;
+  document.addEventListener('visibilitychange', () => { if (document.hidden) _kriegerFlushSession(); });
+  window.addEventListener('beforeunload', () => { try { _kriegerFlushSession(); } catch (e) {} });
+}
+
 async function _runKriegerFight(member, state, tier, seed, COLS, ROWS, MARGIN, key, flavorIdx, potionKey, potionKey2, eLevel) {
   const popup = document.getElementById('krieger-popup');
   const btn = document.getElementById('krieger-fight-go');
@@ -2596,6 +2641,7 @@ async function _runKriegerFight(member, state, tier, seed, COLS, ROWS, MARGIN, k
 
   // Goldene-Bohne-Fortschritt VOR dem Kampf festhalten (für Kapitel-Freischaltungs-Erkennung)
   const _prevGolden = (typeof kriegerGoldenBeanProgress === 'function') ? kriegerGoldenBeanProgress(state.dd) : { done: 0, complete: false };
+  const _preLevel = state.dd?.level || 1;  // Level vor dem Kampf (für die Session-Zusammenfassung)
 
   let result;
   try { result = await kriegerFight(member.id, tier, flavorIdx, potionKey || null, potionKey2 || null, eLevel == null ? 0 : eLevel); }
@@ -2643,6 +2689,8 @@ async function _runKriegerFight(member, state, tier, seed, COLS, ROWS, MARGIN, k
     ristretto_doppio:   { icon: '⚡', name: 'Ristretto Doppio (Trank)' },
     doppelter_espresso: { icon: '☕', name: 'Doppelter Espresso' },
     kaffeepause:        { icon: '☕', name: 'Kaffeepause' },
+    steppensalve:       { icon: '🏹', name: 'Eröffnungssalve' },
+    wuestenraub:        { icon: '🩸', name: 'Krit-Lebensraub' },
   };
   const log = result.log || [];
   for (const entry of log) {
@@ -2721,9 +2769,44 @@ async function _runKriegerFight(member, state, tier, seed, COLS, ROWS, MARGIN, k
   // Dungeon-Schritte, die reguläre Tagesgrenze (kriegerStepsAllowed) bleibt
   // unverändert. Gilt auch für Boss-Siege.
   if (result.won) {
-    const usedNow = kriegerStepsUsed(state.dd);
-    state.dd = { ...state.dd, steps_today: Math.max(0, usedNow - 5), steps_date: _kriegerTodayKey() };
+    // Anti-Grind (2026-07-16): Sieg-Schritt-Erstattung nur bis KRIEGER_REFUND_CAP (10) mal/Tag.
+    // Danach kein +5 mehr → das reguläre Tagesbudget läuft leer (natürliches Ende). Zähler in
+    // dungeon_data (refundsToday/refundDate) — überlebt den Server-Roundtrip (unbekannte JSONB-Keys).
+    const _tk = _kriegerTodayKey();
+    const _refunds = (state.dd.refundDate === _tk) ? (state.dd.refundsToday || 0) : 0;
+    const _cap = (typeof KRIEGER_REFUND_CAP === 'number') ? KRIEGER_REFUND_CAP : 10;
+    if (_refunds < _cap) {
+      const usedNow = kriegerStepsUsed(state.dd);
+      state.dd = { ...state.dd, steps_today: Math.max(0, usedNow - 5), steps_date: _tk,
+                   refundsToday: _refunds + 1, refundDate: _tk };
+      if (_refunds + 1 === _cap) showToast('🚶 Schritt-Erstattung für heute aufgebraucht — morgen wieder.', 'info');
+    } else {
+      state.dd = { ...state.dd, refundsToday: _refunds, refundDate: _tk };
+    }
     dungeonDirty = true;
+  }
+
+  // Handelsprivileg-Set (2026-07-16): 40% des eingesetzten Trankwerts zurück, wenn mit Trank gewonnen.
+  if (result.won && typeof kriegerActiveSetCulture === 'function'
+      && kriegerActiveSetCulture(state.dd.equipped) === 'handel') {
+    try {
+      const _pct = (typeof KRIEGER_HANDEL_POTION_REFUND === 'number') ? KRIEGER_HANDEL_POTION_REFUND : 0.4;
+      let _refund = 0;
+      for (const pk of [result.potion_used, result.potion_used2].filter(Boolean)) {
+        const pot = (typeof kriegerPotionByKey === 'function') ? kriegerPotionByKey(pk) : null;
+        if (pot) _refund += Math.round((pot.cost || 0) * _pct);
+      }
+      if (_refund > 0) {
+        await DB.addCoins(member.id, _refund);
+        state.memberCoins += _refund;
+        if (_krSession) _krSession.ccCombat += _refund;
+        try {
+          const mdLog = await DB.appendTodayLogFresh(member.id, [{ label: '⚖️ Handelsspanne (Trank-Rückvergütung)', amount: _refund, detail: 'Kaffee-Krieger' }]);
+          if (mdLog) { currentUserData = { ...(currentUserData || {}), map_data: mdLog }; member.map_data = mdLog; }
+        } catch (e) { /* non-critical */ }
+        showToast(`⚖️ Handelsspanne: +${_refund} CC Trank-Rückvergütung`, 'success');
+      }
+    } catch (e) { /* non-critical */ }
   }
 
   // Respawn (2026-07-15): nach einem SIEG (Nicht-Boss) den Encounter NICHT mehr löschen, sondern
@@ -2771,15 +2854,23 @@ async function _runKriegerFight(member, state, tier, seed, COLS, ROWS, MARGIN, k
     } catch (e) { /* non-critical */ }
   }
 
-  // Chat-Broadcast (Pflicht laut Plan: Sieg/Niederlage/Level-Up/Boss-Kill)
+  // Chat-Entlastung (2026-07-16): KEINE Einzel-Posts mehr pro Kampf (die überschwemmten den Chat).
+  // Stattdessen ein In-Memory-Session-Sammler, der beim Verlassen des Dungeons EINE Zusammenfassung
+  // postet (siehe _kriegerFlushSession). Nur der Boss-Kill bleibt als eigener epischer Broadcast.
   try {
-    if (result.won) {
-      await DB.postMessage(`⚔️ ${_esc2(member.name)} hat ${enemyDef.name} besiegt! (+${result.cc_awarded} CC, +${result.ep_awarded} EP)`, member.name);
-      if (tier === 'boss') await DB.postMessage(`🐉 ${_esc2(member.name)} hat den Espresso-Drachen besiegt!`, member.name);
-    } else {
-      await DB.postMessage(`💀 ${_esc2(member.name)} ist gegen ${enemyDef.name} unterlegen (+${result.ep_awarded} Trost-EP).`, member.name);
+    const s = _krSessionEnsure(member.name);
+    s.fights += 1;
+    if (result.won) s.wins += 1; else s.losses += 1;
+    s.ccCombat += (result.cc_awarded || 0);
+    s.ep       += (result.ep_awarded || 0);
+    s.potions  += ((result.potion_used ? 1 : 0) + (result.potion_used2 ? 1 : 0));
+    if (s.levelStart == null) s.levelStart = _preLevel;
+    s.levelEnd = result.new_level;
+    _krSessionBumpTimer();
+    if (tier === 'boss' && result.won) {
+      s.bossKills += 1;
+      await DB.postMessage(`🐉 ${_esc2(member.name)} hat den Espresso-Drachen besiegt!`, member.name);
     }
-    if (result.leveled_up) await DB.postMessage(`🎉 ${_esc2(member.name)} hat Krieger-Stufe ${result.new_level} erreicht!`, member.name);
   } catch (e) { /* non-critical */ }
 
   // Achievements (Erster Sieg/Stufe 10/50/100/Drachentöter) — analog Kaffee-Jagd-Block

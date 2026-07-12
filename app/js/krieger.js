@@ -205,7 +205,7 @@ const KRIEGER_ITEMS = [
   // migration_2026-07-13) gespiegelt sein. 'feet' bleibt clientseitig (kein SQL-Eintrag).
   // Kein Tier 3 (JP-Entscheidung: Kernset + Stiefel, T1+T2).
 
-  // ── Steppe/Nomaden 🐺 · Set „Steppenwind" (+8 Schritte/Tag) — Bogen: ATK/CRIT, wenig DEF ──
+  // ── Steppe/Nomaden 🐺 · Set „Steppenwind" (+5 Schritte/Tag + Eröffnungssalve) — Bogen: ATK/CRIT, wenig DEF ──
   { key:'bogen_steppe_t1',    slot:'weapon',   culture:'steppe', tier:1, icon:'🏹', name:'Reflexbogen',            cost:150, minLevel:1,  atk:9,  def:-1, crit:2 },
   { key:'lamellen_steppe_t1', slot:'armor',    culture:'steppe', tier:1, icon:'🧥', name:'Lamellenrüstung',        cost:130, minLevel:1,  atk:0,  def:6,  crit:0 },
   { key:'feder_steppe_t1',    slot:'talisman', culture:'steppe', tier:1, icon:'🪶', name:'Adlerfeder-Talisman',    cost:140, minLevel:1,  atk:0,  def:0,  crit:5 },
@@ -288,7 +288,7 @@ const KRIEGER_COMPANIONS = [
   { key:'falke_mittelalter', culture:'mittelalter', icon:'🦅', name:'Wappenfalke',    cost:600, minLevel:10, desc:'+10% CoffeeCoins nach jedem Sieg.' },
   { key:'pudel_europa',      culture:'europa',      icon:'🐩', name:'Salon-Pudel',    cost:600, minLevel:10, desc:'+10% EP nach jedem Sieg.' },
   { key:'kamel_orient',      culture:'orient',      icon:'🐪', name:'Karawanen-Kamel',cost:600, minLevel:10, desc:'+50% Trost-EP bei einer Niederlage.' },
-  { key:'lama_suedamerika',  culture:'suedamerika', icon:'🦙', name:'Anden-Lama',     cost:600, minLevel:10, desc:'Heilt 2% Max-HP pro Runde (stapelt mit dem Sonnenkraft-Set).' },
+  { key:'lama_suedamerika',  culture:'suedamerika', icon:'🦙', name:'Anden-Lama',     cost:600, minLevel:10, desc:'Heilt +2 HP pro Runde (stapelt mit dem Sonnenkraft-Set).' },
 ];
 function kriegerCompanionByKey(key) { return KRIEGER_COMPANIONS.find(c => c.key === key) || null; }
 function kriegerActiveCompanion(dd) { return kriegerCompanionByKey(dd?.companion); }
@@ -405,13 +405,13 @@ const KRIEGER_CULTURE_NAMES = {
 };
 
 const KRIEGER_SET_BONUSES = {
-  mittelalter: { name: 'Eisern',         desc: 'Erste 2 gegnerische Treffer pro Kampf −50% Schaden, alle weiteren −10%' },
-  europa:      { name: 'Hofdiplomatie',  desc: '25% Chance auf einen Extra-Angriff pro Runde + Sieg gibt +20% CC' },
-  orient:      { name: 'Wüstensturm',    desc: 'CRIT-Chance +10 Prozentpunkte, CRITs treffen ×2,5 (statt ×2)' },
-  suedamerika: { name: 'Sonnenkraft',    desc: 'Heilt 3% MaxHP pro Runde + Sieg gibt +20% EP' },
-  // Utility-Sets (2026-07-13): Nicht-Kampf-Boni, rein clientseitig (dungeon_fight unberührt).
-  steppe:      { name: 'Steppenwind',    desc: '+8 Schritte/Tag im Dungeon' },
-  handel:      { name: 'Handelsprivileg',desc: '−15% Preis auf Ausrüstung & Tränke' },
+  mittelalter: { name: 'Eisern',         desc: 'Erste 2 gegnerische Treffer −50% Schaden, weitere −10% + Rüstungsdurchschlag (ignoriert 40% der Gegner-Verteidigung)' },
+  europa:      { name: 'Hofdiplomatie',  desc: '25% Chance auf einen Extra-Angriff pro Runde + Sieg gibt +50% CC' },
+  orient:      { name: 'Wüstensturm',    desc: 'CRIT-Chance +10 Prozentpunkte, CRITs treffen ×2,5 und jeder CRIT heilt +4 HP' },
+  suedamerika: { name: 'Sonnenkraft',    desc: 'Heilt +3 HP pro Runde + Sieg gibt +20% EP' },
+  // Utility-Sets (2026-07-13): teils Nicht-Kampf-Boni, clientseitig (Steppe-Salve/Europa/etc. serverseitig).
+  steppe:      { name: 'Steppenwind',    desc: '+5 Schritte/Tag + Eröffnungssalve (Gratis-Fernschuss vor Runde 1)' },
+  handel:      { name: 'Handelsprivileg',desc: '−25% Preis auf Ausrüstung & Tränke + 40% Trank-Rückvergütung nach Sieg' },
   freibeuter:  { name: 'Freibeuterglück',desc: '+50% Fund-Chance UND +75% CC pro Fund im Dungeon' },
   spaeher:     { name: 'Späherauge',     desc: 'deckt passiv die Umgebung (Radius 2) im Nebel auf' },
 };
@@ -439,8 +439,10 @@ function kriegerActiveSetCulture(equipped) {
 // ── Utility-Set-Boni (2026-07-13) ─────────────────────────────────────────────
 // 4 neue Kulturen mit NICHT-Kampf-Set-Boni. Alle Effekte rein clientseitig (dungeon_fight
 // bleibt unangetastet). Aktiv, sobald weapon+armor+talisman derselben Kultur getragen werden.
-const KRIEGER_STEPPE_SET_STEPS     = 8;    // Steppenwind: +Schritte/Tag im Dungeon
-const KRIEGER_HANDEL_SET_DISCOUNT  = 0.15; // Handelsprivileg: −15% auf Ausrüstung & Tränke
+const KRIEGER_STEPPE_SET_STEPS     = 5;    // Steppenwind: +Schritte/Tag (2026-07-16: 8→5, dafür Eröffnungssalve serverseitig)
+const KRIEGER_HANDEL_SET_DISCOUNT  = 0.25; // Handelsprivileg: −25% auf Ausrüstung & Tränke (2026-07-16: 0.15→0.25)
+const KRIEGER_HANDEL_POTION_REFUND = 0.4;  // Handelsprivileg: 40% Trank-Wert zurück nach Sieg mit Trank
+const KRIEGER_REFUND_CAP           = 10;   // Anti-Grind (2026-07-16): max. Sieg-Schritt-Erstattungen/Tag
 const KRIEGER_FREIBEUTER_FIND_MULT = 1.5;  // Freibeuterglück: ×1.5 Fund-Chance
 const KRIEGER_SPAEHER_SET_RADIUS   = 2;    // Späherauge: passiver Umgebungs-Scan (Chebyshev r)
 function kriegerSetActive(dd, culture) {
@@ -575,7 +577,7 @@ const KRIEGER_ENEMY_ABILITIES = {
   verdichtung:    { icon:'🔨', name:'Verdichtung',   desc:'Verteidigung steigt mit jeder Runde' },
   roestfeuer:     { icon:'🔥', name:'Röstfeuer',     desc:'Schadens-Burst alle 5 Runden' },
   aetzend:        { icon:'🕷️', name:'Ätzend',        desc:'deine Verteidigung sinkt pro erlittenem Treffer' },
-  regeneration:   { icon:'🐍', name:'Regeneration',  desc:'heilt sich 4% HP/Runde (nicht unter 30% HP)' },
+  regeneration:   { icon:'🐍', name:'Regeneration',  desc:'heilt sich einen festen HP-Betrag pro Runde (nicht unter 30% HP)' },
   adrenalinschub: { icon:'⚡', name:'Adrenalinschub',desc:'Schaden steigt, je niedriger seine HP' },
   geistform:      { icon:'👻', name:'Geistform',     desc:'dein erster Treffer im Kampf ist wirkungslos' },
   bitterkern:     { icon:'🗿', name:'Bitterkern',    desc:'−25% erlittener Schaden, dafür schwächere Angriffe' },
