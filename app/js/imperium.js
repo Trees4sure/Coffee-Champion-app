@@ -2315,7 +2315,13 @@ async function _handleKriegerTap(tx, ty, member, state, seed, COLS, ROWS, MARGIN
   // erneut versuchbar, siehe Spieldesign-Kommentar in _runKriegerFight). Bug-Fix
   // 2026-07-04: vorher blieb ein Gegner-Feld auch nach einem SIEG unbegrenzt farmbar,
   // weil hier nicht zwischen Sieg/Niederlage unterschieden wurde.
-  if (explored && (isBoss || (state.dd.encounters || {})[key])) {
+  // Respawn (2026-07-15): nur AKTIVE Gegner (nie besiegt ODER seit dem letzten Respawn-Tick
+  // regeneriert) bieten einen Kampf; auf Cooldown (besiegt, noch nicht respawnt) ist das Feld
+  // begehbar und fällt in den Walkback/Fast-Travel-Zweig unten.
+  const enemyActive = !isBoss && (typeof kriegerEnemyActive === 'function'
+    ? kriegerEnemyActive(state.dd, key)
+    : !!((state.dd.encounters || {})[key]));
+  if (explored && (isBoss || enemyActive)) {
     const tier = isBoss ? 'boss' : state.dd.encounters[key];
     _showKriegerFightPrompt(member, state, tier, seed, COLS, ROWS, MARGIN, key);
     return;
@@ -2324,6 +2330,13 @@ async function _handleKriegerTap(tx, ty, member, state, seed, COLS, ROWS, MARGIN
   // erneuter Fund) — sonst sitzt man fest, sobald alle Nachbarfelder erkundet sind.
   // Direkt angrenzend → 1-Schritt-Walkback (unverändert); weiter weg → Fast-Travel (Etappe 4).
   if (explored) {
+    // Respawn-Hinweis: besiegtes, noch nicht regeneriertes Gegnerfeld angetippt → kurz erklären,
+    // warum kein Kampf kommt (Feld ist trotzdem begehbar).
+    if (typeof kriegerEnemyOnCooldown === 'function' && kriegerEnemyOnCooldown(state.dd, key)) {
+      const at = (typeof kriegerNextRespawnAt === 'function') ? kriegerNextRespawnAt(state.dd, key) : 0;
+      const when = at ? ` (regeneriert ~${new Date(at).toLocaleDateString('de-DE')})` : '';
+      showToast(`🔁 Diesen Gegner hast du bereits besiegt — er kehrt beim nächsten Respawn zurück${when}.`, 'info');
+    }
     if (kriegerCanWalkBack(tx, ty, state.dd)) {
       await _handleKriegerWalkBack(tx, ty, member, state, seed, COLS, ROWS, MARGIN);
     } else {
@@ -2367,7 +2380,10 @@ async function _handleKriegerTap(tx, ty, member, state, seed, COLS, ROWS, MARGIN
     _updateHeaderCoins({ coins: state.memberCoins });
     try { await DB.addCoins(member.id, gimmick.cc); } catch (e) {}
     showToast(`🪙 +${gimmick.cc} CC im Dungeon gefunden!`, 'success');
-    try { await DB.postMessage(`🪙 ${_esc2(member.name)} hat im Dungeon ${gimmick.cc} CC gefunden!`, member.name); } catch (e) {}
+    // Chat-Entlastung (2026-07-15, User: „Dungeon-Funde überschwemmen den Chat"): die häufigen
+    // CC-Kleinfunde werden NICHT mehr im Chat gepostet — sie stehen weiter im Tages-Log
+    // („🪙 Dungeon-Funde ×N", aggregiert) + Toast. Nur relevante Funde (Gutschein/Trank) bleiben
+    // im Chat, ebenso Siege/Level-Ups/Set-Komplett.
     // Tages-Log (Profil "Heute erhalten") — frisch mergen (gegen Clobbering durch zeitgleiche Writes).
     try {
       const mdLog = await DB.appendTodayLogFresh(member.id, [{ label: '🪙 Dungeon-Fund', amount: gimmick.cc, cat: 'karte', aggKey: 'krieger_dungeon_fund', aggBase: '🪙 Dungeon-Funde', detail: 'Kaffee-Krieger-Dungeon' }]);
@@ -2710,13 +2726,13 @@ async function _runKriegerFight(member, state, tier, seed, COLS, ROWS, MARGIN, k
     dungeonDirty = true;
   }
 
-  // Bug-Fix 2026-07-04: nach einem SIEG (Nicht-Boss) das Encounter-Feld aus `encounters`
-  // entfernen — sonst bleibt das Feld über _handleKriegerTap() Punkt 1 unbegrenzt farmbar
-  // (dungeon_fight() selbst rührt `encounters` nicht an, das ist rein clientseitig verwaltet).
-  // Niederlage bleibt bewusst weiter versuchbar (encounters-Eintrag bleibt stehen).
+  // Respawn (2026-07-15): nach einem SIEG (Nicht-Boss) den Encounter NICHT mehr löschen, sondern
+  // den Sieg-Zeitpunkt in `defeatedAt[key]` merken. Das Feld ist ab dem nächsten globalen Respawn-
+  // Tick (3-Tage-Takt, kriegerEnemyActive) wieder kämpfbar → dauerhafter t1-Nachschub in der Mitte.
+  // Bis dahin ist es begehbar (siehe _handleKriegerTap: nur AKTIVE Gegner blocken/bieten Kampf).
+  // Niederlage bleibt wie bisher sofort erneut versuchbar (kein defeatedAt-Eintrag).
   if (result.won && tier !== 'boss' && key && state.dd.encounters?.[key]) {
-    const { [key]: _removed, ...restEncounters } = state.dd.encounters;
-    state.dd = { ...state.dd, encounters: restEncounters };
+    state.dd = { ...state.dd, defeatedAt: { ...(state.dd.defeatedAt || {}), [key]: Date.now() } };
     dungeonDirty = true;
   }
 
@@ -2967,7 +2983,16 @@ function _kriegerRenderShop(member, state, body) {
     </div>
   </div>`;
 
-  body.innerHTML = `<div class="krieger-loadout">${loadoutHtml}</div>${setHint}${schmiedHtml}${scanHtml}${mountHtml}${companionHtml}${sections}`;
+  // ⚡ Auto-Ausrüsten (2026-07-15, User-Wunsch: „ein Klick legt ein komplettes Set an"): je
+  // vollständig besessenem Kern-Set ein Knopf → Waffe+Rüstung+Talisman dieser Kultur + bester
+  // besessener Stiefel-/Sicht-Slot in einem Zug. Erspart das manuelle Umstecken.
+  const completeSets = (typeof kriegerOwnedCompleteSets === 'function') ? kriegerOwnedCompleteSets(dd) : [];
+  const autoEquipHtml = completeSets.length ? `<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;justify-content:center;margin:2px 0 10px">
+    <span style="font-size:12px;color:var(--muted)">⚡ Schnell-Ausrüsten:</span>
+    ${completeSets.map(c => `<button class="cc-build-btn krieger-autoequip-btn" data-set="${c}" style="font-size:11px;padding:4px 9px"${setCulture === c ? ' disabled' : ''}>${KRIEGER_CULTURE_NAMES[c]}${setCulture === c ? ' ✓' : ''}</button>`).join('')}
+  </div>` : '';
+
+  body.innerHTML = `<div class="krieger-loadout">${loadoutHtml}</div>${autoEquipHtml}${setHint}${schmiedHtml}${scanHtml}${mountHtml}${companionHtml}${sections}`;
 
   body.querySelectorAll('.krieger-buy-btn').forEach(btn => {
     btn.onclick = async () => {
@@ -3038,6 +3063,39 @@ function _kriegerRenderShop(member, state, body) {
         }
         _kriegerRenderShop(member, state, body);
       } catch (e) { showToast(e.message || 'Ausrüsten fehlgeschlagen', 'error'); }
+    };
+  });
+
+  // ⚡ Auto-Ausrüsten: komplettes Kern-Set einer Kultur + bester Stiefel/Sicht in einem Klick.
+  body.querySelectorAll('.krieger-autoequip-btn').forEach(btn => {
+    btn.onclick = async () => {
+      const culture = btn.dataset.set;
+      if (typeof kriegerEquipSetLoadout !== 'function') return;
+      const prevEquipped = state.dd.equipped || {};
+      const newEquipped  = kriegerEquipSetLoadout(state.dd, culture);
+      const newDD = { ...state.dd, equipped: newEquipped };
+      btn.disabled = true;
+      try {
+        await DB.saveDungeonData(member.id, newDD);
+        const wasComplete = kriegerActiveSetCulture(prevEquipped);
+        state.dd = newDD;
+        currentUserData = { ...(currentUserData || {}), dungeon_data: state.dd };
+        const nowComplete = kriegerActiveSetCulture(newEquipped);
+        const bonus = KRIEGER_SET_BONUSES[nowComplete] || KRIEGER_SET_BONUSES[culture];
+        showToast(`✨ ${KRIEGER_CULTURE_NAMES[culture]}-Set angelegt${bonus ? ' — ' + bonus.name : ''}!`, 'success');
+        if (nowComplete && !wasComplete) {
+          try {
+            const existing = currentUserData?.achievements || {};
+            if (!existing.krieger_set_complete) {
+              await DB.grantAchievements(member.id, { krieger_set_complete: true });
+              currentUserData = { ...currentUserData, achievements: { ...existing, krieger_set_complete: true } };
+              const ach = (typeof ACHIEVEMENTS !== 'undefined' ? ACHIEVEMENTS : []).find(a => a.id === 'krieger_set_complete');
+              if (ach) showToast(`🏆 Achievement: ${ach.name}! (+${ach.coinReward} CC)`, 'success');
+            }
+          } catch (e) { /* non-critical */ }
+        }
+        _kriegerRenderShop(member, state, body);
+      } catch (e) { showToast(e.message || 'Ausrüsten fehlgeschlagen', 'error'); btn.disabled = false; }
     };
   });
 

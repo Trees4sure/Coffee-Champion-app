@@ -8,7 +8,7 @@ const KRIEGER_START_X    = 75;
 const KRIEGER_START_Y    = 75;
 const KRIEGER_TILE       = 20;
 const KRIEGER_GIMMICK_P  = 0.25;   // Fundchance pro neuem Feld
-const KRIEGER_ENEMY_P    = 0.12;   // Encounter-Chance pro neuem Feld
+const KRIEGER_ENEMY_P    = 0.15;   // Encounter-Chance pro neuem Feld (2026-07-15: 0.12→0.15, „mehr Gegner")
 const KRIEGER_GIMMICKS   = [
   { emoji:'🪙', cc: [1, 8] }, // Standard-Fund (CC)
 ];
@@ -155,45 +155,48 @@ function _kriegerCarveCorridor(grid, N, x1, y1, x2, y2) {
 // beeinflusst nur kriegerStepsAllowed() hier im Frontend, dungeon_fight() liest ihn nicht,
 // deshalb ist dafür KEINE SQL-Änderung nötig.) ──
 const KRIEGER_ITEMS = [
-  // ── Mittelalterlich (Tier 1: ab Stufe 1 · Tier 2 „Veredelt": ab Stufe 20) ──
+  // ── Mittelalterlich (Tier 1: ab Stufe 1 · Tier 2 „Veredelt": ab Stufe 15) ──
+  // Gate 2026-07-15 gesenkt 20→15 (User: „nicht genug schlagbare Gegner bis L20"): mit T2-Gear
+  // ab L15 wird die große t2-Population schlagbar → t1-Grind nur bis ~L15 nötig. Dafür t1-Kern
+  // vergrößert (maxDist 15→28) + Gegnerdichte erhöht (KRIEGER_ENEMY_P 0.12→0.15) = „deutlich mehr t1".
   { key:'schwert_mittelalter_t1',  slot:'weapon',   culture:'mittelalter', tier:1, icon:'⚔️', name:'Langschwert',        cost:140, minLevel:1,  atk:8,  def:0,  crit:0 },
   { key:'ruestung_mittelalter_t1', slot:'armor',    culture:'mittelalter', tier:1, icon:'🛡️', name:'Kettenrüstung',      cost:150, minLevel:1,  atk:0,  def:8,  crit:0 },
   { key:'amulett_mittelalter_t1',  slot:'talisman', culture:'mittelalter', tier:1, icon:'🧿', name:'Wappenschild-Anhänger', cost:120, minLevel:1, atk:0, def:0, crit:4 },
   { key:'stiefel_mittelalter_t1',  slot:'feet',     culture:'mittelalter', tier:1, icon:'👢', name:'Wanderstiefel',      cost:130, minLevel:1,  atk:0,  def:0,  crit:0, steps:5 },
-  { key:'schwert_mittelalter_t2',  slot:'weapon',   culture:'mittelalter', tier:2, icon:'⚔️', name:'Ritterschwert',      cost:420, minLevel:20, atk:22, def:0,  crit:0 },
-  { key:'ruestung_mittelalter_t2', slot:'armor',    culture:'mittelalter', tier:2, icon:'🛡️', name:'Plattenrüstung',     cost:450, minLevel:20, atk:0,  def:22, crit:0 },
-  { key:'amulett_mittelalter_t2',  slot:'talisman', culture:'mittelalter', tier:2, icon:'🧿', name:'Drachenwappen-Amulett', cost:380, minLevel:20, atk:0, def:0, crit:10 },
-  { key:'stiefel_mittelalter_t2',  slot:'feet',     culture:'mittelalter', tier:2, icon:'👢', name:'Ritterstiefel',      cost:420, minLevel:20, atk:0,  def:0,  crit:0, steps:12 },
+  { key:'schwert_mittelalter_t2',  slot:'weapon',   culture:'mittelalter', tier:2, icon:'⚔️', name:'Ritterschwert',      cost:420, minLevel:15, atk:22, def:0,  crit:0 },
+  { key:'ruestung_mittelalter_t2', slot:'armor',    culture:'mittelalter', tier:2, icon:'🛡️', name:'Plattenrüstung',     cost:450, minLevel:15, atk:0,  def:22, crit:0 },
+  { key:'amulett_mittelalter_t2',  slot:'talisman', culture:'mittelalter', tier:2, icon:'🧿', name:'Drachenwappen-Amulett', cost:380, minLevel:15, atk:0, def:0, crit:10 },
+  { key:'stiefel_mittelalter_t2',  slot:'feet',     culture:'mittelalter', tier:2, icon:'👢', name:'Ritterstiefel',      cost:420, minLevel:15, atk:0,  def:0,  crit:0, steps:12 },
 
   // ── Europäisch ──
   { key:'rapier_europa_t1',        slot:'weapon',   culture:'europa', tier:1, icon:'🤺', name:'Rapier',           cost:150, minLevel:1,  atk:6,  def:0,  crit:2 },
   { key:'wams_europa_t1',          slot:'armor',    culture:'europa', tier:1, icon:'👘', name:'Samtwams',         cost:130, minLevel:1,  atk:0,  def:6,  crit:0 },
   { key:'siegelring_europa_t1',    slot:'talisman', culture:'europa', tier:1, icon:'💍', name:'Siegelring',       cost:120, minLevel:1,  atk:3,  def:3,  crit:0 },
   { key:'schuhe_europa_t1',        slot:'feet',     culture:'europa', tier:1, icon:'👞', name:'Lederschuhe',      cost:130, minLevel:1,  atk:0,  def:0,  crit:0, steps:5 },
-  { key:'degen_europa_t2',         slot:'weapon',   culture:'europa', tier:2, icon:'🤺', name:'Hofdegen',         cost:480, minLevel:20, atk:18, def:0,  crit:6 },
-  { key:'harnisch_europa_t2',      slot:'armor',    culture:'europa', tier:2, icon:'👘', name:'Brokat-Harnisch',  cost:420, minLevel:20, atk:0,  def:20, crit:0 },
-  { key:'adelssiegel_europa_t2',   slot:'talisman', culture:'europa', tier:2, icon:'💍', name:'Adelssiegel',      cost:400, minLevel:20, atk:8,  def:8,  crit:4 },
-  { key:'reitstiefel_europa_t2',   slot:'feet',     culture:'europa', tier:2, icon:'👞', name:'Reitstiefel',      cost:420, minLevel:20, atk:0,  def:0,  crit:0, steps:12 },
+  { key:'degen_europa_t2',         slot:'weapon',   culture:'europa', tier:2, icon:'🤺', name:'Hofdegen',         cost:480, minLevel:15, atk:18, def:0,  crit:6 },
+  { key:'harnisch_europa_t2',      slot:'armor',    culture:'europa', tier:2, icon:'👘', name:'Brokat-Harnisch',  cost:420, minLevel:15, atk:0,  def:20, crit:0 },
+  { key:'adelssiegel_europa_t2',   slot:'talisman', culture:'europa', tier:2, icon:'💍', name:'Adelssiegel',      cost:400, minLevel:15, atk:8,  def:8,  crit:4 },
+  { key:'reitstiefel_europa_t2',   slot:'feet',     culture:'europa', tier:2, icon:'👞', name:'Reitstiefel',      cost:420, minLevel:15, atk:0,  def:0,  crit:0, steps:12 },
 
   // ── Orientalisch ──
   { key:'saebel_orient_t1',        slot:'weapon',   culture:'orient', tier:1, icon:'🗡️', name:'Krummsäbel',       cost:160, minLevel:1,  atk:10, def:-2, crit:0 },
   { key:'kaftan_orient_t1',        slot:'armor',    culture:'orient', tier:1, icon:'🧥', name:'Seidenkaftan',     cost:110, minLevel:1,  atk:0,  def:4,  crit:0 },
   { key:'basaramulett_orient_t1',  slot:'talisman', culture:'orient', tier:1, icon:'🧿', name:'Basar-Amulett',    cost:170, minLevel:1,  atk:0,  def:0,  crit:7 },
   { key:'sandalen_orient_t1',      slot:'feet',     culture:'orient', tier:1, icon:'🥿', name:'Basar-Sandalen',   cost:130, minLevel:1,  atk:0,  def:0,  crit:0, steps:5 },
-  { key:'saebel_orient_t2',        slot:'weapon',   culture:'orient', tier:2, icon:'🗡️', name:'Damaszener-Säbel', cost:500, minLevel:20, atk:26, def:-4, crit:0 },
-  { key:'kettenhemd_orient_t2',    slot:'armor',    culture:'orient', tier:2, icon:'🧥', name:'Seiden-Kettenhemd',cost:380, minLevel:20, atk:0,  def:12, crit:5 },
-  { key:'wesiramulett_orient_t2',  slot:'talisman', culture:'orient', tier:2, icon:'🧿', name:'Wesir-Amulett',    cost:600, minLevel:20, atk:0,  def:0,  crit:18 },
-  { key:'kamelstiefel_orient_t2',  slot:'feet',     culture:'orient', tier:2, icon:'🥿', name:'Karawanen-Stiefel',cost:420, minLevel:20, atk:0,  def:0,  crit:0, steps:12 },
+  { key:'saebel_orient_t2',        slot:'weapon',   culture:'orient', tier:2, icon:'🗡️', name:'Damaszener-Säbel', cost:500, minLevel:15, atk:26, def:-4, crit:0 },
+  { key:'kettenhemd_orient_t2',    slot:'armor',    culture:'orient', tier:2, icon:'🧥', name:'Seiden-Kettenhemd',cost:380, minLevel:15, atk:0,  def:12, crit:5 },
+  { key:'wesiramulett_orient_t2',  slot:'talisman', culture:'orient', tier:2, icon:'🧿', name:'Wesir-Amulett',    cost:600, minLevel:15, atk:0,  def:0,  crit:18 },
+  { key:'kamelstiefel_orient_t2',  slot:'feet',     culture:'orient', tier:2, icon:'🥿', name:'Karawanen-Stiefel',cost:420, minLevel:15, atk:0,  def:0,  crit:0, steps:12 },
 
   // ── Südamerikanisch ──
   { key:'keule_suedamerika_t1',    slot:'weapon',   culture:'suedamerika', tier:1, icon:'🏏', name:'Obsidian-Keule',  cost:140, minLevel:1,  atk:6,  def:2,  crit:0 },
   { key:'umhang_suedamerika_t1',   slot:'armor',    culture:'suedamerika', tier:1, icon:'🪶', name:'Federumhang',     cost:150, minLevel:1,  atk:0,  def:5,  crit:2 },
   { key:'sonnenscheibe_suedamerika_t1', slot:'talisman', culture:'suedamerika', tier:1, icon:'☀️', name:'Sonnenscheibe', cost:130, minLevel:1, atk:2, def:2, crit:2 },
   { key:'sandalen_suedamerika_t1', slot:'feet',     culture:'suedamerika', tier:1, icon:'🩴', name:'Naturfaser-Sandalen', cost:130, minLevel:1, atk:0, def:0, crit:0, steps:5 },
-  { key:'keule_suedamerika_t2',    slot:'weapon',   culture:'suedamerika', tier:2, icon:'🏏', name:'Sonnenkeule',     cost:440, minLevel:20, atk:16, def:8,  crit:0 },
-  { key:'umhang_suedamerika_t2',   slot:'armor',    culture:'suedamerika', tier:2, icon:'🪶', name:'Kondorumhang',    cost:460, minLevel:20, atk:0,  def:14, crit:6 },
-  { key:'goldscheibe_suedamerika_t2', slot:'talisman', culture:'suedamerika', tier:2, icon:'☀️', name:'Goldene Sonnenscheibe', cost:480, minLevel:20, atk:8, def:8, crit:8 },
-  { key:'kondorstiefel_suedamerika_t2', slot:'feet', culture:'suedamerika', tier:2, icon:'🩴', name:'Kondorfeder-Stiefel', cost:420, minLevel:20, atk:0, def:0, crit:0, steps:12 },
+  { key:'keule_suedamerika_t2',    slot:'weapon',   culture:'suedamerika', tier:2, icon:'🏏', name:'Sonnenkeule',     cost:440, minLevel:15, atk:16, def:8,  crit:0 },
+  { key:'umhang_suedamerika_t2',   slot:'armor',    culture:'suedamerika', tier:2, icon:'🪶', name:'Kondorumhang',    cost:460, minLevel:15, atk:0,  def:14, crit:6 },
+  { key:'goldscheibe_suedamerika_t2', slot:'talisman', culture:'suedamerika', tier:2, icon:'☀️', name:'Goldene Sonnenscheibe', cost:480, minLevel:15, atk:8, def:8, crit:8 },
+  { key:'kondorstiefel_suedamerika_t2', slot:'feet', culture:'suedamerika', tier:2, icon:'🩴', name:'Kondorfeder-Stiefel', cost:420, minLevel:15, atk:0, def:0, crit:0, steps:12 },
 
   // ══ Utility-Kulturen (2026-07-13) ══════════════════════════════════════════════════════════
   // 4 neue Kulturen mit NICHT-Kampf-Set-Boni (dungeon_fight bleibt unangetastet; Set-Effekt rein
@@ -207,60 +210,73 @@ const KRIEGER_ITEMS = [
   { key:'lamellen_steppe_t1', slot:'armor',    culture:'steppe', tier:1, icon:'🧥', name:'Lamellenrüstung',        cost:130, minLevel:1,  atk:0,  def:6,  crit:0 },
   { key:'feder_steppe_t1',    slot:'talisman', culture:'steppe', tier:1, icon:'🪶', name:'Adlerfeder-Talisman',    cost:140, minLevel:1,  atk:0,  def:0,  crit:5 },
   { key:'stiefel_steppe_t1',  slot:'feet',     culture:'steppe', tier:1, icon:'👟', name:'Steppenstiefel',         cost:130, minLevel:1,  atk:0,  def:0,  crit:0, steps:5 },
-  { key:'bogen_steppe_t2',    slot:'weapon',   culture:'steppe', tier:2, icon:'🏹', name:'Kompositbogen',          cost:480, minLevel:20, atk:24, def:-2, crit:4 },
-  { key:'lamellen_steppe_t2', slot:'armor',    culture:'steppe', tier:2, icon:'🧥', name:'Schwere Lamellenrüstung',cost:420, minLevel:20, atk:0,  def:18, crit:2 },
-  { key:'feder_steppe_t2',    slot:'talisman', culture:'steppe', tier:2, icon:'🪶', name:'Adlerschwinge-Talisman', cost:440, minLevel:20, atk:0,  def:0,  crit:12 },
-  { key:'stiefel_steppe_t2',  slot:'feet',     culture:'steppe', tier:2, icon:'👟', name:'Nomadenstiefel',         cost:420, minLevel:20, atk:0,  def:0,  crit:0, steps:12 },
+  { key:'bogen_steppe_t2',    slot:'weapon',   culture:'steppe', tier:2, icon:'🏹', name:'Kompositbogen',          cost:480, minLevel:15, atk:24, def:-2, crit:4 },
+  { key:'lamellen_steppe_t2', slot:'armor',    culture:'steppe', tier:2, icon:'🧥', name:'Schwere Lamellenrüstung',cost:420, minLevel:15, atk:0,  def:18, crit:2 },
+  { key:'feder_steppe_t2',    slot:'talisman', culture:'steppe', tier:2, icon:'🪶', name:'Adlerschwinge-Talisman', cost:440, minLevel:15, atk:0,  def:0,  crit:12 },
+  { key:'stiefel_steppe_t2',  slot:'feet',     culture:'steppe', tier:2, icon:'👟', name:'Nomadenstiefel',         cost:420, minLevel:15, atk:0,  def:0,  crit:0, steps:12 },
 
   // ── Handelsgilde/Hanse ⚖️ · Set „Handelsprivileg" (−15% Ausrüstung & Tränke) — DEF-Tank ──
   { key:'degen_handel_t1',  slot:'weapon',   culture:'handel', tier:1, icon:'⚔️', name:'Kontor-Degen',        cost:150, minLevel:1,  atk:6,  def:2,  crit:0 },
   { key:'robe_handel_t1',   slot:'armor',    culture:'handel', tier:1, icon:'🧥', name:'Zunft-Robe',          cost:140, minLevel:1,  atk:0,  def:8,  crit:0 },
   { key:'siegel_handel_t1', slot:'talisman', culture:'handel', tier:1, icon:'💰', name:'Handelssiegel',       cost:130, minLevel:1,  atk:0,  def:3,  crit:1 },
   { key:'schuhe_handel_t1', slot:'feet',     culture:'handel', tier:1, icon:'👞', name:'Kontor-Schuhe',       cost:130, minLevel:1,  atk:0,  def:0,  crit:0, steps:5 },
-  { key:'degen_handel_t2',  slot:'weapon',   culture:'handel', tier:2, icon:'⚔️', name:'Meister-Kontor-Degen',cost:460, minLevel:20, atk:16, def:6,  crit:0 },
-  { key:'robe_handel_t2',   slot:'armor',    culture:'handel', tier:2, icon:'🧥', name:'Hanse-Robe',          cost:440, minLevel:20, atk:0,  def:24, crit:0 },
-  { key:'siegel_handel_t2', slot:'talisman', culture:'handel', tier:2, icon:'💰', name:'Großhandelssiegel',   cost:440, minLevel:20, atk:0,  def:8,  crit:4 },
-  { key:'schuhe_handel_t2', slot:'feet',     culture:'handel', tier:2, icon:'👞', name:'Patrizier-Schuhe',    cost:420, minLevel:20, atk:0,  def:0,  crit:0, steps:12 },
+  { key:'degen_handel_t2',  slot:'weapon',   culture:'handel', tier:2, icon:'⚔️', name:'Meister-Kontor-Degen',cost:460, minLevel:15, atk:16, def:6,  crit:0 },
+  { key:'robe_handel_t2',   slot:'armor',    culture:'handel', tier:2, icon:'🧥', name:'Hanse-Robe',          cost:440, minLevel:15, atk:0,  def:24, crit:0 },
+  { key:'siegel_handel_t2', slot:'talisman', culture:'handel', tier:2, icon:'💰', name:'Großhandelssiegel',   cost:440, minLevel:15, atk:0,  def:8,  crit:4 },
+  { key:'schuhe_handel_t2', slot:'feet',     culture:'handel', tier:2, icon:'👞', name:'Patrizier-Schuhe',    cost:420, minLevel:15, atk:0,  def:0,  crit:0, steps:12 },
 
   // ── Freibeuter/Piraten ☠️ · Set „Freibeuterglück" (+50% Fund-Chance im Dungeon) — ATK/CRIT-Raider ──
   { key:'entermesser_freibeuter_t1', slot:'weapon',   culture:'freibeuter', tier:1, icon:'🗡️', name:'Entermesser',        cost:150, minLevel:1,  atk:8,  def:0,  crit:3 },
   { key:'mantel_freibeuter_t1',      slot:'armor',    culture:'freibeuter', tier:1, icon:'🧥', name:'Freibeuter-Mantel',  cost:130, minLevel:1,  atk:0,  def:5,  crit:1 },
   { key:'kompass_freibeuter_t1',     slot:'talisman', culture:'freibeuter', tier:1, icon:'🧭', name:'Schatzkompass',      cost:140, minLevel:1,  atk:1,  def:0,  crit:4 },
   { key:'seestiefel_freibeuter_t1',  slot:'feet',     culture:'freibeuter', tier:1, icon:'🥾', name:'Seestiefel',         cost:130, minLevel:1,  atk:0,  def:0,  crit:0, steps:5 },
-  { key:'entermesser_freibeuter_t2', slot:'weapon',   culture:'freibeuter', tier:2, icon:'🗡️', name:'Kapitäns-Säbel',     cost:480, minLevel:20, atk:20, def:0,  crit:6 },
-  { key:'mantel_freibeuter_t2',      slot:'armor',    culture:'freibeuter', tier:2, icon:'🧥', name:'Kapitäns-Mantel',    cost:420, minLevel:20, atk:0,  def:14, crit:4 },
-  { key:'kompass_freibeuter_t2',     slot:'talisman', culture:'freibeuter', tier:2, icon:'🧭', name:'Goldkompass',        cost:440, minLevel:20, atk:4,  def:0,  crit:12 },
-  { key:'seestiefel_freibeuter_t2',  slot:'feet',     culture:'freibeuter', tier:2, icon:'🥾', name:'Kaperfahrer-Stiefel',cost:420, minLevel:20, atk:0,  def:0,  crit:0, steps:12 },
+  { key:'entermesser_freibeuter_t2', slot:'weapon',   culture:'freibeuter', tier:2, icon:'🗡️', name:'Kapitäns-Säbel',     cost:480, minLevel:15, atk:20, def:0,  crit:6 },
+  { key:'mantel_freibeuter_t2',      slot:'armor',    culture:'freibeuter', tier:2, icon:'🧥', name:'Kapitäns-Mantel',    cost:420, minLevel:15, atk:0,  def:14, crit:4 },
+  { key:'kompass_freibeuter_t2',     slot:'talisman', culture:'freibeuter', tier:2, icon:'🧭', name:'Goldkompass',        cost:440, minLevel:15, atk:4,  def:0,  crit:12 },
+  { key:'seestiefel_freibeuter_t2',  slot:'feet',     culture:'freibeuter', tier:2, icon:'🥾', name:'Kaperfahrer-Stiefel',cost:420, minLevel:15, atk:0,  def:0,  crit:0, steps:12 },
 
   // ── Kundschafter/Späher 🔭 · Set „Späherauge" (deckt passiv die Umgebung r=2 auf) — CRIT-Präzision ──
   { key:'dolch_spaeher_t1',       slot:'weapon',   culture:'spaeher', tier:1, icon:'🗡️', name:'Späher-Dolch',      cost:150, minLevel:1,  atk:7,  def:0,  crit:4 },
   { key:'tarnumhang_spaeher_t1',  slot:'armor',    culture:'spaeher', tier:1, icon:'🧥', name:'Tarnumhang',        cost:130, minLevel:1,  atk:0,  def:4,  crit:2 },
   { key:'fernrohr_spaeher_t1',    slot:'talisman', culture:'spaeher', tier:1, icon:'🔭', name:'Fernrohr-Talisman', cost:140, minLevel:1,  atk:0,  def:0,  crit:6 },
   { key:'pfadstiefel_spaeher_t1', slot:'feet',     culture:'spaeher', tier:1, icon:'🥾', name:'Pfadfinderstiefel', cost:130, minLevel:1,  atk:0,  def:0,  crit:0, steps:5 },
-  { key:'dolch_spaeher_t2',       slot:'weapon',   culture:'spaeher', tier:2, icon:'🗡️', name:'Meucheldolch',      cost:480, minLevel:20, atk:18, def:0,  crit:8 },
-  { key:'tarnumhang_spaeher_t2',  slot:'armor',    culture:'spaeher', tier:2, icon:'🧥', name:'Schattenumhang',    cost:420, minLevel:20, atk:0,  def:12, crit:6 },
-  { key:'fernrohr_spaeher_t2',    slot:'talisman', culture:'spaeher', tier:2, icon:'🔭', name:'Adlerauge-Fernrohr', cost:440, minLevel:20, atk:0,  def:0,  crit:16 },
-  { key:'pfadstiefel_spaeher_t2', slot:'feet',     culture:'spaeher', tier:2, icon:'🥾', name:'Kundschafterstiefel',cost:420, minLevel:20, atk:0,  def:0,  crit:0, steps:12 },
+  { key:'dolch_spaeher_t2',       slot:'weapon',   culture:'spaeher', tier:2, icon:'🗡️', name:'Meucheldolch',      cost:480, minLevel:15, atk:18, def:0,  crit:8 },
+  { key:'tarnumhang_spaeher_t2',  slot:'armor',    culture:'spaeher', tier:2, icon:'🧥', name:'Schattenumhang',    cost:420, minLevel:15, atk:0,  def:12, crit:6 },
+  { key:'fernrohr_spaeher_t2',    slot:'talisman', culture:'spaeher', tier:2, icon:'🔭', name:'Adlerauge-Fernrohr', cost:440, minLevel:15, atk:0,  def:0,  crit:16 },
+  { key:'pfadstiefel_spaeher_t2', slot:'feet',     culture:'spaeher', tier:2, icon:'🥾', name:'Kundschafterstiefel',cost:420, minLevel:15, atk:0,  def:0,  crit:0, steps:12 },
 
-  // ── Tier 3 „Meisterlich" (ab Stufe 60) — 2 Waffen/Kultur: Pfad A klassisch, Pfad B mit Mechanik-Twist ──
+  // ── Tier 3 „Meisterlich" (ab Stufe 35, 2026-07-15 gesenkt 60→35) — 2 Waffen/Kultur: Pfad A klassisch, Pfad B mit Mechanik-Twist ──
   // KEIN Lock/Pfadzwang (JP-Entscheidung): beide frei kauf-/ausrüstbar. `mech` steuert serverseitige
   // Sonder-Logik in dungeon_fight (Waffen-Key-Prefix streitkolben/armbrust/wurfmesser/kriegsbogen) — die
   // Twist-Beschreibung ist reine UI-Vorschau, die Wirkung rechnet die RPC. Stats MÜSSEN mit
   // _krieger_item_stats() in migration_2026-07-08 übereinstimmen.
-  { key:'schwert_mittelalter_t3',      slot:'weapon', culture:'mittelalter', tier:3, icon:'⚔️', name:'Zweihänder',      cost:780, minLevel:60, atk:34, def:0,  crit:0 },
-  { key:'streitkolben_mittelalter_t3', slot:'weapon', culture:'mittelalter', tier:3, icon:'🔨', name:'Streitkolben',    cost:760, minLevel:60, atk:26, def:2,  crit:0, mech:'streitkolben', mechDesc:'Ignoriert 50% der gegnerischen Verteidigung.' },
-  { key:'degen_europa_t3',             slot:'weapon', culture:'europa',      tier:3, icon:'🤺', name:'Meisterdegen',     cost:800, minLevel:60, atk:28, def:0,  crit:10 },
-  { key:'armbrust_europa_t3',          slot:'weapon', culture:'europa',      tier:3, icon:'🏹', name:'Armbrust',         cost:760, minLevel:60, atk:20, def:0,  crit:6,  mech:'armbrust', mechDesc:'Garantierter Bonus-Erstschlag in Runde 1 (dafür niedrigerer Grund-ATK).' },
-  { key:'saebel_orient_t3',            slot:'weapon', culture:'orient',      tier:3, icon:'🗡️', name:'Shamshir',        cost:800, minLevel:60, atk:38, def:-6, crit:0 },
-  { key:'wurfmesser_orient_t3',        slot:'weapon', culture:'orient',      tier:3, icon:'🔪', name:'Wurfmesser-Set',   cost:780, minLevel:60, atk:20, def:0,  crit:8,  mech:'wurfmesser', mechDesc:'Mehrere kleine Treffer, jeder mit eigener CRIT-Chance (CRIT-Synergie).' },
-  { key:'keule_suedamerika_t3',        slot:'weapon', culture:'suedamerika', tier:3, icon:'🏏', name:'Kriegskeule',     cost:780, minLevel:60, atk:26, def:12, crit:0 },
-  { key:'kriegsbogen_suedamerika_t3',  slot:'weapon', culture:'suedamerika', tier:3, icon:'🏹', name:'Kriegsbogen',     cost:760, minLevel:60, atk:24, def:4,  crit:0,  mech:'kriegsbogen', mechDesc:'Bonus-Schaden gegen Gegner mit hoher Verteidigung.' },
+  { key:'schwert_mittelalter_t3',      slot:'weapon', culture:'mittelalter', tier:3, icon:'⚔️', name:'Zweihänder',      cost:780, minLevel:35, atk:34, def:0,  crit:0 },
+  { key:'streitkolben_mittelalter_t3', slot:'weapon', culture:'mittelalter', tier:3, icon:'🔨', name:'Streitkolben',    cost:760, minLevel:35, atk:26, def:2,  crit:0, mech:'streitkolben', mechDesc:'Ignoriert 50% der gegnerischen Verteidigung.' },
+  { key:'degen_europa_t3',             slot:'weapon', culture:'europa',      tier:3, icon:'🤺', name:'Meisterdegen',     cost:800, minLevel:35, atk:28, def:0,  crit:10 },
+  { key:'armbrust_europa_t3',          slot:'weapon', culture:'europa',      tier:3, icon:'🏹', name:'Armbrust',         cost:760, minLevel:35, atk:20, def:0,  crit:6,  mech:'armbrust', mechDesc:'Garantierter Bonus-Erstschlag in Runde 1 (dafür niedrigerer Grund-ATK).' },
+  { key:'saebel_orient_t3',            slot:'weapon', culture:'orient',      tier:3, icon:'🗡️', name:'Shamshir',        cost:800, minLevel:35, atk:38, def:-6, crit:0 },
+  { key:'wurfmesser_orient_t3',        slot:'weapon', culture:'orient',      tier:3, icon:'🔪', name:'Wurfmesser-Set',   cost:780, minLevel:35, atk:20, def:0,  crit:8,  mech:'wurfmesser', mechDesc:'Mehrere kleine Treffer, jeder mit eigener CRIT-Chance (CRIT-Synergie).' },
+  { key:'keule_suedamerika_t3',        slot:'weapon', culture:'suedamerika', tier:3, icon:'🏏', name:'Kriegskeule',     cost:780, minLevel:35, atk:26, def:12, crit:0 },
+  { key:'kriegsbogen_suedamerika_t3',  slot:'weapon', culture:'suedamerika', tier:3, icon:'🏹', name:'Kriegsbogen',     cost:760, minLevel:35, atk:24, def:4,  crit:0,  mech:'kriegsbogen', mechDesc:'Bonus-Schaden gegen Gegner mit hoher Verteidigung.' },
+
+  // ── Tier 3 Rüstung + Talisman (NEU 2026-07-15, ab Stufe 35) — vervollständigen das Meister-Set
+  // (weapon+armor+talisman gleicher Kultur → Set-Bonus). Nur die 4 klassischen Kulturen (Utility-
+  // Kulturen bleiben bei T2). Kampfwerte MÜSSEN mit _krieger_item_stats() in migration_2026-07-15b
+  // übereinstimmen; _krieger_item_culture erkennt die Kultur bereits per LIKE am Key. ──
+  { key:'ruestung_mittelalter_t3', slot:'armor',    culture:'mittelalter', tier:3, icon:'🛡️', name:'Turnierrüstung',      cost:740, minLevel:35, atk:0,  def:32, crit:0 },
+  { key:'amulett_mittelalter_t3',  slot:'talisman', culture:'mittelalter', tier:3, icon:'🧿', name:'Großmeister-Wappen',   cost:700, minLevel:35, atk:0,  def:4,  crit:14 },
+  { key:'harnisch_europa_t3',      slot:'armor',    culture:'europa',      tier:3, icon:'👘', name:'Kürass-Harnisch',      cost:740, minLevel:35, atk:0,  def:30, crit:0 },
+  { key:'adelssiegel_europa_t3',   slot:'talisman', culture:'europa',      tier:3, icon:'💍', name:'Fürstensiegel',        cost:720, minLevel:35, atk:10, def:10, crit:8 },
+  { key:'kettenhemd_orient_t3',    slot:'armor',    culture:'orient',      tier:3, icon:'🧥', name:'Sultans-Kettenhemd',   cost:720, minLevel:35, atk:0,  def:16, crit:10 },
+  { key:'wesiramulett_orient_t3',  slot:'talisman', culture:'orient',      tier:3, icon:'🧿', name:'Kalifen-Amulett',      cost:780, minLevel:35, atk:0,  def:0,  crit:26 },
+  { key:'umhang_suedamerika_t3',   slot:'armor',    culture:'suedamerika', tier:3, icon:'🪶', name:'Quetzal-Umhang',       cost:740, minLevel:35, atk:0,  def:20, crit:10 },
+  { key:'goldscheibe_suedamerika_t3', slot:'talisman', culture:'suedamerika', tier:3, icon:'☀️', name:'Sonnengott-Scheibe', cost:760, minLevel:35, atk:10, def:10, crit:12 },
 
   // ── Kaffeesatz-Lesen / Sicht (Etappe 4, Slot 'scan') — kulturunabhängig, KEINE Kampfwerte.
   // Deckt Feld-KATEGORIEN im Nebel auf (⚔️/🪙), nie exakte Belohnung. Rein clientseitig
   // (kein Eintrag in _krieger_item_stats nötig, da dungeon_fight sie nicht liest).
   { key:'kaffeeglas_scan', slot:'scan', culture:null, tier:1, icon:'🔍', name:'Kaffee-Glas',        cost:200, minLevel:5, atk:0, def:0, crit:0, scan:'line',    scanDesc:'Deckt 5 Felder in der zuletzt gelaufenen Richtung auf.' },
-  { key:'wirbelsud_scan',  slot:'scan', culture:null, tier:2, icon:'🌀', name:'Wirbel-Sud',         cost:450, minLevel:20, atk:0, def:0, crit:0, scan:'ring',    scanDesc:'Deckt einen Ring bei Radius 3 um dich auf (aktualisiert sich beim Laufen).' },
+  { key:'wirbelsud_scan',  slot:'scan', culture:null, tier:2, icon:'🌀', name:'Wirbel-Sud',         cost:450, minLevel:15, atk:0, def:0, crit:0, scan:'ring',    scanDesc:'Deckt einen Ring bei Radius 3 um dich auf (aktualisiert sich beim Laufen).' },
   { key:'orakel_scan',     slot:'scan', culture:null, tier:3, icon:'🔮', name:'Kaffeesatz-Orakel',  cost:850, minLevel:45, atk:0, def:0, crit:0, scan:'checker', scanDesc:'Deckt jedes 2. Feld in Radius 6 auf — große, aber lückenhafte Sicht.' },
 ];
 
@@ -272,7 +288,7 @@ const KRIEGER_COMPANIONS = [
   { key:'falke_mittelalter', culture:'mittelalter', icon:'🦅', name:'Wappenfalke',    cost:600, minLevel:10, desc:'+10% CoffeeCoins nach jedem Sieg.' },
   { key:'pudel_europa',      culture:'europa',      icon:'🐩', name:'Salon-Pudel',    cost:600, minLevel:10, desc:'+10% EP nach jedem Sieg.' },
   { key:'kamel_orient',      culture:'orient',      icon:'🐪', name:'Karawanen-Kamel',cost:600, minLevel:10, desc:'+50% Trost-EP bei einer Niederlage.' },
-  { key:'lama_suedamerika',  culture:'suedamerika', icon:'🦙', name:'Anden-Lama',     cost:600, minLevel:10, desc:'Heilt 2% Max-HP/Runde unter 50% HP (teilt sich den 50%-MaxHP-Deckel mit Sonnenkraft).' },
+  { key:'lama_suedamerika',  culture:'suedamerika', icon:'🦙', name:'Anden-Lama',     cost:600, minLevel:10, desc:'Heilt 2% Max-HP pro Runde (stapelt mit dem Sonnenkraft-Set).' },
 ];
 function kriegerCompanionByKey(key) { return KRIEGER_COMPANIONS.find(c => c.key === key) || null; }
 function kriegerActiveCompanion(dd) { return kriegerCompanionByKey(dd?.companion); }
@@ -331,7 +347,7 @@ function kriegerPeekTile(tx, ty, worldSeed) {
   if (tx === KRIEGER_BOSS_POS.x && ty === KRIEGER_BOSS_POS.y) return { type: 'boss' };
   const dist = Math.max(Math.abs(tx - KRIEGER_START_X), Math.abs(ty - KRIEGER_START_Y));
   const rEnc = _tileRng(tx, ty, 5151, worldSeed)();
-  if (rEnc < KRIEGER_ENEMY_P) return { type: 'enemy', tier: kriegerTierForDistance(dist) };
+  if (rEnc < KRIEGER_ENEMY_P) return { type: 'enemy', tier: kriegerTierForDistance(dist, tx, ty, worldSeed) };
   const rGim = _tileRng(tx, ty, 7373, worldSeed)();
   if (rGim < KRIEGER_GIMMICK_P) return { type: 'find' };
   return { type: 'empty' };
@@ -392,11 +408,11 @@ const KRIEGER_SET_BONUSES = {
   mittelalter: { name: 'Eisern',         desc: 'Erste 2 gegnerische Treffer pro Kampf −50% Schaden, alle weiteren −10%' },
   europa:      { name: 'Hofdiplomatie',  desc: '25% Chance auf einen Extra-Angriff pro Runde + Sieg gibt +20% CC' },
   orient:      { name: 'Wüstensturm',    desc: 'CRIT-Chance +10 Prozentpunkte, CRITs treffen ×2,5 (statt ×2)' },
-  suedamerika: { name: 'Sonnenkraft',    desc: 'Heilt 3% MaxHP/Runde unter 50% HP (max. 50% MaxHP/Kampf) + Sieg gibt +20% EP' },
+  suedamerika: { name: 'Sonnenkraft',    desc: 'Heilt 3% MaxHP pro Runde + Sieg gibt +20% EP' },
   // Utility-Sets (2026-07-13): Nicht-Kampf-Boni, rein clientseitig (dungeon_fight unberührt).
   steppe:      { name: 'Steppenwind',    desc: '+8 Schritte/Tag im Dungeon' },
   handel:      { name: 'Handelsprivileg',desc: '−15% Preis auf Ausrüstung & Tränke' },
-  freibeuter:  { name: 'Freibeuterglück',desc: '+50% Fund-Chance im Dungeon (Tränke/Ausrüstung/CC)' },
+  freibeuter:  { name: 'Freibeuterglück',desc: '+50% Fund-Chance UND +75% CC pro Fund im Dungeon' },
   spaeher:     { name: 'Späherauge',     desc: 'deckt passiv die Umgebung (Radius 2) im Nebel auf' },
 };
 
@@ -435,6 +451,42 @@ function kriegerPriceFactor(dd)  { return kriegerSetActive(dd, 'handel') ? (1 - 
 function kriegerDiscountedCost(baseCost, dd) { return Math.round((baseCost || 0) * kriegerPriceFactor(dd)); }
 function kriegerFindMult(dd)     { return kriegerSetActive(dd, 'freibeuter') ? KRIEGER_FREIBEUTER_FIND_MULT : 1; }
 
+// ── Auto-Ausrüsten (2026-07-15, User-Wunsch: „ein Klick, der ein komplettes Set anlegt") ──
+// Bestes besessenes Item eines Slots (optional kulturgefiltert): höchster Tier, bei
+// Gleichstand nach Schritten (feet), Tier (scan) bzw. Kampfsumme (weapon/armor/talisman).
+function kriegerBestOwnedInSlot(dd, slot, culture) {
+  const owned = dd?.owned || {};
+  const cand = KRIEGER_ITEMS.filter(i => i.slot === slot && owned[i.key] && (!culture || i.culture === culture));
+  if (!cand.length) return null;
+  const score = i => slot === 'feet' ? (i.steps || 0)
+    : slot === 'scan' ? (i.tier || 0)
+    : ((i.atk || 0) + (i.def || 0) + (i.crit || 0));
+  return cand.slice().sort((a, b) => (b.tier - a.tier) || (score(b) - score(a)))[0];
+}
+// Kulturen, deren komplettes Kern-Set (weapon+armor+talisman) bereits im Besitz ist.
+function kriegerOwnedCompleteSets(dd) {
+  return Object.keys(KRIEGER_CULTURE_NAMES).filter(c =>
+    kriegerBestOwnedInSlot(dd, 'weapon', c) &&
+    kriegerBestOwnedInSlot(dd, 'armor', c) &&
+    kriegerBestOwnedInSlot(dd, 'talisman', c));
+}
+// Neues equipped-Objekt: Kern-Set einer Kultur anlegen + besten besessenen feet/scan-Slot füllen
+// (feet/scan sind nicht Teil des Set-Bonus → global bestes ist immer vorteilhaft).
+function kriegerEquipSetLoadout(dd, culture) {
+  const eq = { ...(dd?.equipped || {}) };
+  const w = kriegerBestOwnedInSlot(dd, 'weapon', culture);
+  const a = kriegerBestOwnedInSlot(dd, 'armor', culture);
+  const t = kriegerBestOwnedInSlot(dd, 'talisman', culture);
+  if (w) eq.weapon = w.key;
+  if (a) eq.armor = a.key;
+  if (t) eq.talisman = t.key;
+  const feet = kriegerBestOwnedInSlot(dd, 'feet');
+  const scan = kriegerBestOwnedInSlot(dd, 'scan');
+  if (feet) eq.feet = feet.key;
+  if (scan) eq.scan = scan.key;
+  return eq;
+}
+
 // ── Gegner (MUSS exakt mit _krieger_enemy_stats in SQL übereinstimmen) ──────
 // CC-Belohnungen 2026-06-30 nach unten korrigiert (User-Feedback "darf nicht zu viel sein"),
 // 2026-07-04 wieder auf die ursprünglichen Plan-Werte angehoben (lohnte sich nicht gegenüber
@@ -447,8 +499,8 @@ const KRIEGER_ENEMIES = [
   // (Distanz ≤15) liefert laut Labyrinth-Simulation im Schnitt nur ~780 erreichbare EP — die alte
   // t2-Schwelle (Stufe 8 / 1.470 EP) war damit aus reinem t1-Content oft gar nicht erreichbar.
   // Nur minLevel gesenkt (t2 8→4, t3 18→9, t4 32→16); Distanz-Zonen/Stats/Boss unverändert.
-  { tier:'t1',   name:'Schaum-Gesindel', flavor:['🫧 Milchschaum-Wicht','👹 Bohnen-Goblin','🟤 Kaffeesatz-Schleim'], abilities:['aufschaeumen','bohnenwurf','zaeh'], hp:60,  atk:11, def:2,  ccMin:20,  ccMax:35,  ep:25,  minLevel:1,  maxDist:15 },
-  { tier:'t2',   name:'Mahlwerk-Bande',  flavor:['⚙️ Mahlwerk-Golem','👻 Filterpapier-Geist','🔨 Tamper-Troll'],      abilities:['stampfer','durchsichtig','verdichtung'], hp:110, atk:16, def:7,  ccMin:45,  ccMax:75,  ep:55,  minLevel:4,  maxDist:35 },
+  { tier:'t1',   name:'Schaum-Gesindel', flavor:['🫧 Milchschaum-Wicht','👹 Bohnen-Goblin','🟤 Kaffeesatz-Schleim'], abilities:['aufschaeumen','bohnenwurf','zaeh'], hp:60,  atk:11, def:2,  ccMin:20,  ccMax:35,  ep:25,  minLevel:1,  maxDist:28 },
+  { tier:'t2',   name:'Mahlwerk-Bande',  flavor:['⚙️ Mahlwerk-Golem','👻 Filterpapier-Geist','🔨 Tamper-Troll'],      abilities:['stampfer','durchsichtig','verdichtung'], hp:110, atk:16, def:7,  ccMin:45,  ccMax:75,  ep:55,  minLevel:4,  maxDist:46 },
   { tier:'t3',   name:'Röster-Horde',    flavor:['🔥 Röstkammer-Zwerg','🕷️ Säure-Spinne','🐍 Crema-Hydra'],          abilities:['roestfeuer','aetzend','regeneration'], hp:200, atk:25, def:13, ccMin:90,  ccMax:140, ep:100, minLevel:9,  maxDist:60 },
   { tier:'t4',   name:'Koffein-Elite',   flavor:['⚡ Koffein-Berserker','👻 Espresso-Geist','🗿 Robusta-Titan'],      abilities:['adrenalinschub','geistform','bitterkern'], hp:340, atk:36, def:20, ccMin:170, ccMax:260, ep:170, minLevel:16, maxDist:90 },
   { tier:'boss', name:'Der Espresso-Drache', flavor:['🐉 Der Espresso-Drache'], abilities:['flammenatem'], hp:650, atk:50, def:28, ccMin:350, ccMax:550, ep:350, minLevel:55, maxDist:9999 },
@@ -470,7 +522,11 @@ function kriegerFlavorMod(tier, idx) {
 // Feld → immer gleiche Stufe/gleicher Flavor). Wirkt spiegelbildlich zum Spieler
 // auf ATK/DEF/HP und erhöht die EP. Bänder MÜSSEN zu _krieger_enemy_level_band in
 // migration_2026-07-13b_krieger_gegner_level.sql passen (Server clampt darauf).
-const KRIEGER_ENEMY_LEVEL_BANDS = { t1:[1,10], t2:[5,18], t3:[12,28], t4:[22,45], boss:[60,60] };
+// Bänder 2026-07-15 gesenkt (User: „Gegner viel zu stark, selbst L10 voll ausgerüstet"):
+// die Ober-Level lagen deutlich über dem Spieler, der einen Tier gerade erst erreicht →
+// Werte skalierten den Gegner weit über die eigene Ausrüstung. Enger + niedriger, damit
+// Gegner nahe am eigenen Level bleiben. MUSS zu _krieger_enemy_level_band in SQL passen.
+const KRIEGER_ENEMY_LEVEL_BANDS = { t1:[1,6], t2:[3,11], t3:[9,17], t4:[16,27], boss:[60,60] };
 
 // Deterministisches Gegner-Level für ein Feld (eigener Salt 3131, NICHT von anderen
 // _tileRng-Salts belegt). Boss = fest 60.
@@ -613,13 +669,79 @@ function kriegerEnemyDef(tier) { return KRIEGER_ENEMIES.find(e => e.tier === tie
 const KRIEGER_BOSS_POS = { x: KRIEGER_WORLD - 5, y: KRIEGER_WORLD - 5 };
 const KRIEGER_BOSS_MIN_LEVEL = 80;
 
-// Welcher Gegner-Tier passt zur Distanz vom Zentrum?
-function kriegerTierForDistance(dist) {
+// Zonen-Obergrenze: der höchste Tier, der bei dieser Distanz überhaupt auftreten darf.
+function kriegerZoneTier(dist) {
   for (const e of KRIEGER_ENEMIES) {
     if (e.tier === 'boss') continue;
     if (dist <= e.maxDist) return e.tier;
   }
   return 't4';
+}
+
+// Welcher Gegner-Tier steht auf einem Feld? (Durchmischung 2026-07-15, User-Wunsch
+// „bei weiter Entfernung nicht nur schwere Gegner".) Die Distanz setzt jetzt nur noch die
+// OBERGRENZE — darunter tauchen auch schwächere Tiers auf, mit abnehmender Häufigkeit.
+// Deterministisch pro Feld (eigener Salt 5253, kollidiert mit keinem anderen _tileRng-Salt),
+// damit Explore, Peek/Scouting und der Kampf-Prompt exakt denselben Tier würfeln. Ohne
+// Koordinaten/Seed (alte Aufrufe) Fallback auf die reine Zonen-Obergrenze (unverändertes Verhalten).
+const KRIEGER_TIER_ORDER = ['t1', 't2', 't3', 't4'];
+function kriegerTierForDistance(dist, tx, ty, worldSeed) {
+  const zone = kriegerZoneTier(dist);
+  const maxIdx = KRIEGER_TIER_ORDER.indexOf(zone);
+  if (maxIdx <= 0 || typeof _tileRng !== 'function' || tx == null || ty == null) return zone;
+  // Gewichte: Zonen-Tier am häufigsten (3), direkt darunter (2), alle tieferen je (1).
+  // Bsp. t4-Zone → t4 43% · t3 29% · t2 14% · t1 14%; t2-Zone → t2 60% · t1 40%.
+  const weights = [];
+  let total = 0;
+  for (let i = 0; i <= maxIdx; i++) {
+    const d = maxIdx - i;                       // 0 = Zonen-Tier
+    const w = d === 0 ? 3 : (d === 1 ? 2 : 1);
+    weights.push(w); total += w;
+  }
+  let r = _tileRng(tx, ty, 5253, worldSeed)() * total;
+  for (let i = 0; i <= maxIdx; i++) {
+    r -= weights[i];
+    if (r < 0) return KRIEGER_TIER_ORDER[i];
+  }
+  return zone;
+}
+
+// ── Gegner-Respawn (2026-07-15, User-Wunsch) ──────────────────────────────────
+// Besiegte Gegner regenerieren im GLOBALEN 3-Tage-Takt (kein Einzel-Cooldown pro Feld):
+// erster Respawn-Tick 12.07.2026 13:00 (Ortszeit), danach alle 3 Tage (15./18./21. … je 13:00).
+// Ein besiegtes Feld (dd.defeatedAt[key] = Zeitpunkt des Siegs) ist wieder kämpfbar, sobald der
+// jüngste Respawn-Tick NACH seinem Sieg liegt. Löst das „schon aufgedeckt / kein t1-Nachschub in
+// der Mitte"-Problem für Bestandsspieler (rein clientseitig in dungeon_data, keine SQL).
+// ANKER bei abweichendem Live-Tag hier anpassen (Monat ist 0-basiert: 6 = Juli).
+const KRIEGER_RESPAWN_ANCHOR    = new Date(2026, 6, 12, 13, 0, 0).getTime();
+const KRIEGER_RESPAWN_PERIOD_MS = 3 * 24 * 60 * 60 * 1000;
+// Zeitpunkt des jüngsten Respawn-Ticks ≤ now (vor dem ersten Anker → -Infinity, nichts respawnt).
+function kriegerLastRespawnTick(now) {
+  now = now || Date.now();
+  if (now < KRIEGER_RESPAWN_ANCHOR) return -Infinity;
+  const k = Math.floor((now - KRIEGER_RESPAWN_ANCHOR) / KRIEGER_RESPAWN_PERIOD_MS);
+  return KRIEGER_RESPAWN_ANCHOR + k * KRIEGER_RESPAWN_PERIOD_MS;
+}
+// Ist ein Gegnerfeld aktuell wieder kämpfbar? (nie besiegt ODER seit-Sieg ein Tick vergangen)
+function kriegerEnemyRespawned(dd, key) {
+  const d = dd?.defeatedAt?.[key];
+  if (d == null) return true;
+  return d < kriegerLastRespawnTick();
+}
+// Cooldown = besiegt UND noch nicht respawnt.
+function kriegerEnemyOnCooldown(dd, key) {
+  return dd?.defeatedAt?.[key] != null && !kriegerEnemyRespawned(dd, key);
+}
+// Aktiver Kampf möglich: Encounter existiert (Tier gespeichert) UND respawnt/nie besiegt.
+function kriegerEnemyActive(dd, key) {
+  return !!(dd?.encounters?.[key]) && kriegerEnemyRespawned(dd, key);
+}
+// Nächster Respawn-Zeitpunkt eines besiegten Feldes (für „regeneriert in …"-Anzeige); 0 = schon aktiv.
+function kriegerNextRespawnAt(dd, key) {
+  const d = dd?.defeatedAt?.[key];
+  if (d == null || d < kriegerLastRespawnTick()) return 0;
+  const k = Math.floor((d - KRIEGER_RESPAWN_ANCHOR) / KRIEGER_RESPAWN_PERIOD_MS) + 1;
+  return KRIEGER_RESPAWN_ANCHOR + k * KRIEGER_RESPAWN_PERIOD_MS;
 }
 
 // ── Stufen/EP ──────────────────────────────────────────────────────────────────
@@ -737,7 +859,7 @@ function kriegerExploreTile(tx, ty, dd, worldSeed) {
     const dist = Math.max(Math.abs(tx - KRIEGER_START_X), Math.abs(ty - KRIEGER_START_Y));
     const rEnc = _tileRng(tx, ty, 5151, worldSeed)();
     if (rEnc < KRIEGER_ENEMY_P) {
-      const tier = kriegerTierForDistance(dist);
+      const tier = kriegerTierForDistance(dist, tx, ty, worldSeed);
       const def  = kriegerEnemyDef(tier);
       const flavorIdx = Math.floor(_tileRng(tx, ty, 6262, worldSeed)() * def.flavor.length);
       encounter = { tier, flavorIdx };
@@ -759,7 +881,11 @@ function kriegerExploreTile(tx, ty, dd, worldSeed) {
           gimmick = { potion: pKey, emoji: pDef ? pDef.icon : '🧪', name: (pDef ? pDef.name : 'Trank') + ' gefunden' };
         } else {
           const cc = KRIEGER_GIMMICKS[0].cc;
-          const amount = cc[0] + Math.floor(_tileRng(tx, ty, 8484, worldSeed)() * (cc[1] - cc[0] + 1));
+          let amount = cc[0] + Math.floor(_tileRng(tx, ty, 8484, worldSeed)() * (cc[1] - cc[0] + 1));
+          // Freibeuterglück (2026-07-15): das Set macht Funde nicht nur HÄUFIGER (×1.5 oben),
+          // sondern auch WERTVOLLER — CC-Funde +75% (User: „gegenüber Späher noch nicht besser genug";
+          // Späher dominiert durch Sicht, daher Freibeuter monetär deutlich anheben). Rein clientseitig.
+          if (kriegerSetActive(dd, 'freibeuter')) amount = Math.round(amount * 1.75);
           gimmick = { cc: amount };
         }
       }
@@ -1077,8 +1203,12 @@ function kriegerRender(canvas, dd, worldSeed, vpX, vpY) {
       ctx.font = `${Math.floor(T * 0.7)}px sans-serif`;
       ctx.fillText('🐉', t.px + 2, t.py + T - 3);
     } else if (encounters[key]) {
+      // Respawn (2026-07-15): besiegte, noch nicht regenerierte Gegner nur schwach andeuten.
+      const _cd = (typeof kriegerEnemyOnCooldown === 'function') && kriegerEnemyOnCooldown(dd, key);
+      if (_cd) ctx.globalAlpha = 0.28;
       ctx.font = `${Math.floor(T * 0.6)}px sans-serif`;
       ctx.fillText('⚔️', t.px + 3, t.py + T - 4);
+      ctx.globalAlpha = 1.0;
     } else if (gimmickTiles[key]) {
       ctx.globalAlpha = 0.55; // bereits eingesammelt — nur noch schwacher Hinweis
       ctx.font = `${Math.floor(T * 0.55)}px sans-serif`;

@@ -574,9 +574,12 @@ function renderLeaderboard() {
 // WHATS_NEW_GO_LIVE (lokale Zeit), davor bleibt es still. Danach einmalig pro Spieler beim
 // nächsten App-Start (idempotent über map_data.whatsNewSeen). Bei leerer Liste poppt dank
 // Guard nichts. Zum Deaktivieren: WHATS_NEW_ITEMS = [] und/oder GO_LIVE in die Zukunft setzen.
-const WHATS_NEW_VERSION = '2026-07-15-kaffeemobil-boerse';
+// 2026-07-12: Version gebumpt für den Kaffee-Krieger-Umbau. Die 5 bisherigen Einträge BLEIBEN
+// bewusst erhalten (Nachzügler, die das vorige Popup nie gesehen haben, verlieren sie sonst —
+// whatsNewSeen merkt sich nur EINE Version). Wer die 5 schon kannte, sieht sie einmal erneut + Krieger.
+const WHATS_NEW_VERSION = '2026-07-12-kaffee-krieger';
 // Go-Live-Zeitpunkt (LOKALE Zeit, ISO ohne "Z" → wird als Ortszeit interpretiert):
-const WHATS_NEW_GO_LIVE = new Date('2026-07-11T13:00:00'); // 11.07. 13:00 Uhr
+const WHATS_NEW_GO_LIVE = new Date('2026-07-12T13:00:00'); // heute 12.07. 13:00 Uhr
 const WHATS_NEW_ITEMS = [
   {
     icon: '🚐',
@@ -602,6 +605,11 @@ const WHATS_NEW_ITEMS = [
     icon: '💤',
     title: 'Länger weg? Kein Problem',
     text: 'Passives Einkommen wird jetzt für bis zu 14 Tage Abwesenheit nachgezahlt — Urlaub kostet dich keinen Ertrag mehr.'
+  },
+  {
+    icon: '⚔️',
+    title: 'Kaffee-Krieger überarbeitet',
+    text: 'Die Gegner sind fairer: schwächer skaliert, besser durchmischt (nicht mehr nur harte Brocken weit draußen) und dichter gesät nahe der Mitte. Besiegte Gegner kehren jetzt alle paar Tage zurück — du gehst nie mehr ohne Nachschub aus. Ausrüstung: Tier-2-Gear schon ab Stufe 15, dazu ein komplettes neues Tier-3-Meister-Set (Rüstung + Talisman) ab Stufe 35. Neu: ⚡ „Schnell-Ausrüsten" legt ein ganzes Set mit einem Klick an. Und die Südamerika-Heilung wirkt wieder wie früher.'
   }
 ];
 
