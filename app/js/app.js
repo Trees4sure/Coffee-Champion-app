@@ -1340,10 +1340,11 @@ function _informantStatsHtml(u) {
     items.push(`🧠 CIQ: ${quizCiq} Punkte · ${_fmtCoins(quizCC)} CC aus Quiz · ${_fmtCoins(ciqEarned)} CC aus Angriffen erbeutet${ciqLost > 0 ? ` · ${_fmtCoins(ciqLost)} CC durch Angriffe verloren` : ''}${ciqSkills ? ' · Fähigkeiten: ' + ciqSkills : ''}`);
   }
 
-  // 🚐 Kaffeemobil
+  // 🚐 Kaffeemobil — Reisevergütung (mobil.totalEarned, kumulativ serverseitig geführt in claim_arrival)
   const mCities = (typeof _ccMobilCities === 'function') ? _ccMobilCities(u) : 0;
   const mTrips  = (u.mobil && u.mobil.totalTrips) || 0;
-  if (mCities > 1 || mTrips > 0) items.push(`🚐 Kaffeemobil: ${mCities} Städte · ${mTrips} Reisen`);
+  const mEarned = (u.mobil && u.mobil.totalEarned) || 0;
+  if (mCities > 1 || mTrips > 0) items.push(`🚐 Kaffeemobil: ${mCities} Städte · ${mTrips} Reisen · ${_fmtCoins(mEarned)} CC Reisevergütung`);
 
   if (!items.length) return '';
   return `<div class="cc-informant-stats" style="display:flex;flex-wrap:wrap;gap:6px;margin:4px 0">

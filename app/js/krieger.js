@@ -450,7 +450,7 @@ function kriegerActiveSetCulture(equipped) {
 const KRIEGER_STEPPE_SET_STEPS     = 5;    // Steppenwind: +Schritte/Tag (2026-07-16: 8→5, dafür Eröffnungssalve serverseitig)
 const KRIEGER_HANDEL_SET_DISCOUNT  = 0.25; // Handelsprivileg: −25% auf Ausrüstung & Tränke (2026-07-16: 0.15→0.25)
 const KRIEGER_HANDEL_POTION_REFUND = 0.4;  // Handelsprivileg: 40% Trank-Wert zurück nach Sieg mit Trank
-const KRIEGER_REFUND_CAP           = 10;   // Anti-Grind (2026-07-16): max. Sieg-Schritt-Erstattungen/Tag
+const KRIEGER_REFUND_CAP           = 20;   // Anti-Grind (2026-07-16, 2026-07-16d: 10→20): max. Sieg-Schritt-Erstattungen/Tag
 const KRIEGER_FREIBEUTER_FIND_MULT = 1.5;  // Freibeuterglück: ×1.5 Fund-Chance
 const KRIEGER_SPAEHER_SET_RADIUS   = 2;    // Späherauge: passiver Umgebungs-Scan (Chebyshev r)
 function kriegerSetActive(dd, culture) {

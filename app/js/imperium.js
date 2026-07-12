@@ -2236,6 +2236,7 @@ function _kriegerRenderDungeon(member, state, seed, COLS, ROWS, MARGIN, body) {
       if (mdLog) { currentUserData = { ...(currentUserData || {}), map_data: mdLog }; member.map_data = mdLog; }
     } catch (e) { /* non-critical */ }
     showToast(`✅ +${KRIEGER_EXTRA_STEPS} Schritte freigeschaltet!`, 'success');
+    try { _krSessionAddAction(member.name, 'steps'); } catch (e) { /* non-critical */ }
     _kriegerRenderDungeon(member, state, seed, COLS, ROWS, MARGIN, body);
   });
 
@@ -2258,6 +2259,7 @@ function _kriegerRenderDungeon(member, state, seed, COLS, ROWS, MARGIN, body) {
       if (mdLog) { currentUserData = { ...(currentUserData || {}), map_data: mdLog }; member.map_data = mdLog; }
     } catch (e) { /* non-critical */ }
     showToast('🛌 Vollständig erholt — ❤️ 100 %!', 'success');
+    try { _krSessionAddAction(member.name, 'heal'); } catch (e) { /* non-critical */ }
     _kriegerRenderDungeon(member, state, seed, COLS, ROWS, MARGIN, body);
   });
 
@@ -2609,7 +2611,8 @@ function _krSessionEnsure(name, doEntry) {
   if (!_krSession) {
     _krSession = { entered:false, fights:0, wins:0, losses:0, ccCombat:0, ccFinds:0, ep:0,
                    levelStart:null, levelEnd:null, potionsUsed:{}, potionsBought:{}, bossKills:0,
-                   vouchersFound:0, potionsFound:0, purchases:0, purchaseLabels:[] };
+                   vouchersFound:0, potionsFound:0, purchases:0, purchaseLabels:[],
+                   stepsBought:0, healsBought:0 };
     _krSessionName = name || 'Krieger';
   }
   if (doEntry && !_krSession.entered) {
@@ -2631,6 +2634,13 @@ function _krSessionAddPotionBuy(name, key) {
   s.potionsBought[key] = (s.potionsBought[key] || 0) + 1;
   _krSessionBumpTimer();
 }
+// Sonstige CC-Aktionen im Dungeon (Schritte-Nachkauf / Volle Erholung) in den Sammler legen.
+function _krSessionAddAction(name, kind) {
+  const s = _krSessionEnsure(name, false);
+  if (kind === 'steps')      s.stepsBought += 1;
+  else if (kind === 'heal')  s.healsBought += 1;
+  _krSessionBumpTimer();
+}
 // Trank-Zähl-Map → „2× ☕ Espresso, 1× 🧊 Cold Brew".
 function _krFmtPotions(map) {
   return Object.entries(map || {}).map(([k, n]) => {
@@ -2647,8 +2657,9 @@ async function _kriegerFlushSession() {
   const s = _krSession; _krSession = null;
   if (!s) return;
   const boughtPotions = Object.keys(s.potionsBought || {}).length > 0;
+  const anyShop = s.purchases || boughtPotions || s.stepsBought || s.healsBought;
   const dungeonActivity = s.fights || s.ccFinds || s.vouchersFound || s.potionsFound || s.entered;
-  if (!dungeonActivity && !s.purchases && !boughtPotions) return;
+  if (!dungeonActivity && !anyShop) return;
   const esc = (typeof _esc2 === 'function') ? _esc2 : (x => x);
   const name = esc(_krSessionName);
   // Käufe als kompakte Liste (Icon+Name), gedeckelt.
@@ -2665,18 +2676,22 @@ async function _kriegerFlushSession() {
     if (totalCC > 0)         parts.push(`${totalCC} CC (⚔️ ${Math.round(s.ccCombat)} Kampf · 🗺️ ${Math.round(s.ccFinds)} Funde)`);
     if (s.ep > 0)            parts.push(`${s.ep} EP`);
     if (levels > 0)          parts.push(`${levels} Level`);
-    if (usedPotList)         parts.push(`🧪 genutzt: ${usedPotList}`);
+    if (usedPotList)         parts.push(`🧪 eingesetzt: ${usedPotList}`);
     if (s.vouchersFound > 0) parts.push(`${s.vouchersFound} 🎁 Gutschein${s.vouchersFound > 1 ? 'e' : ''}`);
     if (s.potionsFound > 0)  parts.push(`${s.potionsFound} 🧪 Trankfund${s.potionsFound > 1 ? 'e' : ''}`);
     if (s.losses > 0)        parts.push(`${s.losses} Niederlagen`);
     if (s.purchases > 0)     parts.push(`🛒 ${s.purchases} gekauft${buyList ? ` (${buyList})` : ''}`);
     if (boughtPotList)       parts.push(`🧪 gekauft: ${boughtPotList}`);
+    if (s.stepsBought > 0)   parts.push(`👣 ${s.stepsBought}× Schritte nachgekauft`);
+    if (s.healsBought > 0)   parts.push(`🛌 ${s.healsBought}× Erholung gekauft`);
     try { await DB.postMessage(`☕ ${name} verlässt das Dungeon — ${parts.join(', ')}.`, _krSessionName); } catch (e) { /* non-critical */ }
-  } else if (s.purchases > 0 || boughtPotions) {
+  } else if (anyShop) {
     // Reiner Einkauf (kein Dungeon-Besuch dazwischen).
     const shopParts = [];
-    if (s.purchases > 0) shopParts.push(`${s.purchases} Ausrüstungsteil${s.purchases > 1 ? 'e' : ''}${buyList ? ` (${buyList})` : ''}`);
-    if (boughtPotList)   shopParts.push(`🧪 ${boughtPotList}`);
+    if (s.purchases > 0)   shopParts.push(`${s.purchases} Ausrüstungsteil${s.purchases > 1 ? 'e' : ''}${buyList ? ` (${buyList})` : ''}`);
+    if (boughtPotList)     shopParts.push(`🧪 ${boughtPotList}`);
+    if (s.stepsBought > 0) shopParts.push(`👣 ${s.stepsBought}× Schritte`);
+    if (s.healsBought > 0) shopParts.push(`🛌 ${s.healsBought}× Erholung`);
     try { await DB.postMessage(`🛒 ${name} war einkaufen: ${shopParts.join(' · ')}.`, _krSessionName); } catch (e) { /* non-critical */ }
   }
 }
@@ -2832,7 +2847,16 @@ async function _runKriegerFight(member, state, tier, seed, COLS, ROWS, MARGIN, k
       const usedNow = kriegerStepsUsed(state.dd);
       state.dd = { ...state.dd, steps_today: Math.max(0, usedNow - 5), steps_date: _tk,
                    refundsToday: _refunds + 1, refundDate: _tk };
-      if (_refunds + 1 === _cap) showToast('🚶 Schritt-Erstattung für heute aufgebraucht — morgen wieder.', 'info');
+      // Beim Erreichen des Deckels ein kleines Popup INNERHALB der Krieger-View (ins Kampf-Ergebnis
+      // eingefügt, das gerade den Sieg zeigt) — kein globaler Toast.
+      if (_refunds + 1 === _cap && resultEl) {
+        const note = document.createElement('div');
+        note.className = 'krieger-legs-note';
+        note.innerHTML = `<span style="font-size:1.4em">🥵</span> Puh, schon ${_cap} Gegner besiegt, die Beine werden schwer … für heute gibt es keine Schritt-Erstattung mehr.`;
+        const closeBtn = document.getElementById('krieger-fight-close');
+        if (closeBtn && closeBtn.parentNode) closeBtn.parentNode.insertBefore(note, closeBtn);
+        else resultEl.appendChild(note);
+      }
     } else {
       state.dd = { ...state.dd, refundsToday: _refunds, refundDate: _tk };
     }
@@ -2854,7 +2878,7 @@ async function _runKriegerFight(member, state, tier, seed, COLS, ROWS, MARGIN, k
         state.memberCoins += _refund;
         if (_krSession) _krSession.ccCombat += _refund;
         try {
-          const mdLog = await DB.appendTodayLogFresh(member.id, [{ label: '⚖️ Handelsspanne (Trank-Rückvergütung)', amount: _refund, detail: 'Kaffee-Krieger' }]);
+          const mdLog = await DB.appendTodayLogFresh(member.id, [{ label: '⚖️ Handelsspanne (Trank-Rückvergütung)', amount: _refund, cat: 'krieger', aggKey: 'krieger_handel', aggBase: '⚖️ Handelsspanne', detail: 'Kaffee-Krieger' }]);
           if (mdLog) { currentUserData = { ...(currentUserData || {}), map_data: mdLog }; member.map_data = mdLog; }
         } catch (e) { /* non-critical */ }
         showToast(`⚖️ Handelsspanne: +${_refund} CC Trank-Rückvergütung`, 'success');
@@ -2902,7 +2926,7 @@ async function _runKriegerFight(member, state, tier, seed, COLS, ROWS, MARGIN, k
   // dürfen den Kampf-Flow nicht blockieren).
   if (result.cc_awarded > 0) {
     try {
-      const mdLog = await DB.appendTodayLogFresh(member.id, [{ label: `⚔️ Sieg: ${enemyDef.name}`, amount: result.cc_awarded, detail: 'Kaffee-Krieger-Kampf' }]);
+      const mdLog = await DB.appendTodayLogFresh(member.id, [{ label: `⚔️ Sieg: ${enemyDef.name}`, amount: result.cc_awarded, cat: 'krieger', aggKey: 'krieger_win', aggBase: '⚔️ Krieger-Siege', detail: 'Kaffee-Krieger-Kampf' }]);
       if (mdLog) { currentUserData = { ...(currentUserData || {}), map_data: mdLog }; member.map_data = mdLog; }
     } catch (e) { /* non-critical */ }
   }
