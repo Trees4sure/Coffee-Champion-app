@@ -867,6 +867,7 @@ function renderVermoegen(u) {
     ['🌍', 'Welthandel',      v.welt],
     ['⚔️', 'Kaffee-Krieger',  v.krieger],
   ];
+  if (v.kapital) rows.push(['💵', 'Liquides Kapital', v.kapital]);
   if (v.erlebnis) rows.push(['🎡', 'Erlebnisse', v.erlebnis]);
   // 🤝 Kredit-Netto nur zeigen, wenn vorhanden: Restschuld (Schuldner, negativ) bzw.
   // offene Tilgung, die dem Geber noch zufließt (positiv).
@@ -1266,6 +1267,8 @@ function _informantVermoegenHtml(u) {
   if (typeof _ccVermoegen !== 'function') return '';
   const v = _ccVermoegen(u);
   const cats = [['🪙', v.coins], ['🔬', v.forschung], ['🗺️', v.karte], ['🌍', v.welt], ['⚔️', v.krieger]];
+  if (v.kapital) cats.push(['💵', v.kapital]); // Liquides Kapital (Stille Anlage + Börse)
+  if (v.erlebnis) cats.push(['🎡', v.erlebnis]);
   if (v.kredit) cats.push(['🤝', v.kredit]); // Kredit-Netto: Restschuld (neg) bzw. offene Tilgung (pos)
   const chips = cats.map(([e, val]) => {
     const neg = val < 0;
@@ -1303,6 +1306,11 @@ function _informantStatsHtml(u) {
     if (as.schutz > 0)     parts.push(`${as.schutz}× 🛡️`);
     if (parts.length) items.push(`🤝 Bündnisse: ${parts.join(' · ')}`);
   }
+
+  // 🤝 Lifetime-CC aus Bündnissen erhalten (Handelsdividende + Friedenstribut), Zähler
+  // map_data.allianceCcEarned — ab Einführung geführt (keine rückwirkende Historie).
+  const allyEarned = u.map_data?.allianceCcEarned || 0;
+  if (allyEarned > 0) items.push(`🤝 Aus Bündnissen erhalten: ${_fmtCoins(allyEarned)} CC`);
 
   const bldCount  = (typeof _ccBldCount === 'function') ? _ccBldCount(u) : 0;
   const explored  = (typeof _ccExploredPct === 'function') ? _ccExploredPct(u) : 0;
@@ -1741,6 +1749,11 @@ function _ccGardeValue(u) {
 function _ccStilleAnlage(u) {
   return (typeof worldPassiveTotal === 'function') ? Math.round(worldPassiveTotal(u) || 0) : 0;
 }
+// 💹 Kaffeebörse-Kapital (map_data.worldDev.fund.principal) — jederzeit voll auszahlbar, daher
+// wie Bargeld Teil des Gesamtvermögens (JP 2026-07-13). Vorher bewusst draußen — Regeländerung.
+function _ccBoerse(u) {
+  return Math.round((typeof _fundOf === 'function') ? (_fundOf(u).principal || 0) : (u.map_data?.worldDev?.fund?.principal || 0));
+}
 // 🔭 Welt-Entwicklungen (map_data.worldDev): dauerhafte Freischaltungen — Kaufpreis (WORLD_DEVS.cost)
 // als Anlagewert (analog Forschung). Der Kaffeebörse-Fund-Saldo (worldDev.fund) ist KEINE Dev,
 // sondern aktiv gehandeltes Kapital → bleibt Netto-Aktivität, nicht hier.
@@ -1751,12 +1764,13 @@ function _ccWorldDevValue(u) {
   for (const d of WORLD_DEVS) if (owned[d.id]) s += d.cost || 0;
   return s;
 }
-// 🌍 Welthandel-Wert VOLL konserviert (JP 2026-07-11): investierter Einfluss (total_invested)
-// + eigene Welt-Gebäude + Garde (Näherung) + Stille-Anlage-Kapital + Welt-Entwicklungen. So
-// verschwindet kein ins Netto invest:true-gebuchtes CC, sondern taucht hier im Vermögen auf.
+// 🌍 Welthandel-Wert: investierter Einfluss (total_invested) + eigene Welt-Gebäude + Garde
+// (Näherung) + Welt-Entwicklungen. Das Stille-Anlage-KAPITAL zählt NICHT mehr hier, sondern
+// als liquides Kapital in der eigenen Kategorie 💵 (JP 2026-07-13) — so verschwindet weiterhin
+// kein ins Netto invest:true-gebuchtes CC, es wird nur sauberer als Bargeld ausgewiesen.
 function _ccWorldValue(u) {
   return _ccWorldInvested(u) + _ccWorldBuildingValue(u) + _ccGardeValue(u)
-    + _ccStilleAnlage(u) + _ccWorldDevValue(u);
+    + _ccWorldDevValue(u);
 }
 // 💰 Gesamtvermögen aufgestaffelt nach Kategorie (+ Summe). Aus aktuellem Besitz berechnet,
 // keine DB-Migration — reflektiert rückwirkend alles Besessene, egal wann gekauft.
@@ -1772,11 +1786,14 @@ function _ccVermoegen(u) {
     karte:     Math.round(_ccBldScore(u) + _ccMapUpgradeValue(u)),
     welt:      Math.round(_ccWorldValue(u)),
     krieger:   Math.round(_ccKriegerGear(u)),
+    // 💵 Liquides Kapital: Stille Anlage + Kaffeebörse — jederzeit voll auszahlbar, zählt wie
+    // Bargeld ins Vermögen (JP 2026-07-13). Stille Anlage war zuvor im 🌍-Wert, Börse fehlte ganz.
+    kapital:   Math.round(_ccStilleAnlage(u) + _ccBoerse(u)),
     // 🎡 Erlebnisse (Kaffee-Garten u.a. Erlebnis-Minigames) — Summe der Freischaltkosten
     erlebnis:  Math.round((typeof gardenValue === 'function') ? gardenValue(u.garden) : 0),
     kredit,
   };
-  parts.total = parts.coins + parts.forschung + parts.karte + parts.welt + parts.krieger + parts.erlebnis + parts.kredit;
+  parts.total = parts.coins + parts.forschung + parts.karte + parts.welt + parts.krieger + parts.kapital + parts.erlebnis + parts.kredit;
   return parts;
 }
 function _ccVermoegenTotal(u) { return _ccVermoegen(u).total; }

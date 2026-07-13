@@ -191,7 +191,7 @@ const DB = (() => {
     if (rShare > 0) out.push({ label: '⚙️ Forschung (passiv)', amount: rShare, cat: 'forschung', detail: (typeof researchPerDayDetail === 'function') ? researchPerDayDetail(member.research) : '' });
     if (bShare > 0) out.push({ label: '🏗️ Gebäude-Einkommen',  amount: bShare, cat: 'karte', detail: (typeof buildingPerDayDetail === 'function') ? buildingPerDayDetail(member.map_data?.buildings || {}) : '' });
     if (wShare > 0) out.push({ label: '🌍 Welt-Einfluss',       amount: wShare, cat: 'welt', detail: wDetail });
-    if (tShare > 0) out.push({ label: '🤝 Handelsdividende',    amount: tShare, cat: 'welt', detail: '+10% des Einkommens aus dem Partner-Land' });
+    if (tShare > 0) out.push({ label: '🤝 Handelsdividende',    amount: tShare, cat: 'welt', ally: true, detail: '+10% des Einkommens aus dem Partner-Land' });
     if (gShare > 0) out.push({ label: '🏛️ Gruppenkasse (passiv)', amount: gShare, cat: 'gruppe', detail: `+${gPerDay} CC/Tag für alle` });
     if (pShare > 0) out.push({ label: '🏦 Stille Anlage',        amount: pShare, cat: 'welt', detail: (typeof worldPassivePerDayDetail === 'function') ? worldPassivePerDayDetail(member, worldByCountry) : '' });
     if (gaShare > 0) out.push({ label: '🪴 Garten (passiv)',      amount: gaShare, cat: 'erlebnis', detail: `${gaPerDay} CC/Tag aus dem Kaffee-Garten` });
@@ -530,8 +530,11 @@ const DB = (() => {
           // läuft ebenfalls bei showApp) den eben angehängten Passiv-Eintrag — und umgekehrt.
           // Das Write-Fenster schrumpft so auf einen RPC (wie in _writeSalaryPoint).
           const { data: fresh } = await _sb.from('members').select('map_data').eq('id', memberId).single();
-          const md = appendTodayLog((fresh && fresh.map_data) || member.map_data,
-            _passiveLogEntries(member, earned, worldRankMap, worldByCountry, gPerDay, tradeBonusDay));
+          const _pEntries = _passiveLogEntries(member, earned, worldRankMap, worldByCountry, gPerDay, tradeBonusDay);
+          let md = appendTodayLog((fresh && fresh.map_data) || member.map_data, _pEntries);
+          // 🤝 Lifetime-Zähler „aus Bündnissen erhalten" (passive Handelsdividende, ally:true).
+          const _allyGain = _pEntries.reduce((s, e) => s + (e.ally ? (e.amount || 0) : 0), 0);
+          if (_allyGain > 0) md = { ...md, allianceCcEarned: Math.round(((md.allianceCcEarned || 0) + _allyGain) * 100) / 100 };
           await updateMapData(memberId, md);
         } catch (e) { console.warn('Passiv-Log konnte nicht gespeichert werden:', e); }
       }
@@ -970,7 +973,7 @@ const DB = (() => {
         logEntries.push({ label: '🌍 Welt-Einfluss', amount: k(worldBonus), cat: 'welt', detail });
       }
       if (allianceCupBonus > 0) {
-        logEntries.push({ label: '🤝 Handelsdividende', amount: k(allianceCupBonus), cat: 'welt', detail: `${amount}× à ${tradeBonus.cup}/Tasse · +10% aus dem Partner-Land` });
+        logEntries.push({ label: '🤝 Handelsdividende', amount: k(allianceCupBonus), cat: 'welt', ally: true, detail: `${amount}× à ${tradeBonus.cup}/Tasse · +10% aus dem Partner-Land` });
       }
       if (gardenCupBonus > 0) {
         logEntries.push({ label: '🪴 Garten', amount: k(gardenCupBonus), cat: 'erlebnis', detail: `${amount}× à ${gardenPerCupEff}/Tasse (Kaffee-Garten)` });
@@ -992,6 +995,9 @@ const DB = (() => {
 
       let md = member.map_data || {};
       if (logEntries.length) md = appendTodayLog(md, logEntries);
+      // 🤝 Lifetime-Zähler „aus Bündnissen erhalten" (Handelsdividende, ally:true) — für den Informant.
+      const _allyGain = logEntries.reduce((s, e) => s + (e.ally ? (e.amount || 0) : 0), 0);
+      if (_allyGain > 0) md = { ...md, allianceCcEarned: Math.round(((md.allianceCcEarned || 0) + _allyGain) * 100) / 100 };
       if (caffeineRedFlag)   md = { ...md, caffeineFlag: tomorrowStr }; // morgen Drosselung auf 3
       if (donateGag)         md = { ...md, coffeeDonateWeek: isoWk };   // Wochen-Gag 1×/Woche
       if (logEntries.length || caffeineRedFlag || donateGag) await updateMapData(memberId, md);
@@ -1992,6 +1998,18 @@ const DB = (() => {
           const md = appendTodayLog((fresh && fresh.map_data) || member.map_data, logEntries);
           await updateMapData(memberId, md);
         } catch (e) { console.warn('Tribut-Log konnte nicht gespeichert werden:', e); }
+        // 🤝 Empfänger-Seite (offline): Lifetime-Zähler „aus Bündnis erhalten" + Transparenz-Log via
+        // Fresh-Merge auf fremdes map_data (Muster wie Schatzräuber-Beute). pay_alliance_tribut hat die
+        // Coins bereits gutgeschrieben — hier nur Zähler + Log. Nicht-kritisch (darf Payer-Flow nie brechen).
+        for (const r of paid) {
+          if (!r.receiver_id) continue;
+          try {
+            const { data: rf } = await _sb.from('members').select('map_data').eq('id', r.receiver_id).single();
+            let rmd = appendTodayLog((rf && rf.map_data) || {}, [{ label: `🕊️ Friedenstribut erhalten von ${member.name}`, amount: r.amount_paid }]);
+            rmd = { ...rmd, allianceCcEarned: Math.round(((rmd.allianceCcEarned || 0) + r.amount_paid) * 100) / 100 };
+            await updateMapData(r.receiver_id, rmd);
+          } catch (e) { /* non-critical */ }
+        }
       }
     } catch (e) { console.warn('Bündnis-Tribut fehlgeschlagen:', e.message); }
     return results;
