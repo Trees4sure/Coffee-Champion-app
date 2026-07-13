@@ -1401,7 +1401,7 @@ function _informantPanelHtml() {
         <div class="cc-informant-row" style="border-bottom:1px solid var(--gold-dim);padding:8px 2px">
           <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px">
             <strong>${_esc(u.name)}</strong>
-            <span style="color:var(--muted);font-size:.78rem">🪙 ${_fmtCoins(u.coins || 0)} · 💰 ${last.day ?? '–'}/Tag realisiert · ☕ +${_fmtCoins(perCup)}/Tasse</span>
+            <span style="color:var(--muted);font-size:.78rem">🪙 ${_fmtCoins(u.coins || 0)} · 💰 ${last.day ?? '–'}/Tag passiv · ☕ +${_fmtCoins(perCup)}/Tasse</span>
           </div>
           ${_informantVermoegenHtml(u)}
           ${_ccBilanzHtml(u, true)}
@@ -1432,9 +1432,11 @@ function renderGehalt() {
   // Realisiertes Einkommen heute — live aus dem Tages-Log jedes Mitglieds.
   const todayKey = new Date().toISOString().slice(0, 10);
   const _tlOf = u => { const tl = (appData.users.find(x => x.id === u.id) || u).map_data?.todayLog; return (tl && tl.date === todayKey) ? (tl.entries || []) : []; };
-  const grossToday = u => Math.round(_tlOf(u).reduce((s, e) => s + (e.amount > 0 ? e.amount : 0), 0) * 100) / 100; // Einnahmen
-  const spendToday = u => Math.round(_tlOf(u).reduce((s, e) => s + ((e.amount < 0 && !e.invest) ? -e.amount : 0), 0) * 100) / 100; // Konsum-Ausgaben (ohne Investitionen)
-  const netToday   = u => Math.round(_tlOf(u).reduce((s, e) => s + (e.invest ? 0 : (e.amount || 0)), 0) * 100) / 100;             // Netto = Einnahmen − Konsum-Ausgaben (Investitionen zählen nicht)
+  // kapital:true = reine Kapitalbewegung (Stille Anlage / Kaffeebörse Ein-/Auszahlen) → zählt
+  // weder als Einnahme noch als Ausgabe noch ins Netto (nur informativ im Tages-Log sichtbar).
+  const grossToday = u => Math.round(_tlOf(u).reduce((s, e) => s + ((e.amount > 0 && !e.kapital) ? e.amount : 0), 0) * 100) / 100; // Einnahmen
+  const spendToday = u => Math.round(_tlOf(u).reduce((s, e) => s + ((e.amount < 0 && !e.invest && !e.kapital) ? -e.amount : 0), 0) * 100) / 100; // Konsum-Ausgaben (ohne Investitionen/Kapital)
+  const netToday   = u => Math.round(_tlOf(u).reduce((s, e) => s + ((e.invest || e.kapital) ? 0 : (e.amount || 0)), 0) * 100) / 100;             // Netto = Einnahmen − Konsum-Ausgaben (Investitionen & Kapitalbewegungen zählen nicht)
 
   // Metrik per Umschalter (📈 Brutto / 🧮 Netto), Fallback auf Verfügbarkeit. Beide Werte
   // liegen in jedem Snapshot → Umschalten zeigt auch die Altdaten der anderen Metrik.
@@ -1782,7 +1784,8 @@ function _ccBilanz(u) {
     { icon: '☕', label: 'Tassen',            income: inc.tassen || 0 },
     { icon: '🔬', label: 'Forschung',         income: inc.forschung || 0, invested: inv.forschung || 0 },
     { icon: '🗺️', label: 'Karte & Gebäude',   income: inc.karte || 0, spent: sp.karte || 0, invested: inv.karte || 0 },
-    { icon: '🌍', label: 'Welthandel',        income: inc.welt || 0, spent: sp.welt || 0, invested: inv.welt || 0 },
+    { icon: '🌍', label: 'Welthandel (Einfluss)', income: inc.welt || 0, spent: sp.welt || 0, invested: inv.welt || 0 },
+    { icon: '🏗️', label: 'Welt-Gebäude',      income: inc.weltbau || 0, spent: sp.weltbau || 0, invested: inv.weltbau || 0 },
     { icon: '⚔️', label: 'Kaffee-Krieger',    income: (dd.totalCcEarned || 0) + (inc.krieger || 0), spent: (dd.potionsSpent || 0) + (sp.krieger || 0), invested: inv.krieger || 0 },
     { icon: '🧠', label: 'CIQ',               income: quizCC + (u.map_data?.ciqCcEarned || 0) + (inc.ciq || 0), spent: sp.ciq || 0, invested: inv.ciq || 0 },
     { icon: '💎', label: 'Schätze',           income: u.map_data?.totalTreasureCc || 0 },

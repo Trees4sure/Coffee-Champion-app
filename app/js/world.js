@@ -628,7 +628,7 @@ async function _handleBuildWorld(country, member, def) {
   try { await DB.postMessage(`${member.name} baut ${def.icon} ${def.name} in ${country.flag} ${country.name}!${taxMsg} 🏗️`, member.name); } catch (e) {}
   // CC-Ausgabe ins Tages-Log/Netto — build_world_structure zieht p_cost serverseitig ab (Steuer
   // wird daraus umgeleitet, nicht zusätzlich), loggt aber KEIN todayLog. Fresh-Merge gegen Clobbering.
-  try { await DB.appendTodayLogFresh(member.id, [{ label: `🏗️ Welt-Bau: ${def.name} — ${country.flag} ${country.name}`, amount: -cost, cat: 'welt', detail: 'Welt-Gebäude', invest: true }]); } catch (e) {}
+  try { await DB.appendTodayLogFresh(member.id, [{ label: `🏗️ Welt-Bau: ${def.name} — ${country.flag} ${country.name}`, amount: -cost, cat: 'weltbau', detail: 'Welt-Gebäude', invest: true }]); } catch (e) {}
   await _worldRefreshAndReopen(country, member);
 }
 
@@ -645,7 +645,7 @@ async function _handleUpgradeWorld(country, member, def) {
   showToast(`⬆️ ${def.name} auf Level 2 ausgebaut!${taxMsg}`, 'success');
   try { await DB.postMessage(`${member.name} baut ${def.icon} ${def.name} in ${country.flag} ${country.name} aus!${taxMsg} ⬆️`, member.name); } catch (e) {}
   // CC-Ausgabe ins Tages-Log/Netto (build_world_structure loggt server-seitig nicht) — Fresh-Merge.
-  try { await DB.appendTodayLogFresh(member.id, [{ label: `⬆️ Welt-Ausbau: ${def.name} — ${country.flag} ${country.name}`, amount: -cost, cat: 'welt', detail: 'Welt-Gebäude', invest: true }]); } catch (e) {}
+  try { await DB.appendTodayLogFresh(member.id, [{ label: `⬆️ Welt-Ausbau: ${def.name} — ${country.flag} ${country.name}`, amount: -cost, cat: 'weltbau', detail: 'Welt-Gebäude', invest: true }]); } catch (e) {}
   await _worldRefreshAndReopen(country, member);
 }
 
@@ -669,7 +669,7 @@ async function _handleBuyGarde(country, member) {
   if (res.cost > 0) {
     try {
       const mdLog = DB.appendTodayLog(member.map_data || {},
-        [{ label: `${res.level === 2 ? '⬆️ Garde-Ausbau' : '☕ Garde stationiert'} — ${country.flag} ${country.name}`, amount: -res.cost, cat: 'welt', invest: true }]);
+        [{ label: `${res.level === 2 ? '⬆️ Garde-Ausbau' : '☕ Garde stationiert'} — ${country.flag} ${country.name}`, amount: -res.cost, cat: 'weltbau', invest: true }]);
       await DB.updateMapData(member.id, mdLog);
       if (typeof currentUserData !== 'undefined') currentUserData = { ...(currentUserData || {}), map_data: mdLog };
     } catch (e) { /* non-critical */ }
@@ -1164,7 +1164,7 @@ async function _handleBuyWorldDev(member, dev) {
   let md = { ...(member.map_data || {}) };
   md.worldDev = { ...(md.worldDev || {}), [dev.id]: true };
   // Ausgabe im selben Write anhängen (Transparenz → Netto-Gehalt).
-  try { md = DB.appendTodayLog(md, [{ label: `🔭 Entwicklung: ${dev.name}`, amount: -dev.cost, cat: 'welt', detail: 'Weltkarte', invest: true }]); } catch (e) {}
+  try { md = DB.appendTodayLog(md, [{ label: `🔭 Entwicklung: ${dev.name}`, amount: -dev.cost, cat: 'weltbau', detail: 'Weltkarte', invest: true }]); } catch (e) {}
   try { await DB.updateMapData(member.id, md); } catch (e) { console.warn('worldDev save:', e); }
   if (currentUserData) currentUserData.map_data = md;
   member.map_data = md;
@@ -1237,7 +1237,7 @@ async function _handleFundDeposit(member) {
   catch (e) { showToast(e.message || 'Fehlgeschlagen', 'error'); return; }
   if (left === null || left === undefined) { showToast('Nicht genug CoffeeCoins!', 'error'); return; }
   await _saveFund(member, { principal: f.principal + amount, lastDiv: f.lastDiv, mode: f.mode },
-    [{ label: '💹 Kaffeebörse: Einzahlung', amount: -amount, detail: 'Weltkarte' }]);
+    [{ label: '💹 Kaffeebörse: Einzahlung', amount: -amount, detail: 'Einzahlung (Kapital)', kapital: true }]);
   showToast(`💹 ${amount} CC angelegt.`, 'success');
   await _worldRefreshTab(member);
 }
@@ -1245,10 +1245,13 @@ async function _handleFundDeposit(member) {
 async function _handleFundWithdraw(member) {
   const f = _fundOf(member);
   if (f.principal < 1) return;
-  try { await DB.addCoins(member.id, f.principal); }
+  const _payout = f.principal;
+  try { await DB.addCoins(member.id, _payout); }
   catch (e) { showToast(e.message || 'Fehlgeschlagen', 'error'); return; }
-  showToast(`💹 ${_wfmt(f.principal)} CC ausgezahlt.`, 'success');
-  await _saveFund(member, { principal: 0, lastDiv: f.lastDiv, mode: f.mode });
+  showToast(`💹 ${_wfmt(_payout)} CC ausgezahlt.`, 'success');
+  // kapital-neutraler Info-Eintrag (weder Einnahme noch Netto) — symmetrisch zur Einzahlung.
+  await _saveFund(member, { principal: 0, lastDiv: f.lastDiv, mode: f.mode },
+    [{ label: '💹 Kaffeebörse: Auszahlung', amount: _payout, detail: 'Auszahlung (Kapital)', kapital: true }]);
   await _worldRefreshTab(member);
 }
 

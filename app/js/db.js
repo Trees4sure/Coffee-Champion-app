@@ -136,7 +136,9 @@ const DB = (() => {
       invested: { ...(prevLedger?.invested || {}) },
     };
     for (const e of (entries || [])) {
-      if (!e || !e.cat || !e.amount) continue;
+      // kapital:true = reine Kapitalbewegung (Stille Anlage / Kaffeebörse Ein-/Auszahlen) →
+      // weder Einnahme noch Ausgabe noch Investition. Wird komplett übersprungen.
+      if (!e || !e.cat || !e.amount || e.kapital) continue;
       const bucket = e.amount > 0 ? 'income' : (e.invest ? 'invested' : 'spent');
       L[bucket][e.cat] = Math.round(((L[bucket][e.cat] || 0) + Math.abs(e.amount)) * 100) / 100;
     }
@@ -653,14 +655,14 @@ const DB = (() => {
     const tl    = member.map_data && member.map_data.todayLog;
     const tlOk  = !!(tl && tl.date === today());
     const gross = tlOk
-      ? Math.round((tl.entries || []).reduce((s, e) => s + (e.amount > 0 ? e.amount : 0), 0) * 100) / 100
+      ? Math.round((tl.entries || []).reduce((s, e) => s + ((e.amount > 0 && !e.kapital) ? e.amount : 0), 0) * 100) / 100
       : 0;
     // NET = realisiertes Tages-Einkommen MINUS KONSUM-Ausgaben (negative Log-Einträge, z.B. Tränke,
     // Reparatur, Steuer-Events, Strafen) = das „erweiterte Tages-Gehalt" für das Chart (Transparenz).
     // Investitionen (invest:true — Forschung, Karte/Gebäude, Welthandel, Krieger-Ausrüstung) zählen
     // NICHT ins Netto: sie mindern nicht das Gehalt, sondern wandern ins Gesamtvermögen (JP 2026-07-11).
     const net = tlOk
-      ? Math.round((tl.entries || []).reduce((s, e) => s + (e.invest ? 0 : (e.amount || 0)), 0) * 100) / 100
+      ? Math.round((tl.entries || []).reduce((s, e) => s + ((e.invest || e.kapital) ? 0 : (e.amount || 0)), 0) * 100) / 100
       : 0;
 
     return { day: perDay, cup: perCup, coins: Math.round(member.coins || 0), gross, net };
@@ -1774,7 +1776,9 @@ const DB = (() => {
     // Ausgabe im Tages-Log (tatsächlich angelegter Betrag; kann durch Deckel < amount sein).
     if (data && !data.error) {
       const inv = (data.invested != null) ? data.invested : parseFloat(amount);
-      try { if (inv > 0) await appendTodayLogFresh(memberId, [{ label: `🏦 Stille Anlage: ${countryId}`, amount: -inv, cat: 'welt', detail: 'Investition', invest: true }]); } catch (e) {}
+      // kapital:true → reine Kapitalbewegung (rückzahlbar), NICHT als Investition ins Ledger
+      // buchen und NICHT vom Netto abziehen. Nur informativ im „Heute erhalten"-Log sichtbar.
+      try { if (inv > 0) await appendTodayLogFresh(memberId, [{ label: `🏦 Stille Anlage: ${countryId}`, amount: -inv, detail: 'Einzahlung (Kapital)', kapital: true }]); } catch (e) {}
     }
     return data || { error: 'no_data' };
   }
@@ -1787,6 +1791,14 @@ const DB = (() => {
       p_member_id: memberId, p_country_id: countryId, p_amount: parseFloat(amount)
     });
     if (error) return { error: error.message };
+    // Investor-Auszahlung als KAPITAL-NEUTRALEN Tages-Log-Eintrag schreiben (die RPC loggt
+    // den eigenen Rückfluss bewusst NICHT mehr — Kapital-Rückfluss ist keine Einnahme).
+    // kapital:true → weder Netto noch Bilanz-Ledger, nur informativ. Fresh-Merge, da die RPC
+    // gerade worldPassive reduziert hat. Best-effort: Fehler darf die Auszahlung nicht stören.
+    if (data && !data.error) {
+      const payout = (data.payout != null) ? data.payout : parseFloat(amount);
+      try { if (payout > 0) await appendTodayLogFresh(memberId, [{ label: `🏧 Stille Anlage ausgezahlt: ${countryId}`, amount: payout, detail: 'Auszahlung (Kapital)', kapital: true }]); } catch (e) {}
+    }
     return data || { error: 'no_data' };
   }
 
