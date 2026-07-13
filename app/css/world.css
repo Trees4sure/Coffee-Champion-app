@@ -113,6 +113,7 @@
 .cc-wstat-tax { color: #9FE1CB; }
 .cc-wstat-div { color: #E9C46A; }
 .cc-wstat-anlage { color: #C9A227; }
+.cc-wstat-boerse { color: #4E9AF1; }
 
 .cc-wgal { display: flex; flex-direction: column; gap: 4px; }
 .cc-wgal-row {
