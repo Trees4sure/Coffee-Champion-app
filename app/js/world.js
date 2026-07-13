@@ -982,7 +982,7 @@ let _worldAccOpen = { stats: true, gallery: false, devs: false, alliances: false
 // ── Ausführliches Welt-Statistik-Panel ───────────────────────────────────────
 function _renderWeltStatistik(investments, byCountry, member, taxStats, users) {
   const list = (users || []).map(u => ({ u, s: worldStatsForMember(investments, byCountry, u.id) }))
-    .filter(x => x.s.ranks || x.s.myBld.length || worldPassiveTotal(x.u) > 0)
+    .filter(x => x.s.ranks || x.s.myBld.length || worldPassiveTotal(x.u) > 0 || (x.u.map_data?.worldDev?.fund?.principal || 0) > 0)
     .sort((a, b) => (b.s.governments - a.s.governments) || (b.s.invested - a.s.invested) || (b.s.perDay - a.s.perDay));
   if (!list.length) return `
     <details class="cc-world-acc" data-acc="stats"${_worldAccOpen.stats ? ' open' : ''}><summary>📊 Welt-Statistik</summary>
@@ -1000,6 +1000,7 @@ function _renderWeltStatistik(investments, byCountry, member, taxStats, users) {
     const divTotal = u.map_data?.worldDividend?.totalReceived || 0;
     const anlage = worldPassiveTotal(u);
     const anlageYield = (typeof worldPassivePerDay === 'function') ? worldPassivePerDay(u, byCountry) : 0;
+    const boerse = u.map_data?.worldDev?.fund?.principal || 0;
     return `<div class="cc-wstat-row${mine}">
       <div class="cc-wstat-name">${_esc2(u.name)} <span class="cc-wstat-flags">${govFlags}</span></div>
       <div class="cc-wstat-cells">
@@ -1009,6 +1010,7 @@ function _renderWeltStatistik(investments, byCountry, member, taxStats, users) {
         <span title="errichtete Gebäude">🏗️ ${s.myBld.length}</span>
         <span title="Welt-Einkommen / Tag">📈 +${_wfmt(s.perDay)}</span>
         ${anlage > 0 ? `<span class="cc-wstat-anlage" title="Stille Anlage: ${_wfmt(anlage)} CC Kapital · Anteil am Gebäude-Einkommen">🏦 ${_wfmt(anlage)}${anlageYield > 0 ? ` (+${_wfmt(anlageYield)}/Tag)` : ''}</span>` : ''}
+        ${boerse > 0 ? `<span class="cc-wstat-boerse" title="Kaffeebörse: ${_wfmt(boerse)} CC angelegtes Kapital">💹 ${_wfmt(boerse)}</span>` : ''}
         ${divTotal > 0 ? `<span class="cc-wstat-div" title="Erbauer-Dividende erhalten (gesamt)">💵 ${_wfmt(divTotal)}</span>` : ''}
         ${hasTax ? `<span class="cc-wstat-tax" title="Steuern erhalten (Woche · gesamt)">🪙 ${_wfmt(t.received_7d || 0)}·${_wfmt(t.received_total || 0)}</span>` : ''}
         ${hasTax ? `<span class="cc-wstat-tax" title="Steuern gezahlt (Woche · gesamt)">💸 ${_wfmt(t.paid_7d || 0)}·${_wfmt(t.paid_total || 0)}</span>` : ''}

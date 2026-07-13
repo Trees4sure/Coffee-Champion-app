@@ -2926,7 +2926,10 @@ async function _runKriegerFight(member, state, tier, seed, COLS, ROWS, MARGIN, k
   // dürfen den Kampf-Flow nicht blockieren).
   if (result.cc_awarded > 0) {
     try {
-      const mdLog = await DB.appendTodayLogFresh(member.id, [{ label: `⚔️ Sieg: ${enemyDef.name}`, amount: result.cc_awarded, cat: 'krieger', aggKey: 'krieger_win', aggBase: '⚔️ Krieger-Siege', detail: 'Kaffee-Krieger-Kampf' }]);
+      // KEIN cat: Kampf-CC wird bereits retro über dungeon_data.totalCcEarned gezählt (siehe
+      // _ccBilanz-Kommentar in app.js). Mit cat:'krieger' liefe dieselbe CC ZUSÄTZLICH ins
+      // Bilanz-Ledger (inc.krieger) → Doppelzählung in den Einnahmen. Nur informativer Log-Eintrag.
+      const mdLog = await DB.appendTodayLogFresh(member.id, [{ label: `⚔️ Sieg: ${enemyDef.name}`, amount: result.cc_awarded, aggKey: 'krieger_win', aggBase: '⚔️ Krieger-Siege', detail: 'Kaffee-Krieger-Kampf' }]);
       if (mdLog) { currentUserData = { ...(currentUserData || {}), map_data: mdLog }; member.map_data = mdLog; }
     } catch (e) { /* non-critical */ }
   }

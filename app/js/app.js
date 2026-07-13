@@ -1346,6 +1346,20 @@ function _informantStatsHtml(u) {
   const mEarned = (u.mobil && u.mobil.totalEarned) || 0;
   if (mCities > 1 || mTrips > 0) items.push(`🚐 Kaffeemobil: ${mCities} Städte · ${mTrips} Reisen · ${_fmtCoins(mEarned)} CC Reisevergütung`);
 
+  // 🏦💹 Kapital-Bestände (Transparenz): Stille Anlage (map_data.worldPassive) + Kaffeebörse
+  // (map_data.worldDev.fund). Reine map_data-Reads — kein Server-Fetch; world.js-Helfer mit
+  // typeof-Guard, sonst direkter Optional-Chaining-Zugriff.
+  const anlage = (typeof worldPassiveTotal === 'function') ? worldPassiveTotal(u)
+    : Object.values(u.map_data?.worldPassive || {}).reduce((s, v) => s + (Number(v) || 0), 0);
+  const boerse = (typeof _fundOf === 'function') ? (_fundOf(u).principal || 0)
+    : (u.map_data?.worldDev?.fund?.principal || 0);
+  if (anlage > 0 || boerse > 0) {
+    const kp = [];
+    if (anlage > 0) kp.push(`🏦 Stille Anlage: ${_fmtCoins(anlage)} CC`);
+    if (boerse > 0) kp.push(`💹 Börse: ${_fmtCoins(boerse)} CC`);
+    items.push(kp.join(' · '));
+  }
+
   if (!items.length) return '';
   return `<div class="cc-informant-stats" style="display:flex;flex-wrap:wrap;gap:6px;margin:4px 0">
     ${items.map(t => `<span style="background:rgba(255,255,255,.05);border-radius:6px;padding:2px 7px;font-size:.72rem;color:var(--muted)">${t}</span>`).join('')}
