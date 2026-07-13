@@ -1842,6 +1842,23 @@ function _ccBilanzHtml(u, compact) {
       <span class="bilanz-label">${c.icon} ${c.label}</span>
       <span class="bilanz-vals">${cell(c.income, 'pos')}${cell(c.spent, 'neg')}${c.invested ? `<span class="bilanz-v inv">🏛️${f(c.invested)}</span>` : '<span class="bilanz-v bilanz-0">·</span>'}</span>
     </div>`).join('');
+  // 📦 Abgleich mit dem Gesamtvermögen: Vermögen = Startbestand + Einnahmen − Ausgaben.
+  // Investitionen werden NICHT abgezogen (sie stecken als Asset bereits im Vermögen). Der
+  // Startbestand ist ein Rest-/Plug-Wert: Kapital/Besitz vor Ledger-Start (12.07.) PLUS die
+  // Bewertungs-Unschärfe der Asset-Werte (Forschungs-Score/Garde/Gear ≠ exakt bezahltes CC)
+  // und nicht geloggte Verluste. Macht die Box rechnerisch schlüssig, ist aber kein exaktes
+  // „Bargeld vor 12.07.". Nur wenn _ccVermoegen verfügbar ist.
+  const vermoegen = (typeof _ccVermoegen === 'function') ? Math.round(_ccVermoegen(u).total) : null;
+  const startbestand = (vermoegen != null) ? Math.round(vermoegen - b.total.income + b.total.spent) : null;
+  const reconcileRow = (vermoegen != null) ? `
+      <div class="bilanz-row bilanz-reconcile">
+        <span class="bilanz-label" title="Besitz/Guthaben vor Ledger-Start (12.07.) + Bewertungs-Rest der Asset-Werte. Macht die Bilanz mit dem Gesamtvermögen schlüssig; kein exaktes Bargeld.">📦 Startbestand &amp; Bewertung</span>
+        <span class="bilanz-vals"><span class="bilanz-v ${startbestand < 0 ? 'neg' : 'pos'}">${startbestand < 0 ? '−' : '+'}${f(Math.abs(startbestand))}</span></span>
+      </div>` : '';
+  const reconcileEq = (vermoegen != null && !compact) ? `
+      <div class="bilanz-eq" title="Investitionen werden nicht abgezogen — sie stecken bereits als Asset im Gesamtvermögen." style="font-size:.68rem;color:var(--muted);text-align:center;padding:5px 6px 1px;opacity:.85">
+        📦 ${f(startbestand)} + 📈 ${f(b.total.income)} − 💸 ${f(b.total.spent)} = 💰 <strong>${f(vermoegen)} CC</strong>
+      </div>` : '';
   return `
     <div class="bilanz-box${compact ? ' bilanz-compact' : ''}">
       <div class="bilanz-head"><span>Rubrik</span><span class="bilanz-vals"><span class="bilanz-v pos">Einnahmen</span><span class="bilanz-v neg">Verbraucht</span><span class="bilanz-v inv">Investiert</span></span></div>
@@ -1850,6 +1867,7 @@ function _ccBilanzHtml(u, compact) {
         <span class="bilanz-label">Summe</span>
         <span class="bilanz-vals">${cell(b.total.income, 'pos')}${cell(b.total.spent, 'neg')}${b.total.invested ? `<span class="bilanz-v inv">🏛️${f(b.total.invested)}</span>` : '<span class="bilanz-v bilanz-0">·</span>'}</span>
       </div>
+      ${reconcileRow}${reconcileEq}
     </div>`;
 }
 // Kaffee-Krieger (RPG) — Werte aus u.dungeon_data (NICHT map_data.dungeonStats, das ist die
