@@ -26,6 +26,14 @@ const WORLD_COUNTRIES = [
   { id:'southafrica',iso:'ZA', flag:'🇿🇦', name:'Südafrika',     specialty:'Cape-Specialty',             slots:[{rank:1,label:'Regierung',perCup:0,perDay:4},{rank:2,label:'Baurecht I',perCup:0,perDay:2},{rank:3,label:'Baurecht II',perCup:0.2,perDay:0}] },
   { id:'australia',  iso:'AU', flag:'🇦🇺', name:'Australien',    specialty:'Flat White',                 slots:[{rank:1,label:'Regierung',perCup:0.4,perDay:0},{rank:2,label:'Baurecht I',perCup:0,perDay:3},{rank:3,label:'Baurecht II',perCup:0.2,perDay:0}] },
   { id:'russia',     iso:'RU', flag:'🇷🇺', name:'Russland',      specialty:'Import-Monopol',             slots:[{rank:1,label:'Regierung',perCup:0,perDay:5},{rank:2,label:'Baurecht I',perCup:0,perDay:3},{rank:3,label:'Baurecht II',perCup:0,perDay:2}] },
+  // ── Neue Konsumländer (2026-07-14, PLAN_rohstofflaender §2b) — Rohwerte wie Bestand, Multiplikator wird unten aufgebacken ──
+  { id:'norway',     iso:'NO', flag:'🇳🇴', name:'Norwegen',      specialty:'Fjord-Filterkaffee',         slots:[{rank:1,label:'Regierung',perCup:0.5,perDay:0},{rank:2,label:'Baurecht I',perCup:0.3,perDay:0},{rank:3,label:'Baurecht II',perCup:0,perDay:2}] },
+  { id:'sweden',     iso:'SE', flag:'🇸🇪', name:'Schweden',      specialty:'Fika-Kultur',                slots:[{rank:1,label:'Regierung',perCup:0.5,perDay:0},{rank:2,label:'Baurecht I',perCup:0,perDay:4},{rank:3,label:'Baurecht II',perCup:0.3,perDay:0}] },
+  { id:'finland',    iso:'FI', flag:'🇫🇮', name:'Finnland',      specialty:'Weltrekord-Pro-Kopf',        slots:[{rank:1,label:'Regierung',perCup:0.5,perDay:0},{rank:2,label:'Baurecht I',perCup:0.3,perDay:0},{rank:3,label:'Baurecht II',perCup:0,perDay:2}] },
+  { id:'denmark',    iso:'DK', flag:'🇩🇰', name:'Dänemark',      specialty:'Hygge-Kaffee',               slots:[{rank:1,label:'Regierung',perCup:0.5,perDay:0},{rank:2,label:'Baurecht I',perCup:0.3,perDay:0},{rank:3,label:'Baurecht II',perCup:0,perDay:2}] },
+  { id:'iceland',    iso:'IS', flag:'🇮🇸', name:'Island',        specialty:'Insel-Röster',               slots:[{rank:1,label:'Regierung',perCup:0.35,perDay:0},{rank:2,label:'Baurecht I',perCup:0,perDay:2},{rank:3,label:'Baurecht II',perCup:0.15,perDay:0}] },
+  { id:'poland',     iso:'PL', flag:'🇵🇱', name:'Polen',         specialty:'Kawa-Kultur',                slots:[{rank:1,label:'Regierung',perCup:0.3,perDay:0},{rank:2,label:'Baurecht I',perCup:0.2,perDay:0},{rank:3,label:'Baurecht II',perCup:0,perDay:2}] },
+  { id:'ukraine',    iso:'UA', flag:'🇺🇦', name:'Ukraine',       specialty:'Lviv-Kaffeehäuser',          slots:[{rank:1,label:'Regierung',perCup:0.3,perDay:0},{rank:2,label:'Baurecht I',perCup:0,perDay:3},{rank:3,label:'Baurecht II',perCup:0.2,perDay:0}] },
 ];
 
 const WORLD_MIN_INVEST = 25;
@@ -40,6 +48,150 @@ const WORLD_SLOT_DAY_MULT = 2.5;   // Tageserträge moderater angehoben
 for (const _c of WORLD_COUNTRIES) for (const _s of _c.slots) {
   _s.perCup = Math.round((_s.perCup || 0) * WORLD_SLOT_CUP_MULT * 100) / 100;
   _s.perDay = Math.round((_s.perDay || 0) * WORLD_SLOT_DAY_MULT * 100) / 100;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 🫘 ROHSTOFF-/ANBAULÄNDER (2026-07-14, PLAN_rohstofflaender)
+// Tropischer Kaffeegürtel: produziert Rohkaffee-Bohnen (Standard/Öko) statt CC.
+// Verdränglich wie Konsumländer (worldRanksForMember/WORLD_BUILD_RANK_PCT geerbt),
+// aber Ertrag = Bohnen; Investieren = Bau-Stränge L1–L5 hochziehen.
+// signatur: outMult (±20 % Menge), oekoBase (Basis-Öko-Anteil 0..~0.12).
+// ═══════════════════════════════════════════════════════════════════════════
+const PRODUCER_COUNTRIES = [
+  // Südamerika
+  { id:'colombia',   iso:'CO', flag:'🇨🇴', name:'Kolumbien',      region:'Südamerika',  specialty:'Arabica-Hochland',      outMult:0.90, oekoBase:0.10 },
+  { id:'peru',       iso:'PE', flag:'🇵🇪', name:'Peru',           region:'Südamerika',  specialty:'Bio-Hochland',          outMult:0.95, oekoBase:0.12 },
+  { id:'ecuador',    iso:'EC', flag:'🇪🇨', name:'Ecuador',        region:'Südamerika',  specialty:'Galápagos-Arabica',     outMult:0.90, oekoBase:0.10 },
+  { id:'venezuela',  iso:'VE', flag:'🇻🇪', name:'Venezuela',      region:'Südamerika',  specialty:'Maracaibo-Handel',      outMult:1.00, oekoBase:0.05 },
+  { id:'bolivia',    iso:'BO', flag:'🇧🇴', name:'Bolivien',       region:'Südamerika',  specialty:'Yungas-Hochland',       outMult:0.90, oekoBase:0.10 },
+  // Südostasien
+  { id:'vietnam',    iso:'VN', flag:'🇻🇳', name:'Vietnam',        region:'Südostasien', specialty:'Robusta-Massenware',    outMult:1.25, oekoBase:0.00 },
+  { id:'thailand',   iso:'TH', flag:'🇹🇭', name:'Thailand',       region:'Südostasien', specialty:'Doi-Chang-Arabica',     outMult:1.00, oekoBase:0.05 },
+  { id:'laos',       iso:'LA', flag:'🇱🇦', name:'Laos',           region:'Südostasien', specialty:'Bolaven-Plateau',       outMult:1.00, oekoBase:0.06 },
+  { id:'philippines',iso:'PH', flag:'🇵🇭', name:'Philippinen',    region:'Südostasien', specialty:'Barako-Sorte',          outMult:1.10, oekoBase:0.02 },
+  // Afrika
+  { id:'ethiopia',   iso:'ET', flag:'🇪🇹', name:'Äthiopien',      region:'Afrika',      specialty:'Arabica-Ursprung',      outMult:0.90, oekoBase:0.12 },
+  { id:'kenya',      iso:'KE', flag:'🇰🇪', name:'Kenia',          region:'Afrika',      specialty:'AA-Spitzenlagen',       outMult:0.90, oekoBase:0.10 },
+  { id:'uganda',     iso:'UG', flag:'🇺🇬', name:'Uganda',         region:'Afrika',      specialty:'Robusta-Wildkaffee',    outMult:1.20, oekoBase:0.02 },
+  { id:'tanzania',   iso:'TZ', flag:'🇹🇿', name:'Tansania',       region:'Afrika',      specialty:'Kilimanjaro-Peaberry',  outMult:0.95, oekoBase:0.08 },
+  { id:'rwanda',     iso:'RW', flag:'🇷🇼', name:'Ruanda',         region:'Afrika',      specialty:'Bourbon-Hügel',         outMult:0.90, oekoBase:0.10 },
+  { id:'ivorycoast', iso:'CI', flag:'🇨🇮', name:'Elfenbeinküste', region:'Afrika',      specialty:'Robusta-Export',        outMult:1.20, oekoBase:0.00 },
+  // Orient
+  { id:'yemen',      iso:'YE', flag:'🇾🇪', name:'Jemen',          region:'Orient',      specialty:'Heritage-Mokka',        outMult:0.85, oekoBase:0.12 },
+  { id:'iran',       iso:'IR', flag:'🇮🇷', name:'Iran',           region:'Orient',      specialty:'Qahve-Handelsroute',    outMult:1.00, oekoBase:0.04 },
+  { id:'iraq',       iso:'IQ', flag:'🇮🇶', name:'Irak',           region:'Orient',      specialty:'Basra-Handelsroute',    outMult:1.00, oekoBase:0.04 },
+];
+const _PRODUCER_ISO = new Set(PRODUCER_COUNTRIES.map(c => c.iso));
+// Handelseinheit: Rohkaffee wird in Tonnen gehandelt → „CT" = Coffee Tons (1 Bohnen-Einheit = 1 Tonne).
+const PRODUCER_UNIT = 'CT';
+// Versorgungs-Multiplikator (§6c): Referenz-Tassen/Tag, um den perCup-Anteil des Konsum-Einkommens
+// in ein Tageseinkommen zu übersetzen (Balance-Knopf). Cap-% liegt server-seitig bei 40.
+const SUPPLY_CUPS_REF = 5;
+function isProducerIso(iso) { return _PRODUCER_ISO.has(iso); }
+function _producerById(id)  { return PRODUCER_COUNTRIES.find(c => c.id === id) || null; }
+function _producerByIso(iso){ return PRODUCER_COUNTRIES.find(c => c.iso === iso) || null; }
+
+// 6 Bau-Stränge (Land-Ebene, je L0–L5). trackBase = Kosten-Basis (§5b), lohn nur Mitarbeiter.
+const PRODUCER_TRACKS = [
+  { id:'plantage',  icon:'🌱', name:'Plantage',    trackBase:90, desc:'Basis-Bohnenoutput' },
+  { id:'wasser',    icon:'💧', name:'Wasser',      trackBase:70, desc:'Output-Multiplikator (Infrastruktur-Gate)' },
+  { id:'duenger',   icon:'🧪', name:'Dünger',      trackBase:70, desc:'Output-Multiplikator + hebt Öko-Anteil' },
+  { id:'arbeit',    icon:'👷', name:'Mitarbeiter', trackBase:60, desc:'Output-Multiplikator (kostet Löhne/Tag)' },
+  { id:'trocknung', icon:'🌾', name:'Trocknung',   trackBase:80, desc:'hebt Öko-Anteil + senkt Verderb' },
+  { id:'logistik',  icon:'🚛', name:'Logistik',    trackBase:75, desc:'Transportkapazität/Tag + senkt Verderb' },
+];
+function _producerTrack(id) { return PRODUCER_TRACKS.find(t => t.id === id) || null; }
+
+// Produktionsformel pro Land/Tag (§5a). levels = { plantage,wasser,duenger,arbeit,trocknung,logistik } (0..5).
+function producerLandOutput(country, levels) {
+  const L = levels || {};
+  const P = L.plantage|0, W = L.wasser|0, D = L.duenger|0, M = L.arbeit|0, T = L.trocknung|0, G = L.logistik|0;
+  const outMult  = country ? (country.outMult || 1) : 1;
+  const oekoBase = country ? (country.oekoBase || 0) : 0;
+  const waterMult   = (W === 0) ? 0.40 : (1 + 0.15 * W);
+  const duengerMult = 1 + 0.12 * D;
+  const arbeitMult  = 1 + 0.10 * M;
+  const rawOutput   = Math.round(4 * P * waterMult * duengerMult * arbeitMult * outMult);
+  const oekoShare   = Math.min(0.90, 0.08 * D + 0.10 * T + oekoBase);
+  const kapazitaet  = 6 * G;
+  const delivered   = Math.min(rawOutput, kapazitaet);
+  const oekoDeliv   = Math.round(delivered * oekoShare);
+  const stdDeliv    = delivered - oekoDeliv;
+  const spoiled     = Math.max(0, rawOutput - delivered);
+  return { rawOutput, oekoShare, kapazitaet, delivered, oekoDeliv, stdDeliv, spoiled };
+}
+// Löhne/Tag je Land (§5c): 2 × Mitarbeiter-Level.
+function producerLohnPerDay(levels) { return 2 * ((levels && levels.arbeit) | 0); }
+// Upgrade-Kosten L→L+1 (§5b), Rabatt via _worldCost (Handelsattaché) wiederverwendet.
+function producerUpgradeCost(member, trackId, curLevel) {
+  const t = _producerTrack(trackId); if (!t) return 0;
+  return _worldCost(member, t.trackBase * ((curLevel | 0) + 1));
+}
+
+// Freischaltung: neues Forschungsitem „Erzeuger-Konzession" (getrennt von welthandelslizenz).
+function canAccessProducer(member) {
+  return !!(member && member.research && member.research['erzeugerkonzession']);
+}
+// Anbau-Länderlimit: höchstes voll besessenes Tier × 2 (knapper als Konsum × 3).
+function producerCountryLimit(research) {
+  return worldHighestCompletedTier(research) * 2;
+}
+
+let _producerInvCache = []; // alle world_producer_investments der Gruppe (für Limit + Karte)
+let _producerTrackCache = {}; // { country_id: { track_id: level } } — Land-Bau-Stände
+
+// Track-Rows [{country_id, track_id, level}] → { country_id: { track_id: level } }
+function producerTracksByCountry(rows) {
+  const m = {};
+  for (const r of (rows || [])) (m[r.country_id] = m[r.country_id] || {})[r.track_id] = r.level;
+  return m;
+}
+// Level-Objekt { plantage, wasser, duenger, arbeit, trocknung, logistik } für ein Land (0 default).
+function producerLevelsFor(countryId, byCountry) {
+  const t = (byCountry || _producerTrackCache)[countryId] || {};
+  const o = {};
+  for (const tr of PRODUCER_TRACKS) o[tr.id] = t[tr.id] | 0;
+  return o;
+}
+
+// Rang aus rohen Anbau-Investitionen (analog worldRanksForMember, aber ohne Garde — v1).
+// investments: Array { member_id, country_id, total_invested }
+function producerRanksForMember(investments, memberId) {
+  const byCountry = {};
+  for (const w of (investments || [])) (byCountry[w.country_id] = byCountry[w.country_id] || []).push(w);
+  const rankMap = {};
+  const foreignGovt = new Set();
+  for (const [cid, list] of Object.entries(byCountry)) {
+    const eff = list.map(w => ({ member_id: w.member_id, e: Number(w.total_invested) || 0 }))
+                    .sort((a, b) => b.e - a.e);
+    const myIdx = eff.findIndex(w => w.member_id === memberId);
+    if (myIdx >= 0 && myIdx < 3) rankMap[cid] = myIdx + 1;
+    if (eff[0] && eff[0].member_id !== memberId) {
+      const c = _producerById(cid); if (c) foreignGovt.add(c.iso);
+    }
+  }
+  return { rankMap, foreignGovt };
+}
+// Füllfarbe für Anbauländer (rang-abhängig; unbesetzt = dunkelgrün, klar vom Konsum-Braun getrennt).
+function producerCountryColor(iso, rankMap, foreignGovtIsoSet) {
+  const c = _producerByIso(iso);
+  const rank = c ? (rankMap || {})[c.id] : null;
+  if (rank === 1) return '#d4aa37'; // Gold: eigene Erzeuger-Regierung
+  if (rank === 2) return '#a0a0a0'; // Silber
+  if (rank === 3) return '#cd7f32'; // Bronze
+  if (foreignGovtIsoSet && foreignGovtIsoSet.has(iso)) return '#5a1a1a'; // fremd regiert
+  return '#14301c'; // unbesetztes Anbauland (dunkelgrün)
+}
+function producerInvestedTotal(investments, memberId) {
+  let s = 0;
+  for (const w of (investments || [])) if (w.member_id === memberId) s += Number(w.total_invested) || 0;
+  return Math.round(s);
+}
+// Zahl der Anbauländer, in denen das Mitglied mind. 1 CC investiert hat (fürs Limit).
+function producerCountriesHeld(investments, memberId) {
+  const set = new Set();
+  for (const w of (investments || [])) if (w.member_id === memberId && (Number(w.total_invested) || 0) > 0) set.add(w.country_id);
+  return set.size;
 }
 
 function _worldById(id)   { return WORLD_COUNTRIES.find(c => c.id === id) || null; }
@@ -291,8 +443,10 @@ async function _buildWeltkarte(member, el) {
       <span><i style="background:#cd7f32"></i>Baurecht II</span>
       <span><i style="background:#5a1a1a"></i>fremd regiert</span>
       <span><i style="background:#2a2010"></i>frei</span>
+      <span><i style="background:#14301c;border:2px solid #3fae5a"></i>🫘 Anbauland</span>
     </div>
     <div id="cc-world-sheet" class="cc-world-sheet hidden"></div>
+    <div id="cc-producer-panel"></div>
     <div id="cc-world-stats"></div>
     <div id="cc-world-devs"></div>`;
 
@@ -310,6 +464,17 @@ async function _buildWeltkarte(member, el) {
   try { bldRows = await DB.fetchAllWorldBuildings(); } catch (e) { bldRows = []; }
   _worldBldCache = worldBuildingsByCountry(bldRows);
   _worldInvCache = investments; // für Tier-Limit-Prüfung in _openCountrySheet
+
+  // 🫘 Anbauländer-Investitionen + Bau-Stände (grüne Rahmen + Rang) — still deaktiviert, falls Backend fehlt
+  let producerInv = [];
+  try { producerInv = (typeof DB.fetchAllProducerInvestments === 'function') ? await DB.fetchAllProducerInvestments() : []; }
+  catch (e) { producerInv = []; }
+  _producerInvCache = producerInv;
+  let producerTracks = [];
+  try { producerTracks = (typeof DB.fetchAllProducerTracks === 'function') ? await DB.fetchAllProducerTracks() : []; }
+  catch (e) { producerTracks = []; }
+  _producerTrackCache = producerTracksByCountry(producerTracks);
+  const { rankMap: producerRankMap, foreignGovt: producerForeignGovt } = producerRanksForMember(producerInv, member.id);
 
   // 🤝 Weltbündnisse: erst Housekeeping (Ablauf/Rang-1-Verlust auflösen + Chat-Meldung),
   // dann den aktuellen Stand laden. Beides robust — [] bei fehlender Migration.
@@ -353,6 +518,17 @@ async function _buildWeltkarte(member, el) {
     const fv = devsEl.querySelector('[data-fund-dividend]'); if (fv) fv.onclick = () => _handleFundDividend(member);
     devsEl.querySelectorAll('[data-fund-mode]').forEach(b => { b.onclick = () => _handleFundMode(member, b.dataset.fundMode); });
   }
+  // 🫘 Rohstoff-Panel (Lager + Ernte) — nur relevant, wenn Konzession ODER schon Anbau-Einfluss
+  const prodPanelEl = document.getElementById('cc-producer-panel');
+  if (prodPanelEl) {
+    // 🫘 Ernte AUTOMATISCH einsammeln (alle Länder auf einmal), BEVOR das Panel gerendert wird,
+    // damit es gleich den frischen Lagerstand zeigt — kein Länder-Klick, kein Button nötig.
+    try { await _maybeAutoHarvest(member); } catch (e) { /* non-critical */ }
+    prodPanelEl.innerHTML = _renderProducerPanel(member);
+    const sb2 = prodPanelEl.querySelector('[data-prod-supply]');
+    if (sb2) sb2.onclick = () => _handleClaimSupply(member);
+    prodPanelEl.querySelectorAll('[data-prod-sell]').forEach(b => b.onclick = () => _handleSellBeans(member, b.dataset.prodSell));
+  }
   _wireAccordions();
 
   const { rankMap, foreignGovt } = worldRanksForMember(investments, member.id);
@@ -370,12 +546,23 @@ async function _buildWeltkarte(member, el) {
   const geo = await fetch('assets/g20.geojson').then(r => r.json()).catch(() => null);
   if (geo) {
     _worldGeoLayer = L.geoJSON(geo, {
-      style: (f) => ({
-        fillColor: getCountryColor(f.properties.iso, rankMap, foreignGovt),
-        weight: 1, color: 'rgba(0,0,0,0.6)', fillOpacity: 0.78,
-      }),
+      style: (f) => {
+        const iso = f.properties.iso;
+        // 🫘 Anbauländer: grüner Rahmen markiert den Typ (Füllfarbe bleibt rang-abhängig).
+        if (isProducerIso(iso)) return {
+          fillColor: producerCountryColor(iso, producerRankMap, producerForeignGovt),
+          weight: 2, color: '#3fae5a', fillOpacity: 0.78,
+        };
+        return {
+          fillColor: getCountryColor(iso, rankMap, foreignGovt),
+          weight: 1, color: 'rgba(0,0,0,0.6)', fillOpacity: 0.78,
+        };
+      },
       onEachFeature: (f, layer) => {
-        const c = _worldByIso(f.properties.iso);
+        const iso = f.properties.iso;
+        const pc = _producerByIso(iso);
+        if (pc) { layer.on('click', () => { if (typeof _openProducerSheet === 'function') _openProducerSheet(pc, member); }); return; }
+        const c = _worldByIso(iso);
         if (!c) return;
         layer.on('click', () => _openCountrySheet(c, member));
       },
@@ -597,6 +784,347 @@ async function _openCountrySheet(country, member) {
   sheet.querySelectorAll('[data-world-upgrade]').forEach(b => b.onclick = () => {
     const def = worldBuildingDef(country.id, b.dataset.worldUpgrade); if (def) _handleUpgradeWorld(country, member, def);
   });
+}
+
+// ── 🫘 Anbauland-Sheet (Bau-Stränge, Rang, Land-Produktion) ───────────────────
+async function _openProducerSheet(country, member) {
+  const sheet = document.getElementById('cc-world-sheet');
+  if (!sheet) return;
+  sheet.classList.remove('hidden');
+  sheet.innerHTML = `<p style="color:var(--muted);padding:14px">Lade ${country.flag} ${country.name}…</p>`;
+
+  const hasAccess = canAccessProducer(member);
+
+  let standings = [];
+  try { standings = await DB.fetchProducerStandings(country.id); }
+  catch (e) { console.warn('fetchProducerStandings:', e.message); }
+  const myRow  = standings.find(s => s.member_id === member.id);
+  const myRank = myRow ? myRow.rank : null;
+  const myInv  = myRow ? Number(myRow.total_invested) : 0;
+  const rankPct = myRank ? (WORLD_BUILD_RANK_PCT[myRank] || 0) : 0;
+
+  const levels = producerLevelsFor(country.id);
+  const out    = producerLandOutput(country, levels);
+  const myDelivStd  = Math.round(out.stdDeliv  * rankPct);
+  const myDelivOeko = Math.round(out.oekoDeliv * rankPct);
+  const myLohn = Math.round(producerLohnPerDay(levels) * rankPct);
+
+  const held   = producerCountriesHeld(_producerInvCache, member.id);
+  const limit  = producerCountryLimit(member.research);
+  const atLimit = !(myInv > 0) && held >= limit;
+
+  const slotRows = [1, 2, 3].map(rank => {
+    const occ = standings.find(s => s.rank === rank);
+    const medal = ['🥇','🥈','🥉'][rank - 1];
+    const label = rank === 1 ? 'Regent' : rank === 2 ? 'Baurecht I' : 'Baurecht II';
+    const who = occ ? `${_esc2(occ.member_name)} · ${_wfmt(occ.total_invested)} CC` : '(frei)';
+    const mine = occ && occ.member_id === member.id ? ' cc-world-mine' : '';
+    return `<div class="cc-world-slot${mine}">
+      <span class="cc-world-slot-rank">${medal} ${label}</span>
+      <span class="cc-world-slot-who">${who}</span>
+      <span class="cc-world-slot-bonus">${Math.round(WORLD_BUILD_RANK_PCT[rank] * 100)}% Ernte</span>
+    </div>`;
+  }).join('');
+
+  const trackRows = PRODUCER_TRACKS.map(tr => {
+    const lvl = levels[tr.id] || 0;
+    const cost = producerUpgradeCost(member, tr.id, lvl);
+    let btn;
+    if (!hasAccess)   btn = `<span class="cc-world-blocked">🔒 Konzession nötig</span>`;
+    else if (lvl >= 5) btn = `<span class="cc-world-blocked">✓ max L5</span>`;
+    else if (atLimit)  btn = `<span class="cc-world-blocked">🔒 Limit</span>`;
+    else               btn = `<button class="cc-build-btn cc-world-bbtn" data-prod-track="${tr.id}">${lvl === 0 ? 'Bauen' : 'Ausbau L' + (lvl + 1)} · ${cost} 🫘</button>`;
+    return `<div class="cc-world-bld">
+      <span class="cc-world-bld-name">${tr.icon} ${tr.name} <em>L${lvl}</em></span>
+      <span class="cc-world-bld-eff">${tr.desc}</span>
+      ${btn}
+    </div>`;
+  }).join('');
+
+  const statusLine = myRank
+    ? `Dein Einfluss: <strong>Rang ${myRank}</strong> · ${_wfmt(myInv)} CC · Ernteanteil <strong>${Math.round(rankPct * 100)}%</strong>`
+    : `Du hast hier noch keinen Einfluss — ziehe einen Bau-Strang hoch, um Einfluss zu sammeln (der Zahler wird Regent).`;
+  const verderb = out.spoiled > 0
+    ? `<p class="cc-world-pctnote cc-world-passive-fee">⚠️ ${out.spoiled} ${PRODUCER_UNIT}/Tag verderben (Transport ${out.kapazitaet} < Produktion ${out.rawOutput}) — Logistik 🚛 ausbauen.</p>`
+    : '';
+
+  sheet.innerHTML = `
+    <div class="cc-world-sheet-head">
+      <span>${country.flag} <strong>${_esc2(country.name)}</strong> · 🫘 ${_esc2(country.specialty)}</span>
+      <button class="cc-world-close" data-world-close>✕</button>
+    </div>
+    <div class="cc-world-slots">${slotRows}</div>
+    <p class="cc-world-status">${statusLine}</p>
+    ${!hasAccess ? `<div class="cc-world-invest-locked">🔒 Braucht die Forschung <strong>🫘 Erzeuger-Konzession</strong> (alle Tier-2-Forschungen + 400 CC), um hier Plantagen zu bauen.</div>` : ''}
+    ${atLimit ? `<div class="cc-world-invest-locked">🔒 Anbau-Limit erreicht: <strong>${held}/${limit}</strong> Anbauländer. Schließe ein höheres Tier ab (+2 je Tier).</div>` : ''}
+    <div class="cc-world-section-title">🏭 Land-Produktion <span>(pro Tag, in ${PRODUCER_UNIT})</span></div>
+    <p class="cc-world-pctnote">
+      Output: <strong>${out.delivered} ${PRODUCER_UNIT}</strong>/Tag (🌾 Öko ${out.oekoDeliv} · Standard ${out.stdDeliv}) · Öko-Quote ${Math.round(out.oekoShare * 100)}% · Transport ${out.kapazitaet} ${PRODUCER_UNIT}/Tag.<br>
+      ${myRank ? `Dein Anteil (${Math.round(rankPct * 100)}%): <strong>🌾 ${myDelivOeko} Öko · ${myDelivStd} Standard</strong> ${PRODUCER_UNIT}/Tag${myLohn > 0 ? ` · 💸 Löhne ${myLohn} CC/Tag` : ''}` : `Ohne Rang erhältst du keinen Ernteanteil.`}
+    </p>
+    ${verderb}
+    <div class="cc-world-section-title">🌱 Bau-Stränge <span>(Land-Ebene, L0–L5)</span></div>
+    <div class="cc-world-blds">${trackRows}</div>
+    <p class="cc-world-pctnote">Investieren = Bau-Strang hochziehen: du zahlst CC, das Land-Level steigt für alle, und du sammelst Einfluss (Rang). Ernte-Einlösung folgt separat.</p>`;
+
+  sheet.querySelector('[data-world-close]').onclick = () => sheet.classList.add('hidden');
+  sheet.querySelectorAll('[data-prod-track]').forEach(b => b.onclick = () => {
+    const tr = _producerTrack(b.dataset.prodTrack); if (tr) _handleUpgradeProducerTrack(country, member, tr);
+  });
+}
+
+async function _handleUpgradeProducerTrack(country, member, track) {
+  if (!canAccessProducer(member)) { showToast('🔒 Erzeuger-Konzession nötig.', 'error'); return; }
+  const levels = producerLevelsFor(country.id);
+  const lvl = levels[track.id] || 0;
+  if (lvl >= 5) { showToast('Bereits maximal ausgebaut (L5).', 'info'); return; }
+  const held = producerCountriesHeld(_producerInvCache, member.id);
+  const isNewHere = !_producerInvCache.some(w => w.member_id === member.id && w.country_id === country.id && (Number(w.total_invested) || 0) > 0);
+  if (isNewHere && held >= producerCountryLimit(member.research)) {
+    showToast(`🔒 Anbau-Limit erreicht (${held}/${producerCountryLimit(member.research)}).`, 'error'); return;
+  }
+  const cost = producerUpgradeCost(member, track.id, lvl);
+  let res;
+  try { res = await DB.upgradeProducerTrack(member.id, country.id, track.id, cost); }
+  catch (e) { showToast(e.message || 'Ausbau fehlgeschlagen', 'error'); return; }
+  if (res?.error === 'insufficient_coins') { showToast('Nicht genug CoffeeCoins!', 'error'); return; }
+  if (res?.error === 'max_level')          { showToast('Bereits maximal ausgebaut (L5).', 'info'); return; }
+  if (!res?.ok) { showToast('Ausbau fehlgeschlagen', 'error'); return; }
+  showToast(`🌱 ${track.name} in ${country.flag} ${country.name} auf L${res.level} ausgebaut!`, 'success');
+  try { await DB.postMessage(`${member.name} baut ${track.icon} ${track.name} (L${res.level}) in ${country.flag} ${country.name} 🫘`, member.name); } catch (e) {}
+  await _producerRefreshAndReopen(country, member);
+}
+
+// Nach Anbau-Aktion: Daten frisch, Karte neu, Anbau-Sheet erneut öffnen.
+async function _producerRefreshAndReopen(country, member) {
+  try {
+    appData = await DB.fetchData();
+    const um = appData.users.find(u => u.id === member.id);
+    if (um) { currentUserData = { ...currentUserData, ...um }; if (typeof _updateHeaderCoins === 'function') _updateHeaderCoins(um); }
+  } catch (e) {}
+  const el = document.getElementById('imp-content');
+  if (el) {
+    el.innerHTML = '';
+    await _buildWeltkarte(currentUserData || member, el);
+    await _openProducerSheet(country, currentUserData || member);
+  }
+}
+
+// ── 🫘 Ernte / Lager (Schritt 3) ──────────────────────────────────────────────
+function producerLagerOf(member) {
+  const r = (member && member.map_data && member.map_data.rohstoffe) || {};
+  return { std: Number(r.std) || 0, oeko: Number(r.oeko) || 0, lastHarvest: r.lastHarvest || null };
+}
+// Tages-Ertrag des Mitglieds über alle Anbauländer, in denen es Rang 1–3 hält (Ein-Quelle-der-Wahrheit).
+function producerMemberDailyYield(member) {
+  const { rankMap } = producerRanksForMember(_producerInvCache, member.id);
+  let stdPerDay = 0, oekoPerDay = 0, lohnPerDay = 0;
+  const perCountry = [];
+  for (const c of PRODUCER_COUNTRIES) {
+    const rank = rankMap[c.id]; if (!rank) continue;
+    const pct = WORLD_BUILD_RANK_PCT[rank] || 0; if (!pct) continue;
+    const levels = producerLevelsFor(c.id);
+    const out = producerLandOutput(c, levels);
+    const s = out.stdDeliv * pct, o = out.oekoDeliv * pct, l = producerLohnPerDay(levels) * pct;
+    stdPerDay += s; oekoPerDay += o; lohnPerDay += l;
+    if (s + o > 0 || l > 0) perCountry.push({ c, rank, std: s, oeko: o, lohn: l });
+  }
+  return { stdPerDay, oekoPerDay, lohnPerDay, perCountry };
+}
+const _r1 = (n) => Math.round(n * 10) / 10;
+
+// UTC-Tages-Key, konsistent zur SQL (to_char(now() AT TIME ZONE 'UTC','YYYY-MM-DD')).
+function _supplyTodayKey() { return new Date().toISOString().slice(0, 10); }
+
+// Bohnen-Tagespreis-Faktor 0.70–1.40. PORTABLER Hash — MUSS identisch zur SQL sell_beans sein
+// (h = Σ (h*31 + charCode) mod 100000 über `<UTC-Tag>:<member_id>`), damit Anzeige == Auszahlung.
+function _beanFactor(memberId) {
+  const s = _supplyTodayKey() + ':' + memberId;
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 100000;
+  return Math.round((0.70 + 0.70 * (h / 100000)) * 100) / 100;
+}
+function producerBeanPrices(memberId) {
+  const f = _beanFactor(memberId);
+  return { factor: f, oeko: Math.round(3.0 * f * 100) / 100, std: Math.round(1.0 * f * 100) / 100 };
+}
+
+// Konsum-Tageseinkommen des Mitglieds (perDay + perCup×Referenz-Tassen) — Basis für den Versorgungsbonus.
+function producerKonsumBasis(member) {
+  const { rankMap } = worldRanksForMember(_worldInvCache, member.id);
+  const perDay = ((typeof calcWorldPerDay === 'function' ? calcWorldPerDay(rankMap) : 0) || 0)
+               + ((typeof calcWorldBuildingPerDay === 'function' ? calcWorldBuildingPerDay(rankMap, _worldBldCache) : 0) || 0);
+  const perCup = ((typeof calcWorldPerCup === 'function' ? calcWorldPerCup(rankMap) : 0) || 0)
+               + ((typeof calcWorldBuildingPerCup === 'function' ? calcWorldBuildingPerCup(rankMap, _worldBldCache) : 0) || 0);
+  return Math.round((perDay + perCup * SUPPLY_CUPS_REF) * 100) / 100;
+}
+// Vorschau für Panel + Button-Gating (Formel identisch zur SQL claim_supply — Ein-Quelle-der-Wahrheit).
+function producerSupplyPreview(member) {
+  const basis  = producerKonsumBasis(member);
+  const lager  = producerLagerOf(member);
+  const bedarf = Math.round(0.5 * basis);
+  const oekoUse = Math.min(lager.oeko, bedarf);
+  const stdUse  = Math.min(lager.std, Math.max(0, bedarf - oekoUse));
+  const pct     = Math.min(40, oekoUse * 0.8 + stdUse * 0.3);
+  const bonus   = Math.round(pct / 100 * basis);
+  const already = ((member.map_data && member.map_data.rohstoffe && member.map_data.rohstoffe.supplyLast) || '') === _supplyTodayKey();
+  const activePct = (member.map_data && member.map_data.rohstoffe && member.map_data.rohstoffe.supplyPct) || 0;
+  return { basis, bedarf, oekoUse, stdUse, pct, bonus, already, activePct };
+}
+
+function _renderProducerPanel(member) {
+  const holds = producerCountriesHeld(_producerInvCache, member.id);
+  if (!canAccessProducer(member) && holds === 0) return ''; // irrelevant → nichts anzeigen
+  const lager = producerLagerOf(member);
+  const y = producerMemberDailyYield(member);
+  const totalPerDay = _r1(y.stdPerDay + y.oekoPerDay);
+  const listing = y.perCountry.map(p => `${p.c.flag} ${p.c.name} (R${p.rank})`).join(', ') || '—';
+  const canHarvest = totalPerDay > 0;
+  return `
+    <div class="cc-world-section-title">🫘 Rohstoff-Lager <span>(Rohkaffee in ${PRODUCER_UNIT} = Coffee Tons)</span></div>
+    <div class="cc-producer-lager">
+      <span>🌾 Öko: <strong>${lager.oeko}</strong> ${PRODUCER_UNIT}</span>
+      <span>🫘 Standard: <strong>${lager.std}</strong> ${PRODUCER_UNIT}</span>
+    </div>
+    <p class="cc-world-pctnote">
+      Tages-Ertrag: <strong>~${totalPerDay} ${PRODUCER_UNIT}</strong>/Tag (🌾 ${_r1(y.oekoPerDay)} · ${_r1(y.stdPerDay)})${y.lohnPerDay > 0 ? ` · 💸 Löhne ~${_r1(y.lohnPerDay)} CC/Tag` : ''}<br>
+      Aus: ${listing}
+    </p>
+    ${canHarvest
+      ? `<p class="cc-world-pctnote">✅ Ernte läuft <strong>automatisch</strong>: Beim Öffnen der Weltkarte wandert der Ertrag <strong>aller</strong> deiner Anbauländer ins Lager (Löhne werden verrechnet) — kein Einsammeln, kein Länder-Klick nötig.</p>`
+      : `<p class="cc-world-pctnote">Baue Plantagen in Anbauländern (🥇 Rang nötig), um Rohkaffee zu ernten.</p>`}
+    ${_renderSupplySection(member)}
+    ${_renderSellSection(member)}`;
+}
+
+// 🫘➡️💰 Brücke 2: Überschuss-Bohnen an der Kaffeebörse zu Tagespreis verkaufen.
+function _renderSellSection(member) {
+  const lager = producerLagerOf(member);
+  if (lager.oeko <= 0 && lager.std <= 0) return '';
+  const p = producerBeanPrices(member.id);
+  const oekoGet = Math.round(lager.oeko * p.oeko);
+  const stdGet  = Math.round(lager.std * p.std);
+  const trend = p.factor >= 1.15 ? '📈 Hoch' : p.factor <= 0.85 ? '📉 Tief' : '➖ Normal';
+  return `
+    <div class="cc-world-section-title">🫘➡️💰 Bohnen-Verkauf <span>(Kaffeebörse · ${trend})</span></div>
+    <p class="cc-world-pctnote">Tagespreis: 🌾 Öko <strong>${p.oeko}</strong> · Standard <strong>${p.std}</strong> CC/${PRODUCER_UNIT} (Faktor ${p.factor}×).</p>
+    <div class="cc-boerse-actions">
+      ${lager.oeko > 0 ? `<button class="cc-build-btn cc-world-bbtn" data-prod-sell="oeko">🌾 ${lager.oeko} Öko → +${oekoGet} CC</button>` : ''}
+      ${lager.std > 0 ? `<button class="cc-build-btn cc-world-bbtn" data-prod-sell="std">🫘 ${lager.std} Std → +${stdGet} CC</button>` : ''}
+    </div>`;
+}
+
+async function _handleSellBeans(member, kind) {
+  const lager = producerLagerOf(member);
+  const sellOeko = kind === 'oeko' ? lager.oeko : 0;
+  const sellStd  = kind === 'std'  ? lager.std  : 0;
+  if (sellOeko + sellStd <= 0) { showToast('Kein Vorrat zu verkaufen.', 'info'); return; }
+  let res;
+  try { res = await DB.sellBeans(member.id, sellOeko, sellStd); }
+  catch (e) { showToast(e.message || 'Verkauf fehlgeschlagen', 'error'); return; }
+  if (res?.error)   { showToast('Verkauf fehlgeschlagen: ' + res.error, 'error'); return; }
+  if (res?.nothing) { showToast('Kein Vorrat zu verkaufen.', 'info'); return; }
+  const sold = [];
+  if (res.sold_oeko > 0) sold.push(`🌾 ${res.sold_oeko}`);
+  if (res.sold_std > 0)  sold.push(`🫘 ${res.sold_std}`);
+  showToast(`💰 Verkauft: ${sold.join(' · ')} ${PRODUCER_UNIT} → +${res.proceeds} CC`, 'success');
+  try { await DB.appendTodayLogFresh(member.id, [{ label: '🫘➡️💰 Bohnen-Verkauf', amount: res.proceeds, cat: 'anbau', detail: 'Kaffeebörse' }]); } catch (e) {}
+  await _producerRefreshAndReopenPanel(member);
+}
+
+// 🏪 Brücke 1: Bohnen → Konsum-Bonus (nur wenn der Spieler Konsum-Märkte hat).
+function _renderSupplySection(member) {
+  const sup = producerSupplyPreview(member);
+  if (sup.basis <= 0) return '';
+  let body;
+  if (sup.already) {
+    body = `✅ Heute bereits versorgt — <strong>+${Math.round(sup.activePct)}%</strong> aktiv.`;
+  } else if (sup.bonus >= 1) {
+    body = `Prognose: verbraucht 🌾 ${sup.oekoUse} · ${sup.stdUse} Standard → <strong>+${Math.round(sup.pct)}%</strong> ≈ <strong>+${sup.bonus} CC</strong> heute.`;
+  } else if (sup.oekoUse + sup.stdUse < 1) {
+    body = `Kein Rohkaffee im Lager — erst ernten, dann versorgen.`;
+  } else {
+    body = `Dein Konsum-Einkommen ist noch zu klein für einen spürbaren Bonus — erobere mehr Konsum-Länder, dann lohnt sich die Versorgung.`;
+  }
+  return `
+    <div class="cc-world-section-title">🏪 Märkte versorgen <span>(Bohnen → Konsum-Bonus, max 40 %)</span></div>
+    <p class="cc-world-pctnote">Bedarf heute: <strong>${sup.bedarf} ${PRODUCER_UNIT}</strong> (Öko zuerst) · Konsum-Tageseinkommen ~${_r1(sup.basis)} CC.<br>${body}</p>
+    ${(!sup.already && sup.bonus >= 1) ? `<button class="cc-build-btn" data-prod-supply="1">🏪 Märkte versorgen (+${sup.bonus} CC)</button>` : ''}`;
+}
+
+async function _handleClaimSupply(member) {
+  const basis = producerKonsumBasis(member);
+  if (basis <= 0) { showToast('Du hast noch keine Konsum-Märkte (Welt-Rang nötig).', 'info'); return; }
+  let res;
+  try { res = await DB.claimSupply(member.id, basis); }
+  catch (e) { showToast(e.message || 'Versorgung fehlgeschlagen', 'error'); return; }
+  if (res?.error)   { showToast('Versorgung fehlgeschlagen: ' + res.error, 'error'); return; }
+  if (res?.already) { showToast('✅ Du hast deine Märkte heute schon versorgt.', 'info'); return; }
+  if (res?.nothing) { showToast('🫘 Nicht genug Bohnen für einen spürbaren Versorgungsbonus.', 'info'); return; }
+  showToast(`🏪 Märkte versorgt: +${Math.round(res.pct)}% → +${res.bonus} CC (🌾 ${res.oeko_use} · ${res.std_use} verbraucht)`, 'success');
+  try { await DB.appendTodayLogFresh(member.id, [{ label: `🏪 Versorgungsbonus (+${Math.round(res.pct)}%)`, amount: res.bonus, cat: 'anbau', detail: 'Anbau → Konsum-Märkte' }]); } catch (e) {}
+  await _producerRefreshAndReopenPanel(member);
+}
+
+// Ernte läuft AUTOMATISCH: beim Öffnen der Weltkarte wandert der aufgelaufene Ertrag ins Lager
+// (Löhne verrechnet). Server ist über das Zeit-Delta idempotent → mehrfaches Aufrufen doppelt
+// nicht. Kurzer Throttle gegen Refresh-Spam nach Aktionen (Upgrade/Verkauf lösen ein Rebuild aus).
+let _lastAutoHarvestAt = 0;
+async function _maybeAutoHarvest(member) {
+  if (Date.now() - _lastAutoHarvestAt < 15000) return null;
+  _lastAutoHarvestAt = Date.now();
+  const y = producerMemberDailyYield(member);
+  if ((y.stdPerDay + y.oekoPerDay) <= 0) return null; // keine Produktion → nichts zu ernten
+  let res;
+  try { res = await DB.claimHarvest(member.id, y.stdPerDay, y.oekoPerDay, y.lohnPerDay); }
+  catch (e) { return null; }
+  if (!res || res.error || res.nothing) return null;
+  // Lokal patchen (Lager + Coins), damit das gleich gerenderte Panel den frischen Stand zeigt.
+  const md = { ...(member.map_data || {}) };
+  md.rohstoffe = { ...(md.rohstoffe || {}), std: res.lager_std, oeko: res.lager_oeko };
+  member.map_data = md;
+  if (currentUserData) {
+    currentUserData = { ...currentUserData, map_data: md, coins: (res.coins_left != null ? res.coins_left : currentUserData.coins) };
+    if (typeof _updateHeaderCoins === 'function') _updateHeaderCoins({ coins: currentUserData.coins });
+  }
+  const parts = [];
+  if (res.oeko > 0) parts.push(`🌾 ${res.oeko} Öko`);
+  if (res.std > 0)  parts.push(`🫘 ${res.std} Std`);
+  showToast(`🫘 Ernte automatisch eingesammelt: ${parts.join(' · ')} ${PRODUCER_UNIT}${res.lohn > 0 ? ` (−${res.lohn} CC Löhne)` : ''}`, 'success');
+  if (res.lohn > 0) { try { await DB.appendTodayLogFresh(member.id, [{ label: '💸 Plantagen-Löhne', amount: -res.lohn, cat: 'anbau', detail: 'Anbauland-Betrieb' }]); } catch (e) {} }
+  try { await _checkProducerAchievements(member, res); } catch (e) { /* non-critical */ }
+  return res;
+}
+
+// 🏆 Bohnen-Lager-Meilensteine (CT) — ad-hoc bei der Ernte vergeben (condition:null in achievements.js).
+async function _checkProducerAchievements(member, res) {
+  const existing = (currentUserData && currentUserData.achievements) || member.achievements || {};
+  const lagerTotal = (res.lager_std || 0) + (res.lager_oeko || 0);
+  const toGrant = {};
+  if (!existing.prod_first) toGrant.prod_first = true;
+  if (!existing.prod_100 && lagerTotal >= 100) toGrant.prod_100 = true;
+  if (!existing.prod_500 && lagerTotal >= 500) toGrant.prod_500 = true;
+  if (!existing.prod_1000 && lagerTotal >= 1000) toGrant.prod_1000 = true;
+  if (!existing.prod_oeko_100 && (res.lager_oeko || 0) >= 100) toGrant.prod_oeko_100 = true;
+  const ids = Object.keys(toGrant);
+  if (!ids.length) return;
+  await DB.grantAchievements(member.id, toGrant);
+  if (currentUserData) currentUserData = { ...currentUserData, achievements: { ...existing, ...toGrant } };
+  for (const id of ids) {
+    const a = (typeof ACHIEVEMENTS !== 'undefined' ? ACHIEVEMENTS : []).find(x => x.id === id);
+    if (a) showToast(`🏆 Achievement: ${a.name}! (+${a.coinReward} CC)`, 'success');
+  }
+}
+
+// Rebuild der Welt-View nach Ernte (kein Länder-Sheet nötig).
+async function _producerRefreshAndReopenPanel(member) {
+  try {
+    appData = await DB.fetchData();
+    const um = appData.users.find(u => u.id === member.id);
+    if (um) { currentUserData = { ...currentUserData, ...um }; if (typeof _updateHeaderCoins === 'function') _updateHeaderCoins(um); }
+  } catch (e) {}
+  const el = document.getElementById('imp-content');
+  if (el) { el.innerHTML = ''; await _buildWeltkarte(currentUserData || member, el); }
 }
 
 // Nach einer Aktion: Coins/Header aktualisieren, Karte neu einfärben, Panel erneut öffnen
@@ -1001,6 +1529,9 @@ function _renderWeltStatistik(investments, byCountry, member, taxStats, users) {
     const anlage = worldPassiveTotal(u);
     const anlageYield = (typeof worldPassivePerDay === 'function') ? worldPassivePerDay(u, byCountry) : 0;
     const boerse = u.map_data?.worldDev?.fund?.principal || 0;
+    const _lagerOeko = Number(u.map_data?.rohstoffe?.oeko) || 0;
+    const _lagerStd  = Number(u.map_data?.rohstoffe?.std) || 0;
+    const _lagerTot  = _lagerOeko + _lagerStd;
     return `<div class="cc-wstat-row${mine}">
       <div class="cc-wstat-name">${_esc2(u.name)} <span class="cc-wstat-flags">${govFlags}</span></div>
       <div class="cc-wstat-cells">
@@ -1011,6 +1542,7 @@ function _renderWeltStatistik(investments, byCountry, member, taxStats, users) {
         <span title="Welt-Einkommen / Tag">📈 +${_wfmt(s.perDay)}</span>
         ${anlage > 0 ? `<span class="cc-wstat-anlage" title="Stille Anlage: ${_wfmt(anlage)} CC Kapital · Anteil am Gebäude-Einkommen">🏦 ${_wfmt(anlage)}${anlageYield > 0 ? ` (+${_wfmt(anlageYield)}/Tag)` : ''}</span>` : ''}
         ${boerse > 0 ? `<span class="cc-wstat-boerse" title="Kaffeebörse: ${_wfmt(boerse)} CC angelegtes Kapital">💹 ${_wfmt(boerse)}</span>` : ''}
+        ${_lagerTot > 0 ? `<span class="cc-wstat-anbau" title="Rohkaffee-Lager: 🌾 ${_lagerOeko} Öko · ${_lagerStd} Standard ${PRODUCER_UNIT}">🫘 ${_wfmt(_lagerTot)} ${PRODUCER_UNIT}</span>` : ''}
         ${divTotal > 0 ? `<span class="cc-wstat-div" title="Erbauer-Dividende erhalten (gesamt)">💵 ${_wfmt(divTotal)}</span>` : ''}
         ${hasTax ? `<span class="cc-wstat-tax" title="Steuern erhalten (Woche · gesamt)">🪙 ${_wfmt(t.received_7d || 0)}·${_wfmt(t.received_total || 0)}</span>` : ''}
         ${hasTax ? `<span class="cc-wstat-tax" title="Steuern gezahlt (Woche · gesamt)">💸 ${_wfmt(t.paid_7d || 0)}·${_wfmt(t.paid_total || 0)}</span>` : ''}

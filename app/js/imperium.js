@@ -2085,7 +2085,7 @@ function _kriegerRenderPotions(member, state, body) {
           if (mdLog) { currentUserData = { ...(currentUserData || {}), map_data: mdLog }; member.map_data = mdLog; }
         } catch (e) { /* non-critical */ }
         showToast(`🧪 ${potion.name} gekauft!`, 'success');
-        try { _krSessionAddPotionBuy(member.name, potion.key); } catch (e) { /* non-critical */ }
+        try { _krSessionAddPotionBuy(member.name, potion.key, paid); } catch (e) { /* non-critical */ }
         _kriegerRenderPotions(member, state, body);
       } catch (e) { showToast(e.message || 'Kauf fehlgeschlagen', 'error'); btn.disabled = false; }
     };
@@ -2236,7 +2236,7 @@ function _kriegerRenderDungeon(member, state, seed, COLS, ROWS, MARGIN, body) {
       if (mdLog) { currentUserData = { ...(currentUserData || {}), map_data: mdLog }; member.map_data = mdLog; }
     } catch (e) { /* non-critical */ }
     showToast(`✅ +${KRIEGER_EXTRA_STEPS} Schritte freigeschaltet!`, 'success');
-    try { _krSessionAddAction(member.name, 'steps'); } catch (e) { /* non-critical */ }
+    try { _krSessionAddAction(member.name, 'steps', KRIEGER_EXTRA_STEP_COST); } catch (e) { /* non-critical */ }
     _kriegerRenderDungeon(member, state, seed, COLS, ROWS, MARGIN, body);
   });
 
@@ -2259,7 +2259,7 @@ function _kriegerRenderDungeon(member, state, seed, COLS, ROWS, MARGIN, body) {
       if (mdLog) { currentUserData = { ...(currentUserData || {}), map_data: mdLog }; member.map_data = mdLog; }
     } catch (e) { /* non-critical */ }
     showToast('🛌 Vollständig erholt — ❤️ 100 %!', 'success');
-    try { _krSessionAddAction(member.name, 'heal'); } catch (e) { /* non-critical */ }
+    try { _krSessionAddAction(member.name, 'heal', KRIEGER_FULL_HEAL_COST); } catch (e) { /* non-critical */ }
     _kriegerRenderDungeon(member, state, seed, COLS, ROWS, MARGIN, body);
   });
 
@@ -2612,7 +2612,7 @@ function _krSessionEnsure(name, doEntry) {
     _krSession = { entered:false, fights:0, wins:0, losses:0, ccCombat:0, ccFinds:0, ep:0,
                    levelStart:null, levelEnd:null, potionsUsed:{}, potionsBought:{}, bossKills:0,
                    vouchersFound:0, potionsFound:0, purchases:0, purchaseLabels:[],
-                   stepsBought:0, healsBought:0 };
+                   stepsBought:0, healsBought:0, ccSpent:0 };
     _krSessionName = name || 'Krieger';
   }
   if (doEntry && !_krSession.entered) {
@@ -2622,23 +2622,26 @@ function _krSessionEnsure(name, doEntry) {
   return _krSession;
 }
 // Käufe (Ausrüstung/Begleiter/Reittier) in den Sammler legen (2026-07-16b) — statt je Kauf ein Chat-Post.
-function _krSessionAddPurchase(name, label) {
+function _krSessionAddPurchase(name, label, cost) {
   const s = _krSessionEnsure(name, false);
   s.purchases += 1;
+  s.ccSpent += (Number(cost) || 0);
   if (label && s.purchaseLabels.length < 20) s.purchaseLabels.push(label);
   _krSessionBumpTimer();
 }
 // Trank gekauft (2026-07-16c) — nach Typ gezählt, für die Zusammenfassung „welche + wie viele".
-function _krSessionAddPotionBuy(name, key) {
+function _krSessionAddPotionBuy(name, key, cost) {
   const s = _krSessionEnsure(name, false);
   s.potionsBought[key] = (s.potionsBought[key] || 0) + 1;
+  s.ccSpent += (Number(cost) || 0);
   _krSessionBumpTimer();
 }
 // Sonstige CC-Aktionen im Dungeon (Schritte-Nachkauf / Volle Erholung) in den Sammler legen.
-function _krSessionAddAction(name, kind) {
+function _krSessionAddAction(name, kind, cost) {
   const s = _krSessionEnsure(name, false);
   if (kind === 'steps')      s.stepsBought += 1;
   else if (kind === 'heal')  s.healsBought += 1;
+  s.ccSpent += (Number(cost) || 0);
   _krSessionBumpTimer();
 }
 // Trank-Zähl-Map → „2× ☕ Espresso, 1× 🧊 Cold Brew".
@@ -2684,6 +2687,7 @@ async function _kriegerFlushSession() {
     if (boughtPotList)       parts.push(`🧪 gekauft: ${boughtPotList}`);
     if (s.stepsBought > 0)   parts.push(`👣 ${s.stepsBought}× Schritte nachgekauft`);
     if (s.healsBought > 0)   parts.push(`🛌 ${s.healsBought}× Erholung gekauft`);
+    if (s.ccSpent > 0)       parts.push(`💸 ${Math.round(s.ccSpent)} CC ausgegeben`);
     try { await DB.postMessage(`☕ ${name} verlässt das Dungeon — ${parts.join(', ')}.`, _krSessionName); } catch (e) { /* non-critical */ }
   } else if (anyShop) {
     // Reiner Einkauf (kein Dungeon-Besuch dazwischen).
@@ -2692,6 +2696,7 @@ async function _kriegerFlushSession() {
     if (boughtPotList)     shopParts.push(`🧪 ${boughtPotList}`);
     if (s.stepsBought > 0) shopParts.push(`👣 ${s.stepsBought}× Schritte`);
     if (s.healsBought > 0) shopParts.push(`🛌 ${s.healsBought}× Erholung`);
+    if (s.ccSpent > 0)     shopParts.push(`💸 ${Math.round(s.ccSpent)} CC`);
     try { await DB.postMessage(`🛒 ${name} war einkaufen: ${shopParts.join(' · ')}.`, _krSessionName); } catch (e) { /* non-critical */ }
   }
 }
@@ -3185,7 +3190,7 @@ function _kriegerRenderShop(member, state, body) {
           ? `🛒 ${item.name} erworben! 🎁 Gutschein eingelöst (50% günstiger).`
           : `🛒 ${item.name} erworben!`, 'success');
         // Chat-Entlastung (2026-07-16b): Einzelkäufe nicht mehr posten → in die Session-Zusammenfassung.
-        try { _krSessionAddPurchase(member.name, `${item.icon} ${item.name}`); } catch (e) {}
+        try { _krSessionAddPurchase(member.name, `${item.icon} ${item.name}`, (newDD._costPaid ?? item.cost)); } catch (e) {}
         // 🗡️ Achievement: erste Tier-3-Waffe (Meisterwaffe)
         if (item.tier === 3 && item.slot === 'weapon') {
           try {
@@ -3331,7 +3336,7 @@ function _kriegerRenderShop(member, state, body) {
         currentUserData = { ...(currentUserData || {}), coins: state.memberCoins, dungeon_data: state.dd };
         _updateHeaderCoins({ coins: state.memberCoins });
         showToast(`🐴 ${comp.name} erworben${state.dd.companion === comp.key ? ' & ausgerüstet' : ''}!`, 'success');
-        try { _krSessionAddPurchase(member.name, `${comp.icon} ${comp.name}`); } catch (e) {}
+        try { _krSessionAddPurchase(member.name, `${comp.icon} ${comp.name}`, comp.cost); } catch (e) {}
         try {
           const mdLog = await DB.appendTodayLogFresh(member.id, [{ label: `🐴 Begleiter: ${comp.name}`, amount: -comp.cost, cat: 'krieger', detail: 'Kaffee-Krieger-Ausgabe', invest: true }]);
           if (mdLog) { currentUserData = { ...(currentUserData || {}), map_data: mdLog }; member.map_data = mdLog; }
@@ -3387,7 +3392,7 @@ function _kriegerRenderShop(member, state, body) {
         currentUserData = { ...(currentUserData || {}), coins: state.memberCoins, dungeon_data: state.dd };
         _updateHeaderCoins({ coins: state.memberCoins });
         showToast(`🐎 ${mount.name} erworben${state.dd.mount === mount.key ? ' & aufgesessen' : ''}!`, 'success');
-        try { _krSessionAddPurchase(member.name, `${mount.icon} ${mount.name}`); } catch (e) {}
+        try { _krSessionAddPurchase(member.name, `${mount.icon} ${mount.name}`, mount.cost); } catch (e) {}
         try {
           const mdLog = await DB.appendTodayLogFresh(member.id, [{ label: `🐎 Reittier: ${mount.name}`, amount: -mount.cost, cat: 'krieger', detail: 'Kaffee-Krieger-Ausgabe', invest: true }]);
           if (mdLog) { currentUserData = { ...(currentUserData || {}), map_data: mdLog }; member.map_data = mdLog; }

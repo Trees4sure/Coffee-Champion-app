@@ -365,10 +365,11 @@ async function kmStartTrip(toId) {
     const res = await DB.startTrip(currentUser.id, toId);
     if (res && res.error) { showToast(kmErr(res), 'error'); return; }
     const c = _kmGraph.cities[toId];
+    const _cost = res.cost || 0;
     // Tages-Log (Rubrik erlebnis; Reise-Einsatz = Konsum, kein invest)
-    try { await DB.appendTodayLogFresh(currentUser.id, [{ label: `🚐 Reise nach ${(c||{}).name || toId} (Einsatz)`, amount: -(res.cost || 0), cat: 'erlebnis', detail: 'Kaffeemobil' }]); } catch (e) {}
+    try { await DB.appendTodayLogFresh(currentUser.id, [{ label: `🚐 Reise begonnen nach ${(c||{}).name || toId}`, amount: -_cost, cat: 'erlebnis', detail: 'Kaffeemobil' }]); } catch (e) {}
     await kmSyncAfterAction(res);
-    showToast(`🚚 Losgefahren nach ${(c||{}).name || toId} — Ankunft in ${kmFmtDur((Date.parse(res.arriveAt)-Date.now())/60000)}`, 'success');
+    showToast(`🚐 Reise begonnen nach ${(c||{}).name || toId} – ${_cost} CC · Ankunft in ${kmFmtDur((Date.parse(res.arriveAt)-Date.now())/60000)}`, 'success');
     kmRender();
   } catch (e) { showToast(e.message, 'error'); }
   finally { _kmBusy = false; }
@@ -380,14 +381,17 @@ async function kmCheckArrival(member) {
   if (!trip || _kmClaiming) return false;
   if (Date.now() < Date.parse(trip.arriveAt)) return false;
   _kmClaiming = true;
+  // Reisedauer aus dem laufenden Trip (start→Ankunft) für die Meldungen festhalten.
+  const _durMin = (trip.startAt && trip.arriveAt) ? Math.max(0, (Date.parse(trip.arriveAt) - Date.parse(trip.startAt)) / 60000) : 0;
   try {
     const res = await DB.claimArrival(currentUser.id);
     if (res && res.error) { if (res.error !== 'still_traveling') console.warn('claim_arrival:', res.error); return false; }
     const c = _kmGraph ? _kmGraph.cities[res.city] : null;
-    try { await DB.appendTodayLogFresh(currentUser.id, [{ label: `🏁 Angekommen in ${(c||{}).name || res.city}`, amount: res.reward || 0, cat: 'erlebnis', detail: res.firstVisit ? 'Erstbesuch' : 'Kaffeemobil' }]); } catch (e) {}
+    const _durTxt = _durMin > 0 ? ` nach ${kmFmtDur(_durMin)}` : '';
+    try { await DB.appendTodayLogFresh(currentUser.id, [{ label: `🏁 Ankunft in ${(c||{}).name || res.city}${_durTxt}`, amount: res.reward || 0, cat: 'erlebnis', detail: res.firstVisit ? 'Erstbesuch' : 'Kaffeemobil' }]); } catch (e) {}
     await kmSyncAfterAction(res);
     // Kleines Ankunfts-Popup für den Reisenden selbst (auch im Hintergrund/anderer Tab).
-    kmShowArrival((c || {}).name || res.city, res.reward || 0, res.firstVisit);
+    kmShowArrival((c || {}).name || res.city, res.reward || 0, res.firstVisit, _durMin);
     // Erstbesuch in die Gruppe posten — nie kritisch
     if (res.firstVisit) {
       const nm = (typeof currentUserData !== 'undefined' && currentUserData && currentUserData.name) || 'Jemand';
@@ -403,11 +407,12 @@ async function kmCheckArrival(member) {
 // Erscheint für den Reisenden selbst bei Ankunft — auch wenn der Kaffeemobil-Tab
 // gerade nicht offen ist (Hintergrund-Ankunft via app.js). Hängt sich selbst an
 // <body> (unabhängig vom Karte-Tab), nutzt aber dieselben .cc-karte-popup-Styles.
-function kmShowArrival(cityName, reward, firstVisit) {
+function kmShowArrival(cityName, reward, firstVisit, durMin) {
   try {
     let el = document.getElementById('cc-mobil-popup');
     if (!el) { el = document.createElement('div'); el.id = 'cc-mobil-popup'; document.body.appendChild(el); }
     el.className = 'cc-karte-popup cc-karte-popup--auto';
+    const _durTxt = (durMin && durMin > 0) ? `Reise: ${kmFmtDur(durMin)} · ` : '';
     el.innerHTML = `
       <div class="cc-karte-popup-inner">
         <div class="cc-karte-popup-hdr">🏁 ANGEKOMMEN!</div>
@@ -415,7 +420,7 @@ function kmShowArrival(cityName, reward, firstVisit) {
           <span class="cc-karte-popup-emoji">🚐</span>
           <div class="cc-karte-popup-text">
             <strong>${_kmEsc(cityName || 'Ziel')}${firstVisit ? ' ⭐' : ''}</strong>
-            <em>${firstVisit ? 'Erstbesuch — Entdecker-Bonus!' : 'Gute Reise gehabt.'}</em>
+            <em>${_durTxt}${firstVisit ? 'Erstbesuch — Entdecker-Bonus!' : 'Gute Reise gehabt.'}</em>
             <span class="cc-karte-popup-cc">+${reward} 🫘 CC Reisebonus</span>
           </div>
         </div>

@@ -582,12 +582,17 @@ function renderLeaderboard() {
 // 2026-07-12: Version gebumpt für den Kaffee-Krieger-Umbau. Die 5 bisherigen Einträge BLEIBEN
 // bewusst erhalten (Nachzügler, die das vorige Popup nie gesehen haben, verlieren sie sonst —
 // whatsNewSeen merkt sich nur EINE Version). Wer die 5 schon kannte, sieht sie einmal erneut + Krieger.
-const WHATS_NEW_VERSION = '2026-07-16-krieger-balance';
+const WHATS_NEW_VERSION = '2026-07-14-rohstoff-imperium';
 // Go-Live-Zeitpunkt (LOKALE Zeit, ISO ohne "Z" → wird als Ortszeit interpretiert):
-const WHATS_NEW_GO_LIVE = new Date('2026-07-13T08:00:00'); // 13.07. 08:00 Uhr (morgen früh)
-// Version-Bump 2026-07-16: neuer ⚔️-Balance-Eintrag ganz oben. Die bisherigen Einträge BLEIBEN
-// erhalten (whatsNewSeen merkt nur EINE Version → sonst gingen sie für Nachzügler verloren).
+const WHATS_NEW_GO_LIVE = new Date('2026-07-14T00:00:00'); // heute live — vor dem echten Rollout ggf. anpassen
+// Version-Bump 2026-07-14: neuer 🌍🫘-Rohstoff-Imperium-Eintrag ganz oben. Die bisherigen Einträge
+// BLEIBEN erhalten (whatsNewSeen merkt nur EINE Version → sonst gingen sie für Nachzügler verloren).
 const WHATS_NEW_ITEMS = [
+  {
+    icon: '🫘',
+    title: 'Neu: Rohstoff-Imperium',
+    text: 'Erobere tropische Anbauländer (Kolumbien, Äthiopien, Vietnam & Co.), baue Plantagen und ernte Rohkaffee — gemessen in CT (Coffee Tons). Versorge damit deine eigenen Kaffee-Märkte für bis zu +40 % Tagesbonus, oder verkaufe die Bohnen zum schwankenden Tagespreis an der Kaffeebörse. Öko-Bohnen sind mehr wert als Standard. Zu finden auf der 🌍 Weltkarte (grün umrandete Länder), sobald du die neue Forschung „🫘 Erzeuger-Konzession" besitzt (braucht alle Tier-2-Forschungen). 5 neue Achievements warten auf dich!'
+  },
   {
     icon: '⚔️',
     title: 'Kaffee-Krieger: Balance & Kultur-Rollen',
@@ -604,24 +609,9 @@ const WHATS_NEW_ITEMS = [
     text: 'Lege dein persönliches Diorama der Kaffeegeschichte an: 84 Sammel-Elemente in 7 Epochen füllen dein 📖 Kaffee-Lexikon — und werfen dauerhaft CoffeeCoins ab (passiv pro Tag + extra pro Tasse). Zu finden im Imperium-Tab, sobald du die Forschung „Kaffeegarten" und die „Limitierte Edition" besitzt.'
   },
   {
-    icon: '🤝',
-    title: 'Handelsbündnis: wechselseitige Dividende',
-    text: 'Schließen zwei Länder ein Handelsbündnis, erhalten jetzt BEIDE Partner eine 🤝 Handelsdividende aus dem Umsatz des jeweils anderen Landes — eine echte wechselseitige Ausschüttung statt nur einseitig. Bestehende Pakte profitieren automatisch.'
-  },
-  {
     icon: '💹',
     title: 'Kaffeebörse: automatisch & wählbar',
     text: 'Deine Börsen-Dividende kommt jetzt automatisch einmal pro Tag — kein tägliches Einsammeln mehr. Neu: Du wählst, ob sie aufs Guthaben geht oder reinvestiert wird (Zinseszins bis zum Maximum).'
-  },
-  {
-    icon: '💤',
-    title: 'Länger weg? Kein Problem',
-    text: 'Passives Einkommen wird jetzt für bis zu 14 Tage Abwesenheit nachgezahlt — Urlaub kostet dich keinen Ertrag mehr.'
-  },
-  {
-    icon: '⚔️',
-    title: 'Kaffee-Krieger überarbeitet',
-    text: 'Die Gegner sind fairer: schwächer skaliert, besser durchmischt (nicht mehr nur harte Brocken weit draußen) und dichter gesät nahe der Mitte. Besiegte Gegner kehren jetzt alle paar Tage zurück — du gehst nie mehr ohne Nachschub aus. Ausrüstung: Tier-2-Gear schon ab Stufe 15, dazu ein komplettes neues Tier-3-Meister-Set (Rüstung + Talisman) ab Stufe 35. Neu: ⚡ „Schnell-Ausrüsten" legt ein ganzes Set mit einem Klick an. Und die Südamerika-Heilung wirkt wieder wie früher.'
   }
 ];
 
@@ -726,6 +716,25 @@ function ensureRegelwerk() {
       (Länder-Menü) — du bekommst einen <b>Anteil am Gebäude-Einkommen des Landes</b> (mehr Kapital = mehr Anteil,
       bis 20 % bei 1.250 CC), <b>täglich passiv</b> und <b>ohne Rang-Einfluss</b>. Länder ohne Gebäude werfen nichts ab.
       <b>Auszahlen</b> geht jederzeit — 20 % gehen dabei als Entschädigung an die Erbauer des Landes.`)}
+    ${sec('🫘', 'Rohstoff-Imperium — Anbauländer & Rohkaffee', `
+      Mit der Forschung <b>🫘 Erzeuger-Konzession</b> (alle Tier-2-Forschungen) öffnen sich auf der
+      Weltkarte die <b>grün umrandeten Anbauländer</b> (Kolumbien, Äthiopien, Vietnam & Co.).
+      Dort ziehst du <b>6 Plantagen-Stränge</b> hoch (🌱 Plantage · 💧 Wasser · 🧪 Dünger · 👷 Mitarbeiter ·
+      🌾 Trocknung · 🚛 Logistik) — je höher, desto mehr <b>Rohkaffee</b> (gemessen in <b>CT = Coffee Tons</b>)
+      wirft das Land pro Tag ab. Investieren = Strang hochziehen; dein Rang (🥇 Regent / 🥈🥉 Baurecht)
+      bestimmt deinen Ernteanteil (100 / 50 / 20 %).<br>
+      <span class="cc-rw-hl">🫘 Ernte läuft automatisch:</span> Beim Öffnen der Weltkarte wandert der Ertrag
+      <b>aller</b> deiner Anbauländer ins Lager (sammelt sich bis zu 4 Tage). 👷 Mitarbeiter kosten <b>Löhne</b> —
+      die werden bei der Ernte verrechnet. <b>🌾 Öko</b>-Bohnen sind wertvoller als Standard.<br>
+      <span class="cc-rw-hl">Mit den Bohnen machst du eines von zwei Dingen:</span><br>
+      <b>🏪 Märkte versorgen</b> — füttere die Bohnen in deine eigenen 🌍 Konsum-Länder: gut versorgte Märkte
+      bringen an dem Tag <b>bis zu +40 % mehr CC-Einkommen</b> (1× pro Tag, Öko wird zuerst verbraucht,
+      lohnt bei großem Konsum-Imperium).<br>
+      <b>🫘➡️💰 Verkaufen</b> — Bohnen direkt gegen CC zum <b>schwankenden Tagespreis</b> (Öko ~3×, Standard ~1×,
+      Tagesfaktor 0,7–1,4). Lohnt, wenn du wenig Konsum-Länder hast oder der Preis gerade hoch steht.<br>
+      <span class="cc-rw-hl">Achtung:</span> Du darfst in <b>Tier × 2</b> Anbauländern aktiv sein
+      (Tier 2 = 4, Tier 3 = 6 …). Und halte die <b>🚛 Logistik</b> mit: Was du nicht transportieren kannst,
+      <b>verdirbt</b>. 5 neue Achievements warten. 🫘`)}
     ${sec('⚔️', 'Kaffee-Krieger — Dungeon, Ausrüstung & Kämpfe', `
       Eigener Imperium-Reiter „⚔️ Krieger": Erkunde dein <b>persönliches Felsenlabyrinth</b> — die
       täglichen Schritte wachsen mit deiner Krieger-Stufe. Auf neu betretenen Feldern warten
@@ -1817,6 +1826,7 @@ function _ccBilanz(u) {
     { icon: '🗺️', label: 'Karte & Gebäude',   income: inc.karte || 0, spent: sp.karte || 0, invested: inv.karte || 0 },
     { icon: '🌍', label: 'Welthandel (Einfluss)', income: inc.welt || 0, spent: sp.welt || 0, invested: inv.welt || 0 },
     { icon: '🏗️', label: 'Welt-Gebäude',      income: inc.weltbau || 0, spent: sp.weltbau || 0, invested: inv.weltbau || 0 },
+    { icon: '🫘', label: 'Anbauländer',        income: inc.anbau || 0, spent: sp.anbau || 0, invested: inv.anbau || 0 },
     { icon: '⚔️', label: 'Kaffee-Krieger',    income: (dd.totalCcEarned || 0) + (inc.krieger || 0), spent: (dd.potionsSpent || 0) + (sp.krieger || 0), invested: inv.krieger || 0 },
     { icon: '🧠', label: 'CIQ',               income: quizCC + (u.map_data?.ciqCcEarned || 0) + (inc.ciq || 0), spent: sp.ciq || 0, invested: inv.ciq || 0 },
     { icon: '💎', label: 'Schätze',           income: u.map_data?.totalTreasureCc || 0 },

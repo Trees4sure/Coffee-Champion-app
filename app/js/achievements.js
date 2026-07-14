@@ -57,6 +57,12 @@ const ACHIEVEMENTS = [
   { id: 'mobil_continents',  icon: '🧭', name: 'Weltenbummler',     desc: 'Auf jedem Kontinent mindestens eine Stadt erobert',   condition: null, coinReward: 250 },
   { id: 'mobil_origins',     icon: '☕', name: 'Ursprungs-Route',    desc: 'Addis Abeba, Bogotá, Jakarta & Hanoi bereist (Kaffee-Ursprünge)', condition: null, coinReward: 200 },
   { id: 'mobil_world',       icon: '👑', name: 'Welteroberer',      desc: '50 verschiedene Städte erobert',                      condition: null, coinReward: 500 },
+  // 🫘 Rohstoff-/Anbauländer — Ernte in CT (Coffee Tons); alle event-granted bei der Ernte (condition:null)
+  { id: 'prod_first',      icon: '🫘', name: 'Erste Ernte',        desc: 'Erste Rohkaffee-Ernte eingefahren',                   condition: null, coinReward: 30  },
+  { id: 'prod_100',        icon: '🌱', name: 'Kaffeebauer',        desc: '100 CT Rohkaffee im Lager',                           condition: null, coinReward: 60  },
+  { id: 'prod_500',        icon: '🚜', name: 'Plantagen-Magnat',   desc: '500 CT Rohkaffee im Lager',                           condition: null, coinReward: 200 },
+  { id: 'prod_1000',       icon: '🏭', name: 'Kaffee-Baron',       desc: '1.000 CT Rohkaffee im Lager',                         condition: null, coinReward: 400 },
+  { id: 'prod_oeko_100',   icon: '🌾', name: 'Bio-Pionier',        desc: '100 CT Öko-Rohkaffee im Lager',                       condition: null, coinReward: 150 },
 ];
 
 function checkAchievements(userData, newAchievements = {}) {

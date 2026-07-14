@@ -1880,6 +1880,66 @@ const DB = (() => {
     return data; // { ok, level } oder { error }
   }
 
+  // ── 🫘 Anbauländer (Rohstoff-System) — alle robust gegen fehlende Migration ────
+  async function fetchAllProducerInvestments() {
+    const { data, error } = await _sb.from('world_producer_investments')
+      .select('member_id, country_id, total_invested').eq('group_id', _groupId);
+    if (error) throw new Error(error.message);
+    return data || [];
+  }
+  async function fetchAllProducerTracks() {
+    const { data, error } = await _sb.from('world_producer_tracks')
+      .select('country_id, track_id, level').eq('group_id', _groupId);
+    if (error) throw new Error(error.message);
+    return data || [];
+  }
+  async function fetchProducerStandings(countryId) {
+    const { data, error } = await _sb.rpc('get_producer_standings', { p_group_id: _groupId, p_country_id: countryId });
+    if (error) throw new Error(error.message);
+    return data || [];
+  }
+  // Bau-Strang hochziehen = Investieren (atomar). Tages-Log als Ausgabe (weltbau-Rubrik, invest).
+  async function upgradeProducerTrack(memberId, countryId, trackId, cost) {
+    const { data, error } = await _sb.rpc('upgrade_producer_track', {
+      p_member_id: memberId, p_group_id: _groupId, p_country_id: countryId,
+      p_track_id: trackId, p_cost: parseFloat(cost)
+    });
+    if (error) throw new Error(error.message);
+    if (data && !data.error) {
+      try { await appendTodayLogFresh(memberId, [{ label: `🫘 Anbau: ${trackId} — ${countryId}`, amount: -parseFloat(cost), cat: 'anbau', detail: 'Anbauland-Ausbau', invest: true }]); } catch (e) {}
+    }
+    return data; // { ok, level, total_invested, coins_left } | { error }
+  }
+  // Ernte einlösen: Client übergibt Tages-Rate, Server ist über das Zeit-Delta (map_data.rohstoffe.lastHarvest)
+  // autoritativ + bucht Bohnen ins Lager, zieht Löhne ab (Safe-Fallback). Löhne loggt der Client (unten).
+  async function claimHarvest(memberId, stdPerDay, oekoPerDay, lohnPerDay) {
+    const { data, error } = await _sb.rpc('claim_harvest', {
+      p_member_id: memberId,
+      p_std_per_day: parseFloat(stdPerDay) || 0,
+      p_oeko_per_day: parseFloat(oekoPerDay) || 0,
+      p_lohn_per_day: parseFloat(lohnPerDay) || 0,
+    });
+    if (error) throw new Error(error.message);
+    return data; // { ok, std, oeko, lohn, days, lager_std, lager_oeko } | { ok, nothing } | { error }
+  }
+  // Versorgungs-Multiplikator (Brücke 1): einmal/Tag Bohnen → % Bonus aufs Konsum-Tageseinkommen.
+  // Client liefert die Konsum-Basis (aus JS-Welt-Daten); Server rechnet Formel + Verbrauch + Tages-Lock.
+  async function claimSupply(memberId, konsumBasis) {
+    const { data, error } = await _sb.rpc('claim_supply', {
+      p_member_id: memberId, p_konsum_basis: parseFloat(konsumBasis) || 0,
+    });
+    if (error) throw new Error(error.message);
+    return data; // { ok, pct, bonus, oeko_use, std_use, lager_* } | { ok, already|nothing } | { error }
+  }
+  // Bohnen an der Kaffeebörse verkaufen (Brücke 2). Server ist über Preis + Bestand autoritativ.
+  async function sellBeans(memberId, sellOeko, sellStd) {
+    const { data, error } = await _sb.rpc('sell_beans', {
+      p_member_id: memberId, p_sell_oeko: parseFloat(sellOeko) || 0, p_sell_std: parseFloat(sellStd) || 0,
+    });
+    if (error) throw new Error(error.message);
+    return data; // { ok, proceeds, sold_oeko, sold_std, price_*, lager_* } | { ok, nothing } | { error }
+  }
+
   async function buyGarde(memberId, countryId) {
     const { data, error } = await _sb.rpc('buy_garde', {
       p_member_id: memberId, p_group_id: _groupId, p_country_id: countryId
@@ -2295,6 +2355,7 @@ const DB = (() => {
     investInCountry, investPassive, withdrawPassive, fetchCountryStandings, fetchAllWorldInvestments,
     requestLoan, fundLoan, applyLoanRepayment, repayLoanEarly, cancelLoan, fetchGroupLoans, fetchMyContributions,
     fetchAllWorldBuildings, buildWorldStructure, buyGarde, fetchTaxStats,
+    fetchAllProducerInvestments, fetchAllProducerTracks, fetchProducerStandings, upgradeProducerTrack, claimHarvest, claimSupply, sellBeans,
     castSabotage, fetchSabotages,
     fetchAllWorldAlliances, proposeAlliance, respondAlliance, reconcileWorldAlliances, settleAllianceTributes,
     quizStatus, quizStart, quizAnswer, quizFinalize, quizGroupReveal,
