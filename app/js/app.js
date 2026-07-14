@@ -737,6 +737,10 @@ function ensureRegelwerk() {
       lohnt bei großem Konsum-Imperium).<br>
       <b>🫘➡️💰 Verkaufen</b> — Bohnen direkt gegen CC zum <b>schwankenden Tagespreis</b> (Öko ~3×, Standard ~1×,
       Tagesfaktor 0,7–1,4). Lohnt, wenn du wenig Konsum-Länder hast oder der Preis gerade hoch steht.<br>
+      <span class="cc-rw-hl">🔗 Länder-Synergien:</span> Manche Konsum-Länder haben ein <b>Premium-Gebäude</b>, das
+      deine ganze Anbau-Seite boostet — z. B. 🇨🇭 Schweiz <b>+50 % Öko-Verkaufspreis</b>, 🇦🇹 Österreich +10 % Öko-Anteil,
+      🇲🇦 Marokko <b>−30 % Löhne</b>, 🇵🇰 Pakistan +15 % Ernte, 🇪🇬 Ägypten +20 % Transport (9 Länder insgesamt).
+      Aktiv, sobald du im Land <b>Rang</b> hast und das Gebäude gebaut ist — der Effekt steht direkt am Gebäude im Länder-Menü.<br>
       <span class="cc-rw-hl">Achtung:</span> Du darfst in <b>Tier × 2</b> Anbauländern aktiv sein
       (Tier 2 = 4, Tier 3 = 6 …). Und halte die <b>🚛 Logistik</b> mit: Was du nicht transportieren kannst,
       <b>verdirbt</b>. 5 neue Achievements warten. 🫘`)}

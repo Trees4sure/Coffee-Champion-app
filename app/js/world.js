@@ -734,10 +734,15 @@ async function _openCountrySheet(country, member) {
     else if (level === 1 && canBuild)  btn = `<button class="cc-build-btn cc-world-bbtn" data-world-upgrade="${def.id}">Ausbau L2 · ${_worldCost(member, Math.round(def.cost * 0.5))} 🫘</button>`;
     else if (level === 0 && !canBuild) btn = `<span class="cc-world-blocked">🔒 Top 3 nötig</span>`;
     else                               btn = `<span class="cc-world-blocked">✓ ${lvlTxt}</span>`;
-    return `<div class="cc-world-bld">
+    // 🔗 Konsum→Anbau-Synergie: wenn dieses Gebäude einen globalen Anbau-Bonus trägt, sichtbar
+    // ausweisen (unabhängig davon, ob der Spieler schon Plantagen hat).
+    const syn = (typeof PRODUCER_SYNERGY !== 'undefined') ? PRODUCER_SYNERGY[def.id] : null;
+    const synNote = syn ? `<span class="cc-world-bld-syn" title="Globaler Bonus auf deine Anbauländer (aktiv mit Rang hier + gebautem Gebäude)">🔗 Anbau-Bonus: ${_esc2(syn.desc)}</span>` : '';
+    return `<div class="cc-world-bld${syn ? ' cc-world-bld-syn-row' : ''}">
       <span class="cc-world-bld-name">${def.icon} ${_esc2(def.name)} <em>${lvlTxt}</em></span>
       <span class="cc-world-bld-eff">${base}</span>
       ${btn}
+      ${synNote}
     </div>`;
   }).join('');
   const hasSteuerberater = !!(member.map_data && member.map_data.worldDev && member.map_data.worldDev.steuerberater);
