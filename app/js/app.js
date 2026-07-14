@@ -591,7 +591,12 @@ const WHATS_NEW_ITEMS = [
   {
     icon: '🫘',
     title: 'Neu: Rohstoff-Imperium',
-    text: 'Erobere tropische Anbauländer (Kolumbien, Äthiopien, Vietnam & Co.), baue Plantagen und ernte Rohkaffee — gemessen in CT (Coffee Tons). Versorge damit deine eigenen Kaffee-Märkte für bis zu +40 % Tagesbonus, oder verkaufe die Bohnen zum schwankenden Tagespreis an der Kaffeebörse. Öko-Bohnen sind mehr wert als Standard. Zu finden auf der 🌍 Weltkarte (grün umrandete Länder), sobald du die neue Forschung „🫘 Erzeuger-Konzession" besitzt (braucht alle Tier-2-Forschungen). 5 neue Achievements warten auf dich!'
+    text: 'Erobere tropische Anbauländer (Kolumbien, Äthiopien, Vietnam & Co.), baue Plantagen und ernte Rohkaffee — gemessen in CT (Coffee Tons). Die Ernte wandert automatisch ins Lager; damit versorgst du entweder deine eigenen Kaffee-Märkte für bis zu +40 % Tagesbonus, oder du verkaufst die Bohnen zum schwankenden Tagespreis an der Kaffeebörse (🌾 Öko ist mehr wert als Standard). Freischaltung: die neue Forschung „🫘 Erzeuger-Konzession" (alle Tier-2-Forschungen). 5 neue Achievements warten!'
+  },
+  {
+    icon: '🌍',
+    title: '13 neue Länder + Konsum→Anbau-Synergien',
+    text: 'Die Weltkarte wächst um 13 Konsum-Länder: Spanien, Portugal, Irland, Schweiz, Österreich, Ungarn, Marokko, Ägypten, Libyen, Afghanistan, Pakistan, Neuseeland & Chile. Der Clou: 9 davon geben mit ihrem Premium-Gebäude einen globalen Bonus auf deine Plantagen (aktiv, sobald du im Land Rang hast und das Gebäude gebaut ist) — z. B. 🇨🇭 Schweiz „Bio-Auktionshaus" +50 % Öko-Verkaufspreis, 🇦🇹 Österreich +10 % Öko-Anteil, 🇲🇦 Marokko −30 % Plantagen-Löhne, 🇵🇰 Pakistan +15 % Ernte, 🇪🇬 Ägypten +20 % Transport. Konsum- und Anbau-Seite greifen jetzt ineinander!'
   },
   {
     icon: '⚔️',

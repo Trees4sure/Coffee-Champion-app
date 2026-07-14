@@ -34,6 +34,20 @@ const WORLD_COUNTRIES = [
   { id:'iceland',    iso:'IS', flag:'🇮🇸', name:'Island',        specialty:'Insel-Röster',               slots:[{rank:1,label:'Regierung',perCup:0.35,perDay:0},{rank:2,label:'Baurecht I',perCup:0,perDay:2},{rank:3,label:'Baurecht II',perCup:0.15,perDay:0}] },
   { id:'poland',     iso:'PL', flag:'🇵🇱', name:'Polen',         specialty:'Kawa-Kultur',                slots:[{rank:1,label:'Regierung',perCup:0.3,perDay:0},{rank:2,label:'Baurecht I',perCup:0.2,perDay:0},{rank:3,label:'Baurecht II',perCup:0,perDay:2}] },
   { id:'ukraine',    iso:'UA', flag:'🇺🇦', name:'Ukraine',       specialty:'Lviv-Kaffeehäuser',          slots:[{rank:1,label:'Regierung',perCup:0.3,perDay:0},{rank:2,label:'Baurecht I',perCup:0,perDay:3},{rank:3,label:'Baurecht II',perCup:0.2,perDay:0}] },
+  // ── Konsumländer 2. Welle (2026-07-14) — Rohwerte wie Bestand, Multiplikator wird aufgebacken ──
+  { id:'spain',       iso:'ES', flag:'🇪🇸', name:'Spanien',       specialty:'Café con Leche',             slots:[{rank:1,label:'Regierung',perCup:0.4,perDay:0},{rank:2,label:'Baurecht I',perCup:0.2,perDay:0},{rank:3,label:'Baurecht II',perCup:0,perDay:2}] },
+  { id:'portugal',    iso:'PT', flag:'🇵🇹', name:'Portugal',      specialty:'Bica & Pastéis',             slots:[{rank:1,label:'Regierung',perCup:0.4,perDay:0},{rank:2,label:'Baurecht I',perCup:0,perDay:3},{rank:3,label:'Baurecht II',perCup:0.2,perDay:0}] },
+  { id:'ireland',     iso:'IE', flag:'🇮🇪', name:'Irland',        specialty:'Irish Coffee',               slots:[{rank:1,label:'Regierung',perCup:0,perDay:4},{rank:2,label:'Baurecht I',perCup:0.2,perDay:0},{rank:3,label:'Baurecht II',perCup:0,perDay:2}] },
+  { id:'switzerland', iso:'CH', flag:'🇨🇭', name:'Schweiz',       specialty:'Präzisions-Aromatik',        slots:[{rank:1,label:'Regierung',perCup:0.5,perDay:0},{rank:2,label:'Baurecht I',perCup:0.3,perDay:0},{rank:3,label:'Baurecht II',perCup:0,perDay:2}] },
+  { id:'austria',     iso:'AT', flag:'🇦🇹', name:'Österreich',    specialty:'Wiener Kaffeehaus',          slots:[{rank:1,label:'Regierung',perCup:0.45,perDay:0},{rank:2,label:'Baurecht I',perCup:0.25,perDay:0},{rank:3,label:'Baurecht II',perCup:0,perDay:2}] },
+  { id:'hungary',     iso:'HU', flag:'🇭🇺', name:'Ungarn',        specialty:'Kávéház-Kultur',             slots:[{rank:1,label:'Regierung',perCup:0.3,perDay:0},{rank:2,label:'Baurecht I',perCup:0,perDay:2},{rank:3,label:'Baurecht II',perCup:0.2,perDay:0}] },
+  { id:'morocco',     iso:'MA', flag:'🇲🇦', name:'Marokko',       specialty:'Nus-Nus',                    slots:[{rank:1,label:'Regierung',perCup:0,perDay:3},{rank:2,label:'Baurecht I',perCup:0.2,perDay:0},{rank:3,label:'Baurecht II',perCup:0,perDay:2}] },
+  { id:'egypt',       iso:'EG', flag:'🇪🇬', name:'Ägypten',       specialty:'Ahwa-Kultur',                slots:[{rank:1,label:'Regierung',perCup:0,perDay:4},{rank:2,label:'Baurecht I',perCup:0,perDay:2},{rank:3,label:'Baurecht II',perCup:0.2,perDay:0}] },
+  { id:'libya',       iso:'LY', flag:'🇱🇾', name:'Libyen',        specialty:'Gahwa-Handel',               slots:[{rank:1,label:'Regierung',perCup:0,perDay:3},{rank:2,label:'Baurecht I',perCup:0,perDay:2},{rank:3,label:'Baurecht II',perCup:0.1,perDay:0}] },
+  { id:'afghanistan', iso:'AF', flag:'🇦🇫', name:'Afghanistan',   specialty:'Qymaq-Chai',                 slots:[{rank:1,label:'Regierung',perCup:0,perDay:3},{rank:2,label:'Baurecht I',perCup:0.1,perDay:0},{rank:3,label:'Baurecht II',perCup:0,perDay:1}] },
+  { id:'pakistan',    iso:'PK', flag:'🇵🇰', name:'Pakistan',      specialty:'Basar-Kaffee',               slots:[{rank:1,label:'Regierung',perCup:0.3,perDay:0},{rank:2,label:'Baurecht I',perCup:0,perDay:2},{rank:3,label:'Baurecht II',perCup:0.2,perDay:0}] },
+  { id:'newzealand',  iso:'NZ', flag:'🇳🇿', name:'Neuseeland',    specialty:'Flat-White-Heimat',          slots:[{rank:1,label:'Regierung',perCup:0.45,perDay:0},{rank:2,label:'Baurecht I',perCup:0,perDay:3},{rank:3,label:'Baurecht II',perCup:0.2,perDay:0}] },
+  { id:'chile',       iso:'CL', flag:'🇨🇱', name:'Chile',         specialty:'Café Cortado',               slots:[{rank:1,label:'Regierung',perCup:0.3,perDay:0},{rank:2,label:'Baurecht I',perCup:0,perDay:3},{rank:3,label:'Baurecht II',perCup:0.2,perDay:0}] },
 ];
 
 const WORLD_MIN_INVEST = 25;
@@ -103,8 +117,9 @@ const PRODUCER_TRACKS = [
 function _producerTrack(id) { return PRODUCER_TRACKS.find(t => t.id === id) || null; }
 
 // Produktionsformel pro Land/Tag (§5a). levels = { plantage,wasser,duenger,arbeit,trocknung,logistik } (0..5).
-function producerLandOutput(country, levels) {
-  const L = levels || {};
+// perks (optional) = aggregierte Konsum→Anbau-Synergie (producerPerks): outputMult/oekoShareAdd/capacityMult.
+function producerLandOutput(country, levels, perks) {
+  const L = levels || {}; const pk = perks || {};
   const P = L.plantage|0, W = L.wasser|0, D = L.duenger|0, M = L.arbeit|0, T = L.trocknung|0, G = L.logistik|0;
   const outMult  = country ? (country.outMult || 1) : 1;
   const oekoBase = country ? (country.oekoBase || 0) : 0;
@@ -112,9 +127,11 @@ function producerLandOutput(country, levels) {
   const duengerMult = 1 + 0.12 * D;
   const arbeitMult  = 1 + 0.10 * M;
   const rawOutput   = Math.round(4 * P * waterMult * duengerMult * arbeitMult * outMult);
-  const oekoShare   = Math.min(0.90, 0.08 * D + 0.10 * T + oekoBase);
-  const kapazitaet  = 6 * G;
-  const delivered   = Math.min(rawOutput, kapazitaet);
+  const oekoShare   = Math.min(0.90, 0.08 * D + 0.10 * T + oekoBase + (pk.oekoShareAdd || 0));
+  const kapazitaet  = Math.round(6 * G * (1 + (pk.capacityMult || 0)));
+  // outputMult wirkt auf die GELIEFERTE Menge (nach Transport-Deckel) → zuverlässiger Bonus,
+  // auch wenn die Logistik limitiert (sonst würde er komplett im Verderb verpuffen).
+  const delivered   = Math.round(Math.min(rawOutput, kapazitaet) * (1 + (pk.outputMult || 0)));
   const oekoDeliv   = Math.round(delivered * oekoShare);
   const stdDeliv    = delivered - oekoDeliv;
   const spoiled     = Math.max(0, rawOutput - delivered);
@@ -194,6 +211,44 @@ function producerCountriesHeld(investments, memberId) {
   return set.size;
 }
 
+// ── 🔗 Konsum→Anbau-Synergie (2026-07-14): Premium-Gebäude (`_d`) bestimmter Konsumländer geben
+// einen GLOBALEN Bonus auf die Anbau-Seite — aktiv, sobald das Gebäude im Land gebaut ist UND der
+// Spieler dort Rang 1–3 hält (er profitiert wie bei jedem Land-Gebäude). Alles reine Boni.
+// Effekt-Felder: oekoPriceMult/stdPriceMult (+% Verkaufspreis), oekoShareAdd (+Öko-Anteil),
+// lohnMult (−% Löhne, negativ), outputMult (+% Output), capacityMult (+% Transportkapazität).
+const PRODUCER_SYNERGY = {
+  switzerland_d: { country:'switzerland', icon:'🌿', label:'Bio-Auktionshaus (CH)',      desc:'+50 % Öko-Verkaufspreis',     oekoPriceMult:0.50 },
+  ireland_d:     { country:'ireland',     icon:'🥃', label:'Whiskey-Veredelung (IE)',    desc:'+25 % Öko-Verkaufspreis',     oekoPriceMult:0.25 },
+  portugal_d:    { country:'portugal',    icon:'⚓', label:'Lissabon-Handelskontor (PT)', desc:'+30 % Standard-Verkaufspreis', stdPriceMult:0.30 },
+  austria_d:     { country:'austria',     icon:'🎯', label:'Sortenrein-Manufaktur (AT)',  desc:'+10 % Öko-Anteil bei Ernte',   oekoShareAdd:0.10 },
+  newzealand_d:  { country:'newzealand',  icon:'🏔️', label:'Southern-Roastery (NZ)',      desc:'+8 % Öko-Anteil (Aromatik)',   oekoShareAdd:0.08 },
+  morocco_d:     { country:'morocco',     icon:'👷', label:'Atlas-Erntekooperative (MA)', desc:'−30 % Plantagen-Löhne',        lohnMult:-0.30 },
+  afghanistan_d: { country:'afghanistan', icon:'🧵', label:'Seidenstraßen-Kontor (AF)',   desc:'−20 % Plantagen-Löhne',        lohnMult:-0.20 },
+  pakistan_d:    { country:'pakistan',    icon:'🧑‍🌾', label:'Erntehelfer-Zentrale (PK)',   desc:'+15 % Bohnen-Output',          outputMult:0.15 },
+  egypt_d:       { country:'egypt',       icon:'🔺', label:'Pyramiden-Handelshaus (EG)',  desc:'+20 % Transportkapazität',     capacityMult:0.20 },
+};
+// Aggregierte aktive Synergie-Boni des Mitglieds (braucht Konsum-Rang + gebautes Gebäude).
+function producerPerks(member) {
+  const out = { oekoPriceMult:0, stdPriceMult:0, oekoShareAdd:0, lohnMult:0, outputMult:0, capacityMult:0, active:[] };
+  if (!member) return out;
+  const { rankMap } = worldRanksForMember(_worldInvCache, member.id);
+  for (const [bid, eff] of Object.entries(PRODUCER_SYNERGY)) {
+    if (!rankMap[eff.country]) continue;                                   // kein Rang im Land → kein Bonus
+    const blds = _worldBldCache[eff.country] || [];
+    if (!blds.some(b => b.building_id === bid)) continue;                  // Gebäude nicht gebaut
+    out.oekoPriceMult += eff.oekoPriceMult || 0;
+    out.stdPriceMult  += eff.stdPriceMult  || 0;
+    out.oekoShareAdd  += eff.oekoShareAdd  || 0;
+    out.lohnMult      += eff.lohnMult      || 0;
+    out.outputMult    += eff.outputMult    || 0;
+    out.capacityMult  += eff.capacityMult  || 0;
+    out.active.push({ icon: eff.icon, label: eff.label, desc: eff.desc });
+  }
+  out.oekoShareAdd = Math.min(out.oekoShareAdd, 0.20);   // Cap
+  out.lohnMult     = Math.max(out.lohnMult, -0.60);      // max 60 % Lohn-Rabatt
+  return out;
+}
+
 function _worldById(id)   { return WORLD_COUNTRIES.find(c => c.id === id) || null; }
 function _worldByIso(iso) { return WORLD_COUNTRIES.find(c => c.iso === iso) || null; }
 function _worldSlot(country, rank) { return country?.slots.find(s => s.rank === rank) || null; }
@@ -269,6 +324,28 @@ const WORLD_BUILDINGS = {
   southafrica:[{id:'southafrica_c',name:'Township-Café',icon:'🏘️',cost:35,perCup:0,perDay:1},{id:'southafrica_a',name:'Safari-Café',icon:'🦁',cost:60,perCup:0,perDay:2},{id:'southafrica_b',name:'Cape-Rösterei',icon:'🔥',cost:70,perCup:0.2,perDay:0},{id:'southafrica_d',name:'Kap-Plantage',icon:'🏔️',cost:165,perCup:0.5,perDay:0}],
   australia:  [{id:'australia_c',name:'Flat-White-Stand',icon:'🥛',cost:35,perCup:0.1,perDay:0},{id:'australia_a',name:'Melbourne-Café-Kette',icon:'🦘',cost:80,perCup:0,perDay:3},{id:'australia_b',name:'Flat-White-Export',icon:'🚢',cost:70,perCup:0.2,perDay:0},{id:'australia_d',name:'Barista-Hauptstadt',icon:'🏙️',cost:170,perCup:0.5,perDay:0}],
   russia:     [{id:'russia_c',name:'Datscha-Kaffee',icon:'🛖',cost:35,perCup:0,perDay:1},{id:'russia_a',name:'Sibirisches Kaffeehaus',icon:'❄️',cost:70,perCup:0,perDay:3},{id:'russia_b',name:'Import-Depot',icon:'📦',cost:60,perCup:0,perDay:2},{id:'russia_d',name:'Transsib-Handelsnetz',icon:'🚂',cost:175,perCup:0,perDay:5}],
+  // ── Gebäude für die neuen Konsumländer (2026-07-14) — gleiche Roh-Skala; Multiplikator wird unten aufgebacken ──
+  norway:     [{id:'norway_c',name:'Hafen-Kiosk',icon:'⚓',cost:35,perCup:0,perDay:1},{id:'norway_a',name:'Fjord-Rösterei',icon:'🏔️',cost:80,perCup:0.3,perDay:0},{id:'norway_b',name:'Filter-Manufaktur',icon:'☕',cost:70,perCup:0,perDay:3},{id:'norway_d',name:'Nordlicht-Kaffeehaus',icon:'🌌',cost:175,perCup:0.5,perDay:0}],
+  sweden:     [{id:'sweden_c',name:'Fika-Ecke',icon:'🍰',cost:35,perCup:0,perDay:1},{id:'sweden_a',name:'Kanelbulle-Café',icon:'🥮',cost:70,perCup:0.2,perDay:0},{id:'sweden_b',name:'Design-Rösterei',icon:'🪑',cost:80,perCup:0,perDay:3},{id:'sweden_d',name:'Stockholm-Roastery',icon:'👑',cost:170,perCup:0.5,perDay:0}],
+  finland:    [{id:'finland_c',name:'Sauna-Kaffeestube',icon:'🧖',cost:35,perCup:0,perDay:1},{id:'finland_a',name:'Pulla-Bäckerei',icon:'🥐',cost:70,perCup:0.2,perDay:0},{id:'finland_b',name:'Rekord-Rösterei',icon:'📈',cost:80,perCup:0.3,perDay:0},{id:'finland_d',name:'Helsinki-Kaffeepalast',icon:'🏛️',cost:175,perCup:0,perDay:5}],
+  denmark:    [{id:'denmark_c',name:'Hygge-Ecke',icon:'🕯️',cost:35,perCup:0,perDay:1},{id:'denmark_a',name:'Smørrebrød-Café',icon:'🥪',cost:70,perCup:0.2,perDay:0},{id:'denmark_b',name:'Design-Kaffeebar',icon:'🚲',cost:70,perCup:0,perDay:3},{id:'denmark_d',name:'Kopenhagen-Roastery',icon:'👑',cost:170,perCup:0.5,perDay:0}],
+  iceland:    [{id:'iceland_c',name:'Geysir-Kiosk',icon:'♨️',cost:35,perCup:0,perDay:1},{id:'iceland_a',name:'Lava-Rösterei',icon:'🌋',cost:70,perCup:0.2,perDay:0},{id:'iceland_b',name:'Gletscher-Kaffeebar',icon:'🧊',cost:60,perCup:0,perDay:2},{id:'iceland_d',name:'Reykjavík-Kaffeehaus',icon:'🐋',cost:160,perCup:0.45,perDay:0}],
+  poland:     [{id:'poland_c',name:'Kawiarnia-Stand',icon:'☕',cost:30,perCup:0.1,perDay:0},{id:'poland_a',name:'Altstadt-Café',icon:'🏰',cost:60,perCup:0,perDay:2},{id:'poland_b',name:'Kawa-Rösterei',icon:'🔥',cost:60,perCup:0.2,perDay:0},{id:'poland_d',name:'Warschau-Kaffeehaus',icon:'🎹',cost:160,perCup:0.5,perDay:0}],
+  ukraine:    [{id:'ukraine_c',name:'Straßen-Kaffee',icon:'☕',cost:30,perCup:0,perDay:1},{id:'ukraine_a',name:'Lviv-Kaffeehaus',icon:'🏛️',cost:60,perCup:0.2,perDay:0},{id:'ukraine_b',name:'Untergrund-Rösterei',icon:'🔥',cost:60,perCup:0,perDay:2},{id:'ukraine_d',name:'Kaffee-Bergwerk',icon:'⛏️',cost:160,perCup:0.5,perDay:0}],
+  // ── Gebäude für die Konsumländer 2. Welle (2026-07-14) ──
+  spain:      [{id:'spain_c',name:'Churrería-Ecke',icon:'🍩',cost:35,perCup:0,perDay:1},{id:'spain_a',name:'Tapas-Café',icon:'🥘',cost:70,perCup:0.2,perDay:0},{id:'spain_b',name:'Cortado-Bar',icon:'☕',cost:70,perCup:0,perDay:3},{id:'spain_d',name:'Barcelona-Roastery',icon:'🏛️',cost:175,perCup:0.5,perDay:0}],
+  portugal:   [{id:'portugal_c',name:'Pastéis-Stand',icon:'🥧',cost:35,perCup:0,perDay:1},{id:'portugal_a',name:'Bica-Bar',icon:'☕',cost:65,perCup:0.2,perDay:0},{id:'portugal_b',name:'Azulejo-Café',icon:'🔵',cost:70,perCup:0,perDay:3},{id:'portugal_d',name:'Lissabon-Handelskontor',icon:'⚓',cost:170,perCup:0.5,perDay:0}],
+  ireland:    [{id:'ireland_c',name:'Pub-Kaffee-Ecke',icon:'🍀',cost:35,perCup:0,perDay:1},{id:'ireland_a',name:'Irish-Coffee-Bar',icon:'☘️',cost:70,perCup:0,perDay:3},{id:'ireland_b',name:'Dubliner Rösterei',icon:'🔥',cost:70,perCup:0.2,perDay:0},{id:'ireland_d',name:'Whiskey-Kaffeehaus',icon:'🥃',cost:170,perCup:0,perDay:5}],
+  switzerland:[{id:'switzerland_c',name:'Alp-Kaffeestube',icon:'🏔️',cost:40,perCup:0,perDay:1},{id:'switzerland_a',name:'Präzisions-Rösterei',icon:'⚙️',cost:90,perCup:0.3,perDay:0},{id:'switzerland_b',name:'Aroma-Labor',icon:'🧪',cost:90,perCup:0.35,perDay:0},{id:'switzerland_d',name:'Bio-Auktionshaus',icon:'🌿',cost:190,perCup:0.5,perDay:0}],
+  austria:    [{id:'austria_c',name:'Melange-Ecke',icon:'☕',cost:35,perCup:0,perDay:1},{id:'austria_a',name:'Wiener Kaffeehaus',icon:'🎻',cost:80,perCup:0.3,perDay:0},{id:'austria_b',name:'Konditorei-Café',icon:'🍰',cost:70,perCup:0.25,perDay:0},{id:'austria_d',name:'Sortenrein-Manufaktur',icon:'🎯',cost:180,perCup:0.5,perDay:0}],
+  hungary:    [{id:'hungary_c',name:'Kávéház-Stand',icon:'☕',cost:30,perCup:0.1,perDay:0},{id:'hungary_a',name:'Budapester Café',icon:'🏛️',cost:60,perCup:0,perDay:2},{id:'hungary_b',name:'Ruin-Bar-Kaffee',icon:'🎨',cost:60,perCup:0.2,perDay:0},{id:'hungary_d',name:'Donau-Kaffeepalast',icon:'🌉',cost:160,perCup:0.5,perDay:0}],
+  morocco:    [{id:'morocco_c',name:'Souk-Kaffeestand',icon:'🕌',cost:30,perCup:0,perDay:1},{id:'morocco_a',name:'Nus-Nus-Café',icon:'🫖',cost:60,perCup:0,perDay:2},{id:'morocco_b',name:'Gewürz-Rösterei',icon:'🌶️',cost:60,perCup:0.2,perDay:0},{id:'morocco_d',name:'Atlas-Erntekooperative',icon:'👷',cost:165,perCup:0,perDay:5}],
+  egypt:      [{id:'egypt_c',name:'Ahwa-Stand',icon:'☕',cost:30,perCup:0,perDay:1},{id:'egypt_a',name:'Nil-Kaffeehaus',icon:'🐫',cost:60,perCup:0,perDay:2},{id:'egypt_b',name:'Basar-Rösterei',icon:'🔥',cost:60,perCup:0.2,perDay:0},{id:'egypt_d',name:'Pyramiden-Handelshaus',icon:'🔺',cost:165,perCup:0,perDay:5}],
+  libya:      [{id:'libya_c',name:'Wüsten-Kaffeezelt',icon:'⛺',cost:30,perCup:0,perDay:1},{id:'libya_a',name:'Gahwa-Haus',icon:'🕌',cost:60,perCup:0,perDay:2},{id:'libya_b',name:'Küsten-Import-Depot',icon:'⚓',cost:60,perCup:0,perDay:2},{id:'libya_d',name:'Sahara-Handelsroute',icon:'🐪',cost:160,perCup:0,perDay:5}],
+  afghanistan:[{id:'afghanistan_c',name:'Chaikhana-Ecke',icon:'🫖',cost:30,perCup:0,perDay:1},{id:'afghanistan_a',name:'Qymaq-Kaffeehaus',icon:'☕',cost:55,perCup:0,perDay:2},{id:'afghanistan_b',name:'Basar-Röster',icon:'🔥',cost:55,perCup:0.15,perDay:0},{id:'afghanistan_d',name:'Seidenstraßen-Kontor',icon:'🧵',cost:155,perCup:0,perDay:4}],
+  pakistan:   [{id:'pakistan_c',name:'Basar-Kaffeestand',icon:'☕',cost:30,perCup:0.1,perDay:0},{id:'pakistan_a',name:'Karachi-Café',icon:'🏙️',cost:60,perCup:0,perDay:2},{id:'pakistan_b',name:'Gewürz-Rösterei',icon:'🌶️',cost:60,perCup:0.2,perDay:0},{id:'pakistan_d',name:'Erntehelfer-Zentrale',icon:'👷',cost:165,perCup:0.5,perDay:0}],
+  newzealand: [{id:'newzealand_c',name:'Flat-White-Stand',icon:'🥛',cost:35,perCup:0.1,perDay:0},{id:'newzealand_a',name:'Wellington-Café',icon:'🥝',cost:75,perCup:0.2,perDay:0},{id:'newzealand_b',name:'Kiwi-Rösterei',icon:'🔥',cost:70,perCup:0,perDay:3},{id:'newzealand_d',name:'Southern-Roastery',icon:'🏔️',cost:175,perCup:0.5,perDay:0}],
+  chile:      [{id:'chile_c',name:'Café-con-Piernas',icon:'☕',cost:35,perCup:0,perDay:1},{id:'chile_a',name:'Santiago-Café',icon:'🏙️',cost:65,perCup:0,perDay:2},{id:'chile_b',name:'Anden-Rösterei',icon:'🔥',cost:65,perCup:0.2,perDay:0},{id:'chile_d',name:'Pazifik-Handelshafen',icon:'⚓',cost:170,perCup:0.5,perDay:0}],
 };
 
 // ── Balancing 2026-06-20: Welt-Gebäude auf Minimap-Niveau heben ─────────────────
@@ -804,7 +881,7 @@ async function _openProducerSheet(country, member) {
   const rankPct = myRank ? (WORLD_BUILD_RANK_PCT[myRank] || 0) : 0;
 
   const levels = producerLevelsFor(country.id);
-  const out    = producerLandOutput(country, levels);
+  const out    = producerLandOutput(country, levels, producerPerks(member));
   const myDelivStd  = Math.round(out.stdDeliv  * rankPct);
   const myDelivOeko = Math.round(out.oekoDeliv * rankPct);
   const myLohn = Math.round(producerLohnPerDay(levels) * rankPct);
@@ -918,18 +995,20 @@ function producerLagerOf(member) {
 // Tages-Ertrag des Mitglieds über alle Anbauländer, in denen es Rang 1–3 hält (Ein-Quelle-der-Wahrheit).
 function producerMemberDailyYield(member) {
   const { rankMap } = producerRanksForMember(_producerInvCache, member.id);
+  const perks = producerPerks(member);
+  const lohnFactor = 1 + (perks.lohnMult || 0);   // Synergie: günstige Arbeitskräfte senken die Löhne
   let stdPerDay = 0, oekoPerDay = 0, lohnPerDay = 0;
   const perCountry = [];
   for (const c of PRODUCER_COUNTRIES) {
     const rank = rankMap[c.id]; if (!rank) continue;
     const pct = WORLD_BUILD_RANK_PCT[rank] || 0; if (!pct) continue;
     const levels = producerLevelsFor(c.id);
-    const out = producerLandOutput(c, levels);
-    const s = out.stdDeliv * pct, o = out.oekoDeliv * pct, l = producerLohnPerDay(levels) * pct;
+    const out = producerLandOutput(c, levels, perks);
+    const s = out.stdDeliv * pct, o = out.oekoDeliv * pct, l = producerLohnPerDay(levels) * lohnFactor * pct;
     stdPerDay += s; oekoPerDay += o; lohnPerDay += l;
     if (s + o > 0 || l > 0) perCountry.push({ c, rank, std: s, oeko: o, lohn: l });
   }
-  return { stdPerDay, oekoPerDay, lohnPerDay, perCountry };
+  return { stdPerDay, oekoPerDay, lohnPerDay, perCountry, perks };
 }
 const _r1 = (n) => Math.round(n * 10) / 10;
 
@@ -944,9 +1023,13 @@ function _beanFactor(memberId) {
   for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 100000;
   return Math.round((0.70 + 0.70 * (h / 100000)) * 100) / 100;
 }
-function producerBeanPrices(memberId) {
-  const f = _beanFactor(memberId);
-  return { factor: f, oeko: Math.round(3.0 * f * 100) / 100, std: Math.round(1.0 * f * 100) / 100 };
+function producerBeanPrices(memberId, perks) {
+  const f = _beanFactor(memberId); const pk = perks || {};
+  return {
+    factor: f,
+    oeko: Math.round(3.0 * f * (1 + (pk.oekoPriceMult || 0)) * 100) / 100,
+    std:  Math.round(1.0 * f * (1 + (pk.stdPriceMult  || 0)) * 100) / 100,
+  };
 }
 
 // Konsum-Tageseinkommen des Mitglieds (perDay + perCup×Referenz-Tassen) — Basis für den Versorgungsbonus.
@@ -990,6 +1073,7 @@ function _renderProducerPanel(member) {
       Tages-Ertrag: <strong>~${totalPerDay} ${PRODUCER_UNIT}</strong>/Tag (🌾 ${_r1(y.oekoPerDay)} · ${_r1(y.stdPerDay)})${y.lohnPerDay > 0 ? ` · 💸 Löhne ~${_r1(y.lohnPerDay)} CC/Tag` : ''}<br>
       Aus: ${listing}
     </p>
+    ${(y.perks && y.perks.active.length) ? `<p class="cc-world-pctnote">🔗 <strong>Aktive Konsum→Anbau-Synergien:</strong> ${y.perks.active.map(a => `${a.icon} ${_esc2(a.desc)}`).join(' · ')}</p>` : ''}
     ${canHarvest
       ? `<p class="cc-world-pctnote">✅ Ernte läuft <strong>automatisch</strong>: Beim Öffnen der Weltkarte wandert der Ertrag <strong>aller</strong> deiner Anbauländer ins Lager (Löhne werden verrechnet) — kein Einsammeln, kein Länder-Klick nötig.</p>`
       : `<p class="cc-world-pctnote">Baue Plantagen in Anbauländern (🥇 Rang nötig), um Rohkaffee zu ernten.</p>`}
@@ -1001,7 +1085,7 @@ function _renderProducerPanel(member) {
 function _renderSellSection(member) {
   const lager = producerLagerOf(member);
   if (lager.oeko <= 0 && lager.std <= 0) return '';
-  const p = producerBeanPrices(member.id);
+  const p = producerBeanPrices(member.id, producerPerks(member));
   const oekoGet = Math.round(lager.oeko * p.oeko);
   const stdGet  = Math.round(lager.std * p.std);
   const trend = p.factor >= 1.15 ? '📈 Hoch' : p.factor <= 0.85 ? '📉 Tief' : '➖ Normal';
@@ -1019,8 +1103,9 @@ async function _handleSellBeans(member, kind) {
   const sellOeko = kind === 'oeko' ? lager.oeko : 0;
   const sellStd  = kind === 'std'  ? lager.std  : 0;
   if (sellOeko + sellStd <= 0) { showToast('Kein Vorrat zu verkaufen.', 'info'); return; }
+  const perks = producerPerks(member);
   let res;
-  try { res = await DB.sellBeans(member.id, sellOeko, sellStd); }
+  try { res = await DB.sellBeans(member.id, sellOeko, sellStd, 1 + (perks.oekoPriceMult || 0), 1 + (perks.stdPriceMult || 0)); }
   catch (e) { showToast(e.message || 'Verkauf fehlgeschlagen', 'error'); return; }
   if (res?.error)   { showToast('Verkauf fehlgeschlagen: ' + res.error, 'error'); return; }
   if (res?.nothing) { showToast('Kein Vorrat zu verkaufen.', 'info'); return; }

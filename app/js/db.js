@@ -1932,9 +1932,12 @@ const DB = (() => {
     return data; // { ok, pct, bonus, oeko_use, std_use, lager_* } | { ok, already|nothing } | { error }
   }
   // Bohnen an der Kaffeebörse verkaufen (Brücke 2). Server ist über Preis + Bestand autoritativ.
-  async function sellBeans(memberId, sellOeko, sellStd) {
+  // oekoPriceMult/stdPriceMult = Konsum→Anbau-Synergie-Faktoren (1.0 = kein Bonus); Server clamped [1,3].
+  async function sellBeans(memberId, sellOeko, sellStd, oekoPriceMult, stdPriceMult) {
     const { data, error } = await _sb.rpc('sell_beans', {
       p_member_id: memberId, p_sell_oeko: parseFloat(sellOeko) || 0, p_sell_std: parseFloat(sellStd) || 0,
+      p_oeko_price_mult: (oekoPriceMult != null ? parseFloat(oekoPriceMult) : 1),
+      p_std_price_mult:  (stdPriceMult  != null ? parseFloat(stdPriceMult)  : 1),
     });
     if (error) throw new Error(error.message);
     return data; // { ok, proceeds, sold_oeko, sold_std, price_*, lager_* } | { ok, nothing } | { error }
