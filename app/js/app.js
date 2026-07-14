@@ -584,7 +584,7 @@ function renderLeaderboard() {
 // whatsNewSeen merkt sich nur EINE Version). Wer die 5 schon kannte, sieht sie einmal erneut + Krieger.
 const WHATS_NEW_VERSION = '2026-07-14-rohstoff-imperium';
 // Go-Live-Zeitpunkt (LOKALE Zeit, ISO ohne "Z" → wird als Ortszeit interpretiert):
-const WHATS_NEW_GO_LIVE = new Date('2026-07-14T00:00:00'); // heute live — vor dem echten Rollout ggf. anpassen
+const WHATS_NEW_GO_LIVE = new Date('2026-07-15T08:00:00'); // 15.07. 08:00 Uhr (morgen früh) — gleichzeitige Premiere für alle
 // Version-Bump 2026-07-14: neuer 🌍🫘-Rohstoff-Imperium-Eintrag ganz oben. Die bisherigen Einträge
 // BLEIBEN erhalten (whatsNewSeen merkt nur EINE Version → sonst gingen sie für Nachzügler verloren).
 const WHATS_NEW_ITEMS = [
