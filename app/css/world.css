@@ -76,6 +76,9 @@
 .cc-world-bld-name { color: rgba(255,255,255,.85); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cc-world-bld-name em { color: rgba(255,255,255,.45); font-style: normal; font-size: 10px; }
 .cc-world-bld-eff  { color: #9FE1CB; font-size: 11px; white-space: nowrap; }
+/* 🔗 Konsum→Anbau-Synergie-Hinweis am Gebäude — über alle Grid-Spalten, eigene Zeile */
+.cc-world-bld-syn { grid-column: 1 / -1; color: #3fae5a; font-size: 10.5px; line-height: 1.3; }
+.cc-world-bld-syn-row { border: 1px solid rgba(63,174,90,.35); }
 .cc-world-bbtn { padding: 6px 10px !important; font-size: 11px !important; white-space: nowrap; }
 .cc-world-blocked { font-size: 11px; color: rgba(255,255,255,.4); white-space: nowrap; }
 .cc-world-garde { margin-top: 4px; }
