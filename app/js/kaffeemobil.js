@@ -392,10 +392,15 @@ async function kmCheckArrival(member) {
     await kmSyncAfterAction(res);
     // Kleines Ankunfts-Popup für den Reisenden selbst (auch im Hintergrund/anderer Tab).
     kmShowArrival((c || {}).name || res.city, res.reward || 0, res.firstVisit, _durMin);
-    // Erstbesuch in die Gruppe posten — nie kritisch
-    if (res.firstVisit) {
+    // Ankunft in die Gruppe posten — mit Reisebonus (CC), bei JEDER Bereisung, nicht nur Erstbesuch (#2, 2026-07-15) — nie kritisch
+    {
       const nm = (typeof currentUserData !== 'undefined' && currentUserData && currentUserData.name) || 'Jemand';
-      try { await DB.postMessage(`🚐 ${nm} hat ${(c||{}).name || res.city} bereist!`, nm); } catch (e) {}
+      const _cityNm = (c || {}).name || res.city;
+      const _rw = res.reward || 0;
+      const _msg = res.firstVisit
+        ? `🚐 ${nm} hat ${_cityNm} ⭐ erstmals erreicht – +${_rw} CC Reisebonus!`
+        : `🚐 ${nm} hat ${_cityNm} erreicht – +${_rw} CC erhalten`;
+      try { await DB.postMessage(_msg, nm); } catch (e) {}
     }
     await kmGrantAchievements(res.mobil || (_kmMember && _kmMember.mobil));
     return true;

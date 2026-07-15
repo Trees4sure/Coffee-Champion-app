@@ -2513,7 +2513,7 @@ function _showKriegerFightPrompt(member, state, tier, seed, COLS, ROWS, MARGIN, 
         : Math.floor(Math.random() * enemyDef.flavor.length));
   const eLevel = (tier === 'boss') ? 60
     : (_coordsOk && typeof kriegerEnemyLevel === 'function'
-        ? kriegerEnemyLevel(_tx, _ty, tier, seed)
+        ? kriegerEnemyLevel(_tx, _ty, tier, seed, (state.dd && state.dd.level) || 1)
         : 0);
   const flavor = enemyDef.flavor[flavorIdx] || enemyDef.name;
   const flavorEmoji = flavor.split(' ')[0];
@@ -2891,13 +2891,18 @@ async function _runKriegerFight(member, state, tier, seed, COLS, ROWS, MARGIN, k
     } catch (e) { /* non-critical */ }
   }
 
-  // Respawn (2026-07-15): nach einem SIEG (Nicht-Boss) den Encounter NICHT mehr löschen, sondern
-  // den Sieg-Zeitpunkt in `defeatedAt[key]` merken. Das Feld ist ab dem nächsten globalen Respawn-
-  // Tick (3-Tage-Takt, kriegerEnemyActive) wieder kämpfbar → dauerhafter t1-Nachschub in der Mitte.
-  // Bis dahin ist es begehbar (siehe _handleKriegerTap: nur AKTIVE Gegner blocken/bieten Kampf).
+  // Respawn (2026-07-15, überarbeitet): nach einem SIEG (Nicht-Boss) den Encounter NICHT löschen.
+  // Erster Sieg → `defeatedAt[key]` (Feld respawnt EINMAL beim nächsten globalen Tick).
+  // Zweiter Sieg über dasselbe Feld (defeatedAt bereits gesetzt → es war ein respawnter Gegner) →
+  // `permaDead[key]`: das Feld respawnt NIE wieder (User-Wunsch: Respawn nur 1×, kein Dauer-Grind).
+  // Bis zum Respawn ist das Feld begehbar (siehe _handleKriegerTap: nur AKTIVE Gegner bieten Kampf).
   // Niederlage bleibt wie bisher sofort erneut versuchbar (kein defeatedAt-Eintrag).
   if (result.won && tier !== 'boss' && key && state.dd.encounters?.[key]) {
-    state.dd = { ...state.dd, defeatedAt: { ...(state.dd.defeatedAt || {}), [key]: Date.now() } };
+    if (state.dd.defeatedAt?.[key] != null) {
+      state.dd = { ...state.dd, permaDead: { ...(state.dd.permaDead || {}), [key]: Date.now() } };
+    } else {
+      state.dd = { ...state.dd, defeatedAt: { ...(state.dd.defeatedAt || {}), [key]: Date.now() } };
+    }
     dungeonDirty = true;
   }
 

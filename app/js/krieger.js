@@ -540,9 +540,15 @@ const KRIEGER_ENEMY_LEVEL_BANDS = { t1:[1,6], t2:[3,11], t3:[9,17], t4:[16,27], 
 
 // Deterministisches Gegner-Level für ein Feld (eigener Salt 3131, NICHT von anderen
 // _tileRng-Salts belegt). Boss = fest 60.
-function kriegerEnemyLevel(tx, ty, tier, worldSeed) {
+function kriegerEnemyLevel(tx, ty, tier, worldSeed, playerLevel) {
   const band = KRIEGER_ENEMY_LEVEL_BANDS[tier] || [0, 0];
-  const lo = band[0], hi = band[1];
+  let lo = band[0], hi = band[1];
+  // Ab Spieler-Stufe 20 keine trivialen Level-1-Gegner mehr (User-Wunsch 2026-07-15): der
+  // Level-Boden steigt mit dem Spieler (L20→4, L26→10, …), bleibt aber IM Tier-Band (min hi),
+  // damit der Server-Clamp (_krieger_enemy_level_band) den Wert nicht wieder senkt → kein SQL.
+  if (playerLevel && playerLevel >= 20) {
+    lo = Math.max(lo, Math.min(hi, playerLevel - 16));
+  }
   if (hi <= lo) return lo;
   if (typeof _tileRng !== 'function') return lo;
   return lo + Math.floor(_tileRng(tx, ty, 3131, worldSeed)() * (hi - lo + 1));
@@ -742,8 +748,12 @@ function kriegerEnemyRespawned(dd, key) {
 function kriegerEnemyOnCooldown(dd, key) {
   return dd?.defeatedAt?.[key] != null && !kriegerEnemyRespawned(dd, key);
 }
-// Aktiver Kampf möglich: Encounter existiert (Tier gespeichert) UND respawnt/nie besiegt.
+// Aktiver Kampf möglich: Encounter existiert (Tier gespeichert) UND respawnt/nie besiegt
+// UND nicht dauerhaft besiegt. `permaDead[key]` wird beim ZWEITEN Sieg über ein Feld gesetzt
+// (User-Wunsch 2026-07-15: jeder Gegner respawnt höchstens 1×, danach endgültig weg —
+// verhindert dauerndes Nach-Grinden desselben t1-Kerns).
 function kriegerEnemyActive(dd, key) {
+  if (dd?.permaDead?.[key]) return false;
   return !!(dd?.encounters?.[key]) && kriegerEnemyRespawned(dd, key);
 }
 // Nächster Respawn-Zeitpunkt eines besiegten Feldes (für „regeneriert in …"-Anzeige); 0 = schon aktiv.

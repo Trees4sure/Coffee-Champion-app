@@ -107,12 +107,12 @@ function _producerByIso(iso){ return PRODUCER_COUNTRIES.find(c => c.iso === iso)
 
 // 6 Bau-Stränge (Land-Ebene, je L0–L5). trackBase = Kosten-Basis (§5b), lohn nur Mitarbeiter.
 const PRODUCER_TRACKS = [
-  { id:'plantage',  icon:'🌱', name:'Plantage',    trackBase:90, desc:'Basis-Bohnenoutput' },
-  { id:'wasser',    icon:'💧', name:'Wasser',      trackBase:70, desc:'Output-Multiplikator (Infrastruktur-Gate)' },
-  { id:'duenger',   icon:'🧪', name:'Dünger',      trackBase:70, desc:'Output-Multiplikator + hebt Öko-Anteil' },
-  { id:'arbeit',    icon:'👷', name:'Mitarbeiter', trackBase:60, desc:'Output-Multiplikator (kostet Löhne/Tag)' },
-  { id:'trocknung', icon:'🌾', name:'Trocknung',   trackBase:80, desc:'hebt Öko-Anteil + senkt Verderb' },
-  { id:'logistik',  icon:'🚛', name:'Logistik',    trackBase:75, desc:'Transportkapazität/Tag + senkt Verderb' },
+  { id:'plantage',  icon:'🌱', name:'Plantage',    trackBase:90, desc:'Grundmenge · +4 🫘/Stufe' },
+  { id:'wasser',    icon:'💧', name:'Wasser',      trackBase:70, desc:'+15% Output/Stufe · ⚠️ ohne = fast Stopp' },
+  { id:'duenger',   icon:'🧪', name:'Dünger',      trackBase:70, desc:'+12% Output/Stufe · hebt Öko' },
+  { id:'arbeit',    icon:'👷', name:'Mitarbeiter', trackBase:60, desc:'+10% Output/Stufe · 💸 Löhne/Tag' },
+  { id:'trocknung', icon:'🌾', name:'Trocknung',   trackBase:80, desc:'+Öko-Quote · −Verderb' },
+  { id:'logistik',  icon:'🚛', name:'Logistik',    trackBase:75, desc:'+Transport/Tag · −Verderb' },
 ];
 function _producerTrack(id) { return PRODUCER_TRACKS.find(t => t.id === id) || null; }
 
@@ -924,8 +924,8 @@ async function _openProducerSheet(country, member) {
     else               btn = `<button class="cc-build-btn cc-world-bbtn" data-prod-track="${tr.id}">${lvl === 0 ? 'Bauen' : 'Ausbau L' + (lvl + 1)} · ${cost} 🫘</button>`;
     return `<div class="cc-world-bld">
       <span class="cc-world-bld-name">${tr.icon} ${tr.name} <em>L${lvl}</em></span>
-      <span class="cc-world-bld-eff">${tr.desc}</span>
       ${btn}
+      <span class="cc-world-bld-eff">${tr.desc}</span>
     </div>`;
   }).join('');
 
