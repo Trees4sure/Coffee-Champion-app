@@ -1,0 +1,54 @@
+/* ☕ Café-Simulator (Erlebnis-Minigame #3) — cafe.js */
+.cc-cafe { padding: 4px 2px 12px; }
+.cc-cafe-intro { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); border-radius: 12px; padding: 14px 16px; margin-bottom: 12px; }
+.cc-cafe-lead { margin: 0 0 12px; font-size: .92rem; line-height: 1.5; color: var(--muted, #b7a99a); }
+.cc-cafe-lead strong { color: #e9dcc9; }
+
+.cc-cafe-progress { margin: 8px 0 12px; }
+.cc-cafe-prog-bar { height: 12px; background: rgba(0,0,0,.3); border-radius: 7px; overflow: hidden; }
+.cc-cafe-prog-bar > span { display: block; height: 100%; background: linear-gradient(90deg,#b8763a,#d9954f); transition: width .4s; }
+.cc-cafe-prog-lbl { font-size: .8rem; color: var(--muted,#b7a99a); margin-top: 5px; }
+.cc-cafe-prog-lbl strong { color: #d9954f; }
+
+.cc-cafe-open { width: 100%; padding: 12px; border: none; border-radius: 10px; background: linear-gradient(90deg,#3f8a4f,#4fae5a); color: #fff; font-weight: 700; font-size: 1rem; cursor: pointer; }
+.cc-cafe-open:hover { filter: brightness(1.08); }
+.cc-cafe-openlock { padding: 10px 12px; background: rgba(180,85,58,.14); border: 1px solid rgba(180,85,58,.35); border-radius: 9px; font-size: .85rem; color: #e0b3a4; }
+.cc-cafe-openlock strong { color: #f0c8a0; }
+
+/* Bühne (Canvas) */
+.cc-cafe-stage { border-radius: 13px; overflow: hidden; border: 1px solid rgba(255,255,255,.1); background: #20120b; margin-bottom: 12px; box-shadow: 0 10px 30px -14px rgba(0,0,0,.6); }
+.cc-cafe-stage canvas { display: block; width: 100%; height: auto; }
+
+/* GuV / Wirtschaftlichkeit */
+.cc-cafe-guv { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); border-radius: 12px; padding: 12px 14px; margin-bottom: 14px; }
+.cc-cafe-guv-head { font-weight: 700; color: #e9dcc9; margin-bottom: 10px; font-size: .95rem; }
+.cc-cafe-guv-grid { display: grid; grid-template-columns: repeat(5,1fr); gap: 6px; }
+.cc-cafe-guv-grid.sub { grid-template-columns: repeat(4,1fr); margin-top: 6px; }
+@media (max-width: 560px) { .cc-cafe-guv-grid, .cc-cafe-guv-grid.sub { grid-template-columns: repeat(2,1fr); } }
+.cc-cafe-kpi { background: rgba(0,0,0,.22); border-radius: 8px; padding: 7px 9px; display: flex; flex-direction: column; gap: 2px; }
+.cc-cafe-kpi .k { font-size: .64rem; letter-spacing: .04em; text-transform: uppercase; color: var(--muted,#b7a99a); }
+.cc-cafe-kpi .v { font-size: .95rem; font-weight: 700; color: #ece0d0; font-variant-numeric: tabular-nums; }
+.cc-cafe-kpi.big { grid-column: span 1; background: rgba(217,149,79,.12); border: 1px solid rgba(217,149,79,.3); }
+.cc-cafe-kpi .v.pos { color: #5fc48a; } .cc-cafe-kpi .v.neg { color: #d2775a; }
+
+.cc-cafe-ruf { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: .78rem; color: var(--muted,#b7a99a); }
+.cc-cafe-ruf-bar { flex: 1; height: 8px; background: rgba(0,0,0,.3); border-radius: 5px; overflow: hidden; }
+.cc-cafe-ruf-bar > span { display: block; height: 100%; background: linear-gradient(90deg,#c9a24a,#d9954f); }
+.cc-cafe-amort { font-size: .76rem; color: var(--muted,#b7a99a); margin: 8px 0 0; }
+.cc-cafe-beans { display: flex; align-items: center; gap: 8px; margin: 10px 0 0; font-size: .8rem; color: #cdbfae; cursor: pointer; }
+.cc-cafe-beans input { accent-color: #d9954f; }
+.cc-cafe-claimnote { font-size: .74rem; color: var(--muted,#b7a99a); margin: 8px 0 0; font-style: italic; }
+
+/* Kaufmenü */
+.cc-cafe-shop-title { font-weight: 700; color: #e9dcc9; margin: 14px 0 8px; font-size: .9rem; }
+.cc-cafe-shop { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 560px) { .cc-cafe-shop { grid-template-columns: 1fr; } }
+.cc-cafe-shop-col h4 { margin: 0 0 6px; font-size: .82rem; color: #d9954f; }
+.cc-cafe-item { display: grid; grid-template-columns: 1fr auto; gap: 3px 8px; align-items: center; background: rgba(255,255,255,.04); border-radius: 8px; padding: 7px 10px; margin-bottom: 6px; }
+.cc-cafe-item-name { color: rgba(255,255,255,.86); font-size: .84rem; }
+.cc-cafe-item-name em { color: rgba(255,255,255,.45); font-style: normal; font-size: .74rem; }
+.cc-cafe-item-eff { grid-column: 1 / -1; font-size: .72rem; color: #9fd8bc; }
+.cc-cafe-buy { padding: 6px 11px; border: none; border-radius: 7px; background: #b8763a; color: #fff; font-size: .78rem; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.cc-cafe-buy:hover:not(:disabled) { background: #d9954f; }
+.cc-cafe-buy:disabled { opacity: .4; cursor: not-allowed; }
+.cc-cafe-max { font-size: .74rem; color: #5fc48a; white-space: nowrap; }
