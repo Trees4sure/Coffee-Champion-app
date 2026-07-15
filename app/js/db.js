@@ -1943,6 +1943,36 @@ const DB = (() => {
     return data; // { ok, proceeds, sold_oeko, sold_std, price_*, lager_* } | { ok, nothing } | { error }
   }
 
+  // ── ☕ Café (Erlebnis-Minigame #3) ──────────────────────────────────────────
+  // Kern-State in map_data.cafe; idle-Ertrag server-autoritativ über Zeit-Delta (wie claim_harvest).
+  async function openCafe(memberId) {
+    const { data, error } = await _sb.rpc('open_cafe', { p_member_id: memberId });
+    if (error) throw new Error(error.message);
+    return data; // { ok, map_data } | { error }
+  }
+  async function buyCafeItem(memberId, cat, key, cost, name) {
+    const { data, error } = await _sb.rpc('buy_cafe_item', {
+      p_member_id: memberId, p_cat: cat, p_key: key, p_cost: parseFloat(cost) || 0, p_name: name || ''
+    });
+    if (error) throw new Error(error.message);
+    return data; // { ok, cost, coins_left, map_data } | { error }
+  }
+  async function claimCafe(memberId, netPerDay, beansStd, beansOeko, rufTarget, umsatzPerDay, gaestePerDay, touchOnly) {
+    const { data, error } = await _sb.rpc('claim_cafe', {
+      p_member_id: memberId, p_net_per_day: parseFloat(netPerDay) || 0,
+      p_beans_std_per_day: parseFloat(beansStd) || 0, p_beans_oeko_per_day: parseFloat(beansOeko) || 0,
+      p_ruf_target: parseFloat(rufTarget) || 0, p_umsatz_per_day: parseFloat(umsatzPerDay) || 0,
+      p_gaeste_per_day: parseFloat(gaestePerDay) || 0, p_touch_only: !!touchOnly
+    });
+    if (error) throw new Error(error.message);
+    return data; // { ok, credited, days, coins, lifetime, map_data } | { ok, nothing } | { error }
+  }
+  async function setCafeBeans(memberId, on) {
+    const { data, error } = await _sb.rpc('set_cafe_beans', { p_member_id: memberId, p_on: !!on });
+    if (error) throw new Error(error.message);
+    return data; // { ok, map_data } | { error }
+  }
+
   async function buyGarde(memberId, countryId) {
     const { data, error } = await _sb.rpc('buy_garde', {
       p_member_id: memberId, p_group_id: _groupId, p_country_id: countryId
@@ -2367,5 +2397,6 @@ const DB = (() => {
     startMinigame, claimMinigame, getMinigameStatus,
     unlockGardenElement, saveGardenPlacements,
     fetchMobilGraph, startTrip, claimArrival,
+    openCafe, buyCafeItem, claimCafe, setCafeBeans,
   };
 })();

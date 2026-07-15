@@ -63,6 +63,12 @@ const ACHIEVEMENTS = [
   { id: 'prod_500',        icon: '🚜', name: 'Plantagen-Magnat',   desc: '500 CT Rohkaffee im Lager',                           condition: null, coinReward: 200 },
   { id: 'prod_1000',       icon: '🏭', name: 'Kaffee-Baron',       desc: '1.000 CT Rohkaffee im Lager',                         condition: null, coinReward: 400 },
   { id: 'prod_oeko_100',   icon: '🌾', name: 'Bio-Pionier',        desc: '100 CT Öko-Rohkaffee im Lager',                       condition: null, coinReward: 150 },
+  // ☕ Café-Simulator (Erlebnis-Minigame #3) — alle event-granted (condition:null)
+  { id: 'cafe_open',       icon: '☕', name: 'Café-Eröffnung',     desc: 'Ein eigenes Café eröffnet',                           condition: null, coinReward: 40  },
+  { id: 'cafe_100',        icon: '🧑‍🍳', name: 'Stammlokal',        desc: '100 Gäste im eigenen Café bedient',                   condition: null, coinReward: 60  },
+  { id: 'cafe_1000',       icon: '🏪', name: 'Kaffeehaus',         desc: '1.000 Gäste im eigenen Café bedient',                 condition: null, coinReward: 300 },
+  { id: 'cafe_5star',      icon: '⭐', name: 'Fünf-Sterne-Tag',     desc: 'Ein Café-Tag mit Ø-Zufriedenheit ≥ 4,8 ★',            condition: null, coinReward: 100 },
+  { id: 'cafe_tycoon',     icon: '👑', name: 'Café-Tycoon',        desc: '50.000 CC Café-Umsatz erwirtschaftet',                condition: null, coinReward: 500 },
 ];
 
 function checkAchievements(userData, newAchievements = {}) {

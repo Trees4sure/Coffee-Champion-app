@@ -122,6 +122,8 @@ function showApp() {
   claimPassiveAndRefresh().then(() => { if (currentUser?.id) DB.recordSalarySnapshotsAll(); });
   // 🚐 Kaffeemobil: fällige Reise-Ankunft global einlösen (auch ohne offenen Tab)
   if (typeof kmMaybeArrive === 'function') kmMaybeArrive();
+  // ☕ Café: aufgelaufenen idle-Ertrag gutschreiben (throttled im Modul, auch ohne offenen Tab)
+  if (typeof cafeMaybeClaim === 'function') cafeMaybeClaim(currentUserData, true);
 }
 
 // Passives Einkommen einlösen und bei Gutschrift Anzeige aktualisieren.
@@ -281,6 +283,8 @@ async function refreshData() {
   claimPassiveAndRefresh().then(() => { if (currentUser?.id) DB.recordSalarySnapshotsAll(); });
   // 🚐 Kaffeemobil: fällige Reise-Ankunft global einlösen (auch ohne offenen Tab)
   if (typeof kmMaybeArrive === 'function') kmMaybeArrive();
+  // ☕ Café: aufgelaufenen idle-Ertrag gutschreiben (throttled im Modul, auch ohne offenen Tab)
+  if (typeof cafeMaybeClaim === 'function') cafeMaybeClaim(currentUserData, true);
 }
 
 // ── Nachrichten ───────────────────────────────────────────────────────────────
@@ -582,12 +586,18 @@ function renderLeaderboard() {
 // 2026-07-12: Version gebumpt für den Kaffee-Krieger-Umbau. Die 5 bisherigen Einträge BLEIBEN
 // bewusst erhalten (Nachzügler, die das vorige Popup nie gesehen haben, verlieren sie sonst —
 // whatsNewSeen merkt sich nur EINE Version). Wer die 5 schon kannte, sieht sie einmal erneut + Krieger.
-const WHATS_NEW_VERSION = '2026-07-14-rohstoff-imperium';
+const WHATS_NEW_VERSION = '2026-07-16-cafe';
 // Go-Live-Zeitpunkt (LOKALE Zeit, ISO ohne "Z" → wird als Ortszeit interpretiert):
-const WHATS_NEW_GO_LIVE = new Date('2026-07-15T08:00:00'); // 15.07. 08:00 Uhr (morgen früh) — gleichzeitige Premiere für alle
-// Version-Bump 2026-07-14: neuer 🌍🫘-Rohstoff-Imperium-Eintrag ganz oben. Die bisherigen Einträge
-// BLEIBEN erhalten (whatsNewSeen merkt nur EINE Version → sonst gingen sie für Nachzügler verloren).
+// ⚠️ PLATZHALTER — mit JP final abstimmen; sollte NACH dem SQL-Deploy des Cafés liegen.
+const WHATS_NEW_GO_LIVE = new Date('2026-07-16T08:00:00');
+// Version-Bump 2026-07-16: neuer ☕-Café-Eintrag ganz oben. Die bisherigen Einträge BLEIBEN
+// erhalten (whatsNewSeen merkt nur EINE Version → sonst gingen sie für Nachzügler verloren).
 const WHATS_NEW_ITEMS = [
+  {
+    icon: '☕',
+    title: 'Neu: Dein eigenes Café',
+    text: 'Eröffne dein eigenes Café! Kaufe erst die Grundausstattung zusammen — Espressomaschine, Mühle, Theke, Möbel und Mitarbeiter, alle in mehreren Güteklassen. Ist der Mindeststandard erreicht, eröffnest du: dann kommen Gäste, jeder Kaffee bringt CoffeeCoins, und dein Café läuft von selbst weiter (idle). Miete, Löhne und Zutaten (🫘 Bohnen aus deinem Anbau-Imperium oder CC) gehen davon ab — die Wirtschaftlichkeit siehst du live im Café. Zu finden im Imperium-Tab, sobald du die Forschung „🏠 Erstes Café" besitzt.'
+  },
   {
     icon: '🫘',
     title: 'Neu: Rohstoff-Imperium',
@@ -1836,6 +1846,7 @@ function _ccBilanz(u) {
     { icon: '🌍', label: 'Welthandel (Einfluss)', income: inc.welt || 0, spent: sp.welt || 0, invested: inv.welt || 0 },
     { icon: '🏗️', label: 'Welt-Gebäude',      income: inc.weltbau || 0, spent: sp.weltbau || 0, invested: inv.weltbau || 0 },
     { icon: '🫘', label: 'Anbauländer',        income: inc.anbau || 0, spent: sp.anbau || 0, invested: inv.anbau || 0 },
+    { icon: '☕', label: 'Café',               income: inc.cafe || 0, spent: sp.cafe || 0, invested: inv.cafe || 0 },
     { icon: '⚔️', label: 'Kaffee-Krieger',    income: (dd.totalCcEarned || 0) + (inc.krieger || 0), spent: (dd.potionsSpent || 0) + (sp.krieger || 0), invested: inv.krieger || 0 },
     { icon: '🧠', label: 'CIQ',               income: quizCC + (u.map_data?.ciqCcEarned || 0) + (inc.ciq || 0), spent: sp.ciq || 0, invested: inv.ciq || 0 },
     { icon: '💎', label: 'Schätze',           income: u.map_data?.totalTreasureCc || 0 },
