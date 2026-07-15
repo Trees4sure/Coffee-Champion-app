@@ -291,11 +291,17 @@ function worldPerDayDetail(rankMap) {
   }
   return parts.join(', ');
 }
-function worldPerCupDetail(rankMap) {
+function worldPerCupDetail(rankMap, byCountry) {
   const parts = [];
   for (const [cid, rank] of Object.entries(rankMap || {})) {
     const c = _worldById(cid); const slot = _worldSlot(c, rank);
-    if (c && slot && (slot.perCup || 0) > 0) parts.push(`${c.flag}+${slot.perCup}`);
+    let v = (slot && (slot.perCup || 0) > 0) ? slot.perCup : 0;
+    // Rangabhängiger Gebäude-Anteil dieses Landes mit einbeziehen (sonst fehlt der
+    // Gebäude-perCup im „Heute erhalten"-Detail, obwohl er ausgezahlt wird).
+    if (byCountry && typeof calcWorldBuildingPerCup === 'function') {
+      v += calcWorldBuildingPerCup({ [cid]: rank }, byCountry) || 0;
+    }
+    if (c && v > 0) parts.push(`${c.flag}+${Math.round(v * 100) / 100}`);
   }
   return parts.join(', ');
 }
@@ -1591,6 +1597,7 @@ function worldStatLineHTML(u, investments, byCountry) {
     + `🌍 ${s.governments}🏛️ &nbsp;·&nbsp; ${s.ranks} Länder &nbsp;·&nbsp; 💰 ${_wfmt(s.invested)} inv.`
     + (s.myBld.length ? ` &nbsp;·&nbsp; 🏗️ ${s.myBld.length} ${bldIcons}` : '')
     + (s.perDay > 0 ? ` &nbsp;·&nbsp; +${_wfmt(s.perDay)}/Tag` : '')
+    + (s.perCup > 0 ? ` &nbsp;·&nbsp; +${s.perCup}/Tasse` : '')
     + `</div>`;
 }
 
@@ -1630,6 +1637,7 @@ function _renderWeltStatistik(investments, byCountry, member, taxStats, users) {
         <span title="investiert gesamt">💰 ${_wfmt(s.invested)}</span>
         <span title="errichtete Gebäude">🏗️ ${s.myBld.length}</span>
         <span title="Welt-Einkommen / Tag">📈 +${_wfmt(s.perDay)}</span>
+        ${s.perCup > 0 ? `<span title="Welt-Einfluss pro Tasse (Länder-Ränge + rangabhängige Gebäude)">☕ +${s.perCup}/Tasse</span>` : ''}
         ${anlage > 0 ? `<span class="cc-wstat-anlage" title="Stille Anlage: ${_wfmt(anlage)} CC Kapital · Anteil am Gebäude-Einkommen">🏦 ${_wfmt(anlage)}${anlageYield > 0 ? ` (+${_wfmt(anlageYield)}/Tag)` : ''}</span>` : ''}
         ${boerse > 0 ? `<span class="cc-wstat-boerse" title="Kaffeebörse: ${_wfmt(boerse)} CC angelegtes Kapital">💹 ${_wfmt(boerse)}</span>` : ''}
         ${_lagerTot > 0 ? `<span class="cc-wstat-anbau" title="Rohkaffee-Lager: 🌾 ${_lagerOeko} Öko · ${_lagerStd} Standard ${PRODUCER_UNIT}">🫘 ${_wfmt(_lagerTot)} ${PRODUCER_UNIT}</span>` : ''}

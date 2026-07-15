@@ -969,7 +969,7 @@ const DB = (() => {
       }
       if (worldBonus > 0) {
         const detail = (typeof worldPerCupDetail === 'function')
-          ? `${amount}× à ${worldPerCupBase}/Tasse · ${worldPerCupDetail(worldRankMap)}` : '';
+          ? `${amount}× à ${worldPerCupBase}/Tasse · ${worldPerCupDetail(worldRankMap, worldByCountry)}` : '';
         logEntries.push({ label: '🌍 Welt-Einfluss', amount: k(worldBonus), cat: 'welt', detail });
       }
       if (allianceCupBonus > 0) {
