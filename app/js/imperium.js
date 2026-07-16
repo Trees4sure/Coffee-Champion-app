@@ -1227,11 +1227,12 @@ function _buildKarte(member, el) {
     _justDone.forEach(([, b], i) => {
       const def = karteBuildingDef(b.type);
       if (!def) return;
-      const desc = def.perDay    ? `Liefert jetzt +${def.perDay} CC/Tag`
-                 : def.harbor    ? 'Handelshafen aktiv — 1% aller Forschungskäufe'
-                 : def.stepBonus ? `Dauerhaft +${def.stepBonus} Schritt/Tag`
-                 : def.fogRadius ? 'Deckt den Nebel im Umkreis auf'
-                 : 'Gebäude fertiggestellt';
+      const _fx = [];
+      if (def.perDay)    _fx.push(`+${def.perDay} CC/Tag`);
+      if (def.harbor)    _fx.push('1% aller Forschungskäufe der Gruppe');
+      if (def.stepBonus) _fx.push(`+${def.stepBonus} Schritt/Tag`);
+      if (def.fogRadius) _fx.push('deckt den Nebel im Umkreis auf');
+      const desc = _fx.length ? `Liefert jetzt ${_fx.join(' · ')}` : 'Gebäude fertiggestellt';
       setTimeout(() => {
         if (typeof showAchievementPopup === 'function') {
           showAchievementPopup({ icon: def.emoji, name: `${def.name} aktiv!`, desc });
@@ -1835,11 +1836,12 @@ function _showDungeonModal(member, state, seed) {
 
 // ── Gebäude-Bau ───────────────────────────────────────────────────────────────
 function _buildingEffectLabel(b) {
-  if (b.perDay)    return `+${b.perDay} CC/Tag`;
-  if (b.harbor)    return '1% aller Forschungskäufe der Gruppe';
-  if (b.stepBonus) return `+${b.stepBonus} Schritt${b.stepBonus > 1 ? 'e' : ''}/Tag`;
-  if (b.fogRadius) return 'Deckt Nebel im Umkreis auf';
-  return '';
+  const parts = [];
+  if (b?.perDay)    parts.push(`+${b.perDay} CC/Tag`);
+  if (b?.harbor)    parts.push('1% aller Forschungskäufe der Gruppe');
+  if (b?.stepBonus) parts.push(`+${b.stepBonus} Schritt${b.stepBonus > 1 ? 'e' : ''}/Tag`);
+  if (b?.fogRadius) parts.push('Deckt Nebel im Umkreis auf');
+  return parts.join(' · ');
 }
 
 function _showKarteBuildMenu(options, cx, cy, member, state, seed) {

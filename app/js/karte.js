@@ -193,7 +193,7 @@ function _getBestItemInSlot(slot, upgrades) {
 //   perDay    : passives CC-Einkommen nach Fertigstellung
 //   stepBonus : dauerhafter Bonus auf das tägliche Schritte-Cap
 //   fogRadius : deckt dauerhaft Nebel im Umkreis auf (nur Aussichtsturm)
-//   harbor    : true = Handelshafen (1% Anteil an Forschungskäufen, s. db.js)
+//   harbor    : true = Handelshafen (zusätzlich 1% Anteil an Forschungskäufen, s. db.js)
 const KARTE_BUILDINGS = [
   // ── Wiese (GRASS) ──
   { key:'kaffeeplantage',   emoji:'🌱', name:'Kaffeeplantage',   path:'Wiese',        terrain:'GRASS',    w:2, h:2,                                cost:300,   days:3, perDay:8  },
@@ -207,7 +207,7 @@ const KARTE_BUILDINGS = [
   // ── Fluss (RIVER) ──
   { key:'wasserquelle',     emoji:'💧', name:'Wasserquelle',     path:'Fluss',        terrain:'RIVER',                                             cost:100,   days:1, perDay:4  },
   { key:'wassermuehle',     emoji:'🏞️', name:'Wassermühle',      path:'Fluss',        terrain:'MOUNTAIN', adjacent:'RIVER',                        cost:500,   days:4, perDay:14 },
-  { key:'handelshafen',     emoji:'⚓', name:'Handelshafen',     path:'Fluss',        terrain:'RIVER',    w:2, h:2,                                cost:800,   days:5, perDay:0, harbor:true },
+  { key:'handelshafen',     emoji:'⚓', name:'Handelshafen',     path:'Fluss',        terrain:'RIVER',    w:2, h:2,                                cost:800,   days:5, perDay:12, harbor:true },
   // ── Kaffeefelder (COFFEE) ──
   { key:'roesterei',        emoji:'🔥', name:'Rösterei',         path:'Kaffeefelder', terrain:'COFFEE',                                            cost:350,   days:3, perDay:10 },
   { key:'cafe',             emoji:'🏠', name:'Café',             path:'Kaffeefelder', terrain:'COFFEE',   w:2, h:2, requires:'roesterei', requireRange:4, cost:900, days:4, perDay:18 },

@@ -715,7 +715,8 @@ function ensureRegelwerk() {
       Auf erkundetem, gleichem Terrain baust du <b>Gebäude</b> (1×1 bis 3×3) — die werfen
       <b>Einkommen ab, während du nichts tust</b>. Bauzeit läuft in Echtzeit, kein Klick nötig.
       Passives Einkommen sammelt sich (gedeckelt auf ein paar Tage), also schau ab und zu rein.
-      Der Handelshafen ⚓ schneidet sogar bei fremden Forschungskäufen mit.`)}
+      Der Handelshafen ⚓ wirft nicht nur täglich CC ab, sondern schneidet zusätzlich
+      bei jedem Forschungskauf der ganzen Gruppe mit (1 % der Kaufkosten).`)}
     ${sec('🔬', 'Forschung', `
       Im Imperium-Tab wächst dein <b>Forschungsbaum</b> (5 Tiers). Items geben CC pro Tasse
       <i>und</i> pro Tag. Höhere Tiers brauchen Voraussetzungen — erst die Basis, dann der Luxus.
