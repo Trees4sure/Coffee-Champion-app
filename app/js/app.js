@@ -579,7 +579,7 @@ function renderLeaderboard() {
 // App-Start. Idempotent über map_data.whatsNewSeen = WHATS_NEW_VERSION (analog Login-Bonus/
 // Tagesaufgaben-Muster) — wer schon dran war, sieht es nicht erneut. Bei künftigen neuen
 // Features: WHATS_NEW_VERSION + WHATS_NEW_ITEMS aktualisieren, dann poppt es einmalig erneut auf.
-// Aktiv: 🪴 Kaffee-Garten + 🤝 Handelsbündnis-Dividende. Zeit-gesteuert — das Popup erscheint erst ab
+// Aktiv: ☕ Café 2.0. Zeit-gesteuert — das Popup erscheint erst ab
 // WHATS_NEW_GO_LIVE (lokale Zeit), davor bleibt es still. Danach einmalig pro Spieler beim
 // nächsten App-Start (idempotent über map_data.whatsNewSeen). Bei leerer Liste poppt dank
 // Guard nichts. Zum Deaktivieren: WHATS_NEW_ITEMS = [] und/oder GO_LIVE in die Zukunft setzen.
@@ -588,19 +588,14 @@ function renderLeaderboard() {
 // whatsNewSeen merkt sich nur EINE Version). Wer die 5 schon kannte, sieht sie einmal erneut + Krieger.
 const WHATS_NEW_VERSION = '2026-07-18-cafe2';
 // Go-Live-Zeitpunkt (LOKALE Zeit, ISO ohne "Z" → wird als Ortszeit interpretiert):
-// JP 2026-07-17: Café 2.0 erst MORGEN 18.07. um 15:00 ankündigen. Alte Einträge raus, nur der Garten bleibt.
+// JP 2026-07-17: Café 2.0 erst MORGEN 18.07. um 15:00 ankündigen. Alte Einträge raus.
 const WHATS_NEW_GO_LIVE = new Date('2026-07-18T15:00:00');
-// WHATS_NEW_ITEMS: nur Café 2.0 (neu) + Kaffee-Garten (bewusst behalten). Rest bewusst entfernt (JP).
+// WHATS_NEW_ITEMS: nur Café 2.0. Kaffee-Garten entfernt (Feature komplett zurückgebaut). Rest bewusst entfernt (JP).
 const WHATS_NEW_ITEMS = [
   {
     icon: '☕',
     title: 'Neu: Dein Café als eigene Filiale + 6 Café-Stile',
     text: 'Dein Café ist jetzt eine selbstverwaltende Filiale mit eigener Kasse: Du legst Startkapital ein, kaufst davon die Ausstattung, und im Betrieb fließen die Gewinne in die Café-Kasse. Über einen Regler bestimmst du, wie viel Gewinn an dich ausgeschüttet wird und wie viel die Filiale behält — mit 🤖 Auto-Ausbau reinvestiert sie sogar selbst. Verluste treffen nur die Café-Kasse, nie dein Guthaben. Ganz neu: 6 wählbare Café-Stile (Klassisch, Hipp, Inn, Chic, Edel, Adlig) — jeder zieht andere Klientel an, von Studenten bis zur High Society. Dazu Café-Level, tägliche Aufgaben und freischaltbare Rezepte. Höhere Stile schaltest du über den Café-Umsatz frei. Zu finden im Imperium-Tab mit der Forschung „🏠 Erstes Café".'
-  },
-  {
-    icon: '🪴',
-    title: 'Kaffee-Garten',
-    text: 'Lege dein persönliches Diorama der Kaffeegeschichte an: 84 Sammel-Elemente in 7 Epochen füllen dein 📖 Kaffee-Lexikon — und werfen dauerhaft CoffeeCoins ab (passiv pro Tag + extra pro Tasse). Zu finden im Imperium-Tab, sobald du die Forschung „Kaffeegarten" und die „Limitierte Edition" besitzt.'
   }
 ];
 
@@ -829,7 +824,6 @@ function renderProfile() {
   }
 
   renderDailyTask(u);
-  renderGartenLexikon(u);
   renderCiqPerks(u);
   renderVermoegen(u);
   renderMobilProfil(u);
@@ -923,32 +917,6 @@ function renderMobilProfil(u) {
       <div class="vermoegen-row"><span class="vermoegen-label">🛣️ Reisen</span><span class="vermoegen-amount">${trips}</span></div>
       <div class="vermoegen-row"><span class="vermoegen-label">🪙 Reiseertrag gesamt</span><span class="vermoegen-amount">${earned.toLocaleString('de-DE')} CC</span></div>
     </div>`;
-}
-
-// 📖 Kaffee-Lexikon-Fortschritt (Kaffee-Garten, Erlebnis-Minigame #1). Dynamisch in den
-// Untertab „🏆 Achievements" injiziert (kein index.html-Edit), nur wenn der Kaffeegarten
-// erforscht ist. Das eigentliche Sammeln passiert im 🪴 Garten-Tab (Imperium).
-function renderGartenLexikon(u) {
-  const tab = document.getElementById('profile-subtab-achievements');
-  if (!tab) return;
-  let sec = document.getElementById('garten-lexikon-section');
-  const hasGarden = !!(u.research && u.research.kaffeegarten && u.research.lim_edition);
-  if (!hasGarden || typeof gardenLexikonCount !== 'function') { if (sec) sec.remove(); return; }
-  if (!sec) {
-    sec = document.createElement('div');
-    sec.id = 'garten-lexikon-section';
-    sec.className = 'progress-section';
-    const anchor = document.getElementById('daily-task-section');
-    if (anchor && anchor.nextSibling) tab.insertBefore(sec, anchor.nextSibling);
-    else tab.insertBefore(sec, tab.firstChild);
-  }
-  const have  = gardenLexikonCount(u.garden);
-  const total = GARDEN_TOTAL;
-  const pct   = Math.round((have / total) * 100);
-  sec.innerHTML = `
-    <div class="section-title">📖 Kaffee-Lexikon</div>
-    <div class="cc-progress-bar"><div class="cc-progress-fill" style="width:${pct}%"></div></div>
-    <p class="dt-meta" style="margin-top:6px">${have}/${total} Einträge entdeckt${have === total ? ' — Garten-Kurator! 🪴' : ''}. Sammle sie im 🪴 Garten (Imperium).</p>`;
 }
 
 // ✨ Kaffee-Aufgabe der Tage (rotiert alle 3 Tage). Wird dynamisch ins Profil injiziert
@@ -1792,8 +1760,8 @@ function _ccVermoegen(u) {
     // 💵 Liquides Kapital: Stille Anlage + Kaffeebörse + Café-Kasse — jederzeit greifbares Kapital,
     // zählt wie Bargeld ins Vermögen (JP 2026-07-13/17). Café-Kasse = Filialvermögen (self-managed).
     kapital:   Math.round(_ccStilleAnlage(u) + _ccBoerse(u) + ((typeof cafeKasse === 'function') ? cafeKasse(u) : 0)),
-    // 🎡 Erlebnisse (Kaffee-Garten u.a. Erlebnis-Minigames) — Summe der Freischaltkosten
-    erlebnis:  Math.round((typeof gardenValue === 'function') ? gardenValue(u.garden) : 0),
+    // 🎡 Erlebnisse — Kaffee-Garten entfernt; keine Erlebnis-Minigames mit Netto-Vermögenswert mehr
+    erlebnis:  0,
     kredit,
   };
   parts.total = parts.coins + parts.forschung + parts.karte + parts.welt + parts.krieger + parts.kapital + parts.erlebnis + parts.kredit;

@@ -109,7 +109,6 @@ async function renderImperium() {
       <button class="imp-tab" data-tab="karte">🗺️ Karte</button>
       <button class="imp-tab" data-tab="welt">🌍 Weltkarte</button>
       <button class="imp-tab" data-tab="krieger">⚔️ Krieger</button>
-      ${(research.kaffeegarten && research.lim_edition) ? '<button class="imp-tab" data-tab="garden">🪴 Garten</button>' : ''}
       ${(research.kaffeemobil && research.barista_kurs && research.fahrender_haendler) ? '<button class="imp-tab" data-tab="mobil">🚐 Kaffeemobil</button>' : ''}
       ${research.erstes_cafe ? '<button class="imp-tab" data-tab="cafe">☕ Café</button>' : ''}
       <button class="imp-tab" data-tab="stats">📊 Statistik</button>
@@ -126,7 +125,7 @@ async function renderImperium() {
     document.querySelectorAll('.imp-tab').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     // Karte/Welt/Krieger-Tab: immer aktuellsten Stand (currentUserData hat map_data/dungeon_data/coins-Updates)
-    const freshMember = (btn.dataset.tab === 'karte' || btn.dataset.tab === 'welt' || btn.dataset.tab === 'krieger' || btn.dataset.tab === 'garden' || btn.dataset.tab === 'mobil' || btn.dataset.tab === 'cafe') ? (currentUserData || member) : member;
+    const freshMember = (btn.dataset.tab === 'karte' || btn.dataset.tab === 'welt' || btn.dataset.tab === 'krieger' || btn.dataset.tab === 'mobil' || btn.dataset.tab === 'cafe') ? (currentUserData || member) : member;
     _renderImperiumTab(btn.dataset.tab, freshMember);
   });
 
@@ -143,7 +142,6 @@ async function _renderImperiumTab(tab, member) {
   if (tab === 'stats')     el.innerHTML = _buildImperiumStats();
   if (tab === 'cosmetics') el.innerHTML = _buildCosmetics(member);
   if (tab === 'krieger')   { el.innerHTML = ''; _buildKrieger(member, el); return; }
-  if (tab === 'garden')    el.innerHTML = _buildGarten(member);
   if (tab === 'mobil')     { el.innerHTML = ''; if (typeof _buildKaffeemobil === 'function') _buildKaffeemobil(member, el); return; }
   if (tab === 'cafe')      { el.innerHTML = ''; if (typeof _buildCafe === 'function') _buildCafe(member, el); return; }
   // Event-Delegation für Kaufbuttons
@@ -154,13 +152,6 @@ async function _renderImperiumTab(tab, member) {
     if (cBtn) await _handleContribute(cBtn.dataset.contribute, member);
     const cosBtn = e.target.closest('[data-cosm-set]');
     if (cosBtn) await _handleCosmeticsSet(cosBtn.dataset.cosmSet, cosBtn.dataset.cosmVal, member);
-    const gBtn = e.target.closest('[data-garden-buy]');
-    if (gBtn) await _handleGardenBuy(gBtn.dataset.gardenBuy, member);
-    const gAcc = e.target.closest('[data-garden-epoch]');
-    if (gAcc && !gBtn) {
-      const c = document.getElementById('garden-ep-' + gAcc.dataset.gardenEpoch);
-      if (c) { c.classList.toggle('open'); _gardenOpenEpoch = c.classList.contains('open') ? gAcc.dataset.gardenEpoch : null; }
-    }
   };
 }
 
@@ -243,106 +234,7 @@ function _buildForschungsbaum(research) {
   return html;
 }
 
-// ── 🪴 Kaffee-Garten (Erlebnis-Minigame #1) ─────────────────────────────────
-// Zuletzt geöffnete Epoche merken, damit ein Kauf nicht zurück zu Epoche 1 springt.
-let _gardenOpenEpoch = null;
-
-function _buildGarten(member) {
-  if (typeof GARDEN_EPOCHS === 'undefined') return '<p style="color:var(--muted);padding:16px">Lade Garten…</p>';
-  const garden = member.garden || {};
-  const total  = GARDEN_TOTAL;
-  const have   = gardenLexikonCount(garden);
-  const pct    = Math.round((have / total) * 100);
-  const value  = gardenValue(garden);
-  const openId = _gardenOpenEpoch || GARDEN_EPOCHS[0].id;
-  const gPerDay = (typeof gardenPerDay === 'function') ? gardenPerDay(garden, member.research) : 0;
-  const gPerCup = (typeof gardenPerCup === 'function') ? gardenPerCup(garden, member.research) : 0;
-
-  const epochsHtml = GARDEN_EPOCHS.map(ep => {
-    const cnt      = gardenEpochUnlockedCount(garden, ep.id);
-    const complete = cnt === 12;
-    const tiles = (GARDEN_ELEMENTS[ep.id] || []).map((elm, i) => {
-      const slot  = i + 1;
-      const id    = gardenElementId(ep.id, slot);
-      const owned = gardenIsUnlocked(garden, id);
-      const rar   = gardenRarity(slot);
-      if (owned) {
-        return `<div class="cc-gt owned cc-gt-${rar}">
-          <div class="cc-gt-icon">${elm.icon}</div>
-          <p class="cc-gt-name">${_esc2(elm.name)}</p>
-          <p class="cc-gt-story">${_esc2(elm.story)}</p>
-        </div>`;
-      }
-      return `<div class="cc-gt locked cc-gt-${rar}">
-        <div class="cc-gt-icon">🔒</div>
-        <p class="cc-gt-name">${_esc2(elm.name)}</p>
-        <p class="cc-gt-rar">${gardenRarityLabel(slot)} · +${gardenSlotPerDay(slot)}/Tag</p>
-        <button class="cc-buy-btn cc-gt-buy" data-garden-buy="${id}">${gardenElementCost(slot)} CC</button>
-      </div>`;
-    }).join('');
-    return `<div class="cc-garden-epoch${ep.id === openId ? ' open' : ''}" id="garden-ep-${ep.id}">
-      <div class="cc-garden-ep-head" data-garden-epoch="${ep.id}">
-        <span class="cc-garden-ep-title">${ep.icon} ${_esc2(ep.name)}</span>
-        <span class="cc-garden-ep-sub">${_esc2(ep.sub)}</span>
-        <span class="cc-garden-ep-count${complete ? ' done' : ''}">${complete ? '✓ ' : ''}${cnt}/12</span>
-      </div>
-      <div class="cc-garden-grid">${tiles}</div>
-    </div>`;
-  }).join('');
-
-  return `<div class="cc-garden">
-    <div class="cc-garden-intro">
-      <p class="cc-garden-lead">🪴 <strong>Kaffee-Garten</strong> — ein Diorama der Kaffeegeschichte. Jedes Element erzählt ein Stück Historie, füllt dein <strong>Kaffee-Lexikon</strong> und wirft <strong>Einkommen</strong> ab (Passiv/Tag + pro Tasse). Volle Epoche = <strong>+100 CC</strong>.</p>
-      <div class="cc-garden-progress">
-        <div class="cc-garden-prog-lbl">📖 Kaffee-Lexikon: <strong>${have}/${total}</strong> Einträge · Sammlungswert ${_fmtCoins(value)} CC</div>
-        <div class="cc-progress-bar"><div class="cc-progress-fill" style="width:${pct}%"></div></div>
-        <div class="cc-garden-income">🪙 Garten-Einkommen: <strong>+${_fmtCoins(gPerDay)} CC/Tag</strong>${gPerCup > 0 ? ` · <strong>+${gPerCup} CC/Tasse</strong>` : ''} <span class="cc-garden-income-note">(inkl. deiner Forschungs-Boni)</span></div>
-      </div>
-    </div>
-    ${epochsHtml}
-  </div>`;
-}
-
-async function _handleGardenBuy(elementId, member) {
-  try {
-    const res = await DB.unlockGardenElement(member.id, elementId);
-    if (res?.error) {
-      const map = { already_unlocked: 'Schon in deinem Garten.', insufficient: 'Nicht genug CoffeeCoins.', bad_element: 'Unbekanntes Element.', not_found: 'Mitglied nicht gefunden.' };
-      showToast(map[res.error] || 'Freischalten fehlgeschlagen', 'error'); return;
-    }
-    const slot    = gardenSlotOfId(elementId);
-    const epochId = elementId.split('_')[0];
-    const def     = gardenElementDef(epochId, slot);
-    const epDef   = gardenEpochDef(epochId);
-    _gardenOpenEpoch = epochId; // beim Neu-Rendern die aktuelle Epoche offen halten
-    // Tages-Log / Bilanz (Rubrik „erlebnis", Freischaltung = invest:true) — nie kaufblockierend
-    try {
-      const entries = [{ label: `🪴 Garten: ${def?.name || elementId}`, amount: -(res.cost || 0), cat: 'erlebnis', detail: 'Kaffee-Garten', invest: true }];
-      if (res.epoch_complete && res.epoch_bonus > 0)
-        entries.push({ label: `🪴 Epoche komplett: ${epDef?.name || epochId}`, amount: res.epoch_bonus, cat: 'erlebnis' });
-      await DB.appendTodayLogFresh(member.id, entries);
-    } catch (e) { /* non-critical */ }
-    appData = await DB.fetchData();
-    const updated = appData.users.find(u => u.id === member.id);
-    if (updated) currentUserData = { ...currentUserData, ...updated };
-    _updateHeaderCoins(updated || member);
-    if (res.epoch_complete) showToast(`🪴 Epoche „${epDef?.name}" komplett! +${res.epoch_bonus} CC`, 'success');
-    else showToast(`🪴 ${def?.name || 'Element'} freigeschaltet! (−${res.cost} CC)`, 'success');
-    try { if (res.epoch_complete && epDef) await DB.postMessage(`🪴 ${member.name} hat die Garten-Epoche „${epDef.name}" vollendet!`, member.name); } catch (e) { /* non-critical */ }
-    // Achievement: volles Lexikon (alle 84) → Garten-Kurator (+250 CC via achievements.js)
-    try {
-      const existing = currentUserData?.achievements || {};
-      if (!existing.garten_epoch_all && updated && gardenAllComplete(updated.garden)) {
-        await DB.grantAchievements(member.id, { garten_epoch_all: true });
-        currentUserData = { ...currentUserData, achievements: { ...existing, garten_epoch_all: true } };
-        const ach = (typeof ACHIEVEMENTS !== 'undefined' ? ACHIEVEMENTS : []).find(a => a.id === 'garten_epoch_all');
-        if (ach) showToast(`🏆 Achievement: ${ach.name}! (+${ach.coinReward} CC)`, 'success');
-        try { await DB.postMessage(`🏆 ${member.name} hat das Kaffee-Lexikon vollständig gefüllt — Garten-Kurator!`, member.name); } catch (e) {}
-      }
-    } catch (e) { /* non-critical */ }
-    _renderImperiumTab('garden', updated || member);
-  } catch (e) { showToast(e.message, 'error'); }
-}
+// (🪴 Kaffee-Garten entfernt — Feature komplett zurückgebaut, 2026-07-17)
 
 // Banner mit allen aktiven Gruppen-Boni (Tasse/Passiv/Schritte/Schatz)
 // Stufen-Banner der Gruppenkasse (Stufe X/5, frische Mechanik, Fortschritt zur nächsten Stufe)
