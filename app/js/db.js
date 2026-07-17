@@ -118,8 +118,21 @@ const DB = (() => {
       list.push(e);
     }
     const next = list.slice(-50);
+    // Laufende Tages-Summen — UNABHÄNGIG vom 50-Einträge-Anzeigelimit oben. Ohne sie schrumpft
+    // die angezeigte Tages-Einnahme, sobald ältere Log-Einträge aus dem 50er-Fenster fallen
+    // (das war der „1800→1000"-Bug). Wir summieren die REINEN Zugänge (jeden eingehenden Eintrag),
+    // nicht die gekappte/aggregierte Anzeige-Liste.
+    const ps = (mapData?.todayLog?.date === day) ? (mapData.todayLog.sums || null) : null;
+    let sGross = ps?.gross || 0, sSpent = ps?.spent || 0, sNet = ps?.net || 0;
+    for (const raw of entries) {
+      const amt = raw.amount || 0;
+      if (raw.kapital) continue;                       // reine Kapitalbewegung → zählt nirgends
+      if (amt > 0) { sGross += amt; sNet += amt; }
+      else if (!raw.invest) { sSpent += -amt; sNet += amt; } // Investitionen zählen nicht ins Netto
+    }
+    const sums = { gross: Math.round(sGross * 100) / 100, spent: Math.round(sSpent * 100) / 100, net: Math.round(sNet * 100) / 100 };
     const ledger = _accrueLedger(mapData?.ledger, entries);
-    return { ...(mapData || {}), todayLog: { date: day, entries: next }, ledger };
+    return { ...(mapData || {}), todayLog: { date: day, entries: next, sums }, ledger };
   }
 
   // ── Bilanz-Ledger: kumulative Lifetime-Summen je Kategorie (Einnahmen/Ausgaben/Investitionen) ──
@@ -652,15 +665,19 @@ const DB = (() => {
     // das passive Einkommen, sondern was tatsächlich reinkam.
     const tl    = member.map_data && member.map_data.todayLog;
     const tlOk  = !!(tl && tl.date === today());
+    // Bevorzugt die laufenden Tages-Summen (todayLog.sums, unabhängig vom 50-Einträge-Limit);
+    // Fallback = Aufsummieren der (evtl. gekappten) Einträge für Alt-Tage ohne sums.
     const gross = tlOk
-      ? Math.round((tl.entries || []).reduce((s, e) => s + ((e.amount > 0 && !e.kapital) ? e.amount : 0), 0) * 100) / 100
+      ? (tl.sums ? Math.round((tl.sums.gross || 0) * 100) / 100
+                 : Math.round((tl.entries || []).reduce((s, e) => s + ((e.amount > 0 && !e.kapital) ? e.amount : 0), 0) * 100) / 100)
       : 0;
     // NET = realisiertes Tages-Einkommen MINUS KONSUM-Ausgaben (negative Log-Einträge, z.B. Tränke,
     // Reparatur, Steuer-Events, Strafen) = das „erweiterte Tages-Gehalt" für das Chart (Transparenz).
     // Investitionen (invest:true — Forschung, Karte/Gebäude, Welthandel, Krieger-Ausrüstung) zählen
     // NICHT ins Netto: sie mindern nicht das Gehalt, sondern wandern ins Gesamtvermögen (JP 2026-07-11).
     const net = tlOk
-      ? Math.round((tl.entries || []).reduce((s, e) => s + ((e.invest || e.kapital) ? 0 : (e.amount || 0)), 0) * 100) / 100
+      ? (tl.sums ? Math.round((tl.sums.net || 0) * 100) / 100
+                 : Math.round((tl.entries || []).reduce((s, e) => s + ((e.invest || e.kapital) ? 0 : (e.amount || 0)), 0) * 100) / 100)
       : 0;
 
     return { day: perDay, cup: perCup, coins: Math.round(member.coins || 0), gross, net };

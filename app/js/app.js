@@ -1424,12 +1424,15 @@ function renderGehalt() {
 
   // Realisiertes Einkommen heute — live aus dem Tages-Log jedes Mitglieds.
   const todayKey = new Date().toISOString().slice(0, 10);
-  const _tlOf = u => { const tl = (appData.users.find(x => x.id === u.id) || u).map_data?.todayLog; return (tl && tl.date === todayKey) ? (tl.entries || []) : []; };
+  const _tlObjOf = u => { const tl = (appData.users.find(x => x.id === u.id) || u).map_data?.todayLog; return (tl && tl.date === todayKey) ? tl : null; };
+  const _tlOf = u => { const tl = _tlObjOf(u); return tl ? (tl.entries || []) : []; };
   // kapital:true = reine Kapitalbewegung (Stille Anlage / Kaffeebörse Ein-/Auszahlen) → zählt
   // weder als Einnahme noch als Ausgabe noch ins Netto (nur informativ im Tages-Log sichtbar).
-  const grossToday = u => Math.round(_tlOf(u).reduce((s, e) => s + ((e.amount > 0 && !e.kapital) ? e.amount : 0), 0) * 100) / 100; // Einnahmen
-  const spendToday = u => Math.round(_tlOf(u).reduce((s, e) => s + ((e.amount < 0 && !e.invest && !e.kapital) ? -e.amount : 0), 0) * 100) / 100; // Konsum-Ausgaben (ohne Investitionen/Kapital)
-  const netToday   = u => Math.round(_tlOf(u).reduce((s, e) => s + ((e.invest || e.kapital) ? 0 : (e.amount || 0)), 0) * 100) / 100;             // Netto = Einnahmen − Konsum-Ausgaben (Investitionen & Kapitalbewegungen zählen nicht)
+  // Bevorzugt die laufenden Tages-Summen (todayLog.sums — unabhängig vom 50-Einträge-Limit, sonst
+  // schrumpft die Tages-Einnahme, wenn ältere Einträge aus dem Fenster fallen); Fallback = Einträge summieren.
+  const grossToday = u => { const t = _tlObjOf(u); return t?.sums ? Math.round((t.sums.gross || 0) * 100) / 100 : Math.round(_tlOf(u).reduce((s, e) => s + ((e.amount > 0 && !e.kapital) ? e.amount : 0), 0) * 100) / 100; }; // Einnahmen
+  const spendToday = u => { const t = _tlObjOf(u); return t?.sums ? Math.round((t.sums.spent || 0) * 100) / 100 : Math.round(_tlOf(u).reduce((s, e) => s + ((e.amount < 0 && !e.invest && !e.kapital) ? -e.amount : 0), 0) * 100) / 100; }; // Konsum-Ausgaben
+  const netToday   = u => { const t = _tlObjOf(u); return t?.sums ? Math.round((t.sums.net || 0) * 100) / 100 : Math.round(_tlOf(u).reduce((s, e) => s + ((e.invest || e.kapital) ? 0 : (e.amount || 0)), 0) * 100) / 100; };             // Netto = Einnahmen − Konsum-Ausgaben
 
   // Metrik per Umschalter (📈 Brutto / 🧮 Netto), Fallback auf Verfügbarkeit. Beide Werte
   // liegen in jedem Snapshot → Umschalten zeigt auch die Altdaten der anderen Metrik.
@@ -1802,7 +1805,13 @@ function _ccBilanz(u) {
   ].map(c => ({ income: 0, spent: 0, invested: 0, ...c }));
   const shown = cats.filter(c => c.income || c.spent || c.invested);
   const tot = shown.reduce((a, c) => ({ income: a.income + c.income, spent: a.spent + c.spent, invested: a.invested + c.invested }), { income: 0, spent: 0, invested: 0 });
-  return { cats: shown, total: tot };
+  // REINER Ledger-Geldfluss (nur cat-getaggte Buchungen, OHNE die Lifetime-Retro-Zähler
+  // Kämpfe/Schätze/CIQ) — für den stabilen Vermögens-Abgleich (⚖️ Bewertungsdifferenz).
+  const ledger = {
+    income: Math.round(Object.values(inc).reduce((s, v) => s + (+v || 0), 0) * 100) / 100,
+    spent:  Math.round(Object.values(sp).reduce((s, v) => s + (+v || 0), 0) * 100) / 100,
+  };
+  return { cats: shown, total: tot, ledger };
 }
 // 📊 Bilanz-Sektion als HTML (geteilt von Profil-Vermögen + Informant). compact=true → kleinere Chips.
 function _ccBilanzHtml(u, compact) {
@@ -1815,22 +1824,24 @@ function _ccBilanzHtml(u, compact) {
       <span class="bilanz-label">${c.icon} ${c.label}</span>
       <span class="bilanz-vals">${cell(c.income, 'pos')}${cell(c.spent, 'neg')}${c.invested ? `<span class="bilanz-v inv">🏛️${f(c.invested)}</span>` : '<span class="bilanz-v bilanz-0">·</span>'}</span>
     </div>`).join('');
-  // 📦 Abgleich mit dem Gesamtvermögen: Vermögen = Startbestand + Einnahmen − Ausgaben.
-  // Investitionen werden NICHT abgezogen (sie stecken als Asset bereits im Vermögen). Der
-  // Startbestand ist ein Rest-/Plug-Wert: Kapital/Besitz vor Ledger-Start (12.07.) PLUS die
-  // Bewertungs-Unschärfe der Asset-Werte (Forschungs-Score/Garde/Gear ≠ exakt bezahltes CC)
-  // und nicht geloggte Verluste. Macht die Box rechnerisch schlüssig, ist aber kein exaktes
-  // „Bargeld vor 12.07.". Nur wenn _ccVermoegen verfügbar ist.
+  // ⚖️ Bewertungsdifferenz — Abgleich mit dem Gesamtvermögen: Vermögen = Bewertungsdifferenz + Netto-Geldfluss.
+  // Der Netto-Geldfluss ist bewusst NUR der reine, cat-getaggte Ledger-Geldfluss (b.ledger) SEIT
+  // Aufzeichnungsbeginn — OHNE die Lifetime-Retro-Zähler (Kämpfe/Schätze/CIQ). Die stehen in der
+  // Tabelle oben als volle Historie, gehören aber nicht in den Vermögens-Abgleich (längst ausgegeben)
+  // und ließen den Wert früher täglich ins Minus wandern. So bleibt die Differenz STABIL und positiv:
+  // sie bündelt Besitz vor Aufzeichnungsbeginn, geparktes Kapital (Stille Anlage/Börse) und die
+  // Bewertungs-Unschärfe der Asset-Werte (Score ≠ exakt bezahltes CC). Nur wenn _ccVermoegen da ist.
   const vermoegen = (typeof _ccVermoegen === 'function') ? Math.round(_ccVermoegen(u).total) : null;
-  const startbestand = (vermoegen != null) ? Math.round(vermoegen - b.total.income + b.total.spent) : null;
+  const lNet = b.ledger ? Math.round((b.ledger.income - b.ledger.spent) * 100) / 100 : 0;
+  const bewertung = (vermoegen != null) ? Math.round(vermoegen - lNet) : null;
   const reconcileRow = (vermoegen != null) ? `
       <div class="bilanz-row bilanz-reconcile">
-        <span class="bilanz-label" title="Besitz/Guthaben vor Ledger-Start (12.07.) + Bewertungs-Rest der Asset-Werte. Macht die Bilanz mit dem Gesamtvermögen schlüssig; kein exaktes Bargeld.">📦 Startbestand &amp; Bewertung</span>
-        <span class="bilanz-vals"><span class="bilanz-v ${startbestand < 0 ? 'neg' : 'pos'}">${startbestand < 0 ? '−' : '+'}${f(Math.abs(startbestand))}</span></span>
+        <span class="bilanz-label" title="Vermögen minus dem geloggten Netto-Geldfluss (Einnahmen − Ausgaben) seit Aufzeichnungsbeginn. Bündelt Besitz vor Aufzeichnungsbeginn, geparktes Kapital (Stille Anlage/Börse) und die Bewertungs-Unschärfe der Asset-Werte. Kämpfe/Schätze/CIQ-Lifetime zählen hier bewusst nicht — damit der Wert stabil bleibt und nicht ins Minus wandert.">⚖️ Bewertungsdifferenz</span>
+        <span class="bilanz-vals"><span class="bilanz-v ${bewertung < 0 ? 'neg' : 'pos'}">${bewertung < 0 ? '−' : '+'}${f(Math.abs(bewertung))}</span></span>
       </div>` : '';
   const reconcileEq = (vermoegen != null && !compact) ? `
-      <div class="bilanz-eq" title="Investitionen werden nicht abgezogen — sie stecken bereits als Asset im Gesamtvermögen." style="font-size:.68rem;color:var(--muted);text-align:center;padding:5px 6px 1px;opacity:.85">
-        📦 ${f(startbestand)} + 📈 ${f(b.total.income)} − 💸 ${f(b.total.spent)} = 💰 <strong>${f(vermoegen)} CC</strong>
+      <div class="bilanz-eq" title="Abgleich über den reinen Geldfluss seit Aufzeichnungsbeginn; die Tabelle oben zeigt die volle Lebenslauf-Historie inkl. Kämpfe/Schätze/CIQ." style="font-size:.68rem;color:var(--muted);text-align:center;padding:5px 6px 1px;opacity:.85">
+        ⚖️ ${f(bewertung)} + 🔄 Geldfluss ${f(lNet)} = 💰 <strong>${f(vermoegen)} CC</strong>
       </div>` : '';
   return `
     <div class="bilanz-box${compact ? ' bilanz-compact' : ''}">
