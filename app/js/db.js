@@ -1972,6 +1972,36 @@ const DB = (() => {
     if (error) throw new Error(error.message);
     return data; // { ok, map_data } | { error }
   }
+  // Filiale-Ökonomie (Café 2.0): eigene Kasse, Einlage, Ausschüttungsquote/Auto-Ausbau, Stil.
+  async function depositCafe(memberId, amount) {
+    const { data, error } = await _sb.rpc('deposit_cafe', { p_member_id: memberId, p_amount: parseFloat(amount) || 0 });
+    if (error) throw new Error(error.message);
+    return data; // { ok, amount, coins_left, kasse, map_data } | { error }
+  }
+  async function setCafePolicy(memberId, ratio, autobuild) {
+    const { data, error } = await _sb.rpc('set_cafe_policy', {
+      p_member_id: memberId, p_ratio: parseFloat(ratio), p_autobuild: !!autobuild });
+    if (error) throw new Error(error.message);
+    return data; // { ok, map_data } | { error }
+  }
+  async function setCafeStil(memberId, stil, minUmsatz) {
+    const { data, error } = await _sb.rpc('set_cafe_stil', {
+      p_member_id: memberId, p_stil: stil, p_min_umsatz: parseFloat(minUmsatz) || 0 });
+    if (error) throw new Error(error.message);
+    return data; // { ok, map_data } | { error: 'locked' }
+  }
+  async function claimCafeTask(memberId, taskId, reward) {
+    const { data, error } = await _sb.rpc('claim_cafe_task', {
+      p_member_id: memberId, p_task_id: taskId, p_reward: parseFloat(reward) || 0 });
+    if (error) throw new Error(error.message);
+    return data; // { ok, reward, coins, map_data } | { error: 'already' }
+  }
+  async function unlockCafeRecipe(memberId, id, cost) {
+    const { data, error } = await _sb.rpc('unlock_cafe_recipe', {
+      p_member_id: memberId, p_id: id, p_cost: parseFloat(cost) || 0 });
+    if (error) throw new Error(error.message);
+    return data; // { ok, kasse_left, map_data } | { error }
+  }
 
   async function buyGarde(memberId, countryId) {
     const { data, error } = await _sb.rpc('buy_garde', {
@@ -2397,6 +2427,6 @@ const DB = (() => {
     startMinigame, claimMinigame, getMinigameStatus,
     unlockGardenElement, saveGardenPlacements,
     fetchMobilGraph, startTrip, claimArrival,
-    openCafe, buyCafeItem, claimCafe, setCafeBeans,
+    openCafe, buyCafeItem, claimCafe, setCafeBeans, depositCafe, setCafePolicy, setCafeStil, claimCafeTask, unlockCafeRecipe,
   };
 })();

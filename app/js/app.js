@@ -586,47 +586,21 @@ function renderLeaderboard() {
 // 2026-07-12: Version gebumpt für den Kaffee-Krieger-Umbau. Die 5 bisherigen Einträge BLEIBEN
 // bewusst erhalten (Nachzügler, die das vorige Popup nie gesehen haben, verlieren sie sonst —
 // whatsNewSeen merkt sich nur EINE Version). Wer die 5 schon kannte, sieht sie einmal erneut + Krieger.
-const WHATS_NEW_VERSION = '2026-07-16-cafe';
+const WHATS_NEW_VERSION = '2026-07-18-cafe2';
 // Go-Live-Zeitpunkt (LOKALE Zeit, ISO ohne "Z" → wird als Ortszeit interpretiert):
-// ⚠️ PLATZHALTER — mit JP final abstimmen; sollte NACH dem SQL-Deploy des Cafés liegen.
-const WHATS_NEW_GO_LIVE = new Date('2026-07-16T08:00:00');
-// Version-Bump 2026-07-16: neuer ☕-Café-Eintrag ganz oben. Die bisherigen Einträge BLEIBEN
-// erhalten (whatsNewSeen merkt nur EINE Version → sonst gingen sie für Nachzügler verloren).
+// JP 2026-07-17: Café 2.0 erst MORGEN 18.07. um 15:00 ankündigen. Alte Einträge raus, nur der Garten bleibt.
+const WHATS_NEW_GO_LIVE = new Date('2026-07-18T15:00:00');
+// WHATS_NEW_ITEMS: nur Café 2.0 (neu) + Kaffee-Garten (bewusst behalten). Rest bewusst entfernt (JP).
 const WHATS_NEW_ITEMS = [
   {
     icon: '☕',
-    title: 'Neu: Dein eigenes Café',
-    text: 'Eröffne dein eigenes Café! Kaufe erst die Grundausstattung zusammen — Espressomaschine, Mühle, Theke, Möbel und Mitarbeiter, alle in mehreren Güteklassen. Ist der Mindeststandard erreicht, eröffnest du: dann kommen Gäste, jeder Kaffee bringt CoffeeCoins, und dein Café läuft von selbst weiter (idle). Miete, Löhne und Zutaten (🫘 Bohnen aus deinem Anbau-Imperium oder CC) gehen davon ab — die Wirtschaftlichkeit siehst du live im Café. Zu finden im Imperium-Tab, sobald du die Forschung „🏠 Erstes Café" besitzt.'
-  },
-  {
-    icon: '🫘',
-    title: 'Neu: Rohstoff-Imperium',
-    text: 'Erobere tropische Anbauländer (Kolumbien, Äthiopien, Vietnam & Co.), baue Plantagen und ernte Rohkaffee — gemessen in CT (Coffee Tons). Die Ernte wandert automatisch ins Lager; damit versorgst du entweder deine eigenen Kaffee-Märkte für bis zu +40 % Tagesbonus, oder du verkaufst die Bohnen zum schwankenden Tagespreis an der Kaffeebörse (🌾 Öko ist mehr wert als Standard). Freischaltung: die neue Forschung „🫘 Erzeuger-Konzession" (alle Tier-2-Forschungen). 5 neue Achievements warten!'
-  },
-  {
-    icon: '🌍',
-    title: '13 neue Länder + Konsum→Anbau-Synergien',
-    text: 'Die Weltkarte wächst um 13 Konsum-Länder: Spanien, Portugal, Irland, Schweiz, Österreich, Ungarn, Marokko, Ägypten, Libyen, Afghanistan, Pakistan, Neuseeland & Chile. Der Clou: 9 davon geben mit ihrem Premium-Gebäude einen globalen Bonus auf deine Plantagen (aktiv, sobald du im Land Rang hast und das Gebäude gebaut ist) — z. B. 🇨🇭 Schweiz „Bio-Auktionshaus" +50 % Öko-Verkaufspreis, 🇦🇹 Österreich +10 % Öko-Anteil, 🇲🇦 Marokko −30 % Plantagen-Löhne, 🇵🇰 Pakistan +15 % Ernte, 🇪🇬 Ägypten +20 % Transport. Konsum- und Anbau-Seite greifen jetzt ineinander!'
-  },
-  {
-    icon: '⚔️',
-    title: 'Kaffee-Krieger: Balance & Kultur-Rollen',
-    text: 'Jede Kultur hat jetzt eine klare Rolle: 🛡️ Mittelalter schlägt mit Rüstungsdurchschlag durch zähe Gegner, 🏰 Europa gibt +50% Kampf-CC, 🌙 Orient heilt bei jedem Krit, 🐺 Steppe eröffnet mit einer Gratis-Salve, ⚖️ Handel bekommt −25% Preise + Trank-Rückvergütung. Heilungen sind auf feste HP umgestellt (fairer), der zähe Tamper-Troll ist wieder besiegbar. Der Dungeon spammt den Chat nicht mehr, sondern fasst Kämpfe, Funde und Käufe zusammen, wenn du ihn verlässt. Neu: zwei Sammler-Achievements 🌍/🏅 für die Tier-1- bzw. Tier-2-Ausrüstung aller acht Kulturen.'
-  },
-  {
-    icon: '🚐',
-    title: 'Kaffeemobil: Welteroberung',
-    text: 'Schick dein Kaffeemobil auf große Fahrt: reise über eine echte, geteilte Weltkarte von Stadt zu Stadt, sammle Reiseboni (je weiter, desto mehr) und bereise mit deinem Kaffee die ganze Welt. Zu finden im Imperium-Tab, sobald du die Forschung „Fahrender Händler" besitzt (braucht Kaffeemobil + Barista-Kurs).'
+    title: 'Neu: Dein Café als eigene Filiale + 6 Café-Stile',
+    text: 'Dein Café ist jetzt eine selbstverwaltende Filiale mit eigener Kasse: Du legst Startkapital ein, kaufst davon die Ausstattung, und im Betrieb fließen die Gewinne in die Café-Kasse. Über einen Regler bestimmst du, wie viel Gewinn an dich ausgeschüttet wird und wie viel die Filiale behält — mit 🤖 Auto-Ausbau reinvestiert sie sogar selbst. Verluste treffen nur die Café-Kasse, nie dein Guthaben. Ganz neu: 6 wählbare Café-Stile (Klassisch, Hipp, Inn, Chic, Edel, Adlig) — jeder zieht andere Klientel an, von Studenten bis zur High Society. Dazu Café-Level, tägliche Aufgaben und freischaltbare Rezepte. Höhere Stile schaltest du über den Café-Umsatz frei. Zu finden im Imperium-Tab mit der Forschung „🏠 Erstes Café".'
   },
   {
     icon: '🪴',
     title: 'Kaffee-Garten',
     text: 'Lege dein persönliches Diorama der Kaffeegeschichte an: 84 Sammel-Elemente in 7 Epochen füllen dein 📖 Kaffee-Lexikon — und werfen dauerhaft CoffeeCoins ab (passiv pro Tag + extra pro Tasse). Zu finden im Imperium-Tab, sobald du die Forschung „Kaffeegarten" und die „Limitierte Edition" besitzt.'
-  },
-  {
-    icon: '💹',
-    title: 'Kaffeebörse: automatisch & wählbar',
-    text: 'Deine Börsen-Dividende kommt jetzt automatisch einmal pro Tag — kein tägliches Einsammeln mehr. Neu: Du wählst, ob sie aufs Guthaben geht oder reinvestiert wird (Zinseszins bis zum Maximum).'
   }
 ];
 
@@ -1815,9 +1789,9 @@ function _ccVermoegen(u) {
     karte:     Math.round(_ccBldScore(u) + _ccMapUpgradeValue(u)),
     welt:      Math.round(_ccWorldValue(u)),
     krieger:   Math.round(_ccKriegerGear(u)),
-    // 💵 Liquides Kapital: Stille Anlage + Kaffeebörse — jederzeit voll auszahlbar, zählt wie
-    // Bargeld ins Vermögen (JP 2026-07-13). Stille Anlage war zuvor im 🌍-Wert, Börse fehlte ganz.
-    kapital:   Math.round(_ccStilleAnlage(u) + _ccBoerse(u)),
+    // 💵 Liquides Kapital: Stille Anlage + Kaffeebörse + Café-Kasse — jederzeit greifbares Kapital,
+    // zählt wie Bargeld ins Vermögen (JP 2026-07-13/17). Café-Kasse = Filialvermögen (self-managed).
+    kapital:   Math.round(_ccStilleAnlage(u) + _ccBoerse(u) + ((typeof cafeKasse === 'function') ? cafeKasse(u) : 0)),
     // 🎡 Erlebnisse (Kaffee-Garten u.a. Erlebnis-Minigames) — Summe der Freischaltkosten
     erlebnis:  Math.round((typeof gardenValue === 'function') ? gardenValue(u.garden) : 0),
     kredit,
