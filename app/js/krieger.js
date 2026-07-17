@@ -451,6 +451,13 @@ const KRIEGER_STEPPE_SET_STEPS     = 5;    // Steppenwind: +Schritte/Tag (2026-0
 const KRIEGER_HANDEL_SET_DISCOUNT  = 0.25; // Handelsprivileg: −25% auf Ausrüstung & Tränke (2026-07-16: 0.15→0.25)
 const KRIEGER_HANDEL_POTION_REFUND = 0.4;  // Handelsprivileg: 40% Trank-Wert zurück nach Sieg mit Trank
 const KRIEGER_REFUND_CAP           = 20;   // Anti-Grind (2026-07-16, 2026-07-16d: 10→20): max. Sieg-Schritt-Erstattungen/Tag
+// Level-abhängiger Deckel (2026-07-17, User): ab Stufe 25 nur noch 10 Sieg-Erstattungen/Tag
+// (statt 20) — hohe Level erreichen das "die Beine werden schwer"-Ende früher. Darunter bleibt 20.
+const KRIEGER_REFUND_CAP_HL        = 10;   // gesenkter Deckel für hohe Level
+const KRIEGER_REFUND_CAP_HL_LEVEL  = 25;   // ab dieser Stufe greift der gesenkte Deckel
+function kriegerRefundCap(level) {
+  return (level || 1) >= KRIEGER_REFUND_CAP_HL_LEVEL ? KRIEGER_REFUND_CAP_HL : KRIEGER_REFUND_CAP;
+}
 const KRIEGER_FREIBEUTER_FIND_MULT = 1.5;  // Freibeuterglück: ×1.5 Fund-Chance
 const KRIEGER_SPAEHER_SET_RADIUS   = 2;    // Späherauge: passiver Umgebungs-Scan (Chebyshev r)
 function kriegerSetActive(dd, culture) {

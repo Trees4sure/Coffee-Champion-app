@@ -2846,12 +2846,15 @@ async function _runKriegerFight(member, state, tier, seed, COLS, ROWS, MARGIN, k
   // Dungeon-Schritte, die reguläre Tagesgrenze (kriegerStepsAllowed) bleibt
   // unverändert. Gilt auch für Boss-Siege.
   if (result.won) {
-    // Anti-Grind (2026-07-16): Sieg-Schritt-Erstattung nur bis KRIEGER_REFUND_CAP (10) mal/Tag.
-    // Danach kein +5 mehr → das reguläre Tagesbudget läuft leer (natürliches Ende). Zähler in
-    // dungeon_data (refundsToday/refundDate) — überlebt den Server-Roundtrip (unbekannte JSONB-Keys).
+    // Anti-Grind (2026-07-16): Sieg-Schritt-Erstattung nur bis zum Tages-Deckel. Danach kein +5
+    // mehr → das reguläre Tagesbudget läuft leer (natürliches Ende). Zähler in dungeon_data
+    // (refundsToday/refundDate) — überlebt den Server-Roundtrip (unbekannte JSONB-Keys).
+    // Deckel level-abhängig (2026-07-17, User): ab Stufe 25 nur noch 10 statt 20.
     const _tk = _kriegerTodayKey();
     const _refunds = (state.dd.refundDate === _tk) ? (state.dd.refundsToday || 0) : 0;
-    const _cap = (typeof KRIEGER_REFUND_CAP === 'number') ? KRIEGER_REFUND_CAP : 10;
+    const _cap = (typeof kriegerRefundCap === 'function')
+      ? kriegerRefundCap(state.dd?.level)
+      : ((typeof KRIEGER_REFUND_CAP === 'number') ? KRIEGER_REFUND_CAP : 10);
     if (_refunds < _cap) {
       const usedNow = kriegerStepsUsed(state.dd);
       state.dd = { ...state.dd, steps_today: Math.max(0, usedNow - 5), steps_date: _tk,
