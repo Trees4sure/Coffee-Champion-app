@@ -1078,43 +1078,6 @@
   text-align: center; animation: kriegerLogIn .3s forwards;
 }
 
-/* ── 🪴 Kaffee-Garten (Erlebnis-Minigame #1) ─────────────────────────────── */
-.cc-garden { padding: 4px 2px 20px; }
-.cc-garden-intro { background: rgba(159,225,203,.06); border: 1px solid rgba(159,225,203,.18); border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; }
-.cc-garden-lead { font-size: .78rem; line-height: 1.45; color: var(--muted, #cdbfa6); margin: 0 0 8px; }
-.cc-garden-prog-lbl { font-size: .74rem; color: #cfeee2; margin-bottom: 5px; }
-.cc-garden-progress .cc-progress-bar { height: 6px; }
-
-.cc-garden-epoch { background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.08); border-radius: 10px; margin-bottom: 8px; overflow: hidden; }
-.cc-garden-ep-head { display: flex; align-items: baseline; gap: 8px; padding: 10px 12px; cursor: pointer; user-select: none; flex-wrap: wrap; }
-.cc-garden-ep-head:active { background: rgba(255,255,255,.02); }
-.cc-garden-ep-title { font-size: .9rem; font-weight: 700; color: #f3e7cf; }
-.cc-garden-ep-sub { font-size: .68rem; color: var(--muted, #8a7a5a); flex: 1 1 auto; }
-.cc-garden-ep-count { font-size: .72rem; font-family: monospace; color: #EF9F27; white-space: nowrap; }
-.cc-garden-ep-count.done { color: #9FE1CB; }
-.cc-garden-ep-head::after { content: '▸'; color: var(--muted, #8a7a5a); font-size: .8rem; margin-left: 2px; transition: transform .2s; }
-.cc-garden-epoch.open .cc-garden-ep-head::after { transform: rotate(90deg); }
-
-.cc-garden-grid { display: none; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 6px; padding: 0 10px 12px; }
-.cc-garden-epoch.open .cc-garden-grid { display: grid; }
-
-.cc-gt { position: relative; border-radius: 8px; padding: 8px 6px; text-align: center; border: 1px solid rgba(255,255,255,.08); background: rgba(255,255,255,.02); }
-.cc-gt-icon { font-size: 1.5rem; line-height: 1.1; }
-.cc-gt-name { font-size: .68rem; font-weight: 600; color: #f3e7cf; margin: 3px 0 0; }
-.cc-gt-story { font-size: .62rem; line-height: 1.35; color: var(--muted, #b6a888); margin: 4px 0 0; }
-.cc-gt-rar { font-size: .6rem; color: var(--muted, #8a7a5a); margin: 2px 0 0; }
-.cc-gt.locked .cc-gt-icon { opacity: .4; }
-.cc-gt.locked .cc-gt-name { color: var(--muted, #b6a888); }
-.cc-gt-buy { margin-top: 5px; }
-/* Rarität als linker Farbstreifen */
-.cc-gt-haeufig       { border-left: 3px solid rgba(159,225,203,.5); }
-.cc-gt-ungewoehnlich { border-left: 3px solid rgba(120,170,255,.6); }
-.cc-gt-selten        { border-left: 3px solid rgba(212,175,55,.75); }
-.cc-gt.owned.cc-gt-selten { background: rgba(212,175,55,.08); }
-.cc-garden-income { font-size: .74rem; color: #cfeee2; margin-top: 7px; }
-.cc-garden-income strong { color: #9FE1CB; }
-.cc-garden-income-note { color: var(--muted, #8a7a5a); font-size: .66rem; }
-
 /* ═══ 🚐 Kaffeemobil: Welteroberung (Erlebnis-Minigame #2) ═══ */
 .cc-mobil-lead { font-size:.85rem; line-height:1.45; color:var(--muted); margin:4px 0 10px; }
 .cc-mobil-status { background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.09);
