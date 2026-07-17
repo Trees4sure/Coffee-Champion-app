@@ -809,7 +809,7 @@ function renderProfile() {
     const log = (u.map_data?.todayLog?.date === todayKey) ? (u.map_data.todayLog.entries || []) : [];
     if (log.length) {
       logSection.style.display = '';
-      logList.innerHTML = log.slice().reverse().map(e => {
+      const entriesHtml = log.slice().reverse().map(e => {
         const neg = e.amount < 0;
         return `
         <div class="today-log-row">
@@ -817,6 +817,7 @@ function renderProfile() {
           <span class="today-log-amount"${neg ? ' style="color:#e0795a"' : ''}>${neg ? '' : '+'}${_fmtCoins(e.amount)} CC</span>
         </div>${e.detail ? `<div class="today-log-detail">${_esc(e.detail)}</div>` : ''}`;
       }).join('');
+      logList.innerHTML = _todayRubrikSummaryHtml(u, todayKey) + entriesHtml;
     } else {
       logSection.style.display = 'none';
       logList.innerHTML = '';
@@ -923,6 +924,36 @@ function renderMobilProfil(u) {
 // (kein index.html-Edit) — landet im Untertab "🏆 Achievements" (voran der Achievements-
 // Grid, siehe Profil-Untertabs), zusammen mit Achievements + Sprüche. Einlösen ist
 // Goodwill — Kontrolle liegt in der Gruppe.
+// ☀️ 2a: Tages-Erträge je Rubrik (aus todayLog.sums.cats — cap-unabhängig, siehe db.js). Kompakte
+// Aufschlüsselung „woraus kam heute wie viel", oberhalb der Einzel-Einträge im Profil-Tages-Log.
+const TODAY_CAT_LABELS = {
+  tassen: ['☕', 'Tassen'], forschung: ['🔬', 'Forschung'], karte: ['🗺️', 'Karte & Gebäude'],
+  welt: ['🌍', 'Welthandel'], weltbau: ['🏗️', 'Welt-Gebäude'], anbau: ['🫘', 'Anbauländer'],
+  cafe: ['☕', 'Café'], krieger: ['⚔️', 'Kaffee-Krieger'], ciq: ['🧠', 'CIQ'], minigame: ['🎣', 'Kaffeejagd'],
+  erlebnis: ['🎡', 'Erlebnisse'], gruppe: ['🏛️', 'Gruppe'], boni: ['🎖️', 'Boni & Aufgaben'],
+  cosmetics: ['🎨', 'Kosmetik'], strafen: ['💸', 'Steuern & Strafen'], beute: ['🎲', 'Kämpfe, Schätze & CIQ'],
+};
+function _todayRubrikSummaryHtml(u, todayKey) {
+  const tl = u.map_data?.todayLog;
+  const sums = (tl && tl.date === todayKey) ? tl.sums : null;
+  if (!sums || !sums.cats) return '';
+  const rows = Object.entries(sums.cats)
+    .map(([k, v]) => [k, Math.round((+v || 0) * 100) / 100])
+    .filter(([, v]) => v !== 0)
+    .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]));
+  if (rows.length < 2) return ''; // bei nur einer Quelle lohnt die Aufschlüsselung nicht
+  const body = rows.map(([k, v]) => {
+    const [ic, lb] = TODAY_CAT_LABELS[k] || ['•', k];
+    const neg = v < 0;
+    return `<div class="today-log-row"><span class="today-log-label">${ic} ${_esc(lb)}</span><span class="today-log-amount"${neg ? ' style="color:#e0795a"' : ''}>${neg ? '' : '+'}${_fmtCoins(v)} CC</span></div>`;
+  }).join('');
+  return `<div style="margin-bottom:8px;padding-bottom:7px;border-bottom:1px solid rgba(255,255,255,.10)">
+      <div class="today-log-detail" style="font-weight:700;opacity:.9;margin:0 0 3px">☀️ Heute nach Rubrik</div>
+      ${body}
+      <div class="today-log-row" style="opacity:.9;margin-top:3px;font-weight:700"><span class="today-log-label">🧮 Netto heute</span><span class="today-log-amount"${sums.net < 0 ? ' style="color:#e0795a"' : ''}>${sums.net < 0 ? '' : '+'}${_fmtCoins(sums.net)} CC</span></div>
+    </div>`;
+}
+
 function renderDailyTask(u) {
   if (typeof currentDailyTask !== 'function') return;
   const { period, task } = currentDailyTask(undefined, u.id); // persönliche Aufgabe je Mitglied

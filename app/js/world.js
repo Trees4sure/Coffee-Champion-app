@@ -1066,6 +1066,40 @@ function producerSupplyPreview(member) {
   return { basis, bedarf, oekoUse, stdUse, pct, bonus, already, activePct };
 }
 
+// 💰 2c: Plantagen-Wirtschaftlichkeit — macht den CC-Effekt der Anbauländer nachvollziehbar.
+// Nutzt producerMemberDailyYield (Produktion + Löhne je Land/Tag) + producerBeanPrices (CC-Wert
+// der Bohnen). „Marktwert" = Tagesernte × aktueller Bohnen-Tagespreis (realisiert durch Verkauf
+// ODER Märkte-Versorgung — dort ggf. höher). Netto = Marktwert − Plantagen-Löhne.
+function _renderProducerWirtschaft(member, y) {
+  if (!y || !y.perCountry || !y.perCountry.length) return '';
+  const p = producerBeanPrices(member.id, y.perks);
+  const posC = '#9FE1CB', negC = '#e0795a';
+  let totProd = 0, totVal = 0, totLohn = 0;
+  const rows = y.perCountry.map(pc => {
+    const prod = pc.std + pc.oeko;
+    const val  = pc.oeko * p.oeko + pc.std * p.std;
+    const net  = val - pc.lohn;
+    totProd += prod; totVal += val; totLohn += pc.lohn;
+    return `<div style="display:flex;justify-content:space-between;gap:8px;font-size:.72rem;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.05)">
+      <span>${pc.c.flag} ${_esc2(pc.c.name)} <span style="opacity:.6">R${pc.rank}</span></span>
+      <span style="text-align:right">🫘 ${_r1(prod)} → ~${_r1(val)} CC${pc.lohn > 0 ? ` − 💸 ${_r1(pc.lohn)}` : ''} = <strong style="color:${net >= 0 ? posC : negC}">${net >= 0 ? '+' : ''}${_r1(net)} CC</strong></span>
+    </div>`;
+  }).join('');
+  const totNet = totVal - totLohn;
+  return `
+    <div class="cc-world-section-title">💰 Plantagen-Wirtschaftlichkeit <span>(Marktwert bei Tagespreis 🌾${p.oeko}/${p.std})</span></div>
+    <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:9px;padding:8px 10px;margin-bottom:8px">
+      <div style="display:flex;flex-wrap:wrap;gap:4px 14px;font-size:.74rem;margin-bottom:5px">
+        <span>Produktion <strong>+${_r1(totProd)} ${PRODUCER_UNIT}/Tag</strong></span>
+        <span>Marktwert <strong>+${_r1(totVal)} CC/Tag</strong></span>
+        ${totLohn > 0 ? `<span>Löhne <strong style="color:${negC}">−${_r1(totLohn)} CC/Tag</strong></span>` : ''}
+        <span>Netto <strong style="color:${totNet >= 0 ? posC : negC}">${totNet >= 0 ? '+' : ''}${_r1(totNet)} CC/Tag</strong></span>
+      </div>
+      ${rows}
+      <p class="cc-world-pctnote" style="margin:5px 0 0">„Marktwert" = Wert der Tagesernte zum aktuellen Bohnen-Tagespreis. Realisiert wird er über 🫘➡️💰 Verkauf oder 🏪 Märkte-Versorgung (dort ggf. höher).</p>
+    </div>`;
+}
+
 function _renderProducerPanel(member) {
   const holds = producerCountriesHeld(_producerInvCache, member.id);
   if (!canAccessProducer(member) && holds === 0) return ''; // irrelevant → nichts anzeigen
@@ -1084,6 +1118,7 @@ function _renderProducerPanel(member) {
       Tages-Ertrag: <strong>~${totalPerDay} ${PRODUCER_UNIT}</strong>/Tag (🌾 ${_r1(y.oekoPerDay)} · ${_r1(y.stdPerDay)})${y.lohnPerDay > 0 ? ` · 💸 Löhne ~${_r1(y.lohnPerDay)} CC/Tag` : ''}<br>
       Aus: ${listing}
     </p>
+    ${_renderProducerWirtschaft(member, y)}
     ${(y.perks && y.perks.active.length) ? `<p class="cc-world-pctnote">🔗 <strong>Aktive Konsum→Anbau-Synergien:</strong> ${y.perks.active.map(a => `${a.icon} ${_esc2(a.desc)}`).join(' · ')}</p>` : ''}
     ${canHarvest
       ? `<p class="cc-world-pctnote">✅ Ernte läuft <strong>automatisch</strong>: Beim Öffnen der Weltkarte wandert der Ertrag <strong>aller</strong> deiner Anbauländer ins Lager (Löhne werden verrechnet) — kein Einsammeln, kein Länder-Klick nötig.</p>`

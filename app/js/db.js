@@ -124,13 +124,17 @@ const DB = (() => {
     // nicht die gekappte/aggregierte Anzeige-Liste.
     const ps = (mapData?.todayLog?.date === day) ? (mapData.todayLog.sums || null) : null;
     let sGross = ps?.gross || 0, sSpent = ps?.spent || 0, sNet = ps?.net || 0;
+    const sCats = { ...(ps?.cats || {}) };             // 2a: Tages-Netto je Rubrik (cat), cap-unabhängig
     for (const raw of entries) {
       const amt = raw.amount || 0;
       if (raw.kapital) continue;                       // reine Kapitalbewegung → zählt nirgends
       if (amt > 0) { sGross += amt; sNet += amt; }
       else if (!raw.invest) { sSpent += -amt; sNet += amt; } // Investitionen zählen nicht ins Netto
+      else continue;                                   // Investition (negativ) → nicht ins Netto/Rubrik
+      const rk = raw.cat || 'beute';                   // cat-lose Zugänge (Kämpfe/Schätze/CIQ) → „beute"
+      sCats[rk] = Math.round(((sCats[rk] || 0) + amt) * 100) / 100;
     }
-    const sums = { gross: Math.round(sGross * 100) / 100, spent: Math.round(sSpent * 100) / 100, net: Math.round(sNet * 100) / 100 };
+    const sums = { gross: Math.round(sGross * 100) / 100, spent: Math.round(sSpent * 100) / 100, net: Math.round(sNet * 100) / 100, cats: sCats };
     const ledger = _accrueLedger(mapData?.ledger, entries);
     return { ...(mapData || {}), todayLog: { date: day, entries: next, sums }, ledger };
   }
