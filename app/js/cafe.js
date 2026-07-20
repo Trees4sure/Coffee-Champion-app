@@ -39,6 +39,9 @@ const CAFE_P = {
   kundenBasis: 70, menuBase: 4.5, ccCap: 10, umschlag: 10, zutatCC: 0.4,
   mieteBasis: 40, mietePGeraet: 6, mietePMoebel: 4, rufEase: 0.15,
   claimCapDays: 14, openMinInvest: 2500, autoReserveDays: 5,
+  // Ausschüttungs-Balance (JP 2026-07-20): harter Deckel 90 % (100 % unmöglich), gesunde Quote 20 %,
+  // darüber Ruf-Malus pro %-Punkt (macht das nachhaltige Endgame-Einkommen ~200–300 CC/Tag statt 1500).
+  maxPayout: 90, healthyPayout: 20, payoutRufMalus: 0.6, payoutExcessYield: 0.2,
 };
 
 // ── Stil-Katalog: jeder Stil zieht andere Klientel an (Menge × Ausgabe) ──────
@@ -139,7 +142,7 @@ function cafeState(member) {
     version: c.version || 1, opened: !!c.opened, openedAt: c.openedAt || null,
     lastClaim: c.lastClaim || null, useBeans: c.useBeans !== false, ruf: c.ruf || 0,
     kasse: Math.max(0, c.kasse || 0),
-    payoutRatio: (c.payoutRatio == null ? 60 : Math.max(0, Math.min(100, c.payoutRatio))),
+    payoutRatio: (c.payoutRatio == null ? CAFE_P.healthyPayout : Math.max(0, Math.min(CAFE_P.maxPayout, c.payoutRatio))),
     autoBuild: !!c.autoBuild,
     stil: (c.stil && CAFE_STIL[c.stil]) ? c.stil : 'klassisch',
     rezepte: c.rezepte || {},
@@ -228,13 +231,21 @@ function cafeDayMetrics(member, state, b) {
   }
   const netto = umsatz - miete - lohn - zutatCC;   // Gewinn/Tag (kann negativ sein; Server ring-fenced auf Kasse)
   const ratio = state.payoutRatio;
-  const ausschuettung = netto > 0 ? Math.round(netto * ratio / 100) : 0;
+  // Raubbau-Malus: bis healthyPayout (20 %) wird voll ausgeschüttet; vom Anteil DARÜBER kommt nur
+  // payoutExcessYield (20 %) an, der Rest verpufft. Zusammen mit dem Ruf-Malus (unten) bringt so
+  // 20 % nachhaltig am meisten — Hochdrehen lohnt sich nicht (JP 2026-07-20). Muss dem SQL-v_dist gleichen.
+  const _effRatio = Math.min(CAFE_P.healthyPayout, ratio) + Math.max(0, ratio - CAFE_P.healthyPayout) * CAFE_P.payoutExcessYield;
+  const ausschuettung = netto > 0 ? Math.round(netto * _effRatio / 100) : 0;
   const thesauriert = netto - ausschuettung;        // bei Verlust = netto (negativ), frisst die Kasse
   const kap  = Math.max(1, cafeCapacity(b));
+  // 🍃 Über der gesunden Quote (healthyPayout) leidet der Café-Ruf: pro %-Punkt über 20 % sinkt
+  // das Ruf-Ziel. Da der Server ruf := p_ruf_target setzt, wandert der Ruf über die Tage nach unten
+  // → rufF (Kundenzahl) fällt → weniger Umsatz. Selbstlimitierend: gieriges Ausschütten ruiniert das Café.
+  const _payoutMalus = Math.max(0, ratio - CAFE_P.healthyPayout) * CAFE_P.payoutRufMalus;
   return { kunden, verkauft, ccTasse:Math.round(ccTasse*10)/10, zufr:Math.round(zufr*100)/100,
     umsatz, miete, lohn, zutatCC, beansOeko, beansStd, netto, ausschuettung, thesauriert,
-    kapazitaet:kap, auslastung:Math.round(verkauft / kap * 100),
-    rufTarget: Math.round(state.ruf + (zufr * 100 - state.ruf) * CAFE_P.rufEase) };
+    kapazitaet:kap, auslastung:Math.round(verkauft / kap * 100), payoutMalus: Math.round(_payoutMalus),
+    rufTarget: Math.round(Math.max(0, state.ruf + (zufr * 100 - state.ruf) * CAFE_P.rufEase - _payoutMalus)) };
 }
 
 // Gewinn/Tag (Filial-intern) — 0 wenn nicht eröffnet.
@@ -425,9 +436,12 @@ function _cafeRenderBetrieb(member, st, b) {
       <div class="cc-cafe-policy">
         <label class="cc-cafe-policy-row">
           <span>Ausschüttungsquote</span>
-          <input type="range" min="0" max="100" step="5" value="${st.payoutRatio}" data-cafe-payout id="cafe-payout">
+          <input type="range" min="0" max="${CAFE_P.maxPayout}" step="5" value="${st.payoutRatio}" data-cafe-payout id="cafe-payout">
           <output id="cafe-payout-out">${st.payoutRatio}%</output>
         </label>
+        <p class="cc-cafe-policy-hint" style="margin:2px 0 6px;font-size:.8rem;color:${st.payoutRatio > CAFE_P.healthyPayout ? 'var(--danger,#c0392b)' : 'var(--muted)'}">${st.payoutRatio > CAFE_P.healthyPayout
+          ? `⚠️ Raubbau über ${CAFE_P.healthyPayout}%: vom Mehr-Anteil kommen nur ${Math.round(CAFE_P.payoutExcessYield*100)}% an, und der Café-Ruf sinkt (−${m.payoutMalus}/Tag → weniger Gäste). Nachhaltig am meisten bringt ≤ ${CAFE_P.healthyPayout}%.`
+          : `✅ Gesunde Quote (≤ ${CAFE_P.healthyPayout}%) — voll ausgeschüttet, Café-Ruf wächst ungestört. Max. ${CAFE_P.maxPayout}%.`}</p>
         <label class="cc-cafe-toggle"><input type="checkbox" data-cafe-autobuild ${st.autoBuild?'checked':''}> 🤖 Auto-Ausbau — die Filiale reinvestiert ihren Gewinn selbst</label>
         <label class="cc-cafe-toggle"><input type="checkbox" data-cafe-beans ${st.useBeans?'checked':''}> 🫘 Bohnen aus dem Anbau-Imperium verwenden (🌾 Öko hebt die Zufriedenheit)</label>
       </div>
@@ -636,7 +650,7 @@ async function _cafeToggleBeans(on, member) {
 async function _cafeSetPolicy(member, ratio, autobuild) {
   try {
     const st = cafeState(member);
-    const r = ratio == null ? st.payoutRatio : ratio;
+    const r = ratio == null ? st.payoutRatio : Math.max(0, Math.min(CAFE_P.maxPayout, ratio));
     const a = autobuild == null ? st.autoBuild : autobuild;
     const res = await DB.setCafePolicy(member.id, r, a);
     _cafeSyncUser(res, member);

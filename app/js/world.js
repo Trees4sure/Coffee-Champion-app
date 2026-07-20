@@ -724,6 +724,11 @@ async function _openCountrySheet(country, member) {
   const topLine = myRank === 1
     ? `👑 Du regierst dieses Land.`
     : `Für Rang 1 nötig: <strong>${needForTop} CC</strong> mehr als der Spitzenreiter.${_gardeNote}`;
+  // 🌍 Anti-Gleichstand (JP 2026-07-20): Nicht-Regenten müssen den Spitzenreiter ÜBERBIETEN —
+  // die Einzel-Investition muss reichen, um Rang 1 tatsächlich zu übernehmen (= needForTop, das
+  // die Garde des Regenten bereits einrechnet). Leeres Land: der Erste zahlt ab 25. Der amtierende
+  // Regent (Rang 1) stockt weiter ab WORLD_MIN_INVEST auf. Stille Anlage bleibt separat.
+  const _seizeMin = (myRank === 1) ? WORLD_MIN_INVEST : needForTop;
 
   // ── Gebäude (gehören dem Land, Wirkung rangabhängig) ──
   // Phase 3: Rang 1, 2 UND 3 dürfen bauen (Rang 2/3 zahlen 20% Steuer an Rang 1).
@@ -828,9 +833,10 @@ async function _openCountrySheet(country, member) {
            um +3 weitere Länder regieren zu dürfen.
          </div>`
       : `<div class="cc-world-invest">
-           <input type="number" id="cc-world-amount" min="${WORLD_MIN_INVEST}" step="5" placeholder="CC (min. ${WORLD_MIN_INVEST})">
+           <input type="number" id="cc-world-amount" min="${_seizeMin}" step="5" placeholder="CC (min. ${_seizeMin})">
            <button class="cc-build-btn" data-world-invest="1">🌍 Einfluss stärken</button>
-         </div>`
+         </div>
+         ${myRank === 1 ? '' : `<p class="cc-world-pctnote">Zum Einsteigen musst du mit <strong>einer</strong> Investition den Spitzenreiter überbieten — mind. <strong>${_wfmt(needForTop)} CC</strong> (Garde des Regenten eingerechnet). Für rangneutralen Ertrag: 🏦 Stille Anlage unten.</p>`}`
     }
     <div class="cc-world-section-title">🏦 Stille Anlage <span>(Ertrag ohne Rang-Einfluss)</span></div>
     <p class="cc-world-pctnote">${_passiveNoteLines.join('<br>')}</p>
@@ -1405,6 +1411,24 @@ async function _handleWorldInvest(country, member) {
   const prevTop  = before[0] || null;
   const prevMine = before.find(s => s.member_id === member.id);
   const prevRank = prevMine ? prevMine.rank : null;
+
+  // 🌍 Anti-Gleichstand (JP 2026-07-20): Nicht-Regenten müssen den Spitzenreiter überbieten —
+  // die EINZEL-Investition muss reichen, um Rang 1 tatsächlich zu übernehmen. Schwelle = needForTop
+  // (roh × Garde-Bonus des Regenten, minus eigene Bestandsinvestition), identisch zum Sheet-Hinweis.
+  // So kann niemand mit 25 CC oder gleichen Beträgen einsteigen. Rein clientseitig (Ehrensystem,
+  // wie das Tier-Limit) — Stille Anlage ist der separate günstige Weg (rangneutral, hier ausgenommen).
+  if (prevRank !== 1) {
+    const _fTop  = _gardeBonus((prevTop  && prevTop.garde_level)  || 0, 1);
+    const _fMe   = _gardeBonus((prevMine && prevMine.garde_level) || 0, 1);
+    const _denom = 1 + _fMe - _fTop;                        // ∈ [0.70,1.30], nie 0
+    const _topInvNow = (prevTop  && Number(prevTop.total_invested))  || 0;
+    const _myInvNow  = (prevMine && Number(prevMine.total_invested)) || 0;
+    const _needTop   = Math.max(WORLD_MIN_INVEST, Math.floor(_topInvNow / _denom - _myInvNow) + 1);
+    if (amount < _needTop) {
+      showToast(`Du musst den Spitzenreiter überbieten: mind. ${_wfmt(_needTop)} CC investieren (Garde eingerechnet) — oder nutze die 🏦 Stille Anlage.`, 'error');
+      return;
+    }
+  }
 
   let res;
   try { res = await DB.investInCountry(member.id, country.id, amount); }

@@ -1162,10 +1162,13 @@ const DB = (() => {
           levied = Math.round((levied + amt) * 100) / 100;
           contribs[member.id] = Math.round(((parseFloat(contribs[member.id]) || 0) + amt) * 100) / 100;
           details.push({ name: member.name, amt });
-          // Today-Log: Abzug im Profil des Mitglieds sichtbar machen
+          // Today-Log: Abzug im Profil des Mitglieds sichtbar machen.
+          // WICHTIG: frisch lesen → nur todayLog mergen (appendTodayLogFresh), NICHT das
+          // batch-gefetchte member.map_data (rows von oben) wholesale zurückschreiben —
+          // sonst clobbert diese Schleife einen zwischenzeitlich geschriebenen
+          // salaryHistory-/todayLog-Punkt (Gehalts-Snapshot/Passiv-Claim laufen parallel).
           try {
-            const updMd = appendTodayLog(member.map_data || {}, [{ label: '🏛️ Tagesabgabe → Kasse', amount: -amt, cat: 'gruppe' }]);
-            await _sb.from('members').update({ map_data: updMd }).eq('id', member.id);
+            await appendTodayLogFresh(member.id, [{ label: '🏛️ Tagesabgabe → Kasse', amount: -amt, cat: 'gruppe' }]);
           } catch (_le) { /* non-critical */ }
         } catch (e) { /* einzelnes Mitglied überspringen */ }
       }
