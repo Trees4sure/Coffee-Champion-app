@@ -91,6 +91,64 @@ const RESEARCH_COMBOS = [
   { id: 'erzeugerkonzession',  name: 'Erzeuger-Konzession',icon: '🫘', requires: ['duengemittel','thermometer','el_muehle','kunstbuch','rollwagen','kaffeemobil','biogarten','barista_kurs'], cost: 400, perCup: 0, perDay: 0, special: 'unlock_producer', desc: 'Schaltet 🫘 Anbauländer frei — baue Plantagen, ernte Rohkaffee (alle Tier-2-Forschungen nötig)' },
 ];
 
+// ── 🌌 Weltraum-Zweig (Endgame) ──────────────────────────────────────────────
+// Plan: plans/PLAN_weltraum.md Schritt 1.1 + E.3/E.7. Ein EIGENER Zweig, getrennt von den
+// 6 Grund-Kategorien: er erscheint im Forschungsbaum erst, wenn das GESAMTE Grundspiel
+// erforscht ist (isAllResearchComplete) — und erst wenn er selbst komplett ist, taucht der
+// 🚀-Weltall-Tab auf. Damit bleibt der Weltraum echtes Spätspiel und keine Abkürzung.
+//
+// P1 (MVP) enthält bewusst nur 3 Stufen aus zwei Ästen (Antrieb + Schürftechnik); die vollen
+// 4 Äste WT1–WT5 folgen in P2/P3 (siehe E.7 im Plan).
+// `art` = Pixel-Art-Kachel aus JPs Render (plans/Weltraum_expansion.png), zugeschnitten nach
+// assets/weltraum/. `icon` bleibt als Emoji-Rückfall, falls die Datei fehlt (siehe onerror
+// in imperium.js) — die App darf nie von einem Bild abhängen.
+const SPACE_RESEARCH = [
+  { id: 'wt_ionenantrieb', name: 'Ionenantrieb',  icon: '🚀', art: 'wt1_ionenantrieb', ast: 'Antrieb & Hülle', wt: 1, cost: 8000,
+    desc: 'Baut den Raumhafen und schaltet 🛰️ Bohnen-Sonde + 🔫 Jäger frei' },
+  { id: 'wt_frachtmodule', name: 'Frachtmodule',  icon: '📦', art: 'wt2_frachtmodule', ast: 'Antrieb & Hülle', wt: 2, cost: 15000,
+    requires: ['wt_ionenantrieb'], desc: 'Schaltet 🚀 Espresso-Kutter + 🛸 Kolonieschiff frei' },
+  { id: 'wt_handbohrer',   name: 'Handbohrer',    icon: '⛏️', art: 'wt1_handbohrer',   ast: 'Schürftechnik',   wt: 1, cost: 8000,
+    requires: ['wt_ionenantrieb'], desc: 'Schaltet ⛏️ Röstkometen frei — Abbau von Erz und Koffeinkristall' },
+];
+
+// Die Tab-Freischaltung hängt an DIESER festen Liste, NICHT an „alle SPACE_RESEARCH besessen".
+// Sonst würde jede spätere P2/P3-Stufe den 🚀-Tab bei Spielern, die P1 durchhaben, wieder
+// zusperren. Neue Stufen erweitern SPACE_RESEARCH, diese Liste bleibt unverändert.
+const SPACE_GATE_ITEMS = ['wt_ionenantrieb', 'wt_frachtmodule', 'wt_handbohrer'];
+
+// Ist das komplette GRUNDSPIEL erforscht? (alle Items aller 6 Pfade + alle Kombos)
+// Try/catch-robust: wird an mehreren Render-Stellen aufgerufen und darf nie werfen.
+function isAllResearchComplete(research) {
+  try {
+    const r = research || {};
+    for (const path of Object.values(RESEARCH_PATHS)) {
+      for (const item of path.items) if (!r[item.id]) return false;
+    }
+    for (const combo of RESEARCH_COMBOS) if (!r[combo.id]) return false;
+    return true;
+  } catch (e) { return false; }
+}
+
+// Weltraum-Zweig weit genug für den 🚀-Tab?
+function spaceBranchComplete(research) {
+  try {
+    const r = research || {};
+    return SPACE_GATE_ITEMS.every(id => !!r[id]);
+  } catch (e) { return false; }
+}
+
+// Ist eine einzelne Weltraum-Stufe jetzt kaufbar? (Gate + Vorgänger)
+function spaceItemAvailable(research, itemId) {
+  try {
+    const r = research || {};
+    if (r[itemId]) return false;
+    if (!isAllResearchComplete(r)) return false;
+    const it = SPACE_RESEARCH.find(x => x.id === itemId);
+    if (!it) return false;
+    return (it.requires || []).every(req => !!r[req]);
+  } catch (e) { return false; }
+}
+
 // ── Balancing 2026-06-20 (v2): pro Tasse ab Tier 2 knapper ───────────────────────
 // „Eher knapp, dann investiert man klüger" — Tassen sollen nur ein moderater Zuschlag
 // sein (Sparen + Investitionswahl zählen), nicht der Haupt-Reichtumsmotor. T1 bleibt

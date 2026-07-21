@@ -89,10 +89,17 @@ function kriegerIsWallFor(dd, x, y, worldSeed) {
 // Werkzeuge — Verbrauchsgüter (Entscheidung 2026-07-21: kein Dauer-Werkzeug, sonst wäre
 // die halbe Karte nach einem Kauf offen und der Erkundungsdruck weg).
 // Bestand in dd.tools{key:anzahl}, analog zu dd.potions.
+// REGELANPASSUNG 2026-07-21 (JP: „die Bombe ist da und die Granate — nicht als erstes"):
+// Werkzeug ist Erschließungs-Gerät fürs mittlere Spiel, kein Startkauf. Es öffnet den Weg
+// zu den Spezialisten/Burgen (ab Stufe 26) — davor gibt es nichts, wozu man sich durchgraben
+// müsste, und ein Bohrer auf Stufe 3 nimmt der Höhle den Erkundungsdruck.
+//   Bohrer:  ohne Gate → ab Stufe 18
+//   Granate: ohne Gate → ab Stufe 26  (= Stufe des ersten Spezialisten)
+// Die Shop-Sektion steht außerdem nicht mehr an zweiter, sondern an LETZTER Stelle.
 const KRIEGER_TOOLS = [
-  { key:'bohrer',  icon:'🔩', name:'Kaffeebohrer',  cost:250, radius:0,
+  { key:'bohrer',  icon:'🔩', name:'Kaffeebohrer',  cost:250, radius:0, minLevel:18,
     desc:'Bricht EINE angrenzende Felswand auf. Verbraucht sich dabei.' },
-  { key:'granate', icon:'💣', name:'Kaffeegranate', cost:600, radius:1,
+  { key:'granate', icon:'💣', name:'Kaffeegranate', cost:600, radius:1, minLevel:26,
     desc:'Sprengt ein 3×3-Feld Fels weg — öffnet ganze Gänge auf einen Schlag.' },
 ];
 function kriegerToolByKey(key)   { return KRIEGER_TOOLS.find(t => t.key === key) || null; }
@@ -329,6 +336,54 @@ const KRIEGER_ITEMS = [
   { key:'wesiramulett_orient_t3',  slot:'talisman', culture:'orient',      tier:3, icon:'🧿', name:'Kalifen-Amulett',      cost:780, minLevel:35, atk:0,  def:0,  crit:26 },
   { key:'umhang_suedamerika_t3',   slot:'armor',    culture:'suedamerika', tier:3, icon:'🪶', name:'Quetzal-Umhang',       cost:740, minLevel:35, atk:0,  def:20, crit:10 },
   { key:'goldscheibe_suedamerika_t3', slot:'talisman', culture:'suedamerika', tier:3, icon:'☀️', name:'Sonnengott-Scheibe', cost:760, minLevel:35, atk:10, def:10, crit:12 },
+
+  // ── Tier 3 VERVOLLSTÄNDIGT (2026-07-21, JP: „nicht alle Kulturen haben Stufe-3-Ausrüstung") ──
+  // Vorher-Zustand, gemessen statt geschätzt:
+  //   • 4 klassische Kulturen: T3 = 2 Waffen + Rüstung + Talisman → STIEFEL fehlten
+  //     (T1/T2 hatten je einen) — ein T3-Träger fiel beim Schritte-Budget auf T2 zurück.
+  //   • 4 Utility-Kulturen (Steppe/Handel/Freibeuter/Späher): GAR KEIN T3 — ihre Sets
+  //     endeten auf T2 und waren ab Stufe 35 chancenlos gegen die Kern-Kulturen.
+  // Jetzt hat jede der 8 Kulturen alle 4 Slots in allen 3 Tiers.
+  //
+  // ⚠️ Zwei Regeln, die diesen Block bestimmen:
+  //  1. `feet` steht NICHT in _krieger_item_stats() — Stiefel haben keine Kampfwerte,
+  //     nur `steps` (rein clientseitig). Die 8 neuen Stiefel brauchen deshalb KEIN SQL.
+  //  2. weapon/armor/talisman werden serverseitig gelesen → die 12 Utility-Kampfteile
+  //     MÜSSEN mit migration_2026-07-21i_krieger_t3_utility.sql übereinstimmen.
+  // Bewusst KEINE zweite Waffe mit `mech` für die Utility-Kulturen: die Mechaniken
+  // (streitkolben/armbrust/wurfmesser/kriegsbogen) erkennt dungeon_fight am Key-Prefix,
+  // eine neue würde einen Eingriff in die Kampf-RPC verlangen. Die Utility-Kulturen
+  // tragen ihre Eigenart ohnehin im Set-Bonus, nicht in der Waffe.
+
+  // Stiefel T3 der 4 klassischen Kulturen (steps 12 → 20, kein SQL nötig)
+  { key:'stiefel_mittelalter_t3',      slot:'feet', culture:'mittelalter', tier:3, icon:'👢', name:'Turnierstiefel',      cost:700, minLevel:35, atk:0, def:0, crit:0, steps:20 },
+  { key:'reitstiefel_europa_t3',       slot:'feet', culture:'europa',      tier:3, icon:'👞', name:'Hofreitstiefel',      cost:700, minLevel:35, atk:0, def:0, crit:0, steps:20 },
+  { key:'kamelstiefel_orient_t3',      slot:'feet', culture:'orient',      tier:3, icon:'🥿', name:'Seidenstraßen-Stiefel', cost:700, minLevel:35, atk:0, def:0, crit:0, steps:20 },
+  { key:'kondorstiefel_suedamerika_t3',slot:'feet', culture:'suedamerika', tier:3, icon:'🩴', name:'Anden-Stiefel',       cost:700, minLevel:35, atk:0, def:0, crit:0, steps:20 },
+
+  // Steppe 🐺 — ATK/CRIT, wenig DEF (Linie aus T1/T2 fortgeschrieben)
+  { key:'bogen_steppe_t3',    slot:'weapon',   culture:'steppe', tier:3, icon:'🏹', name:'Khan-Reflexbogen',    cost:780, minLevel:35, atk:32, def:-3, crit:6 },
+  { key:'lamellen_steppe_t3', slot:'armor',    culture:'steppe', tier:3, icon:'🧥', name:'Khan-Lamellenpanzer', cost:720, minLevel:35, atk:0,  def:26, crit:3 },
+  { key:'feder_steppe_t3',    slot:'talisman', culture:'steppe', tier:3, icon:'🪶', name:'Steppenadler-Schwinge', cost:740, minLevel:35, atk:0, def:0,  crit:18 },
+  { key:'stiefel_steppe_t3',  slot:'feet',     culture:'steppe', tier:3, icon:'👟', name:'Khan-Stiefel',        cost:700, minLevel:35, atk:0,  def:0,  crit:0, steps:20 },
+
+  // Handelsgilde ⚖️ — DEF-Tank
+  { key:'degen_handel_t3',  slot:'weapon',   culture:'handel', tier:3, icon:'⚔️', name:'Patrizier-Degen',    cost:760, minLevel:35, atk:22, def:10, crit:0 },
+  { key:'robe_handel_t3',   slot:'armor',    culture:'handel', tier:3, icon:'🧥', name:'Kontorherren-Robe',  cost:740, minLevel:35, atk:0,  def:34, crit:0 },
+  { key:'siegel_handel_t3', slot:'talisman', culture:'handel', tier:3, icon:'💰', name:'Hansesiegel',        cost:740, minLevel:35, atk:0,  def:12, crit:8 },
+  { key:'schuhe_handel_t3', slot:'feet',     culture:'handel', tier:3, icon:'👞', name:'Ratsherren-Schuhe',  cost:700, minLevel:35, atk:0,  def:0,  crit:0, steps:20 },
+
+  // Freibeuter ☠️ — ATK/CRIT-Raider
+  { key:'entermesser_freibeuter_t3', slot:'weapon',   culture:'freibeuter', tier:3, icon:'🗡️', name:'Admirals-Säbel',   cost:780, minLevel:35, atk:28, def:0,  crit:10 },
+  { key:'mantel_freibeuter_t3',      slot:'armor',    culture:'freibeuter', tier:3, icon:'🧥', name:'Admirals-Mantel',  cost:720, minLevel:35, atk:0,  def:20, crit:6 },
+  { key:'kompass_freibeuter_t3',     slot:'talisman', culture:'freibeuter', tier:3, icon:'🧭', name:'Sternkompass',     cost:750, minLevel:35, atk:6,  def:0,  crit:18 },
+  { key:'seestiefel_freibeuter_t3',  slot:'feet',     culture:'freibeuter', tier:3, icon:'🥾', name:'Admirals-Stiefel', cost:700, minLevel:35, atk:0,  def:0,  crit:0, steps:20 },
+
+  // Späher 🔭 — CRIT-Präzision
+  { key:'dolch_spaeher_t3',       slot:'weapon',   culture:'spaeher', tier:3, icon:'🗡️', name:'Schattenklinge',       cost:780, minLevel:35, atk:24, def:0,  crit:14 },
+  { key:'tarnumhang_spaeher_t3',  slot:'armor',    culture:'spaeher', tier:3, icon:'🧥', name:'Nebelumhang',          cost:720, minLevel:35, atk:0,  def:16, crit:10 },
+  { key:'fernrohr_spaeher_t3',    slot:'talisman', culture:'spaeher', tier:3, icon:'🔭', name:'Falkenauge-Fernrohr',  cost:760, minLevel:35, atk:0,  def:0,  crit:22 },
+  { key:'pfadstiefel_spaeher_t3', slot:'feet',     culture:'spaeher', tier:3, icon:'🥾', name:'Grenzgänger-Stiefel',  cost:700, minLevel:35, atk:0,  def:0,  crit:0, steps:20 },
 
   // ── Kaffeesatz-Lesen / Sicht (Etappe 4, Slot 'scan') — kulturunabhängig, KEINE Kampfwerte.
   // Deckt Feld-KATEGORIEN im Nebel auf (⚔️/🪙), nie exakte Belohnung. Rein clientseitig

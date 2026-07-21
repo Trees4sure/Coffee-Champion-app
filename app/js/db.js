@@ -84,8 +84,14 @@ const DB = (() => {
       research:  u.research              || {},
       cosmetics: u.cosmetics             || {},
       map_data:  u.map_data              || {},
+      // 📊 Tagesbilanz (eigene Spalte, migration_2026-07-21h) — NICHT aus map_data
+      // ableiten: dort wird sie von veralteten Client-Kopien überschrieben.
+      // ⚠️ Ein neues Feld MUSS hier stehen, sonst ist es nach jedem Reload weg
+      // (derselbe Fehler wie damals bei map_data).
+      day_stats: u.day_stats             || {},
       dungeon_data: u.dungeon_data       || {},
       mobil:     u.mobil                 || {},
+      space:     u.space                 || {},   // 🚀 Weltraum (P1)
     };
   }
 
@@ -137,6 +143,34 @@ const DB = (() => {
     const sums = { gross: Math.round(sGross * 100) / 100, spent: Math.round(sSpent * 100) / 100, net: Math.round(sNet * 100) / 100, cats: sCats };
     const ledger = _accrueLedger(mapData?.ledger, entries);
     return { ...(mapData || {}), todayLog: { date: day, entries: next, sums }, ledger };
+  }
+
+  // ── 📊 Tagesbilanz: die EINE Quelle für „was kam heute rein" (0:00–24:00) ─────
+  // Reihenfolge der Quellen ist Absicht:
+  //   1. members.day_stats  — eigene Spalte, server-monoton (bump_day_stats). Kann von
+  //      einem veralteten Client-Write NICHT gesenkt werden. Das ist der Normalfall.
+  //   2. map_data.todayLog.sums — Fallback für die Zeit, bevor die Migration lief
+  //      bzw. bevor der erste Bump des Tages passiert ist.
+  //   3. Aufsummieren der Log-Einträge — letzter Fallback für Altbestände ohne `sums`
+  //      (dort fehlt alles, was aus dem 50-Einträge-Fenster gefallen ist).
+  // Gibt immer { date, gross, spent, net, cats } zurück; für einen fremden Tag Nullen.
+  function dayStats(member, dayKey) {
+    const day = dayKey || today();
+    const r2  = n => Math.round((n || 0) * 100) / 100;
+    const d   = member && (member.day_stats || member.dayStats);
+    if (d && d.date === day) {
+      const gross = r2(parseFloat(d.gross) || 0), spent = r2(parseFloat(d.spent) || 0);
+      return { date: day, gross, spent, net: r2(gross - spent), cats: d.cats || {} };
+    }
+    const tl = member && member.map_data && member.map_data.todayLog;
+    if (tl && tl.date === day) {
+      if (tl.sums) return { date: day, gross: r2(tl.sums.gross), spent: r2(tl.sums.spent), net: r2(tl.sums.net), cats: tl.sums.cats || {} };
+      const es = tl.entries || [];
+      const gross = r2(es.reduce((s, e) => s + ((e.amount > 0 && !e.kapital) ? e.amount : 0), 0));
+      const spent = r2(es.reduce((s, e) => s + ((e.amount < 0 && !e.invest && !e.kapital) ? -e.amount : 0), 0));
+      return { date: day, gross, spent, net: r2(gross - spent), cats: {} };
+    }
+    return { date: day, gross: 0, spent: 0, net: 0, cats: {} };
   }
 
   // ── Bilanz-Ledger: kumulative Lifetime-Summen je Kategorie (Einnahmen/Ausgaben/Investitionen) ──
@@ -665,24 +699,15 @@ const DB = (() => {
     const perCup = Math.round((resCup + wCup + wbCup + tradeBonus.cup + (pk.perCup || 0)) * 100) / 100;
 
     // Realisiertes Gesamteinkommen HEUTE (alle Quellen: Tassen, Schätze, Forschung,
-    // Welt, Login, Aufgaben …) aus dem Tages-Log — so erfasst der Verlauf nicht nur
-    // das passive Einkommen, sondern was tatsächlich reinkam.
-    const tl    = member.map_data && member.map_data.todayLog;
-    const tlOk  = !!(tl && tl.date === today());
-    // Bevorzugt die laufenden Tages-Summen (todayLog.sums, unabhängig vom 50-Einträge-Limit);
-    // Fallback = Aufsummieren der (evtl. gekappten) Einträge für Alt-Tage ohne sums.
-    const gross = tlOk
-      ? (tl.sums ? Math.round((tl.sums.gross || 0) * 100) / 100
-                 : Math.round((tl.entries || []).reduce((s, e) => s + ((e.amount > 0 && !e.kapital) ? e.amount : 0), 0) * 100) / 100)
-      : 0;
+    // Welt, Login, Aufgaben …) — jetzt über dayStats() aus der eigenen day_stats-Spalte,
+    // damit ein veralteter Client-Write den Tageswert nicht mehr zurückdrehen kann.
+    const ds    = dayStats(member);
     // NET = realisiertes Tages-Einkommen MINUS KONSUM-Ausgaben (negative Log-Einträge, z.B. Tränke,
     // Reparatur, Steuer-Events, Strafen) = das „erweiterte Tages-Gehalt" für das Chart (Transparenz).
     // Investitionen (invest:true — Forschung, Karte/Gebäude, Welthandel, Krieger-Ausrüstung) zählen
     // NICHT ins Netto: sie mindern nicht das Gehalt, sondern wandern ins Gesamtvermögen (JP 2026-07-11).
-    const net = tlOk
-      ? (tl.sums ? Math.round((tl.sums.net || 0) * 100) / 100
-                 : Math.round((tl.entries || []).reduce((s, e) => s + ((e.invest || e.kapital) ? 0 : (e.amount || 0)), 0) * 100) / 100)
-      : 0;
+    const gross = ds.gross;
+    const net   = ds.net;
 
     return { day: perDay, cup: perCup, coins: Math.round(member.coins || 0), gross, net };
   }
@@ -1249,11 +1274,16 @@ const DB = (() => {
     const allItems = (typeof getAllResearchItems === 'function') ? getAllResearchItems() : [];
     const allCombos = (typeof RESEARCH_COMBOS !== 'undefined') ? RESEARCH_COMBOS : [];
 
+    // 🌌 Weltraum-Stufen sind ein eigener Zweig (SPACE_RESEARCH), laufen aber über
+    // denselben Kaufweg — gleiche Coins-/Voraussetzungs-/Tages-Log-Behandlung.
+    const allSpace = (typeof SPACE_RESEARCH !== 'undefined') ? SPACE_RESEARCH : [];
+
     const item  = allItems.find(i => i.id === itemId);
     const combo = allCombos.find(c => c.id === itemId);
-    if (!item && !combo) throw new Error('Item nicht gefunden');
+    const space = allSpace.find(s => s.id === itemId);
+    if (!item && !combo && !space) throw new Error('Item nicht gefunden');
 
-    const target = item || combo;
+    const target = item || combo || space;
     let cost     = target.cost || 0;
 
     const { data: raw } = await _sb.from('members')
@@ -1271,6 +1301,12 @@ const DB = (() => {
     const prereqs = target.requires || [];
     if (prereqs.length && !prereqs.every(req => research[req])) {
       throw new Error('Voraussetzungen nicht erfüllt');
+    }
+    // Weltraum-Zweig zusätzlich hinter dem Endgame-Tor: das gesamte Grundspiel muss
+    // erforscht sein. Wird auch in der UI geprüft — hier nochmal, damit ein direkter
+    // Aufruf das Tor nicht umgeht.
+    if (space && typeof isAllResearchComplete === 'function' && !isAllResearchComplete(research)) {
+      throw new Error('Erst das gesamte Grundspiel erforschen');
     }
 
     // Coins abziehen (bei kostenpflichtigen Items)
@@ -1651,6 +1687,32 @@ const DB = (() => {
   async function updateMapData(memberId, mapData) {
     const { error } = await _sb.rpc('save_map_data', { p_member_id: memberId, p_map_data: mapData });
     if (error) throw new Error(error.message);
+    await _bumpDayStats(memberId, mapData);
+  }
+
+  // 📊 Tagesbilanz aus dem map_data-Blob herausziehen (migration_2026-07-21h).
+  // WARUM das hier steht und nicht in appendTodayLog: map_data ist ein GETEILTES
+  // JSON-Dokument, das ~15 Client-Stellen als lokale Kopie halten und wholesale
+  // zurückschreiben (`DB.appendTodayLog(state.mapData, …)`). Ein Karten-Schritt nach
+  // 18 Uhr rollte so den Stand von vor dem Laden zurück und nahm den Tages-Brutto mit.
+  // `bump_day_stats` schreibt MONOTON (GREATEST) in eine eigene Spalte — ein
+  // veralteter Client kann den Wert dadurch nicht mehr senken.
+  // updateMapData ist der EINE Ort, durch den jeder map_data-Write läuft; deshalb
+  // muss keine der Aufrufstellen angefasst werden.
+  // Best-effort: ein Fehler hier darf den eigentlichen Write nie eskalieren.
+  async function _bumpDayStats(memberId, mapData) {
+    try {
+      const tl = mapData && mapData.todayLog;
+      if (!memberId || !tl || !tl.date || !tl.sums) return null;
+      const { data } = await _sb.rpc('bump_day_stats', {
+        p_member_id: memberId,
+        p_day:       tl.date,
+        p_gross:     tl.sums.gross || 0,
+        p_spent:     tl.sums.spent || 0,
+        p_cats:      tl.sums.cats || {},
+      });
+      return data || null;
+    } catch (e) { console.warn('bump_day_stats fehlgeschlagen:', e.message); return null; }
   }
 
   // ── Kaffee-Krieger ───────────────────────────────────────────────────────────
@@ -2200,8 +2262,12 @@ const DB = (() => {
         if (!upg.barista_bart) continue;
         await _sb.rpc('add_coins', { p_member_id: m.id, p_amount: 1 });
         try {
-          const ml = appendTodayLog(m.map_data, [{ label: '🧔 Barista-Bart-Anteil', amount: 1, cat: 'karte' }]);
-          await _sb.rpc('save_map_data', { p_member_id: m.id, p_map_data: ml });
+          // aggKey: alle Bart-Anteile eines Tages landen in EINEM Eintrag („🧔 Barista-Bart-Anteil ×N"),
+          // sonst verdrängen viele 1-CC-Zeilen bei aktiver Gruppe den Rest aus dem 50er-Fenster.
+          // appendTodayLogFresh statt appendTodayLog(m.map_data): das batch-gefetchte map_data ist
+          // veraltet, sobald der Spieler parallel etwas schreibt (Clobber-Vektor wie in applyDailyLevy).
+          await appendTodayLogFresh(m.id, [{ label: '🧔 Barista-Bart-Anteil', amount: 1, cat: 'karte',
+                                             aggKey: 'barista_bart' }]);
         } catch (e) { /* Log-Fehler nicht eskalieren */ }
         count++;
       }
@@ -2390,6 +2456,238 @@ const DB = (() => {
     return data; // { ok, city, reward, firstVisit, uniqueCount, farthest, dist, mobil } | { error }
   }
 
+  // ══ 🚀 Weltraum (P1) ════════════════════════════════════════════════════════
+  // Alle Aufrufe try/catch-gekapselt und mit einem { error }-Objekt als Rückfall:
+  // solange die Migration nicht eingespielt ist, fehlen Tabelle/Funktionen — die App
+  // darf davon nie abstürzen (CLAUDE.md Regel 3), der Weltraum-Tab zeigt dann nur einen Hinweis.
+  // Rohstoffe (Erz/Kristall) laufen NIE über den CC-Ledger — nur die CC-Beträge unten.
+
+  async function ensureGalaxy() {
+    try {
+      if (!_groupId) return { error: 'no_group' };
+      const { data, error } = await _sb.rpc('ensure_galaxy', { p_group_id: _groupId });
+      if (error) return { error: error.message };
+      return data || {};
+    } catch (e) { return { error: e.message }; }
+  }
+
+  async function fetchGalaxy() {
+    try {
+      if (!_groupId) return { planets: [], revealed: {} };
+      const [pl, cl] = await Promise.all([
+        _sb.from('space_planets').select('*').eq('group_id', _groupId),
+        _sb.from('space_clan').select('*').eq('group_id', _groupId).maybeSingle(),
+      ]);
+      return { planets: pl.data || [], revealed: (cl.data && cl.data.revealed) || {} };
+    } catch (e) { console.warn('fetchGalaxy:', e.message); return { planets: [], revealed: {} }; }
+  }
+
+  async function saveSpace(memberId, space) {
+    try {
+      const { data, error } = await _sb.rpc('save_space', { p_member_id: memberId, p_space: space || {} });
+      if (error) return { error: error.message };
+      return data || {};
+    } catch (e) { return { error: e.message }; }
+  }
+
+  // Schiffsbau — CC-Ausgabe wird als Investition geloggt (invest:true, wie Forschung/Welt-Ausbau)
+  async function buildSpace(memberId, ship, count, cc, erz, kristall) {
+    try {
+      const { data, error } = await _sb.rpc('build_space', {
+        p_member_id: memberId, p_ship: ship, p_count: count | 0,
+        p_cc: cc || 0, p_erz: erz || 0, p_kristall: kristall || 0 });
+      if (error) return { error: error.message };
+      if (data && data.ok && (data.cc || 0) > 0) {
+        try {
+          await appendTodayLogFresh(memberId, [{
+            label: `🚀 Raumschiffbau beauftragt: ${ship} ×${data.count}`, amount: -data.cc,
+            cat: 'weltraum', detail: 'Werft am Raumhafen', invest: true, aggKey: 'space_build' }]);
+        } catch (e) {}
+      }
+      return data || {};
+    } catch (e) { return { error: e.message }; }
+  }
+
+  // Raumhafen ausbauen / Geschütz bauen / Geschütz aufrüsten.
+  // Anders als buildSpace schickt der Client hier KEINE Kosten mit — build_space_defense
+  // rechnet sie selbst aus _space_port_stats/_space_turret_stats. Der Betrag für das
+  // Tages-Log kommt deshalb aus der Antwort zurück.
+  async function buildSpaceDefense(memberId, action, slot, type) {
+    try {
+      const { data, error } = await _sb.rpc('build_space_defense', {
+        p_member_id: memberId, p_action: action,
+        p_slot: slot || null, p_type: type || null });
+      if (error) return { error: error.message };
+      if (data && data.ok && (data.cc || 0) > 0) {
+        const label = action === 'port_upgrade'
+          ? `🛰️ Raumhafen-Ausbau (Stufe ${data.level})`
+          : `🛡️ Geschütz ${action === 'turret_build' ? 'gebaut' : 'aufgerüstet'}: ${data.type} (St. ${data.level})`;
+        try {
+          await appendTodayLogFresh(memberId, [{
+            label, amount: -data.cc, cat: 'weltraum',
+            detail: 'Verteidigung am Raumhafen', invest: true, aggKey: 'space_defense' }]);
+        } catch (e) {}
+      }
+      return data || {};
+    } catch (e) { return { error: e.message }; }
+  }
+
+  // ── Weltraum P2: KI-Angriffswellen + Hilferufe ────────────────────────────
+  async function ensureSpaceWave(memberId) {
+    try {
+      if (!_groupId) return { error: 'no_group' };
+      const { data, error } = await _sb.rpc('ensure_space_wave', {
+        p_member_id: memberId, p_group_id: _groupId });
+      if (error) return { error: error.message };
+      return data || {};
+    } catch (e) { return { error: e.message }; }
+  }
+
+  // Offene Wellen der ganzen Gruppe — daraus speist sich die Hilferuf-Liste.
+  // Die abgewehrten interessieren niemanden mehr, deshalb nur `pending`.
+  async function fetchSpaceWaves() {
+    try {
+      if (!_groupId) return [];
+      const { data, error } = await _sb.from('space_waves')
+        .select('id, member_id, arrive_at, strength, tier, help_open')
+        .eq('group_id', _groupId).eq('status', 'pending')
+        .order('arrive_at', { ascending: true });
+      if (error) return [];
+      return data || [];
+    } catch (e) { return []; }
+  }
+
+  async function fetchSpaceHelp(waveIds) {
+    try {
+      if (!waveIds || !waveIds.length) return [];
+      const { data, error } = await _sb.from('space_help')
+        .select('wave_id, helper_id, power, returned').in('wave_id', waveIds);
+      if (error) return [];
+      return data || [];
+    } catch (e) { return []; }
+  }
+
+  async function requestSpaceHelp(memberId) {
+    try {
+      const { data, error } = await _sb.rpc('request_space_help', { p_member_id: memberId });
+      if (error) return { error: error.message };
+      return data || {};
+    } catch (e) { return { error: e.message }; }
+  }
+
+  async function sendSpaceHelp(helperId, waveId, fleet) {
+    try {
+      const { data, error } = await _sb.rpc('send_space_help', {
+        p_helper_id: helperId, p_wave_id: waveId, p_fleet: fleet || {} });
+      if (error) return { error: error.message };
+      return data || {};
+    } catch (e) { return { error: e.message }; }
+  }
+
+  async function resolveSpaceWave(memberId) {
+    try {
+      const { data, error } = await _sb.rpc('resolve_space_wave', { p_member_id: memberId });
+      if (error) return { error: error.message };
+      // Bergungsprämie ins Tages-Log — neue CC-Quelle, Rubrik existiert bereits
+      if (data && data.resolved && (data.cc || 0) > 0) {
+        try {
+          await appendTodayLogFresh(memberId, [{
+            label: `🛡️ Angriffswelle abgewehrt (Bergung)`, amount: data.cc,
+            cat: 'weltraum', detail: `Stärke ${Math.round(data.strength || 0)}`,
+            aggKey: 'space_wave' }]);
+        } catch (e) {}
+      }
+      return data || {};
+    } catch (e) { return { error: e.message }; }
+  }
+
+  // Flotte zurückrufen — nur auf dem Hinflug. Der Server rechnet die neue Rückkehrzeit
+  // selbst (Rückweg = bereits geflogene Zeit); der Client schickt bewusst keine Zeiten mit.
+  // Werftauftrag: mehrere Typen auf einmal bestellen. Preise rechnet der Server.
+  async function buildSpaceCart(memberId, cart) {
+    try {
+      const { data, error } = await _sb.rpc('build_space_cart', {
+        p_member_id: memberId, p_cart: cart || {} });
+      if (error) return { error: error.message };
+      if (data && data.ok && (data.cc || 0) > 0) {
+        const n = (Array.isArray(data.lines) ? data.lines : []).reduce((a, l) => a + (l.count || 0), 0);
+        try {
+          await appendTodayLogFresh(memberId, [{
+            label: `🚀 Raumschiffbau beauftragt: ${n} Schiff(e)`, amount: -data.cc,
+            cat: 'weltraum', detail: 'Werft am Raumhafen', invest: true, aggKey: 'space_build' }]);
+        } catch (e) {}
+      }
+      return data || {};
+    } catch (e) { return { error: e.message }; }
+  }
+
+  // Fertige Schiffe aus der Werft übernehmen.
+  async function claimSpaceBuild(memberId) {
+    try {
+      const { data, error } = await _sb.rpc('claim_space_build', { p_member_id: memberId });
+      if (error) return { error: error.message };
+      return data || {};
+    } catch (e) { return { error: e.message }; }
+  }
+
+  // Dauerernte-Route setzen (0 = auflösen).
+  async function setSpaceRoute(memberId, planetId, count, mode) {
+    try {
+      if (!_groupId) return { error: 'no_group' };
+      const { data, error } = await _sb.rpc('set_space_route', {
+        p_member_id: memberId, p_group_id: _groupId,
+        p_planet_id: planetId, p_count: count | 0, p_mode: mode || 'res' });
+      if (error) return { error: error.message };
+      return data || {};
+    } catch (e) { return { error: e.message }; }
+  }
+
+  async function recallSpaceTrip(memberId) {
+    try {
+      const { data, error } = await _sb.rpc('recall_space_trip', { p_member_id: memberId });
+      if (error) return { error: error.message };
+      return data || {};
+    } catch (e) { return { error: e.message }; }
+  }
+
+  async function startSpaceTrip(memberId, planetId, intent, fleet, speedPct) {
+    try {
+      if (!_groupId) return { error: 'no_group' };
+      const { data, error } = await _sb.rpc('start_space_trip', {
+        p_member_id: memberId, p_group_id: _groupId, p_planet_id: planetId,
+        p_intent: intent, p_fleet: fleet || {}, p_speed_pct: speedPct || 0 });
+      if (error) return { error: error.message };
+      return data || {};
+    } catch (e) { return { error: e.message }; }
+  }
+
+  // Rückkehr abrechnen. Beute-CC ist eine echte Einnahme → Tages-Log ohne invest-Flag.
+  async function claimSpaceArrival(memberId) {
+    try {
+      if (!_groupId) return { error: 'no_group' };
+      const { data, error } = await _sb.rpc('claim_space_arrival', {
+        p_member_id: memberId, p_group_id: _groupId });
+      if (error) return { error: error.message };
+      if (data && data.ok && (data.cc || 0) > 0) {
+        try {
+          await appendTodayLogFresh(memberId, [{
+            label: `🚀 Beute: ${data.planet || 'Planet'}`, amount: data.cc,
+            cat: 'weltraum', detail: 'Weltraum-Einsatz', aggKey: 'space_loot',
+            aggBase: '🚀 Weltraum-Beute' }]);
+        } catch (e) {}
+      }
+      return data || {};
+    } catch (e) { return { error: e.message }; }
+  }
+
+  async function harvestSpace(memberId) {
+    try {
+      const { data, error } = await _sb.rpc('harvest_space', { p_member_id: memberId });
+      if (error) return { error: error.message };
+      return data || {};   // reine Rohstoff-Gutschrift → kein CC-Ledger-Eintrag
+    } catch (e) { return { error: e.message }; }
+  }
+
   return {
     init, setGroup, createGroup, joinGroup,
     fetchData, registerUser, addCups, closeSeason, autoCloseSeasonIfDue,
@@ -2402,7 +2700,7 @@ const DB = (() => {
     spendCoins, fetchTreasury, contributeToTreasury, syncTreasuryGoals,
     applyDailyLevy, checkWeeklyChallenge,
     purchaseResearchItem, saveCosmetics, buyCiqPerk, applyCiqAttack, fetchMemberMapData,
-    updateMapData, addCoins, appendTodayLog, appendTodayLogFresh, claimPassive, recordSalarySnapshot, recordSalarySnapshotsAll,
+    updateMapData, addCoins, appendTodayLog, appendTodayLogFresh, dayStats, claimPassive, recordSalarySnapshot, recordSalarySnapshotsAll,
     saveDungeonData, dungeonFight, buyKriegerItem, repairArmor, buyKriegerPotion, buyKriegerCompanion, buyKriegerMount,
     payBaristaBartGroup, addPenaltyToTreasury, payEigeneTasseGroup,
     claimLoginBonus, claimDailyTask,
@@ -2418,5 +2716,9 @@ const DB = (() => {
     startMinigame, claimMinigame, getMinigameStatus,
     fetchMobilGraph, startTrip, claimArrival,
     openCafe, buyCafeItem, claimCafe, setCafeBeans, depositCafe, setCafePolicy, setCafeStil, claimCafeTask, unlockCafeRecipe,
+    ensureGalaxy, fetchGalaxy, saveSpace, buildSpace, buildSpaceDefense,
+    startSpaceTrip, recallSpaceTrip, claimSpaceArrival, harvestSpace, claimSpaceBuild, buildSpaceCart, setSpaceRoute,
+    ensureSpaceWave, fetchSpaceWaves, fetchSpaceHelp,
+    requestSpaceHelp, sendSpaceHelp, resolveSpaceWave,
   };
 })();

@@ -111,6 +111,7 @@ async function renderImperium() {
       <button class="imp-tab" data-tab="krieger">⚔️ Krieger</button>
       ${(research.kaffeemobil && research.barista_kurs && research.fahrender_haendler) ? '<button class="imp-tab" data-tab="mobil">🚐 Kaffeemobil</button>' : ''}
       ${research.erstes_cafe ? '<button class="imp-tab" data-tab="cafe">☕ Café</button>' : ''}
+      ${(typeof spaceBranchComplete === 'function' && spaceBranchComplete(research)) ? '<button class="imp-tab" data-tab="weltall">🚀 Weltall</button>' : ''}
       <button class="imp-tab" data-tab="stats">📊 Statistik</button>
       <button class="imp-tab" data-tab="kasse">🏛️ Kasse</button>
       <button class="imp-tab" data-tab="cosmetics">🎨 Cosmetics</button>
@@ -125,7 +126,7 @@ async function renderImperium() {
     document.querySelectorAll('.imp-tab').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     // Karte/Welt/Krieger-Tab: immer aktuellsten Stand (currentUserData hat map_data/dungeon_data/coins-Updates)
-    const freshMember = (btn.dataset.tab === 'karte' || btn.dataset.tab === 'welt' || btn.dataset.tab === 'krieger' || btn.dataset.tab === 'mobil' || btn.dataset.tab === 'cafe') ? (currentUserData || member) : member;
+    const freshMember = (btn.dataset.tab === 'karte' || btn.dataset.tab === 'welt' || btn.dataset.tab === 'krieger' || btn.dataset.tab === 'mobil' || btn.dataset.tab === 'cafe' || btn.dataset.tab === 'weltall') ? (currentUserData || member) : member;
     _renderImperiumTab(btn.dataset.tab, freshMember);
   });
 
@@ -144,6 +145,7 @@ async function _renderImperiumTab(tab, member) {
   if (tab === 'krieger')   { el.innerHTML = ''; _buildKrieger(member, el); return; }
   if (tab === 'mobil')     { el.innerHTML = ''; if (typeof _buildKaffeemobil === 'function') _buildKaffeemobil(member, el); return; }
   if (tab === 'cafe')      { el.innerHTML = ''; if (typeof _buildCafe === 'function') _buildCafe(member, el); return; }
+  if (tab === 'weltall')   { el.innerHTML = ''; if (typeof _buildWeltraum === 'function') _buildWeltraum(member, el); return; }
   // Event-Delegation für Kaufbuttons
   el.onclick = async (e) => {
     const btn = e.target.closest('[data-buy]');
@@ -231,7 +233,66 @@ function _buildForschungsbaum(research) {
     </div>`;
   }
   html += `</div>`;
+
+  html += _buildWeltraumZweig(research);
   return html;
+}
+
+// ── 🌌 Weltraum-Zweig im Forschungsbaum ──────────────────────────────────────
+// Erscheint erst, wenn das GESAMTE Grundspiel erforscht ist. Vorher steht dort nur ein
+// Teaser mit dem Reststand — so weiß der Spieler, dass da noch etwas kommt, ohne dass
+// der Zweig anklickbar wäre. Try/catch: fehlt research.js in einer alten Version, bleibt
+// der Forschungsbaum trotzdem intakt (CLAUDE.md Regel 3).
+function _buildWeltraumZweig(research) {
+  try {
+    if (typeof SPACE_RESEARCH === 'undefined' || typeof isAllResearchComplete !== 'function') return '';
+    const gateOpen = isAllResearchComplete(research);
+
+    if (!gateOpen) {
+      // Wie viel fehlt noch? (nur zählen, keine Namen verraten — das bleibt Anreiz)
+      let total = 0, have = 0;
+      for (const path of Object.values(RESEARCH_PATHS)) for (const it of path.items) { total++; if (research[it.id]) have++; }
+      for (const c of RESEARCH_COMBOS) { total++; if (research[c.id]) have++; }
+      return `<div class="cc-space-section cc-space-locked">
+        <div class="section-title" style="margin:16px 0 10px">🌌 Weltraum-Programm</div>
+        <p class="cc-space-teaser">🔒 Verschlossen, solange das Kaffee-Imperium auf der Erde nicht vollendet ist.
+          <strong>${have}/${total}</strong> Forschungen abgeschlossen.</p>
+      </div>`;
+    }
+
+    const done = (typeof spaceBranchComplete === 'function') && spaceBranchComplete(research);
+    let html = `<div class="cc-space-section">
+      <div class="section-title" style="margin:16px 0 10px">🌌 Weltraum-Programm</div>
+      <p class="cc-space-teaser">${done
+        ? '🚀 Der Raumhafen steht — der Tab <strong>🚀 Weltall</strong> ist offen.'
+        : 'Das Imperium ist vollendet. Bau den Raumhafen und schick den Kaffee ins All.'}</p>`;
+
+    for (const it of SPACE_RESEARCH) {
+      const owned = !!research[it.id];
+      const avail = (typeof spaceItemAvailable === 'function') && spaceItemAvailable(research, it.id);
+      const missing = (it.requires || []).filter(r => !research[r])
+        .map(r => (SPACE_RESEARCH.find(s => s.id === r) || {}).name || r).join(', ');
+      // Pixel-Art-Kachel, falls vorhanden; onerror blendet sie aus und zeigt das Emoji darunter.
+      // So bleibt der Baum auch dann vollständig, wenn ein Asset fehlt.
+      const art = it.art
+        ? `<img class="cc-space-art" src="assets/weltraum/${_esc2(it.art)}.png" alt=""
+             onerror="this.remove()"><span class="cc-space-ic cc-space-ic-fb">${it.icon}</span>`
+        : `<span class="cc-space-ic">${it.icon}</span>`;
+      html += `<div class="cc-space-card ${owned ? 'cc-space-owned' : avail ? 'cc-space-ready' : ''}">
+        <div class="cc-space-head">
+          ${art}
+          <span class="cc-space-name">${_esc2(it.name)}</span>
+          <span class="cc-space-ast">${_esc2(it.ast)} · WT${it.wt}</span>
+          <span class="cc-space-cost">${owned ? '✓' : it.cost.toLocaleString('de-DE') + ' CC'}</span>
+        </div>
+        <p class="cc-space-desc">${_esc2(it.desc)}</p>
+        ${owned ? '<p class="cc-combo-owned-lbl">✓ Erforscht</p>'
+          : avail ? `<button class="cc-buy-btn cc-combo-buy-btn" data-buy="${it.id}">Erforschen</button>`
+          : `<p class="cc-combo-locked">🔒 Braucht: ${_esc2(missing || '—')}</p>`}
+      </div>`;
+    }
+    return html + '</div>';
+  } catch (e) { console.warn('Weltraum-Zweig konnte nicht gerendert werden:', e.message); return ''; }
 }
 
 // (🪴 Kaffee-Garten entfernt — Feature komplett zurückgebaut, 2026-07-17)
@@ -1793,6 +1854,7 @@ function _showKarteBuildingInfo(b) {
     status = `🚧 Im Bau — noch ca. ${rem.text}`;
   }
   popup.classList.remove('hidden');
+  _krArmPopup(popup);
   popup.innerHTML = `
     <div class="cc-karte-popup-inner">
       <div class="cc-karte-popup-hdr">${def.emoji} ${_esc2(def.name)}</div>
@@ -2205,10 +2267,39 @@ function _kriegerRenderDungeon(member, state, seed, COLS, ROWS, MARGIN, body) {
     _down = false;
     canvas.releasePointerCapture?.(e.pointerId);
     if (_moved) return;
+    // Kompatibilitaets-Click nach dem Tap unterdruecken, soweit der Browser das ueber
+    // pointerup zulaesst — die verlaessliche Absicherung ist _krArmPopup im Popup selbst.
+    e.preventDefault();
     const { tx, ty } = _tileFromEvent(e);
     await _handleKriegerTap(tx, ty, member, state, seed, COLS, ROWS, MARGIN);
   });
   canvas?.addEventListener('pointercancel', () => { _down = false; });
+}
+
+// ── Ghost-Click-Sperre für frisch geöffnete Popups (Bugfix 2026-07-21) ───────
+// JP: „wenn man einen Feind anklickt, ist auch oft automatisch ein Trank angeklickt,
+// weil das Popup über demselben Feld liegt."
+//
+// Ursache: Der Karten-Tap läuft über `pointerup`. Auf Touch-Geräten schickt der Browser
+// danach zusätzlich ein KOMPATIBILITÄTS-`click` an dieselbe Bildschirmposition — und das
+// Popup steht zu dem Zeitpunkt bereits dort. Der Finger hat also einen Trank getroffen,
+// ohne dass der Nutzer ihn je angetippt hätte.
+//
+// Warum ein Zeit-Gate und nicht nur preventDefault: das compat-Click-Verhalten ist
+// browserabhängig (offiziell unterdrückt es nur preventDefault auf `pointerdown`, was
+// hier das Panning stören würde). Die Sperre wirkt unabhängig davon — und fängt
+// zusätzlich versehentliche Doppel-Taps ab.
+//
+// Wirkt in der Capture-Phase, damit sie VOR den Knopf-Handlern greift.
+function _krArmPopup(popup, ms) {
+  if (!popup) return;
+  const span = ms || 350;
+  const until = Date.now() + span;
+  const swallow = (e) => {
+    if (Date.now() < until) { e.stopPropagation(); e.preventDefault(); }
+  };
+  popup.addEventListener('click', swallow, true);
+  setTimeout(() => popup.removeEventListener('click', swallow, true), span + 60);
 }
 
 async function _handleKriegerTap(tx, ty, member, state, seed, COLS, ROWS, MARGIN) {
@@ -2471,6 +2562,7 @@ function _showKriegerFightPrompt(member, state, tier, seed, COLS, ROWS, MARGIN, 
   const popup = document.getElementById('krieger-popup');
   if (!popup) return;
   popup.classList.remove('hidden');
+  _krArmPopup(popup);
   popup.innerHTML = `
     <div class="krieger-fight-overlay">
       <div class="cc-karte-popup-inner" style="max-width:360px;width:100%">
@@ -2654,6 +2746,7 @@ function _showKriegerToolPrompt(tx, ty, member, state, seed, COLS, ROWS, MARGIN)
   }).join('');
 
   popup.classList.remove('hidden');
+  _krArmPopup(popup);
   popup.innerHTML = `
     <div class="krieger-fight-overlay">
       <div class="cc-karte-popup-inner" style="max-width:340px;width:100%">
@@ -2700,6 +2793,7 @@ function _krShowGateBlock(title, reason) {
   const popup = document.getElementById('krieger-popup');
   if (!popup) { showToast(reason, 'info'); return; }
   popup.classList.remove('hidden');
+  _krArmPopup(popup);
   popup.innerHTML = `
     <div class="krieger-fight-overlay">
       <div class="cc-karte-popup-inner" style="max-width:340px;width:100%">
@@ -2827,6 +2921,7 @@ function _showKriegerCastle(member, state, site, seed, COLS, ROWS, MARGIN) {
   const remaining = kriegerGarrisonRemaining(state.dd, castle.key, site.idx, seed);
   const taken = !!st.lord;
   popup.classList.remove('hidden');
+  _krArmPopup(popup);
   popup.innerHTML = `
     <div class="krieger-fight-overlay">
       <div class="cc-karte-popup-inner" style="max-width:380px;width:100%">
@@ -3396,17 +3491,24 @@ function _kriegerRenderShop(member, state, body) {
         const effCost = (typeof kriegerDiscountedCost === 'function') ? kriegerDiscountedCost(t.cost, dd) : t.cost;
         const canBuy = state.memberCoins >= effCost;
         const priceTxt = effCost < t.cost ? `⚖️ <s>${t.cost}</s> ${effCost}` : `${t.cost}`;
-        return `<div class="krieger-item-card${have > 0 ? ' owned' : ''}">
+        // Level-Gate wie bei Gear/Reittieren/Begleitern (gleiches .ciq-lock-Muster).
+        const locked = (t.minLevel || 0) > level;
+        const action = locked
+          ? `<span class="ciq-state ciq-lock">🔒 ab Stufe ${t.minLevel}</span>`
+          : `<button class="cc-build-btn krieger-tool-buy" data-tool="${t.key}"${canBuy ? '' : ' disabled'}>Kaufen · ${priceTxt} 🫘</button>`;
+        return `<div class="krieger-item-card${have > 0 ? ' owned' : ''}${locked ? ' locked' : ''}">
           <div style="font-size:20px">${t.icon}</div>
           <div style="font-size:11px;font-weight:700">${_esc2(t.name)}${have > 0 ? ` <span style="color:#FAC775">×${have}</span>` : ''}</div>
           <div style="font-size:11px;color:var(--muted);margin:3px 0">${_esc2(t.desc)}</div>
-          <div style="margin-top:5px"><button class="cc-build-btn krieger-tool-buy" data-tool="${t.key}"${canBuy ? '' : ' disabled'}>Kaufen · ${priceTxt} 🫘</button></div>
+          <div style="margin-top:5px">${action}</div>
         </div>`;
       }).join('')}
     </div>
   </div>`;
 
-  body.innerHTML = `<div class="krieger-loadout">${loadoutHtml}</div>${autoEquipHtml}${setHint}${schmiedHtml}${werkzeugHtml}${scanHtml}${mountHtml}${companionHtml}${sections}`;
+  // Reihenfolge (JP 2026-07-21): Werkzeug steht GANZ UNTEN, nicht mehr an zweiter Stelle —
+  // es ist Erschließungs-Gerät fürs mittlere Spiel, nicht das Erste, was man kaufen soll.
+  body.innerHTML = `<div class="krieger-loadout">${loadoutHtml}</div>${autoEquipHtml}${setHint}${schmiedHtml}${scanHtml}${mountHtml}${companionHtml}${sections}${werkzeugHtml}`;
 
   // Werkzeug-Kauf: gleiches Muster wie der Trank-Kauf (spend_coins + save_dungeon_data),
   // aber ohne eigene DB-Funktion — der Bestand liegt rein in dungeon_data.
@@ -3414,6 +3516,13 @@ function _kriegerRenderShop(member, state, body) {
     btn.onclick = async () => {
       const tool = (typeof kriegerToolByKey === 'function') ? kriegerToolByKey(btn.dataset.tool) : null;
       if (!tool) return;
+      // Level-Gate auch im Handler prüfen, nicht nur beim Rendern: der Knopf existiert
+      // zwar gar nicht, solange gesperrt — aber die Bedingung gehört an beide Stellen,
+      // sonst reißt eine spätere Render-Änderung das Gate still auf.
+      if ((tool.minLevel || 0) > (state.dd?.level || 1)) {
+        showToast(`${tool.icon} ${tool.name} gibt es erst ab Stufe ${tool.minLevel}.`, 'error');
+        return;
+      }
       btn.disabled = true;
       const cost = (typeof kriegerDiscountedCost === 'function') ? kriegerDiscountedCost(tool.cost, state.dd) : tool.cost;
       try {

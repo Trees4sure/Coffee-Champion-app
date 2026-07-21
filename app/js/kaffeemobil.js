@@ -260,7 +260,12 @@ function kmBuildMap() {
   for (const u of users) {
     if (!u || !u.mobil) continue;
     const p = kmPos(u.mobil); const mine = (u.id === myId);
-    const icon = L.divIcon({ className: 'km-mobil-icon' + (mine ? ' mine' : ''), html: '🚐', iconSize: [24, 24], iconAnchor: [12, 12] });
+    // Farbring in der Spielerfarbe der Auswertungs-Grafik (playerColor aus app.js) — das 🚐-Emoji
+    // selbst lässt sich nicht einfärben, deshalb eine farbige Scheibe dahinter. Fallback auf die
+    // bisherige schmucklose Darstellung, falls app.js (noch) nicht geladen ist.
+    const col = (typeof playerColor === 'function') ? playerColor(u.id) : null;
+    const html = col ? `<span class="km-mobil-dot" style="--kmc:${col}">🚐</span>` : '🚐';
+    const icon = L.divIcon({ className: 'km-mobil-icon' + (mine ? ' mine' : ''), html, iconSize: [24, 24], iconAnchor: [12, 12] });
     _kmMobileMarkers[u.id] = L.marker([p.lat, p.lng], { icon, interactive: false, keyboard: false, zIndexOffset: mine ? 1000 : 400 }).addTo(map);
   }
 

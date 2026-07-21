@@ -124,6 +124,8 @@ function showApp() {
   if (typeof kmMaybeArrive === 'function') kmMaybeArrive();
   // ☕ Café: aufgelaufenen idle-Ertrag gutschreiben (throttled im Modul, auch ohne offenen Tab)
   if (typeof cafeMaybeClaim === 'function') cafeMaybeClaim(currentUserData, true);
+  // 🚀 Weltraum: zurückgekehrte Flotte einlösen (auch ohne offenen Tab)
+  if (typeof wrMaybeArrive === 'function') wrMaybeArrive();
 }
 
 // Passives Einkommen einlösen und bei Gutschrift Anzeige aktualisieren.
@@ -285,6 +287,8 @@ async function refreshData() {
   if (typeof kmMaybeArrive === 'function') kmMaybeArrive();
   // ☕ Café: aufgelaufenen idle-Ertrag gutschreiben (throttled im Modul, auch ohne offenen Tab)
   if (typeof cafeMaybeClaim === 'function') cafeMaybeClaim(currentUserData, true);
+  // 🚀 Weltraum: zurückgekehrte Flotte einlösen (auch ohne offenen Tab)
+  if (typeof wrMaybeArrive === 'function') wrMaybeArrive();
 }
 
 // ── Nachrichten ───────────────────────────────────────────────────────────────
@@ -317,6 +321,33 @@ function ensureMsgTabs() {
   });
 }
 
+// ── Mini-Bilder im Chat ──────────────────────────────────────────────────────
+// Die Weltraum-Meldungen sahen mit Emoji billig aus (🔫 ist eine Wasserpistole), obwohl
+// die echten Renders unter assets/space/ liegen. Module posten deshalb Platzhalter der
+// Form `[[s:jaeger]]`, die hier zu einem 18px-Bild werden.
+//
+// ⚠️ Der Ersatz läuft IMMER auf dem bereits mit _esc() escapten String und rendert nur
+// Namen aus dieser Whitelist. Ein Spieler kann also nichts einschleusen, indem er das
+// Token selbst in den Chat tippt — er bekommt schlimmstenfalls dasselbe Bildchen.
+const CHAT_ART = {
+  sonde:   ['ship_spaeher', '🛰️'], jaeger:  ['ship_jaeger', '🔫'],
+  kutter:  ['ship_kutter',  '🚀'], ernter:  ['ship_ernter', '⛏️'],
+  kolonie: ['ship_kolonie', '🛸'],
+  erz:     ['res_erz', '🪨'],      kristall:['res_kristall', '💎'],
+  railgun: ['turret_railgun', '🔩'], laser:     ['turret_laser', '⚡'],
+  plasma:  ['turret_plasma', '🔥'],  singularity:['turret_singularity', '🌀'],
+  hafen:   ['base_1', '🛰️'],
+};
+function _chatArt(escaped) {
+  return String(escaped == null ? '' : escaped)
+    .replace(/\[\[s:([a-z0-9_]{1,20})\]\]/g, (tok, key) => {
+      const a = CHAT_ART[key];
+      if (!a) return tok;
+      return `<img class="chat-art" src="assets/space/${a[0]}.png" alt="" onerror="this.remove()"`
+           + `><span class="chat-art-fb">${a[1]}</span>`;
+    });
+}
+
 async function renderMessages() {
   ensureMsgTabs();
   const list    = document.getElementById('messages-list');
@@ -342,14 +373,14 @@ async function renderMessages() {
     list.innerHTML = msgs.map(m => `
       <div class="news-item">
         <div class="news-sender">${_esc(m.member_name)}</div>
-        <div class="news-body">${_esc(m.message)}</div>
+        <div class="news-body">${_chatArt(_esc(m.message))}</div>
         <div class="news-time">${fmtMeta(m)}</div>
       </div>`).join('');
   } else {
     list.innerHTML = msgs.map(m => {
       const own = m.member_name === currentUser?.name;
       return `<div class="msg-item ${own ? 'own' : 'other'}">
-        <div class="msg-bubble">${_esc(m.message)}</div>
+        <div class="msg-bubble">${_chatArt(_esc(m.message))}</div>
         <div class="msg-meta">${own ? '' : `${_esc(m.member_name)} · `}${fmtMeta(m)}</div>
       </div>`;
     }).join('');
@@ -590,45 +621,97 @@ function renderLeaderboard() {
 // Werkzeug). Der Café-2.0-Eintrag BLEIBT bewusst stehen — whatsNewSeen merkt sich nur EINE
 // Version, Nachzügler würden ihn sonst nie sehen (gleiche Begründung wie beim Krieger-Umbau
 // am 12.07.). Wer Café 2.0 schon kannte, sieht ihn einmal erneut zusammen mit dem Neuen.
-const WHATS_NEW_VERSION = '2026-07-21-krieger-burgen';
+const WHATS_NEW_VERSION = '2026-07-21-weltraum-p2';
 // Go-Live-Zeitpunkt (LOKALE Zeit, ISO ohne "Z" → wird als Ortszeit interpretiert).
 // ⚠️ ANPASSEN, falls der Upload später erfolgt — davor bleibt das Popup still.
 const WHATS_NEW_GO_LIVE = new Date('2026-07-22T15:00:00');
 const WHATS_NEW_ITEMS = [
   {
+    id: 'weltraum-p1',
+    condition: (u) => typeof isAllResearchComplete === 'function' && isAllResearchComplete(u&&u.research),
+    icon: '🚀',
+    title: 'Neu: Das Weltraum-Endgame — schickt den Kaffee ins All',
+    text: 'Für alle, die auf der Erde nichts mehr zu erforschen haben: Wenn euer Forschungsbaum KOMPLETT abgeschlossen ist — alle sechs Pfade und alle Kombinationen —, öffnet sich unten im Forschungsbaum das 🌌 Weltraum-Programm. Drei neue Stufen (Ionenantrieb, Frachtmodule, Handbohrer) bauen euren Raumhafen, und danach erscheint der neue Tab 🚀 Weltall. Dort wartet eine Sternkarte mit 19 Wabenquadranten, die eure ganze Gruppe GEMEINSAM erkundet: Was einer aufklärt, sehen alle — ihr seid ein Kaffee-Clan. Schickt 🛰️ Bohnen-Sonden in den Nebel, baut 🔫 Jäger und stürmt die Wächter der Planeten, holt euch mit ⛏️ Röstkometen 🪨 Erz und 💎 Koffeinkristall und gründet mit 🛸 Kolonieschiffen eure ersten Kolonien, die dauerhaft Rohstoffe abwerfen. Jede Reise startet und endet am Raumhafen; wie lange sie dauert, hängt davon ab, wie weit draußen euer Ziel liegt. Wichtig: Die beiden Weltraum-Rohstoffe sind NICHT käuflich. Es gibt sie ausschließlich da oben — reich sein allein reicht hier nicht mehr. Und Vorsicht: Im Kampf verliert ihr immer Schiffe, bei Sieg wie bei Niederlage. Je überlegener eure Flotte, desto weniger. Der Weltraum ist ein Fass ohne Boden für eure CoffeeCoins — genau so ist er gedacht.'
+  },
+  {
+    id: 'weltraum-p1b',
+    condition: (u) => typeof isAllResearchComplete === 'function' && isAllResearchComplete(u&&u.research),
+    icon: '🛡️',
+    title: 'Neu im All: Flottenverbände, Raumhafen-Geschütze und Hinterhalte',
+    text: 'Ihr bestimmt jetzt selbst, WER mitfliegt. Vor jedem Start stellt ihr euren Verband Schiff für Schiff zusammen — bisher flog stumpf die ganze Heimatflotte mit, eure teuren Röstkometen also mitten in jede Schlacht. Kampfkraft und Abbauleistung der Auswahl seht ihr live, dazu Schnellauswahlen für Kampf- und Ernteflotte. Neu ist auch: Draußen ist es nicht mehr sicher. Auf dem Hinflug kann euer Verband in einen Hinterhalt geraten — in Ring 1 selten (12 %), in Ring 2 deutlich öfter (30 %). Ob ihr durchbrecht, entscheidet allein eure eigene Kampfkraft; kommt ihr nicht durch, wird der Auftrag abgebrochen und die Flotte kehrt heim. Schickt eine einzelne Sonde also nicht mehr unbegleitet in die äußeren Ringe. Dagegen hilft euer 🛡️ Raumhafen: Er hat jetzt Bauslots für Geschütze — 🔩 Railgun, ⚡ Laserbatterie, 🔥 Plasmawerfer und 🌀 Singularität, jedes in drei Stufen ausbaubar. Ihre Feuerkraft deckt den Anflug und senkt eure Verluste aus Hinterhalten spürbar. Baut ihr den Hafen selbst aus (Stufe 2 und 3), bekommt ihr mehr Slots und die schweren Geschütze. Jeder hat seinen eigenen Hafen, auch wenn alle aus demselben Quadranten starten. Außerdem: Ihr könnt eine Flotte jetzt ↩️ zurückrufen, solange sie noch auf dem Hinflug ist — der Auftrag verfällt, der Rückweg dauert so lange, wie sie schon geflogen ist. Und alles, was im All passiert, landet endlich im Gruppen-Chat.'
+  },
+  {
+    id: 'weltraum-p2',
+    condition: (u) => typeof isAllResearchComplete === 'function' && isAllResearchComplete(u&&u.research),
+    icon: '🚨',
+    title: 'Neu: Sie greifen zurück — Angriffswellen auf euren Raumhafen',
+    text: 'Bisher wart ihr im All immer die Angreifer. Das ändert sich. Wer Planeten befreit und Kolonien gründet, wird bemerkt: In Abständen von einigen Stunden schickt der Feind eine Welle direkt zu eurem Raumhafen — je mehr ihr besitzt, desto schwerer. Vom 🦟 Schwarm über den 🚨 Angriffskreuzer bis zum 🛰️ Mutterschiff. Aber ihr seht sie kommen: Jede Welle kündigt sich 30 bis 60 Minuten vorher an, mit genauer Stärke und einer ehrlichen Einschätzung, ob eure Verteidigung reicht. Verteidigt wird mit den 🛡️ Geschützen am Raumhafen UND allem, was gerade in der Heimatflotte liegt — schickt also nicht kurz vor dem Einschlag alles auf Expedition. Und jetzt kommt der wichtigste Teil: Ihr könnt 📣 die anderen um Hilfe rufen. Der Hilferuf landet im Chat und im Weltall-Tab aller Clan-Mitglieder, und wer will, schickt euch einen Verband zur Verstärkung. Die Schiffe kämpfen mit, kommen danach nach Hause und der Helfer bekommt bei erfolgreicher Abwehr eine Bergungsprämie. Helfen ist allerdings kein Gratis-Gefallen: Geht die Schlacht schief, verliert auch der Helfer anteilig Schiffe. Verliert ihr eine Welle, kostet euch das ein Viertel eurer Rohstoffe, und beschädigte Geschütze fallen 12 Stunden aus — aber eure Kolonien und befreiten Planeten bleiben euch. Was einmal erobert ist, bleibt erobert.'
+  },
+  {
+    id: 'krieger-burgen',
     icon: '🔱',
     title: 'Neu: Kultur-Spezialisten & 8 Burgen im Kaffee-Krieger',
     text: 'Der Dungeon bekommt ein Endgame. Überall in der Höhle stehen jetzt 8 Kultur-Spezialisten — vom 🛡️ Panzer-Perkolator über das 🐙 Seeungeheuer bis zum 👻 Geisterritter. Jeder ist NUR mit dem passenden Kultur-Set zu schlagen: gegen die Panzerung des Perkolators hilft ausschließlich der Rüstungsdurchschlag des Mittelalter-Sets, den Steppenreiter holt nur die Leichtfüßigkeit des Steppen-Sets ein. Was dir fehlt, wird dir vor dem Kampf angezeigt — du läufst nie blind in eine Niederlage. Endlich lohnen sich damit alle acht Sets, auch Handel, Späher und Freibeuter. Jeder besiegte Spezialist lässt sein 🔱 Kultur-Siegel fallen, und die Siegel öffnen die Tore von 8 neuen Burgen: erst die 🧱 Mauer mit einer Belagerungswaffe brechen, dann im ⬡ Burghof eine ganze Garnison aus Söldnern, Bogenschützen und Röstmagiern Wabe für Wabe räumen — und ganz zum Schluss wartet der 👑 Burgherr, der nur den empfängt, der die Ausrüstung aller acht Kulturen besitzt. Wer alle 8 Burgen einnimmt, wird 🏰 Eroberer der Kulturen.'
   },
   {
+    id: 'krieger-werkzeug',
     icon: '🔩',
     title: 'Neu: Kaffeebohrer & Kaffeegranate — sprengt euch neue Gebiete auf',
     text: 'Ihr habt es gemerkt: Ein großer Teil der Höhle liegt hinter massivem Fels und war schlicht nicht erreichbar. Dafür gibt es jetzt Werkzeug im Krieger-Shop. Der 🔩 Kaffeebohrer (250 CC) bricht eine einzelne Felswand auf, die 💣 Kaffeegranate (600 CC) sprengt gleich ein 3×3-Feld weg und öffnet ganze Gänge. Tippt dazu im Dungeon einfach auf eine Felswand direkt neben euch — vor dem Einsatz seht ihr, wie viele Felder das jeweilige Werkzeug hier tatsächlich freilegt. Beide sind Verbrauchsgüter: einmal gezündet, sind sie weg. Dafür bleiben eure Durchbrüche dauerhaft bestehen.'
   },
   {
+    id: 'krieger-schritte',
     icon: '👣',
     title: 'Regeländerung: Schritte-Zukauf kostet jetzt Stufe × 2',
     text: 'Der Zukauf von +5 Dungeon-Schritten kostete bisher pauschal 10 CC — für einen Anfänger spürbar, für einen Krieger auf Stufe 60 praktisch geschenkt. Ab sofort richtet sich der Preis nach eurer Stufe: Stufe × 2 CC. Auf Stufe 5 zahlt ihr also unverändert 10 CC, auf Stufe 30 sind es 60 CC. Weiterhin maximal 3× pro Tag.'
   },
   {
+    id: 'cafe-2',
     icon: '☕',
     title: 'Neu: Dein Café als eigene Filiale + 6 Café-Stile',
     text: 'Dein Café ist jetzt eine selbstverwaltende Filiale mit eigener Kasse: Du legst Startkapital ein, kaufst davon die Ausstattung, und im Betrieb fließen die Gewinne in die Café-Kasse. Über einen Regler bestimmst du, wie viel Gewinn an dich ausgeschüttet wird und wie viel die Filiale behält — mit 🤖 Auto-Ausbau reinvestiert sie sogar selbst. Verluste treffen nur die Café-Kasse, nie dein Guthaben. Ganz neu: 6 wählbare Café-Stile (Klassisch, Hipp, Inn, Chic, Edel, Adlig) — jeder zieht andere Klientel an, von Studenten bis zur High Society. Dazu Café-Level, tägliche Aufgaben und freischaltbare Rezepte. Höhere Stile schaltest du über den Café-Umsatz frei. Zu finden im Imperium-Tab mit der Forschung „🏠 Erstes Café".'
   }
 ];
 
+// Einträge mit `condition` erscheinen nur, wenn die Bedingung für DIESEN Spieler zutrifft
+// (JP 2026-07-21: die Weltraum-Erklärung soll erst kommen, wenn jemand alles erforscht hat —
+// vorher verrät sie nur ein Feature, das man noch gar nicht öffnen kann).
+//
+// ⚠️ Deshalb reicht `whatsNewSeen = VERSION` NICHT mehr: wer das Popup heute ohne Weltraum
+// wegklickt, hätte die Version abgehakt und den All-Teil NIE zu sehen bekommen. Der Merker
+// ist darum jetzt PRO EINTRAG (`whatsNewSeenIds`), die alte Version bleibt nur noch als
+// Rückfall für Bestandsspieler stehen.
+function _whatsNewVisible() {
+  return WHATS_NEW_ITEMS.filter(i => {
+    if (typeof i.condition !== 'function') return true;
+    // CLAUDE.md Regel 3: eine kaputte Bedingung darf das Popup nie sprengen
+    try { return !!i.condition(currentUserData); } catch (e) { return false; }
+  });
+}
+function _whatsNewPending() {
+  const md   = currentUserData?.map_data || {};
+  const seen = md.whatsNewSeenIds || {};
+  // Bestandsspieler, die die ALTE Version schon quittiert haben, sollen die damals
+  // gezeigten (bedingungslosen) Einträge nicht erneut bekommen.
+  const oldOk = md.whatsNewSeen === WHATS_NEW_VERSION;
+  return _whatsNewVisible().filter(i => !seen[i.id] && !(oldOk && !i.condition));
+}
+
 function checkAndMaybeShowWhatsNew() {
   if (!currentUserData || typeof currentUser === 'undefined' || !currentUser?.id) return;
   if (!WHATS_NEW_ITEMS.length) return; // keine Ankündigung aktiv → gar kein (leeres) Popup
   if (Date.now() < WHATS_NEW_GO_LIVE.getTime()) return; // erst ab Go-Live-Zeitpunkt zeigen
-  if (currentUserData.map_data?.whatsNewSeen === WHATS_NEW_VERSION) return;
-  _showWhatsNewModal();
+  const pending = _whatsNewPending();
+  if (!pending.length) return;
+  _showWhatsNewModal(pending);
 }
 
-function _showWhatsNewModal() {
+function _showWhatsNewModal(items) {
+  const list = items && items.length ? items : _whatsNewPending();
+  if (!list.length) return;
   let m = document.getElementById('whats-new-modal');
   if (!m) { m = document.createElement('div'); m.id = 'whats-new-modal'; m.className = 'hidden'; document.body.appendChild(m); }
-  const itemsHtml = WHATS_NEW_ITEMS.map(i => `
+  const itemsHtml = list.map(i => `
     <div style="text-align:left;margin:10px 0">
       <strong>${i.icon} ${_esc(i.title)}</strong>
       <p style="margin:3px 0 0;font-size:0.85rem;line-height:1.4;color:var(--muted)">${_esc(i.text)}</p>
@@ -648,7 +731,12 @@ function _showWhatsNewModal() {
   document.getElementById('whats-new-ok').onclick = async () => {
     m.classList.add('hidden');
     try {
-      const md = { ...(currentUserData.map_data || {}), whatsNewSeen: WHATS_NEW_VERSION };
+      // Nur die tatsächlich GEZEIGTEN Einträge abhaken — bedingte Einträge, die dieser
+      // Spieler noch gar nicht sehen durfte, bleiben offen und kommen später.
+      const seen = { ...((currentUserData.map_data || {}).whatsNewSeenIds || {}) };
+      for (const i of list) seen[i.id] = true;
+      const md = { ...(currentUserData.map_data || {}),
+                   whatsNewSeen: WHATS_NEW_VERSION, whatsNewSeenIds: seen };
       currentUserData = { ...currentUserData, map_data: md };
       await DB.updateMapData(currentUser.id, md);
     } catch (e) { /* non-critical — poppt im Zweifel nochmal auf */ }
@@ -771,6 +859,26 @@ function ensureRegelwerk() {
       plus eine kleine Strafe in die Gruppenkasse (und einen frechen Spruch im Chat).<br>
       <span class="cc-rw-hl">Wochenend-Abgabe:</span> Wer Sa/So grinden will, spendet den Tassen-Ertrag
       an die Kasse. Work-Life-Balance-Polizei grüßt. Karten-Pannen wandern ebenfalls in die Kasse.`)}
+    ${sec('🚀', 'Weltraum-Endgame: der Kaffee-Clan', `
+      Wenn dein Forschungsbaum <b>komplett</b> ist (alle sechs Pfade UND alle Kombinationen),
+      öffnet sich ganz unten im Forschungsbaum das <b>🌌 Weltraum-Programm</b>. Drei Stufen später
+      (Ionenantrieb → Frachtmodule → Handbohrer) steht dein <b>Raumhafen</b> und der Tab
+      <b>🚀 Weltall</b> erscheint.<br>
+      <span class="cc-rw-hl">Die Galaxie gehört der ganzen Gruppe:</span> 19 Wabenquadranten,
+      anfangs im Nebel. Was einer mit einer 🛰️ Bohnen-Sonde aufklärt, sehen <b>alle</b> —
+      ihr seid ein Kaffee-Clan gegen die Wächter, kein PvP. Flotten, Rohstoffe und Kolonien
+      gehören dagegen dir allein.<br>
+      <span class="cc-rw-hl">Zwei Rohstoffe, nicht käuflich:</span> 🪨 <b>Erz</b> und
+      💎 <b>Koffeinkristall</b> gibt es <b>ausschließlich</b> im All — kein Markt, kein CC-Umtausch.
+      Sie zählen auch nicht zu deinem CC-Vermögen. Reich sein allein reicht hier nicht mehr.<br>
+      <span class="cc-rw-hl">Kampf ist immer teuer:</span> Der Verlustanteil ist
+      <b>Gegnerstärke ÷ (eigene + Gegnerstärke)</b> — und gilt <b>bei Sieg wie bei Niederlage</b>
+      gleichermaßen (gedeckelt bei 60 %). Je überlegener deine Flotte, desto weniger Schiffe
+      bleiben draußen. Ein Sieg befreit den Planeten <b>dauerhaft</b> und bringt Beute;
+      erst danach kannst du dort ⛏️ abbauen oder mit einem 🛸 Kolonieschiff eine
+      <b>Kolonie</b> gründen, die dauerhaft Rohstoffe abwirft (sammelt bis zu 14 Tage an).<br>
+      Jede Reise startet und endet am <b>Raumhafen</b>; die Dauer hängt davon ab, wie weit
+      draußen das Ziel liegt. Es ist immer nur <b>eine Flotte gleichzeitig</b> unterwegs.`)}
     ${sec('🎗️', 'Titel & Ruhm', `
       Dein Titel wächst mit den Tassen, dazu kommen <b>Zusatztitel</b> aus Cosmetics.
       Die <b>Hall of Fame</b> und der druckbare <b>Poster</b> verewigen die Champions in vielen Kategorien —
@@ -825,7 +933,11 @@ function renderProfile() {
   if (logSection && logList) {
     const todayKey = new Date().toISOString().slice(0, 10);
     const log = (u.map_data?.todayLog?.date === todayKey) ? (u.map_data.todayLog.entries || []) : [];
-    if (log.length) {
+    const ds  = _ccDayStats(u);
+    // Die Sektion hängt NICHT mehr an den Log-Einträgen: die Tagesbilanz kommt aus
+    // members.day_stats und überlebt, wenn die Einzel-Einträge verloren gehen (alter
+    // Client-Write) oder aus dem 50-Einträge-Fenster fallen.
+    if (log.length || ds.gross > 0 || ds.spent > 0) {
       logSection.style.display = '';
       const entriesHtml = log.slice().reverse().map(e => {
         const neg = e.amount < 0;
@@ -835,7 +947,10 @@ function renderProfile() {
           <span class="today-log-amount"${neg ? ' style="color:#e0795a"' : ''}>${neg ? '' : '+'}${_fmtCoins(e.amount)} CC</span>
         </div>${e.detail ? `<div class="today-log-detail">${_esc(e.detail)}</div>` : ''}`;
       }).join('');
-      logList.innerHTML = _todayRubrikSummaryHtml(u, todayKey) + entriesHtml;
+      const emptyHint = log.length ? '' :
+        `<div class="today-log-detail" style="margin-top:6px">Die Einzel-Einträge dieses Tages liegen nicht mehr vor — die Tagesbilanz oben ist davon unabhängig und vollständig.</div>`;
+      logList.innerHTML = _todayBilanzHeaderHtml(u, todayKey)
+                        + _todayRubrikSummaryHtml(u, todayKey) + entriesHtml + emptyHint;
     } else {
       logSection.style.display = 'none';
       logList.innerHTML = '';
@@ -950,10 +1065,39 @@ const TODAY_CAT_LABELS = {
   cafe: ['☕', 'Café'], krieger: ['⚔️', 'Kaffee-Krieger'], ciq: ['🧠', 'CIQ'], minigame: ['🎣', 'Kaffeejagd'],
   erlebnis: ['🎡', 'Erlebnisse'], gruppe: ['🏛️', 'Gruppe'], boni: ['🎖️', 'Boni & Aufgaben'],
   cosmetics: ['🎨', 'Kosmetik'], strafen: ['💸', 'Steuern & Strafen'], beute: ['🎲', 'Kämpfe, Schätze & CIQ'],
+  weltraum: ['🚀', 'Weltraum'],
 };
+// 📊 Tagesbilanz eines Nutzers — IMMER über diesen Helfer, nie direkt aus map_data.
+// Nimmt den frischesten bekannten Datensatz aus appData (der übergebene `u` kann aus
+// einem älteren Render stammen) und delegiert an DB.dayStats, das die eigene
+// members.day_stats-Spalte bevorzugt. Siehe migration_2026-07-21h_tagesbilanz.sql:
+// in map_data wurde der Wert von veralteten Client-Writes überschrieben.
+function _ccDayStats(u) {
+  const fresh = (typeof appData !== 'undefined' && appData.users)
+    ? (appData.users.find(x => x.id === u.id) || u) : u;
+  try { return DB.dayStats(fresh); }
+  catch (e) { return { date: '', gross: 0, spent: 0, net: 0, cats: {} }; }
+}
+// 📊 Tagesbilanz-Kopf im Profil (JP 2026-07-21): Brutto ALLER Einnahmen von 0:00 bis
+// 24:00 — unabhängig davon, was noch im Einzel-Log steht. Steht bewusst GANZ OBEN und
+// wird immer gerendert, sobald der Tag Bewegung hatte.
+function _todayBilanzHeaderHtml(u, todayKey) {
+  const ds = _ccDayStats(u);
+  if (ds.date !== todayKey || (!ds.gross && !ds.spent)) return '';
+  const row = (ic, lb, v, cls) =>
+    `<div class="today-log-row"><span class="today-log-label">${ic} ${lb}</span>`
+    + `<span class="today-log-amount"${cls ? ` style="color:${cls}"` : ''}>`
+    + `${v < 0 ? '' : '+'}${_fmtCoins(v)} CC</span></div>`;
+  return `<div style="margin-bottom:8px;padding-bottom:7px;border-bottom:1px solid rgba(255,255,255,.10)">
+      <div class="today-log-detail" style="font-weight:700;opacity:.9;margin:0 0 3px">📊 Tagesbilanz (0:00–24:00)</div>
+      ${row('📈', 'Einnahmen brutto', ds.gross, '')}
+      ${ds.spent ? row('💸', 'Ausgaben (Konsum)', -ds.spent, '#e0795a') : ''}
+      ${ds.spent ? row('🧮', 'Netto', ds.net, ds.net < 0 ? '#e0795a' : '') : ''}
+    </div>`;
+}
 function _todayRubrikSummaryHtml(u, todayKey) {
-  const tl = u.map_data?.todayLog;
-  const sums = (tl && tl.date === todayKey) ? tl.sums : null;
+  const ds = _ccDayStats(u);
+  const sums = (ds.date === todayKey) ? ds : null;
   if (!sums || !sums.cats) return '';
   const rows = Object.entries(sums.cats)
     .map(([k, v]) => [k, Math.round((+v || 0) * 100) / 100])
@@ -968,7 +1112,6 @@ function _todayRubrikSummaryHtml(u, todayKey) {
   return `<div style="margin-bottom:8px;padding-bottom:7px;border-bottom:1px solid rgba(255,255,255,.10)">
       <div class="today-log-detail" style="font-weight:700;opacity:.9;margin:0 0 3px">☀️ Heute nach Rubrik</div>
       ${body}
-      <div class="today-log-row" style="opacity:.9;margin-top:3px;font-weight:700"><span class="today-log-label">🧮 Netto heute</span><span class="today-log-amount"${sums.net < 0 ? ' style="color:#e0795a"' : ''}>${sums.net < 0 ? '' : '+'}${_fmtCoins(sums.net)} CC</span></div>
     </div>`;
 }
 
@@ -1226,6 +1369,25 @@ function renderCiqPerks(u) {
 const MONATE = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
 const COLORS  = ['#d4aa37','#4e9af1','#e06c75','#98c379','#c678dd','#e5c07b','#56b6c2','#abb2bf','#be5046','#61afef'];
 
+// Spieler-Farbe — EINE Quelle für alle Darstellungen, in denen Spieler farblich
+// unterschieden werden: die Auswertungs-Balken/Linien (COLORS[i] über die Rangliste)
+// und die 🚐 Kaffeemobil-Marker auf der Weltkarte. So hat ein Spieler überall dieselbe
+// Farbe. Index = Position in `leaderboardData` (genau wie `top5.map((u,i)=>…)`).
+// Fällt auf einen stabilen ID-Hash zurück, solange die Rangliste noch nicht geladen ist —
+// nie werfen, der Aufrufer ist reines Rendering.
+function playerColor(userId) {
+  try {
+    const lb = (typeof leaderboardData !== 'undefined' && Array.isArray(leaderboardData)) ? leaderboardData : null;
+    if (lb) {
+      const i = lb.findIndex(u => u && u.id === userId);
+      if (i >= 0) return COLORS[i % COLORS.length];
+    }
+    let h = 0; const s = String(userId || '');
+    for (let k = 0; k < s.length; k++) h = (h * 31 + s.charCodeAt(k)) >>> 0;
+    return COLORS[h % COLORS.length];
+  } catch (e) { return COLORS[0]; }
+}
+
 let auswPeriod = 'monat';
 let auswOffset = 0;
 
@@ -1471,17 +1633,14 @@ function renderGehalt() {
   const tsOf   = h => h.ts || (h.d ? new Date(h.d + 'T00:00:00').getTime() : 0);
   const dayKey = t => { const d = new Date(t); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); };
 
-  // Realisiertes Einkommen heute — live aus dem Tages-Log jedes Mitglieds.
-  const todayKey = new Date().toISOString().slice(0, 10);
-  const _tlObjOf = u => { const tl = (appData.users.find(x => x.id === u.id) || u).map_data?.todayLog; return (tl && tl.date === todayKey) ? tl : null; };
-  const _tlOf = u => { const tl = _tlObjOf(u); return tl ? (tl.entries || []) : []; };
-  // kapital:true = reine Kapitalbewegung (Stille Anlage / Kaffeebörse Ein-/Auszahlen) → zählt
-  // weder als Einnahme noch als Ausgabe noch ins Netto (nur informativ im Tages-Log sichtbar).
-  // Bevorzugt die laufenden Tages-Summen (todayLog.sums — unabhängig vom 50-Einträge-Limit, sonst
-  // schrumpft die Tages-Einnahme, wenn ältere Einträge aus dem Fenster fallen); Fallback = Einträge summieren.
-  const grossToday = u => { const t = _tlObjOf(u); return t?.sums ? Math.round((t.sums.gross || 0) * 100) / 100 : Math.round(_tlOf(u).reduce((s, e) => s + ((e.amount > 0 && !e.kapital) ? e.amount : 0), 0) * 100) / 100; }; // Einnahmen
-  const spendToday = u => { const t = _tlObjOf(u); return t?.sums ? Math.round((t.sums.spent || 0) * 100) / 100 : Math.round(_tlOf(u).reduce((s, e) => s + ((e.amount < 0 && !e.invest && !e.kapital) ? -e.amount : 0), 0) * 100) / 100; }; // Konsum-Ausgaben
-  const netToday   = u => { const t = _tlObjOf(u); return t?.sums ? Math.round((t.sums.net || 0) * 100) / 100 : Math.round(_tlOf(u).reduce((s, e) => s + ((e.invest || e.kapital) ? 0 : (e.amount || 0)), 0) * 100) / 100; };             // Netto = Einnahmen − Konsum-Ausgaben
+  // Realisiertes Einkommen heute — über DB.dayStats (Quelle: members.day_stats,
+  // server-monoton). kapital:true = reine Kapitalbewegung (Stille Anlage / Kaffeebörse
+  // Ein-/Auszahlen) → zählt weder als Einnahme noch als Ausgabe noch ins Netto; das
+  // filtert bereits appendTodayLog beim Summieren heraus.
+  const _dsOf = u => _ccDayStats(u);
+  const grossToday = u => _dsOf(u).gross;   // Einnahmen brutto, 0:00–24:00
+  const spendToday = u => _dsOf(u).spent;   // Konsum-Ausgaben (ohne Investitionen)
+  const netToday   = u => _dsOf(u).net;     // Netto = Einnahmen − Konsum-Ausgaben
 
   // Metrik per Umschalter (📈 Brutto / 🧮 Netto), Fallback auf Verfügbarkeit. Beide Werte
   // liegen in jedem Snapshot → Umschalten zeigt auch die Altdaten der anderen Metrik.
@@ -1847,6 +2006,11 @@ function _ccBilanz(u) {
     { icon: '💎', label: 'Schätze',           income: u.map_data?.totalTreasureCc || 0 },
     { icon: '🎣', label: 'Kaffeejagd',        income: inc.minigame || 0, spent: sp.minigame || 0 },
     { icon: '🎡', label: 'Erlebnisse',        income: inc.erlebnis || 0, spent: sp.erlebnis || 0, invested: inv.erlebnis || 0 },
+    // 🚀 Weltraum: Beute-CC als Einnahme, Schiffsbau als Investition. Die beiden Rohstoffe
+    // (Erz/Kristall) tauchen hier bewusst NICHT auf — sie sind kein CC und gehören nicht ins
+    // CC-Vermögen (Ökonomie-Variante A). Ohne diese Zeile flössen die Beträge zwar in die
+    // Ledger-Summe (⚖️ Bewertungsdifferenz), wären aber als Rubrik unsichtbar.
+    { icon: '🚀', label: 'Weltraum',          income: inc.weltraum || 0, spent: sp.weltraum || 0, invested: inv.weltraum || 0 },
     { icon: '🏛️', label: 'Gruppe',            income: inc.gruppe || 0, spent: sp.gruppe || 0 },
     { icon: '🎖️', label: 'Boni & Aufgaben',   income: inc.boni || 0 },
     { icon: '🎨', label: 'Kosmetik',          spent: sp.cosmetics || 0 },

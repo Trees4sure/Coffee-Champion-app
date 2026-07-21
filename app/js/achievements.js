@@ -78,7 +78,62 @@ const ACHIEVEMENTS = [
   { id: 'cafe_1000',       icon: '🏪', name: 'Kaffeehaus',         desc: '1.000 Gäste im eigenen Café bedient',                 condition: null, coinReward: 300 },
   { id: 'cafe_5star',      icon: '⭐', name: 'Fünf-Sterne-Tag',     desc: 'Ein Café-Tag mit Ø-Zufriedenheit ≥ 4,8 ★',            condition: null, coinReward: 100 },
   { id: 'cafe_tycoon',     icon: '👑', name: 'Café-Tycoon',        desc: '50.000 CC Café-Umsatz erwirtschaftet',                condition: null, coinReward: 500 },
+  // 🚀 Weltraum-Endgame (P1) — event-granted beim Einlösen einer Rückkehr (checkSpaceAchievements)
+  { id: 'space_first',     icon: '🚀', name: 'Erster Start',       desc: 'Erste Flotte ins All geschickt und zurückgeholt',     condition: null, coinReward: 50  },
+  { id: 'space_scout',     icon: '🛰️', name: 'Kartograf der Sterne', desc: 'Einen Quadranten für den Kaffee-Clan aufgeklärt',   condition: null, coinReward: 80  },
+  { id: 'space_victory',   icon: '⚔️', name: 'Sternenkrieger',     desc: 'Die Wächter eines Planeten besiegt',                  condition: null, coinReward: 150 },
+  { id: 'space_colony',    icon: '🪐', name: 'Erste Kolonie',      desc: 'Eine Kolonie im All gegründet',                       condition: null, coinReward: 250 },
+  { id: 'space_ore_500',   icon: '🪨', name: 'Erzschürfer',        desc: '500 🪨 Erz im Lager',                                  condition: null, coinReward: 200 },
+  { id: 'space_crystal',   icon: '💎', name: 'Kristallsammler',    desc: '100 💎 Koffeinkristall im Lager',                      condition: null, coinReward: 300 },
+  // 🛡️ Weltraum P2 — Angriffswellen und Hilferufe
+  { id: 'space_defend',    icon: '🛡️', name: 'Hafenmeister',       desc: 'Einen Angriff auf deinen Raumhafen abgewehrt',         condition: null, coinReward: 200 },
+  { id: 'space_defend_big',icon: '🏰', name: 'Unbezwungen',        desc: 'Ein Mutterschiff am Raumhafen abgewehrt',              condition: null, coinReward: 500 },
+  { id: 'space_helper',    icon: '🤝', name: 'Waffenbruder',       desc: 'Einem Clan-Mitglied Verstärkung geschickt',            condition: null, coinReward: 150 },
 ];
+
+// 🚀 Vergabe nach einer eingelösten Weltraum-Rückkehr. Nach dem Muster von _cafeGrantAch:
+// event-granted (nicht `condition`), damit der Toast sofort kommt und nicht erst beim
+// nächsten Datenabruf. Fehler dürfen die Abrechnung nie blockieren (CLAUDE.md Regel 3).
+async function checkSpaceAchievements(member, res) {
+  try {
+    if (!member || !res) return;
+    const ex = (typeof currentUserData !== 'undefined' && currentUserData?.achievements) || member.achievements || {};
+    const space = res.space || member.space || {};
+    const grant = {};
+    // ⚠️ Nur bei einer echten REISE — `resolve_space_wave` liefert dieselbe Funktion an,
+    // hat aber kein `intent`. Ohne diese Bedingung gäbe es „Erster Start" auch für eine
+    // abgewehrte Angriffswelle, ohne je gestartet zu sein.
+    if (!ex.space_first && res.intent) grant.space_first = true;
+    if (!ex.space_scout   && res.intent === 'scout')                 grant.space_scout = true;
+    if (!ex.space_victory && res.intent === 'attack' && res.won)     grant.space_victory = true;
+    // !res.note: die Kolonisierung kann am Ziel scheitern (Planet inzwischen von einem
+    // Mitspieler besetzt) — die Flotte kommt trotzdem heim. Ohne diese Bedingung gäbe es
+    // das Achievement auch für den Fehlschlag.
+    if (!ex.space_colony  && res.intent === 'colonize' && !res.note) grant.space_colony = true;
+    if (!ex.space_ore_500 && (parseFloat(space.erz) || 0) >= 500)    grant.space_ore_500 = true;
+    if (!ex.space_crystal && (parseFloat(space.kristall) || 0) >= 100) grant.space_crystal = true;
+    // 🛡️ Angriffswellen (res.resolved kommt aus resolve_space_wave)
+    if (!ex.space_defend && res.resolved && res.won) grant.space_defend = true;
+    if (!ex.space_defend_big && res.resolved && res.won && res.tier === 'mutterschiff') {
+      grant.space_defend_big = true;
+    }
+    if (!ex.space_helper && res.helped) grant.space_helper = true;
+
+    const keys = Object.keys(grant);
+    if (!keys.length) return;
+    await DB.grantAchievements(member.id, grant);
+    try {
+      if (typeof currentUserData !== 'undefined' && currentUserData) {
+        currentUserData = { ...currentUserData, achievements: { ...ex, ...grant } };
+      }
+    } catch (e) {}
+    const A = (typeof ACHIEVEMENTS !== 'undefined' ? ACHIEVEMENTS : []);
+    keys.forEach(k => {
+      const a = A.find(x => x.id === k);
+      if (a && typeof showToast === 'function') showToast(`🏆 Achievement: ${a.name}! (+${a.coinReward} CC)`, 'success');
+    });
+  } catch (e) { console.warn('Weltraum-Achievements:', e.message); }
+}
 
 function checkAchievements(userData, newAchievements = {}) {
   const unlocked = [];
