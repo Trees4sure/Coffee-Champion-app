@@ -2096,6 +2096,9 @@ function _kriegerRenderDungeon(member, state, seed, COLS, ROWS, MARGIN, body) {
   const exLeft = KRIEGER_EXTRA_STEP_MAX - kriegerExtraStepsBought(state.dd);
   const _hpMax0 = (typeof kriegerHpMax === 'function') ? kriegerHpMax(state.dd) : (80 + prog.level * 4);
   const _hpNow0 = (typeof kriegerHp === 'function') ? kriegerHp(state.dd) : _hpMax0;
+  // Schritt-Zukauf kostet seit 2026-07-21 Level × 2 CC statt pauschal 10 (siehe krieger.js).
+  const _exStepCost = (typeof kriegerExtraStepCost === 'function')
+    ? kriegerExtraStepCost(prog.level) : KRIEGER_EXTRA_STEP_COST;
   body.innerHTML = `
     <div class="krieger-hud">
       <span>📍 ${kriegerPos(state.dd).x}, ${kriegerPos(state.dd).y} &nbsp;·&nbsp; Stufe ${prog.level}</span>
@@ -2104,7 +2107,7 @@ function _kriegerRenderDungeon(member, state, seed, COLS, ROWS, MARGIN, body) {
     <div class="krieger-xp-wrap"><div class="krieger-xp-bar" style="width:${prog.pct}%"></div></div>
     <canvas id="krieger-canvas" class="cc-karte-canvas" width="320" height="280" style="margin-top:8px"></canvas>
     <button class="cc-karte-buy-steps" id="krieger-buy-steps" style="display:${exLeft > 0 ? '' : 'none'}">
-      +${KRIEGER_EXTRA_STEPS} Schritte kaufen &nbsp;&middot;&nbsp; ${KRIEGER_EXTRA_STEP_COST} 🫘 CC &nbsp;<span style="opacity:.65">(noch ${exLeft}×)</span>
+      +${KRIEGER_EXTRA_STEPS} Schritte kaufen &nbsp;&middot;&nbsp; ${_exStepCost} 🫘 CC &nbsp;<span style="opacity:.65">(noch ${exLeft}×)</span>
     </button>
     <button class="cc-karte-buy-steps" id="krieger-buy-heal" style="display:${_hpNow0 < _hpMax0 ? '' : 'none'}">
       🛌 Volle Erholung (❤️ ${_hpNow0}/${_hpMax0}) &nbsp;&middot;&nbsp; ${KRIEGER_FULL_HEAL_COST} 🫘 CC
@@ -2119,7 +2122,11 @@ function _kriegerRenderDungeon(member, state, seed, COLS, ROWS, MARGIN, body) {
   document.getElementById('krieger-buy-steps')?.addEventListener('click', async () => {
     const bought = kriegerExtraStepsBought(state.dd);
     if (bought >= KRIEGER_EXTRA_STEP_MAX) { showToast('Heute schon 3× gekauft — morgen wieder.', 'error'); return; }
-    const newCoins = await DB.spendCoins(member.id, KRIEGER_EXTRA_STEP_COST);
+    // Preis frisch aus dem AKTUELLEN Level bestimmen (nicht aus der Render-Variable) — sonst
+    // zahlt man nach einem Level-Up im selben Screen noch den alten Betrag.
+    const _cost = (typeof kriegerExtraStepCost === 'function')
+      ? kriegerExtraStepCost(state.dd?.level || 1) : KRIEGER_EXTRA_STEP_COST;
+    const newCoins = await DB.spendCoins(member.id, _cost);
     if (newCoins === null) { showToast('Nicht genug CoffeeCoins!', 'error'); return; }
     state.memberCoins = newCoins;
     currentUserData = { ...(currentUserData || {}), coins: newCoins };
@@ -2128,11 +2135,11 @@ function _kriegerRenderDungeon(member, state, seed, COLS, ROWS, MARGIN, body) {
     try { await DB.saveDungeonData(member.id, state.dd); } catch (e) { /* non-critical */ }
     // Ausgabe ins Tages-Log/Netto (Konsum, KEIN invest) — fließt in die Bilanz (cat:'krieger').
     try {
-      const mdLog = await DB.appendTodayLogFresh(member.id, [{ label: `👣 +${KRIEGER_EXTRA_STEPS} Krieger-Schritte gekauft`, amount: -KRIEGER_EXTRA_STEP_COST, cat: 'krieger', detail: 'Kaffee-Krieger-Dungeon' }]);
+      const mdLog = await DB.appendTodayLogFresh(member.id, [{ label: `👣 +${KRIEGER_EXTRA_STEPS} Krieger-Schritte gekauft`, amount: -_cost, cat: 'krieger', detail: 'Kaffee-Krieger-Dungeon' }]);
       if (mdLog) { currentUserData = { ...(currentUserData || {}), map_data: mdLog }; member.map_data = mdLog; }
     } catch (e) { /* non-critical */ }
     showToast(`✅ +${KRIEGER_EXTRA_STEPS} Schritte freigeschaltet!`, 'success');
-    try { _krSessionAddAction(member.name, 'steps', KRIEGER_EXTRA_STEP_COST); } catch (e) { /* non-critical */ }
+    try { _krSessionAddAction(member.name, 'steps', _cost); } catch (e) { /* non-critical */ }
     _kriegerRenderDungeon(member, state, seed, COLS, ROWS, MARGIN, body);
   });
 
@@ -2209,6 +2216,16 @@ async function _handleKriegerTap(tx, ty, member, state, seed, COLS, ROWS, MARGIN
   const key     = `${tx},${ty}`;
   const explored = kriegerIsExplored(tx, ty, state.dd);
 
+  // 🔱 Spezialist / 🏰 Burg (2026-07-21): feste Landmarken haben Vorrang vor der normalen
+  // Feld-Logik. Erst wenn das Feld erkundet ist — vorher muss man hinlaufen wie zu jedem
+  // anderen Feld auch (die Landmarke ist durch den Nebel nur als Ziel sichtbar).
+  const _site = (typeof kriegerSiteAt === 'function') ? kriegerSiteAt(tx, ty, seed) : null;
+  if (_site && explored) {
+    if (_site.kind === 'specialist') _showKriegerSpecialist(member, state, _site, seed, COLS, ROWS, MARGIN);
+    else                             _showKriegerCastle(member, state, _site, seed, COLS, ROWS, MARGIN);
+    return;
+  }
+
   // 1) Bereits erkundetes Feld mit bekanntem Encounter (oder Bossfeld) → Kampf erneut
   // anbieten — aber NUR falls es noch nicht GEWONNEN wurde (Niederlage bleibt bewusst
   // erneut versuchbar, siehe Spieldesign-Kommentar in _runKriegerFight). Bug-Fix
@@ -2248,6 +2265,16 @@ async function _handleKriegerTap(tx, ty, member, state, seed, COLS, ROWS, MARGIN
   // (kriegerCanStep blockt das Betreten unten ohnehin, aber ohne Feedback wirkt es wie ein Bug).
   if (isBoss && (state.dd.level || 1) < KRIEGER_BOSS_MIN_LEVEL) {
     showToast(`🐉 Die Drachenhöhle bleibt bis Stufe ${KRIEGER_BOSS_MIN_LEVEL} versiegelt.`, 'info');
+    return;
+  }
+
+  // 1c) 🔩💣 Felswand angetippt (2026-07-21): mit Werkzeug aufsprengen. Nur ANGRENZEND —
+  // sonst könnte man sich quer durch die Karte tunneln, ohne je hinzulaufen.
+  if (typeof kriegerIsWallFor === 'function' && kriegerIsWallFor(state.dd, tx, ty, seed)) {
+    const p = kriegerPos(state.dd);
+    const adjacent = Math.abs(p.x - tx) <= 1 && Math.abs(p.y - ty) <= 1 && !(p.x === tx && p.y === ty);
+    if (!adjacent) return;                                   // wie bisher: stiller No-Op
+    _showKriegerToolPrompt(tx, ty, member, state, seed, COLS, ROWS, MARGIN);
     return;
   }
 
@@ -2603,6 +2630,250 @@ if (typeof window !== 'undefined' && !window._krSessionHooked) {
   window.addEventListener('beforeunload', () => { try { _kriegerFlushSession(); } catch (e) {} });
 }
 
+// ── 🔩💣 Werkzeug einsetzen (2026-07-21) ──────────────────────────────────────
+// Tap auf eine ANGRENZENDE Felswand. Zeigt, was das jeweilige Werkzeug hier konkret
+// freilegen würde (Anzahl Felder), damit niemand eine 600-CC-Granate an einer einzelnen
+// Wand verschwendet. Kein Schrittverbrauch — der Durchbruch selbst ist die Kosten.
+function _showKriegerToolPrompt(tx, ty, member, state, seed, COLS, ROWS, MARGIN) {
+  const popup = document.getElementById('krieger-popup');
+  if (!popup) return;
+  const tools = (typeof KRIEGER_TOOLS !== 'undefined' ? KRIEGER_TOOLS : []);
+  const have = tools.filter(t => kriegerToolCount(state.dd, t.key) > 0);
+
+  if (!have.length) {
+    _krShowGateBlock('🪨 Massiver Fels', 'Hier kommst du nicht durch.\n\n🔩 Mit einem Kaffeebohrer oder 💣 einer Kaffeegranate aus dem Krieger-Shop lässt sich Fels aufbrechen — so erschließt du Gebiete, die sonst hinter Stein liegen.');
+    return;
+  }
+
+  const cards = have.map(t => {
+    const n = kriegerBlastTiles(state.dd, tx, ty, t, seed).length;
+    const cnt = kriegerToolCount(state.dd, t.key);
+    return `<button class="cc-build-btn krieger-tool-use" data-tool="${t.key}" style="width:100%;margin-bottom:6px">
+      ${t.icon} ${_esc2(t.name)} (×${cnt}) &nbsp;·&nbsp; legt ${n} Feld${n === 1 ? '' : 'er'} frei
+    </button>`;
+  }).join('');
+
+  popup.classList.remove('hidden');
+  popup.innerHTML = `
+    <div class="krieger-fight-overlay">
+      <div class="cc-karte-popup-inner" style="max-width:340px;width:100%">
+        <div class="cc-karte-popup-hdr">🪨 Felswand bei ${tx}, ${ty}</div>
+        <div class="cc-karte-popup-body" style="flex-direction:column;align-items:stretch;gap:6px">
+          <div style="font-size:12px;opacity:.8">Womit willst du den Fels aufbrechen?</div>
+          ${cards}
+          <button class="cc-build-btn" id="kr-tool-cancel" style="opacity:.7">Abbrechen</button>
+        </div>
+      </div>
+    </div>`;
+
+  document.getElementById('kr-tool-cancel')?.addEventListener('click', () => popup.classList.add('hidden'));
+  popup.querySelectorAll('.krieger-tool-use').forEach(btn => {
+    btn.onclick = async () => {
+      const tool = kriegerToolByKey(btn.dataset.tool);
+      if (!tool) return;
+      btn.disabled = true;
+      const tiles = kriegerBlastTiles(state.dd, tx, ty, tool, seed);
+      if (!tiles.length) { showToast('Hier ist schon alles offen.', 'info'); popup.classList.add('hidden'); return; }
+      const prev = state.dd;
+      state.dd = kriegerApplyBlast(state.dd, tiles, tool.key);
+      try { await DB.saveDungeonData(member.id, state.dd); }
+      catch (e) { state.dd = prev; showToast('Durchbruch konnte nicht gespeichert werden.', 'error'); btn.disabled = false; return; }
+      currentUserData = { ...(currentUserData || {}), dungeon_data: state.dd };
+      popup.classList.add('hidden');
+      showToast(`${tool.icon} Durchbruch! ${tiles.length} Feld${tiles.length === 1 ? '' : 'er'} freigelegt.`, 'success');
+      const canvas = document.getElementById('krieger-canvas');
+      if (canvas) kriegerRender(canvas, state.dd, seed, state.vpX, state.vpY);
+      _kriegerUpdateHud(state);
+    };
+  });
+}
+
+// ══ 🔱 Spezialisten & 🏰 Burgen — UI (2026-07-21) ═════════════════════════════
+// Kontext des laufenden Sonderkampfs. _runKriegerFight bekommt bereits 12 Parameter —
+// statt weitere anzuhängen, hinterlegt der Aufrufer hier, WORUM es geht; die Sieg-
+// Buchhaltung unten liest es aus und räumt es danach wieder ab.
+let _krSpecialCtx = null;
+
+// Gate-Absage als Popup (nie als verlorener Kampf — der Spieler soll immer genau sehen,
+// was ihm fehlt, bevor irgendetwas passiert).
+function _krShowGateBlock(title, reason) {
+  const popup = document.getElementById('krieger-popup');
+  if (!popup) { showToast(reason, 'info'); return; }
+  popup.classList.remove('hidden');
+  popup.innerHTML = `
+    <div class="krieger-fight-overlay">
+      <div class="cc-karte-popup-inner" style="max-width:340px;width:100%">
+        <div class="cc-karte-popup-hdr">${_esc2(title)}</div>
+        <div class="cc-karte-popup-body" style="flex-direction:column;align-items:stretch;gap:8px">
+          <div style="font-size:13px;line-height:1.5;white-space:pre-line">${_esc2(reason)}</div>
+          <button class="cc-build-btn" id="kr-gate-close">Verstanden</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('kr-gate-close')?.addEventListener('click', () => popup.classList.add('hidden'));
+}
+
+// Tap auf ein Spezialisten-Feld: erst Gate prüfen, dann den NORMALEN Kampf-Prompt öffnen.
+function _showKriegerSpecialist(member, state, site, seed, COLS, ROWS, MARGIN) {
+  const sp = site.def;
+  if (kriegerHasSeal(state.dd, sp.gateCulture)) {
+    _krShowGateBlock(`🔱 ${sp.name}`, `Diesen Gegner hast du bereits besiegt — sein ${KRIEGER_CULTURE_NAMES[sp.gateCulture]}-Siegel liegt in deiner Tasche.`);
+    return;
+  }
+  const gate = kriegerSpecialistGate(state.dd, sp);
+  if (!gate.ok) { _krShowGateBlock(`${sp.icon} ${sp.name}`, gate.reason); return; }
+  _krSpecialCtx = { kind: 'specialist', culture: sp.gateCulture, name: sp.name, icon: sp.icon };
+  _showKriegerFightPrompt(member, state, sp.tier, seed, COLS, ROWS, MARGIN, site.key);
+}
+
+// ── Hex-Burghof ──────────────────────────────────────────────────────────────
+// Axiale Koordinaten (q,r) → Pixel, „pointy-top"-Waben.
+const KR_HEX_SIZE = 34;
+function _krHexCenter(q, r, cx, cy) {
+  return { x: cx + KR_HEX_SIZE * Math.sqrt(3) * (q + r / 2), y: cy + KR_HEX_SIZE * 1.5 * r };
+}
+function _krHexPath(ctx, x, y, size) {
+  ctx.beginPath();
+  for (let i = 0; i < 6; i++) {
+    const a = Math.PI / 180 * (60 * i - 30);
+    const px = x + size * Math.cos(a), py = y + size * Math.sin(a);
+    i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+}
+
+function _krRenderBurghof(canvas, state, site, seed) {
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const cx = W / 2, cy = H / 2;
+  ctx.clearRect(0, 0, W, H);
+  // Hintergrund: Burghof-Pflaster
+  ctx.fillStyle = '#2b241c';
+  ctx.fillRect(0, 0, W, H);
+
+  const st = kriegerCastleState(state.dd, site.def.key);
+  const layout = kriegerGarrisonLayout(site.idx, seed);
+  const byKey = new Map(layout.map(g => [g.key, g]));
+  const cleared = kriegerGarrisonCleared(state.dd, site.def.key, site.idx, seed);
+
+  for (const cell of kriegerHexCells()) {
+    const key = `${cell.q},${cell.r}`;
+    const { x, y } = _krHexCenter(cell.q, cell.r, cx, cy);
+    const isCenter = cell.q === 0 && cell.r === 0;
+    const g = byKey.get(key);
+    const down = !!st.hex[key];
+
+    _krHexPath(ctx, x, y, KR_HEX_SIZE - 2);
+    if (isCenter)      ctx.fillStyle = cleared ? '#5a3f16' : '#372e24';
+    else if (g && !down) ctx.fillStyle = '#4a3526';
+    else                 ctx.fillStyle = '#332c24';
+    ctx.fill();
+    ctx.strokeStyle = isCenter && cleared ? '#FAC775' : 'rgba(255,244,214,.22)';
+    ctx.lineWidth = isCenter && cleared ? 2 : 1;
+    ctx.stroke();
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    if (isCenter) {
+      // Burgherr: erst sichtbar/angreifbar, wenn die Garnison gefallen ist
+      ctx.globalAlpha = cleared ? 1 : 0.35;
+      ctx.font = '24px sans-serif';
+      ctx.fillText(st.lord ? '🚩' : (cleared ? '👑' : '🔒'), x, y);
+      ctx.globalAlpha = 1;
+    } else if (g) {
+      ctx.globalAlpha = down ? 0.22 : 1;
+      ctx.font = '22px sans-serif';
+      ctx.fillText(down ? '💀' : g.def.icon, x, y);
+      ctx.globalAlpha = 1;
+    }
+  }
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+}
+
+// Welche Wabe wurde angetippt? (nächstes Zentrum innerhalb Wabengröße)
+function _krHexFromEvent(e, canvas) {
+  const rect = canvas.getBoundingClientRect();
+  const px = (e.clientX - rect.left) * (canvas.width / rect.width);
+  const py = (e.clientY - rect.top) * (canvas.height / rect.height);
+  let best = null, bestD = Infinity;
+  for (const cell of kriegerHexCells()) {
+    const c = _krHexCenter(cell.q, cell.r, canvas.width / 2, canvas.height / 2);
+    const d = Math.hypot(px - c.x, py - c.y);
+    if (d < bestD) { bestD = d; best = cell; }
+  }
+  return bestD <= KR_HEX_SIZE ? best : null;
+}
+
+// Haupt-Screen einer Burg: Mauer → Burghof (Hex) → Burgherr.
+function _showKriegerCastle(member, state, site, seed, COLS, ROWS, MARGIN) {
+  const popup = document.getElementById('krieger-popup');
+  if (!popup) return;
+  const castle = site.def;
+  const st = kriegerCastleState(state.dd, castle.key);
+  const cname = KRIEGER_CULTURE_NAMES[castle.culture] || '';
+
+  // Phase 1 — Mauer steht noch: Gate prüfen, sonst Sturm anbieten.
+  if (!st.wall) {
+    const gate = kriegerCastleGate(state.dd, castle);
+    if (!gate.ok) { _krShowGateBlock(`${castle.icon} ${castle.name}`, gate.reason); return; }
+    _krSpecialCtx = { kind: 'wall', castleKey: castle.key, castleIdx: site.idx, name: castle.name };
+    _showKriegerFightPrompt(member, state, KRIEGER_CASTLE_WALL.tier, seed, COLS, ROWS, MARGIN, site.key);
+    return;
+  }
+
+  // Phase 2/3 — Burghof offen: Hex-Feld zeigen.
+  const layout = kriegerGarrisonLayout(site.idx, seed);
+  const remaining = kriegerGarrisonRemaining(state.dd, castle.key, site.idx, seed);
+  const taken = !!st.lord;
+  popup.classList.remove('hidden');
+  popup.innerHTML = `
+    <div class="krieger-fight-overlay">
+      <div class="cc-karte-popup-inner" style="max-width:380px;width:100%">
+        <div class="cc-karte-popup-hdr">${castle.icon} ${_esc2(castle.name)}${cname ? ' · ' + _esc2(cname) : ''}</div>
+        <div class="cc-karte-popup-body" style="flex-direction:column;align-items:stretch;gap:8px">
+          <div style="font-size:12px;opacity:.85;text-align:center">
+            ${taken ? '🚩 Erobert — diese Burg gehört dir.'
+                    : (remaining > 0
+                        ? `⬡ Burghof: noch <b>${remaining}</b> von ${layout.length} Verteidigern`
+                        : '👑 Die Garnison ist gefallen — der Burgherr erwartet dich in der Mitte.')}
+          </div>
+          <canvas id="kr-burghof" width="330" height="290" style="width:100%;border-radius:8px"></canvas>
+          <div style="font-size:11px;opacity:.65;text-align:center">Tipp auf eine Wabe zum Kämpfen</div>
+          <button class="cc-build-btn" id="kr-burg-close">Schließen</button>
+        </div>
+      </div>
+    </div>`;
+  const canvas = document.getElementById('kr-burghof');
+  if (canvas) {
+    _krRenderBurghof(canvas, state, site, seed);
+    canvas.addEventListener('click', (e) => {
+      const cell = _krHexFromEvent(e, canvas);
+      if (!cell) return;
+      const key = `${cell.q},${cell.r}`;
+      const cst = kriegerCastleState(state.dd, castle.key);
+      const isCenter = cell.q === 0 && cell.r === 0;
+      if (isCenter) {
+        if (cst.lord) { showToast('🚩 Diese Burg hast du bereits erobert.', 'info'); return; }
+        if (!kriegerGarrisonCleared(state.dd, castle.key, site.idx, seed)) {
+          showToast('🔒 Erst die Garnison — der Burgherr zeigt sich nicht vorher.', 'info'); return;
+        }
+        const lg = kriegerLordGate(state.dd, castle);
+        if (!lg.ok) { _krShowGateBlock(`👑 Burgherr der ${castle.name}`, lg.reason); return; }
+        _krSpecialCtx = { kind: 'lord', castleKey: castle.key, castleIdx: site.idx, name: castle.name, siteKey: site.key };
+        _showKriegerFightPrompt(member, state, KRIEGER_CASTLE_LORD.tier, seed, COLS, ROWS, MARGIN, site.key);
+        return;
+      }
+      const g = kriegerGarrisonLayout(site.idx, seed).find(x => x.key === key);
+      if (!g) return;                                  // leere Wabe
+      if (cst.hex[key]) { showToast('💀 Diese Wabe ist bereits geräumt.', 'info'); return; }
+      _krSpecialCtx = { kind: 'garrison', castleKey: castle.key, castleIdx: site.idx, hexKey: key, name: g.def.name, siteKey: site.key };
+      _showKriegerFightPrompt(member, state, g.def.tier, seed, COLS, ROWS, MARGIN, site.key);
+    });
+  }
+  document.getElementById('kr-burg-close')?.addEventListener('click', () => popup.classList.add('hidden'));
+}
+
 async function _runKriegerFight(member, state, tier, seed, COLS, ROWS, MARGIN, key, flavorIdx, potionKey, potionKey2, eLevel) {
   const popup = document.getElementById('krieger-popup');
   const btn = document.getElementById('krieger-fight-go');
@@ -2796,9 +3067,15 @@ async function _runKriegerFight(member, state, tier, seed, COLS, ROWS, MARGIN, k
   // `permaDead[key]`: das Feld respawnt NIE wieder (User-Wunsch: Respawn nur 1×, kein Dauer-Grind).
   // Bis zum Respawn ist das Feld begehbar (siehe _handleKriegerTap: nur AKTIVE Gegner bieten Kampf).
   // Niederlage bleibt wie bisher sofort erneut versuchbar (kein defeatedAt-Eintrag).
+  // Zweiter Sieg: der Encounter wird jetzt ERSATZLOS GELÖSCHT (Entscheidung 2026-07-21) statt
+  // nur als permaDead markiert zu werden. Ergebnis ist dasselbe wie vor dem Respawn-Umbau —
+  // das Feld ist danach einfach leer. `permaDead` wird weiter mitgeschrieben, damit
+  // Altbestände (Felder, die den Eintrag schon haben) unverändert weiterfunktionieren.
   if (result.won && tier !== 'boss' && key && state.dd.encounters?.[key]) {
     if (state.dd.defeatedAt?.[key] != null) {
-      state.dd = { ...state.dd, permaDead: { ...(state.dd.permaDead || {}), [key]: Date.now() } };
+      const _enc = { ...(state.dd.encounters || {}) }; delete _enc[key];
+      state.dd = { ...state.dd, encounters: _enc,
+        permaDead: { ...(state.dd.permaDead || {}), [key]: Date.now() } };
     } else {
       state.dd = { ...state.dd, defeatedAt: { ...(state.dd.defeatedAt || {}), [key]: Date.now() } };
     }
@@ -2820,8 +3097,42 @@ async function _runKriegerFight(member, state, tier, seed, COLS, ROWS, MARGIN, k
     }
   }
 
+  // ── 🔱/🏰 Sonderkampf-Buchhaltung (2026-07-21) ────────────────────────────────
+  // Spezialisten/Burgen stehen NICHT in dd.encounters (ihre Felder sind fest aus dem
+  // Welt-Seed), deshalb greift die defeatedAt/permaDead-Logik oben für sie nicht — der
+  // Fortschritt wird hier gebucht. Der Kontext kommt vom Aufrufer über _krSpecialCtx.
+  const _sc = _krSpecialCtx;
+  _krSpecialCtx = null;                      // in jedem Fall abräumen, auch bei Niederlage
+  if (_sc && result.won) {
+    try {
+      if (_sc.kind === 'specialist') {
+        state.dd = { ...state.dd, seals: { ...(state.dd.seals || {}), [_sc.culture]: Date.now() } };
+        dungeonDirty = true;
+        showToast(`🔱 ${KRIEGER_CULTURE_NAMES[_sc.culture] || ''}-Siegel erobert! (${kriegerSealCount(state.dd)}/8)`, 'success');
+      } else if (_sc.kind === 'wall' || _sc.kind === 'garrison' || _sc.kind === 'lord') {
+        const prev = kriegerCastleState(state.dd, _sc.castleKey);
+        const next = { wall: prev.wall, hex: { ...prev.hex }, lord: prev.lord };
+        if (_sc.kind === 'wall')      { next.wall = Date.now(); showToast('🧱 Die Mauer bricht — der Burghof liegt offen!', 'success'); }
+        if (_sc.kind === 'garrison')  { next.hex[_sc.hexKey] = Date.now(); }
+        if (_sc.kind === 'lord')      { next.lord = Date.now(); showToast(`🚩 ${_sc.name} erobert!`, 'success'); }
+        state.dd = { ...state.dd, castles: { ...(state.dd.castles || {}), [_sc.castleKey]: next } };
+        dungeonDirty = true;
+      }
+    } catch (e) { /* non-critical: ein Buchungsfehler darf den Kampf nie kippen */ }
+  }
+
   if (dungeonDirty) {
     try { await DB.saveDungeonData(member.id, state.dd); } catch (e) { /* non-critical */ }
+  }
+
+  // Nach einem Burg-Kampf zurück in den Burghof (Hex neu zeichnen), damit der Fortschritt
+  // sofort sichtbar ist — außer die Burg ist jetzt erobert, dann bleibt der Sieg stehen.
+  if (_sc && result.won && (_sc.kind === 'wall' || _sc.kind === 'garrison') && _sc.castleKey) {
+    try {
+      const _site = (typeof kriegerSpecialSites === 'function')
+        ? kriegerSpecialSites(seed).find(s => s.kind === 'castle' && s.def.key === _sc.castleKey) : null;
+      if (_site) setTimeout(() => _showKriegerCastle(member, state, _site, seed, COLS, ROWS, MARGIN), 900);
+    } catch (e) { /* non-critical */ }
   }
 
   currentUserData = { ...(currentUserData || {}), coins: state.memberCoins, dungeon_data: state.dd };
@@ -2894,11 +3205,11 @@ function _kriegerRenderShop(member, state, body) {
   const equipped = dd.equipped || {};
   const level = dd.level || 1;
 
-  const slotIcons = { weapon: '⚔️', armor: '🛡️', talisman: '🧿', feet: '👢', scan: '🔮' };
-  const slotNames = { weapon: 'Waffe', armor: 'Rüstung', talisman: 'Talisman', feet: 'Stiefel', scan: 'Sicht' };
+  const slotIcons = { weapon: '⚔️', armor: '🛡️', talisman: '🧿', feet: '👢', scan: '🔮', siege: '🧱' };
+  const slotNames = { weapon: 'Waffe', armor: 'Rüstung', talisman: 'Talisman', feet: 'Stiefel', scan: 'Sicht', siege: 'Belagerung' };
   const companionDef = (typeof kriegerActiveCompanion === 'function') ? kriegerActiveCompanion(dd) : null;
   const mountDef = (typeof kriegerActiveMount === 'function') ? kriegerActiveMount(dd) : null;
-  const loadoutHtml = ['weapon', 'armor', 'talisman', 'feet', 'scan'].map(slot => {
+  const loadoutHtml = ['weapon', 'armor', 'talisman', 'feet', 'scan', 'siege'].map(slot => {
     const key = equipped[slot];
     const item = key ? kriegerItemByKey(key) : null;
     return `<div class="krieger-slot${item ? ' filled' : ''}">
@@ -3074,7 +3385,56 @@ function _kriegerRenderShop(member, state, body) {
     ${completeSets.map(c => `<button class="cc-build-btn krieger-autoequip-btn" data-set="${c}" style="font-size:11px;padding:4px 9px"${setCulture === c ? ' disabled' : ''}>${KRIEGER_CULTURE_NAMES[c]}${setCulture === c ? ' ✓' : ''}</button>`).join('')}
   </div>` : '';
 
-  body.innerHTML = `<div class="krieger-loadout">${loadoutHtml}</div>${autoEquipHtml}${setHint}${schmiedHtml}${scanHtml}${mountHtml}${companionHtml}${sections}`;
+  // 🔩💣 Werkzeug (2026-07-21): Verbrauchsgüter zum Aufsprengen von Felswänden.
+  // Bestand in dungeon_data.tools, Einsatz per Tap auf eine angrenzende Wand.
+  const werkzeugHtml = `<div class="krieger-shop-section">
+    <div class="section-title" style="font-size:13px">🔩 Werkzeug <span style="font-weight:400;font-size:11px;color:var(--muted)">· Felswände aufbrechen, Verbrauchsgut</span></div>
+    <p style="font-size:11px;color:var(--muted);text-align:center;margin:2px 0 8px">Nur ~20 % der Höhle ist von Haus aus erreichbar — mit Werkzeug sprengst du dir neue Gebiete auf. Tipp dazu im Dungeon auf eine angrenzende Felswand.</p>
+    <div class="krieger-shop-grid">
+      ${(typeof KRIEGER_TOOLS !== 'undefined' ? KRIEGER_TOOLS : []).map(t => {
+        const have = (typeof kriegerToolCount === 'function') ? kriegerToolCount(dd, t.key) : 0;
+        const effCost = (typeof kriegerDiscountedCost === 'function') ? kriegerDiscountedCost(t.cost, dd) : t.cost;
+        const canBuy = state.memberCoins >= effCost;
+        const priceTxt = effCost < t.cost ? `⚖️ <s>${t.cost}</s> ${effCost}` : `${t.cost}`;
+        return `<div class="krieger-item-card${have > 0 ? ' owned' : ''}">
+          <div style="font-size:20px">${t.icon}</div>
+          <div style="font-size:11px;font-weight:700">${_esc2(t.name)}${have > 0 ? ` <span style="color:#FAC775">×${have}</span>` : ''}</div>
+          <div style="font-size:11px;color:var(--muted);margin:3px 0">${_esc2(t.desc)}</div>
+          <div style="margin-top:5px"><button class="cc-build-btn krieger-tool-buy" data-tool="${t.key}"${canBuy ? '' : ' disabled'}>Kaufen · ${priceTxt} 🫘</button></div>
+        </div>`;
+      }).join('')}
+    </div>
+  </div>`;
+
+  body.innerHTML = `<div class="krieger-loadout">${loadoutHtml}</div>${autoEquipHtml}${setHint}${schmiedHtml}${werkzeugHtml}${scanHtml}${mountHtml}${companionHtml}${sections}`;
+
+  // Werkzeug-Kauf: gleiches Muster wie der Trank-Kauf (spend_coins + save_dungeon_data),
+  // aber ohne eigene DB-Funktion — der Bestand liegt rein in dungeon_data.
+  body.querySelectorAll('.krieger-tool-buy').forEach(btn => {
+    btn.onclick = async () => {
+      const tool = (typeof kriegerToolByKey === 'function') ? kriegerToolByKey(btn.dataset.tool) : null;
+      if (!tool) return;
+      btn.disabled = true;
+      const cost = (typeof kriegerDiscountedCost === 'function') ? kriegerDiscountedCost(tool.cost, state.dd) : tool.cost;
+      try {
+        const newCoins = await DB.spendCoins(member.id, cost);
+        if (newCoins === null || newCoins === undefined) { showToast('Nicht genug CoffeeCoins!', 'error'); btn.disabled = false; return; }
+        state.memberCoins = newCoins;
+        const tools = { ...(state.dd.tools || {}) };
+        tools[tool.key] = (tools[tool.key] || 0) + 1;
+        state.dd = { ...state.dd, tools };
+        await DB.saveDungeonData(member.id, state.dd);
+        currentUserData = { ...(currentUserData || {}), coins: newCoins, dungeon_data: state.dd };
+        _updateHeaderCoins({ coins: newCoins });
+        try {
+          const mdLog = await DB.appendTodayLogFresh(member.id, [{ label: `${tool.icon} ${tool.name}`, amount: -cost, cat: 'krieger', detail: 'Kaffee-Krieger-Werkzeug' }]);
+          if (mdLog) { currentUserData = { ...(currentUserData || {}), map_data: mdLog }; member.map_data = mdLog; }
+        } catch (e) { /* non-critical */ }
+        showToast(`${tool.icon} ${tool.name} gekauft!`, 'success');
+        _kriegerRenderShop(member, state, body);
+      } catch (e) { showToast(e.message || 'Kauf fehlgeschlagen', 'error'); btn.disabled = false; }
+    };
+  });
 
   body.querySelectorAll('.krieger-buy-btn').forEach(btn => {
     btn.onclick = async () => {

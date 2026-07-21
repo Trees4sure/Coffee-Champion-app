@@ -46,6 +46,16 @@ const ACHIEVEMENTS = [
   { id: 'krieger_mount_first', icon: '🐎', name: 'Berittener Krieger',   desc: 'Erstes Reittier erworben',                       condition: null, coinReward: 40 },
   { id: 'krieger_all_t1',      icon: '🌍', name: 'Kulturen-Sammler',     desc: 'Tier-1-Ausrüstung aller 8 Kulturen besessen',    condition: null, coinReward: 80 },
   { id: 'krieger_all_t2',      icon: '🏅', name: 'Meister-Sammler',      desc: 'Tier-2-Ausrüstung aller 8 Kulturen besessen',    condition: null, coinReward: 200 },
+  // 🔱🏰 Kultur-Spezialisten & Burgen (2026-07-21). Diese drei prüfen sich SELBST aus
+  // dungeon_data (nicht event-granted): so werden sie auch dann korrekt vergeben, wenn der
+  // Sieg-Toast mal nicht durchläuft. Alle Zugriffe optional-chained (Regel 3 der CLAUDE.md:
+  // ein fehlgeschlagenes Achievement darf nie die Hauptaktion kippen).
+  { id: 'krieger_seal_first',  icon: '🔱', name: 'Siegelträger',         desc: 'Erstes Kultur-Siegel von einem Spezialisten erobert', coinReward: 60,
+    condition: u => Object.keys(u.dungeon_data?.seals || {}).length >= 1 },
+  { id: 'krieger_seals_all',   icon: '🗝️', name: 'Herr der Siegel',      desc: 'Alle 8 Kultur-Spezialisten besiegt',                  coinReward: 300,
+    condition: u => Object.keys(u.dungeon_data?.seals || {}).length >= 8 },
+  { id: 'krieger_castles_all', icon: '🏰', name: 'Eroberer der Kulturen', desc: 'Alle 8 Kultur-Burgen erobert',                       coinReward: 750,
+    condition: u => Object.values(u.dungeon_data?.castles || {}).filter(c => c?.lord).length >= 8 },
   // 🚐 Kaffeemobil: Welteroberung (Erlebnis-Minigame #2) — alle event-granted (condition:null)
   { id: 'mobil_first',       icon: '🚐', name: 'Erste Ausfahrt',    desc: 'Erste Reise mit dem Kaffeemobil abgeschlossen',      condition: null, coinReward: 30  },
   { id: 'mobil_trips_10',    icon: '🛣️', name: 'Vielfahrer',        desc: '10 Reisen mit dem Kaffeemobil',                       condition: null, coinReward: 60  },

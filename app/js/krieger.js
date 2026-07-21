@@ -67,6 +67,64 @@ function kriegerIsWall(x, y, worldSeed) {
   return grid[y * KRIEGER_WORLD + x] === 1;
 }
 
+// ── 🔩 Aufgebrochene Wände (2026-07-21) ───────────────────────────────────────
+// Messung dieser Session: nur ~20% der offenen Felder sind vom Start aus erreichbar —
+// die Höhlengenerierung verbindet garantiert NUR Start↔Boss. Kaffeebohrer und
+// Kaffeegranate sind die Antwort darauf: sie sprengen Fels weg und erschließen neue
+// Gebiete. Die Durchbrüche leben in dd.brokenWalls{"x,y":ts} (dungeon_data, keine SQL).
+//
+// WICHTIG — der KARTENRAND bleibt immer Fels: `x<=0 || …` wird vor der Prüfung
+// abgefragt, sonst könnte man sich aus der Welt heraussprengen.
+function kriegerIsBroken(dd, x, y) { return !!(dd?.brokenWalls?.[`${x},${y}`]); }
+// Die dd-bewusste Variante von kriegerIsWall. Überall dort verwendet, wo es um
+// BEGEHBARKEIT geht (Laufen, Rendern, Explore). kriegerIsWall selbst bleibt
+// absichtlich unverändert — die Landmarken-Platzierung muss auf der UNGESPRENGTEN
+// Karte rechnen, sonst würden Burgen umziehen, sobald jemand bohrt.
+function kriegerIsWallFor(dd, x, y, worldSeed) {
+  if (x <= 0 || y <= 0 || x >= KRIEGER_WORLD - 1 || y >= KRIEGER_WORLD - 1) return true;
+  if (kriegerIsBroken(dd, x, y)) return false;
+  return kriegerIsWall(x, y, worldSeed);
+}
+
+// Werkzeuge — Verbrauchsgüter (Entscheidung 2026-07-21: kein Dauer-Werkzeug, sonst wäre
+// die halbe Karte nach einem Kauf offen und der Erkundungsdruck weg).
+// Bestand in dd.tools{key:anzahl}, analog zu dd.potions.
+const KRIEGER_TOOLS = [
+  { key:'bohrer',  icon:'🔩', name:'Kaffeebohrer',  cost:250, radius:0,
+    desc:'Bricht EINE angrenzende Felswand auf. Verbraucht sich dabei.' },
+  { key:'granate', icon:'💣', name:'Kaffeegranate', cost:600, radius:1,
+    desc:'Sprengt ein 3×3-Feld Fels weg — öffnet ganze Gänge auf einen Schlag.' },
+];
+function kriegerToolByKey(key)   { return KRIEGER_TOOLS.find(t => t.key === key) || null; }
+function kriegerToolCount(dd, key) { return Math.max(0, (dd?.tools && dd.tools[key]) || 0); }
+function kriegerHasAnyTool(dd)   { return KRIEGER_TOOLS.some(t => kriegerToolCount(dd, t.key) > 0); }
+
+// Welche Felder würde dieses Werkzeug hier tatsächlich freisprengen?
+// Nur echte Felswände zählen (offener Boden „verbraucht" keine Sprengung), und der
+// Kartenrand ist ausgenommen — sonst wäre die Granate am Rand eine Nullnummer und
+// der Spieler hätte 600 CC für nichts ausgegeben.
+function kriegerBlastTiles(dd, tx, ty, tool, worldSeed) {
+  const r = tool?.radius || 0;
+  const out = [];
+  for (let y = ty - r; y <= ty + r; y++) {
+    for (let x = tx - r; x <= tx + r; x++) {
+      if (x <= 0 || y <= 0 || x >= KRIEGER_WORLD - 1 || y >= KRIEGER_WORLD - 1) continue; // Rand bleibt
+      if (!kriegerIsWallFor(dd, x, y, worldSeed)) continue;                                // schon offen
+      out.push({ x, y });
+    }
+  }
+  return out;
+}
+// Neues dungeon_data nach dem Sprengen (rein additiv, bestehende Durchbrüche bleiben).
+function kriegerApplyBlast(dd, tiles, toolKey) {
+  const broken = { ...(dd?.brokenWalls || {}) };
+  const now = Date.now();
+  for (const t of tiles) broken[`${t.x},${t.y}`] = now;
+  const tools = { ...(dd?.tools || {}) };
+  tools[toolKey] = Math.max(0, (tools[toolKey] || 0) - 1);
+  return { ...dd, brokenWalls: broken, tools };
+}
+
 function _kriegerMazeGrid(worldSeed) {
   if (_kriegerMazeCache[worldSeed]) return _kriegerMazeCache[worldSeed];
   const N = KRIEGER_WORLD;
@@ -278,6 +336,16 @@ const KRIEGER_ITEMS = [
   { key:'kaffeeglas_scan', slot:'scan', culture:null, tier:1, icon:'🔍', name:'Kaffee-Glas',        cost:200, minLevel:5, atk:0, def:0, crit:0, scan:'line',    scanDesc:'Deckt 5 Felder in der zuletzt gelaufenen Richtung auf.' },
   { key:'wirbelsud_scan',  slot:'scan', culture:null, tier:2, icon:'🌀', name:'Wirbel-Sud',         cost:450, minLevel:15, atk:0, def:0, crit:0, scan:'ring',    scanDesc:'Deckt einen Ring bei Radius 3 um dich auf (aktualisiert sich beim Laufen).' },
   { key:'orakel_scan',     slot:'scan', culture:null, tier:3, icon:'🔮', name:'Kaffeesatz-Orakel',  cost:850, minLevel:45, atk:0, def:0, crit:0, scan:'checker', scanDesc:'Deckt jedes 2. Feld in Radius 6 auf — große, aber lückenhafte Sicht.' },
+
+  // ── 🧱 Belagerung (Slot 'siege', 2026-07-21) ──────────────────────────────
+  // Reine GATE-ÖFFNER für die Burgmauern (siehe kriegerCastleGate). Bewusst nur ein
+  // kleiner ATK-Bonus: sie sollen die normale Ausrüstungs-Progression nicht verdrängen,
+  // sondern Zugang zu neuem Content geben. Eigene „Kultur" belagerung → bekommt im Shop
+  // automatisch eine eigene Sektion; nie Teil eines Set-Bonus (kriegerActiveSetCulture
+  // prüft nur weapon+armor+talisman, dieser Slot kann also nie ein Set kapern).
+  { key:'ramme_siege',     slot:'siege', culture:'belagerung', tier:1, icon:'🔨', name:'Sturmramme',   cost:900,  minLevel:25, atk:6,  def:0, crit:0, siege:1, mechDesc:'Bricht die Mauer der Nordfeste (Belagerungsstufe 1).' },
+  { key:'katapult_siege',  slot:'siege', culture:'belagerung', tier:2, icon:'🎯', name:'Katapult',     cost:1800, minLevel:30, atk:12, def:0, crit:0, siege:2, mechDesc:'Belagerungsstufe 2 — öffnet zusätzlich die Ostwacht.' },
+  { key:'trebuchet_siege', slot:'siege', culture:'belagerung', tier:3, icon:'⚙️', name:'Trebuchet',    cost:3200, minLevel:35, atk:20, def:0, crit:0, siege:3, mechDesc:'Belagerungsstufe 3 — bricht jede Mauer, inklusive Zitadelle.' },
 ];
 
 // ── Begleiter (4. Slot, Etappe 3) ─────────────────────────────────────────────
@@ -342,9 +410,14 @@ function kriegerFindPath(fromPos, toPos, dd) {
 // ── Kartografie B (Etappe 4): Kaffeesatz-Scouting — Read-only-Vorschau ──────────
 // Identische RNG-Aufrufe wie kriegerExploreTile, aber OHNE jede Mutation (kein Explore,
 // kein steps_today). Liefert nur die KATEGORIE, nie die exakte Belohnung/Flavor.
-function kriegerPeekTile(tx, ty, worldSeed) {
-  if (kriegerIsWall(tx, ty, worldSeed)) return null;
+function kriegerPeekTile(tx, ty, worldSeed, dd) {
+  // dd optional (Bestandsschutz für alte Aufrufe): mit dd werden aufgesprengte Wände
+  // als begehbar gemeldet, ohne dd bleibt das Verhalten exakt wie bisher.
+  if (dd ? kriegerIsWallFor(dd, tx, ty, worldSeed) : kriegerIsWall(tx, ty, worldSeed)) return null;
   if (tx === KRIEGER_BOSS_POS.x && ty === KRIEGER_BOSS_POS.y) return { type: 'boss' };
+  // Landmarken (2026-07-21) werden ohnehin durch den Nebel gezeichnet — der Scan meldet
+  // hier „leer", damit er kein zweites Icon auf dasselbe Feld legt.
+  if (typeof kriegerSiteAt === 'function' && kriegerSiteAt(tx, ty, worldSeed)) return { type: 'empty' };
   const dist = Math.max(Math.abs(tx - KRIEGER_START_X), Math.abs(ty - KRIEGER_START_Y));
   const rEnc = _tileRng(tx, ty, 5151, worldSeed)();
   if (rEnc < KRIEGER_ENEMY_P) return { type: 'enemy', tier: kriegerTierForDistance(dist, tx, ty, worldSeed) };
@@ -402,6 +475,11 @@ const KRIEGER_CULTURE_NAMES = {
   handel:      '⚖️ Handelsgilde',
   freibeuter:  '☠️ Freibeuter',
   spaeher:     '🔭 Kundschafter',
+  // Keine echte Kultur, sondern eine eigene Shop-Sektion für den Belagerungs-Slot
+  // (2026-07-21). Bildet nie ein Set: kriegerActiveSetCulture verlangt weapon+armor+
+  // talisman derselben Kultur, und 'belagerung' hat ausschließlich slot:'siege'.
+  // kriegerOwnedCompleteSets filtert sie aus demselben Grund automatisch heraus.
+  belagerung:  '🧱 Belagerung',
 };
 
 const KRIEGER_SET_BONUSES = {
@@ -440,7 +518,14 @@ function kriegerFeetBonus(dd) {
 function kriegerActiveSetCulture(equipped) {
   if (!equipped?.weapon || !equipped?.armor || !equipped?.talisman) return null;
   const w = kriegerItemByKey(equipped.weapon), a = kriegerItemByKey(equipped.armor), t = kriegerItemByKey(equipped.talisman);
-  if (w && a && t && w.culture === a.culture && a.culture === t.culture) return w.culture;
+  if (!w || !a || !t) return null;
+  // Härtung 2026-07-21: das Item muss auch WIRKLICH in den Slot gehören, in dem es steckt.
+  // Vorher wurde nur die Kultur verglichen — ein (durch alte/kaputte Daten) in den
+  // Waffen-Slot geratenes Rüstungs- oder Belagerungs-Item hätte ein Set vorgetäuscht.
+  // Mit den neuen slot:'siege'-Items (alle Kultur 'belagerung') wäre daraus sonst ein
+  // frei erfindbares „Set" geworden, das die harten Kultur-Gates aushebelt.
+  if (w.slot !== 'weapon' || a.slot !== 'armor' || t.slot !== 'talisman') return null;
+  if (w.culture === a.culture && a.culture === t.culture) return w.culture;
   return null;
 }
 
@@ -543,7 +628,14 @@ function kriegerFlavorMod(tier, idx) {
 // die Ober-Level lagen deutlich über dem Spieler, der einen Tier gerade erst erreicht →
 // Werte skalierten den Gegner weit über die eigene Ausrüstung. Enger + niedriger, damit
 // Gegner nahe am eigenen Level bleiben. MUSS zu _krieger_enemy_level_band in SQL passen.
-const KRIEGER_ENEMY_LEVEL_BANDS = { t1:[1,6], t2:[3,11], t3:[9,17], t4:[16,27], boss:[60,60] };
+const KRIEGER_ENEMY_LEVEL_BANDS = { t1:[1,6], t2:[3,11], t3:[9,17], t4:[16,27], boss:[60,60],
+  // Spezialisten/Burgen (2026-07-21): FESTE Level statt Band — sie stehen an festen Orten,
+  // ein gewürfeltes Level wäre hier nur Rauschen. Muss zu _krieger_enemy_level_band in
+  // migration_2026-07-21_krieger_burgen.sql passen (Server clampt darauf).
+  sp_mittelalter:[26,26], sp_steppe:[27,27],      sp_spaeher:[28,28],  sp_europa:[29,29],
+  sp_handel:[30,30],      sp_freibeuter:[31,31],  sp_suedamerika:[32,32], sp_orient:[34,34],
+  burg_mauer:[26,26], burg_soeldner:[28,28], burg_bogen:[28,28], burg_hauptmann:[30,30],
+  burg_hund:[27,27],  burg_magier:[30,30],   burg_giftmisch:[29,29], burg_herr:[38,38] };
 
 // Deterministisches Gegner-Level für ein Feld (eigener Salt 3131, NICHT von anderen
 // _tileRng-Salts belegt). Boss = fest 60.
@@ -763,12 +855,361 @@ function kriegerEnemyActive(dd, key) {
   if (dd?.permaDead?.[key]) return false;
   return !!(dd?.encounters?.[key]) && kriegerEnemyRespawned(dd, key);
 }
+// Endgültig besiegt (2. Sieg). Bug-Fix 2026-07-21: `permaDead` wurde bisher NUR in
+// kriegerEnemyActive gelesen — im Canvas-Render und im Tap-Handler kam der Zustand nicht vor.
+// Da der Encounter seit dem Respawn-Umbau nach einem Sieg nicht mehr gelöscht wird, blieb ein
+// endgültig besiegtes Feld als ⚔️ in VOLLER Deckkraft stehen (kriegerEnemyOnCooldown ist dort
+// false, weil der Respawn-Tick längst vorbei ist) und der Tap blieb stumm → wirkte wie
+// „geschlagene Gegner verschwinden nicht".
+function kriegerEnemyPermaDead(dd, key) { return !!(dd?.permaDead?.[key]); }
 // Nächster Respawn-Zeitpunkt eines besiegten Feldes (für „regeneriert in …"-Anzeige); 0 = schon aktiv.
 function kriegerNextRespawnAt(dd, key) {
   const d = dd?.defeatedAt?.[key];
   if (d == null || d < kriegerLastRespawnTick()) return 0;
   const k = Math.floor((d - KRIEGER_RESPAWN_ANCHOR) / KRIEGER_RESPAWN_PERIOD_MS) + 1;
   return KRIEGER_RESPAWN_ANCHOR + k * KRIEGER_RESPAWN_PERIOD_MS;
+}
+
+// ══ 🔱 Kultur-Spezialisten & 🏰 Burgen (2026-07-21) ═══════════════════════════
+// Endgame-Ebene über den bestehenden t1–t4-Gegnern. Zwei Bausteine:
+//
+//  1. 8 KULTUR-SPEZIALISTEN — je einer pro Kultur, mit HARTEM Gate: ohne das passende
+//     Set (weapon+armor+talisman derselben Kultur) ist der Kampf gar nicht erst möglich.
+//     Jeder droppt ein 🔱 Kultur-Siegel. Damit bekommen die 4 Utility-Kulturen
+//     (Steppe/Handel/Freibeuter/Späher) erstmals einen echten Kampf-Zweck, und alle 8
+//     Sets werden nacheinander gebraucht statt sich für eines zu entscheiden.
+//  2. 4 BURGEN — mehrstufig (Mauer → Torwache → Burgherr). Doppeltes Gate: Siegel öffnen
+//     das Tor, der Belagerungs-Slot bricht die Mauer. Eroberte Burgen respawnen nie.
+//
+// WICHTIG — bestehende Gegner bleiben unangetastet (User-Vorgabe 2026-07-21): t1–t4 und
+// der Boss behalten Werte, Gates und Balance. Alles hier ist additiv, eine eigene
+// Gegner-Liste (KRIEGER_SPECIALS statt KRIEGER_ENEMIES), damit kriegerZoneTier /
+// kriegerTierForDistance / KRIEGER_TIER_ORDER unverändert weiterlaufen.
+// Die Werte MÜSSEN mit _krieger_enemy_stats in migration_2026-07-21_krieger_burgen.sql
+// übereinstimmen (gleiche Regel wie bei KRIEGER_ENEMIES — hier nur die UI-Vorschau).
+
+// Belagerungs-Stufe eines Spielers (0 = keine Waffe). Öffnet die Burg-Mauern.
+const KRIEGER_SIEGE_SLOT = 'siege';
+function kriegerSiegeLevel(dd) {
+  const item = kriegerItemByKey(dd?.equipped?.[KRIEGER_SIEGE_SLOT]);
+  return item?.siege || 0;
+}
+
+// ── Die 8 Kultur-Spezialisten ────────────────────────────────────────────────
+// `dist` = Chebyshev-Ringabstand vom Startpunkt (bestimmt, wie weit man laufen muss);
+// `gateCulture` = das Set, das den Kampf überhaupt erst freischaltet.
+const KRIEGER_SPECIALISTS = [
+  { tier:'sp_mittelalter', gateCulture:'mittelalter', icon:'🛡️', name:'Panzer-Perkolator', flavor:'🛡️ Panzer-Perkolator',
+    minLevel:26, dist:32, level:26, hp:280, atk:24, def:58, ccMin:200, ccMax:290, ep:200,
+    gateHint:'Seine Panzerung schluckt jeden normalen Hieb. Nur der Rüstungsdurchschlag des Mittelalter-Sets kommt durch.' },
+  { tier:'sp_steppe', gateCulture:'steppe', icon:'🐎', name:'Steppenreiter', flavor:'🐎 Steppenreiter',
+    minLevel:26, dist:34, level:27, hp:240, atk:34, def:16, ccMin:210, ccMax:300, ep:210,
+    gateHint:'Er reitet davon, bevor du in Reichweite bist. Nur mit der Leichtfüßigkeit des Steppen-Sets holst du ihn ein.' },
+  { tier:'sp_spaeher', gateCulture:'spaeher', icon:'🏹', name:'Turm-Armbruster', flavor:'🏹 Turm-Armbruster',
+    minLevel:27, dist:37, level:28, hp:230, atk:38, def:18, ccMin:220, ccMax:310, ep:220,
+    gateHint:'Er schießt aus einer Distanz, die du ohne die Sichtweite des Späher-Sets nie überbrückst.' },
+  { tier:'sp_europa', gateCulture:'europa', icon:'🎩', name:'Zoll-Baron', flavor:'🎩 Zoll-Baron',
+    minLevel:28, dist:39, level:29, hp:300, atk:30, def:24, ccMin:260, ccMax:360, ep:240,
+    gateHint:'Er fordert für jede Runde Wegzoll. Ohne den CC-Fluss des Europa-Sets bist du vor ihm pleite.' },
+  { tier:'sp_handel', gateCulture:'handel', icon:'⚗️', name:'Röst-Alchemist', flavor:'⚗️ Röst-Alchemist',
+    minLevel:29, dist:42, level:30, hp:320, atk:32, def:22, ccMin:270, ccMax:380, ep:250,
+    gateHint:'Nur mit Tränken beizukommen — und die ruinieren dich ohne die Rückvergütung des Handels-Sets.' },
+  { tier:'sp_freibeuter', gateCulture:'freibeuter', icon:'🐙', name:'Seeungeheuer', flavor:'🐙 Seeungeheuer',
+    minLevel:30, dist:44, level:31, hp:380, atk:35, def:20, ccMin:290, ccMax:400, ep:270,
+    gateHint:'Auf dem Wasser bist du ohne das Freibeuter-Set schlicht das Beutetier.' },
+  { tier:'sp_suedamerika', gateCulture:'suedamerika', icon:'🦠', name:'Schimmel-Hydra', flavor:'🦠 Schimmel-Hydra',
+    minLevel:30, dist:46, level:32, hp:420, atk:26, def:26, ccMin:300, ccMax:420, ep:280,
+    gateHint:'Ihr Ätzschaden zermürbt dich über viele Runden. Ohne die Regeneration des Südamerika-Sets stirbst du am Zermürben.' },
+  { tier:'sp_orient', gateCulture:'orient', icon:'👻', name:'Geisterritter', flavor:'👻 Geisterritter',
+    minLevel:32, dist:49, level:34, hp:360, atk:40, def:28, ccMin:330, ccMax:460, ep:310,
+    gateHint:'Physischer Schaden geht durch ihn hindurch. Nur der Krit-Lebensraub des Orient-Sets trifft die Geistform.' },
+];
+
+// ── Die 4 Burgen (3 Wellen je Burg) ──────────────────────────────────────────
+// `seals` = benötigte Kultur-Siegel fürs Tor, `siege` = benötigte Belagerungs-Stufe.
+// Eine Burg JE KULTUR (User-Wunsch 2026-07-21) — dieselben 8 Kulturen wie bei den
+// Spezialisten. `culture` ist dabei kein Set-Gate (das prüft nur der Spezialist), sondern
+// bestimmt Thema, Ort und das VERLANGTE EIGENE SIEGEL: die Burg einer Kultur öffnet sich
+// erst, wenn ihr Spezialist gefallen ist. Zusätzlich braucht sie `seals` Siegel insgesamt,
+// sodass die Reihenfolge zwangsläufig von leicht nach schwer läuft.
+const KRIEGER_CASTLES = [
+  { key:'burg_mittelalter', culture:'mittelalter', icon:'🏰', name:'Eisenfeste',      dist:50, seals:1, siege:1, minLevel:25 },
+  { key:'burg_steppe',      culture:'steppe',      icon:'🏕️', name:'Steppenlager',    dist:54, seals:2, siege:1, minLevel:27 },
+  { key:'burg_spaeher',     culture:'spaeher',     icon:'🗼', name:'Späherturm',      dist:58, seals:3, siege:2, minLevel:29 },
+  { key:'burg_europa',      culture:'europa',      icon:'🏛️', name:'Zollpalast',      dist:62, seals:4, siege:2, minLevel:31 },
+  { key:'burg_handel',      culture:'handel',      icon:'⚖️', name:'Handelskontor',   dist:66, seals:5, siege:2, minLevel:33 },
+  { key:'burg_freibeuter',  culture:'freibeuter',  icon:'🏴‍☠️', name:'Kaperfestung',   dist:70, seals:6, siege:3, minLevel:35 },
+  { key:'burg_suedamerika', culture:'suedamerika', icon:'🗿', name:'Sonnenpyramide',  dist:73, seals:7, siege:3, minLevel:37 },
+  { key:'burg_orient',      culture:'orient',      icon:'🕌', name:'Wüstenzitadelle', dist:76, seals:8, siege:3, minLevel:40 },
+];
+// Eine Burg läuft in DREI Phasen ab (User-Wunsch 2026-07-21):
+//   1. 🧱 MAUER   — ein Kampf. Gate: Belagerungswaffe (siehe castle.siege).
+//   2. ⬡ BURGHOF — ein eigenes HEX-FELD (Radius 2 = 19 Waben) mit einer Garnison aus
+//      verschiedenen Feindtypen. JEDE besetzte Wabe muss fallen, bevor die Mitte aufgeht.
+//   3. 👑 BURGHERR — sitzt in der Mitte des Hex-Felds. Gate: JEDES Ausrüstungsteil
+//      besitzen (alle 8 Kultur-Kernsets + Belagerungswaffe), siehe kriegerLordGate.
+// minLevel MUSS gesetzt sein: es geht 1:1 als min_level in _krieger_enemy_stats und ist der
+// SERVERSEITIGE Schutz. Die Burg-Gates (Siegel/Belagerung) sind Client-Logik im Ehrensystem —
+// ohne min_level könnte ein manipulierter Client die Burgkämpfe auf Stufe 1 auslösen.
+const KRIEGER_CASTLE_WALL = { tier:'burg_mauer', icon:'🧱', name:'Mauerwächter', hp:300, atk:20, def:70, ccMin:150, ccMax:220, ep:160, minLevel:25 };
+const KRIEGER_CASTLE_LORD = { tier:'burg_herr',  icon:'👑', name:'Burgherr',     hp:520, atk:46, def:34, ccMin:400, ccMax:560, ep:380, minLevel:35 };
+
+// Garnison-Typen für die Waben — bewusst unterschiedliche Profile (Panzer/Glaskanone/
+// Heiler/Schwarm), damit der Burghof sich nicht wie 8× derselbe Kampf anfühlt.
+const KRIEGER_GARRISON = [
+  { tier:'burg_soeldner',  icon:'🗡️', name:'Söldner',        hp:190, atk:30, def:14, ccMin:90,  ccMax:140, ep:110 , minLevel:25 },
+  { tier:'burg_bogen',     icon:'🏹', name:'Bogenschütze',   hp:150, atk:38, def:8,  ccMin:95,  ccMax:150, ep:115 , minLevel:25 },
+  { tier:'burg_hauptmann', icon:'🛡️', name:'Wachhauptmann',  hp:260, atk:26, def:30, ccMin:120, ccMax:180, ep:140 , minLevel:25 },
+  { tier:'burg_hund',      icon:'🐕', name:'Kesselhund',     hp:120, atk:34, def:6,  ccMin:70,  ccMax:110, ep:90 , minLevel:25 },
+  { tier:'burg_magier',    icon:'🧙', name:'Röstmagier',     hp:170, atk:42, def:10, ccMin:110, ccMax:170, ep:130 , minLevel:25 },
+  { tier:'burg_giftmisch', icon:'⚗️', name:'Giftmischer',    hp:200, atk:28, def:18, ccMin:105, ccMax:160, ep:125 , minLevel:25 },
+];
+
+// Werte-Skalierung je Burg (Nordfeste ×1.0 … Zitadelle ×1.9) — eine Definition,
+// vier Schwierigkeitsstufen, statt alles einzeln zu pflegen.
+// BEWUSST KEINE per-Burg-Werteskalierung (verworfen 2026-07-21): der Server kennt beim
+// Kampf nur `p_enemy_tier`, nicht die Burg — ein clientseitiger Multiplikator hätte die
+// Vorschau im Prompt von den echten, serverseitig gewürfelten Werten abweichen lassen
+// (dieselbe Sync-Pflicht wie bei KRIEGER_ENEMIES ↔ _krieger_enemy_stats).
+// Die Burgen unterscheiden sich stattdessen über Dinge, die rein clientseitig sauber sind:
+// Garnisonsgröße (6 → 13 Waben), Siegel-Bedarf (1 → 8), Belagerungsstufe (1 → 3) und
+// Mindest-Level (25 → 40). Die Zitadelle ist damit ein deutlich längerer Kampf, ohne dass
+// zwei Wahrheiten über die Gegnerwerte entstehen.
+
+// ── Hex-Burghof: Axial-Koordinaten (q,r), Radius 2 → 19 Waben ────────────────
+const KRIEGER_HEX_RADIUS = 2;
+function kriegerHexCells() {
+  const out = [];
+  const R = KRIEGER_HEX_RADIUS;
+  for (let q = -R; q <= R; q++) {
+    for (let r = Math.max(-R, -q - R); r <= Math.min(R, -q + R); r++) out.push({ q, r });
+  }
+  return out; // 19 Waben, Mitte {0,0} = Burgherr
+}
+// Garnisonsgröße je Burg: Eisenfeste 6 … Wüstenzitadelle 13 Waben besetzt (von 18 möglichen,
+// die Mitte gehört dem Burgherrn). Hart gedeckelt, damit kein Hof „überbucht" werden kann.
+function kriegerGarrisonSize(castleIdx) { return Math.min(18, 6 + (castleIdx || 0)); }
+// Deterministische Belegung des Burghofs aus dem Welt-Seed: welche Wabe trägt welchen Typ?
+// Gleiche Burg → bei jedem Spieler dasselbe Feld (passt zur „feste Burgen"-Entscheidung).
+function kriegerGarrisonLayout(castleIdx, worldSeed) {
+  const cells = kriegerHexCells().filter(c => !(c.q === 0 && c.r === 0)); // Mitte bleibt dem Burgherrn
+  // Deterministisch mischen (Fisher-Yates mit tile-RNG, eigener Salt 4242).
+  for (let i = cells.length - 1; i > 0; i--) {
+    const j = Math.floor(_tileRng(castleIdx, i, 4242, worldSeed)() * (i + 1));
+    [cells[i], cells[j]] = [cells[j], cells[i]];
+  }
+  const n = Math.min(kriegerGarrisonSize(castleIdx), cells.length);
+  return cells.slice(0, n).map((c, i) => {
+    const ti = Math.floor(_tileRng(castleIdx, 100 + i, 4343, worldSeed)() * KRIEGER_GARRISON.length);
+    return { q: c.q, r: c.r, key: `${c.q},${c.r}`, def: KRIEGER_GARRISON[ti] };
+  });
+}
+
+// ── Burg-Fortschritt (lebt in dd.castles[castleKey]) ─────────────────────────
+// { wall: ts, hex: { "q,r": ts }, lord: ts } — alles clientseitig in dungeon_data,
+// keine eigene Tabelle nötig (gleiches Muster wie defeatedAt/permaDead).
+function kriegerCastleState(dd, castleKey) {
+  const c = dd?.castles?.[castleKey];
+  return { wall: c?.wall || 0, hex: c?.hex || {}, lord: c?.lord || 0 };
+}
+function kriegerCastleWallDown(dd, castleKey) { return !!kriegerCastleState(dd, castleKey).wall; }
+function kriegerCastleTaken(dd, castleKey)    { return !!kriegerCastleState(dd, castleKey).lord; }
+// Wie viele Garnisons-Waben sind noch offen?
+function kriegerGarrisonRemaining(dd, castleKey, castleIdx, worldSeed) {
+  const st = kriegerCastleState(dd, castleKey);
+  return kriegerGarrisonLayout(castleIdx, worldSeed).filter(g => !st.hex[g.key]).length;
+}
+function kriegerGarrisonCleared(dd, castleKey, castleIdx, worldSeed) {
+  return kriegerGarrisonRemaining(dd, castleKey, castleIdx, worldSeed) === 0;
+}
+
+// Nachschlagen wie kriegerEnemyDef, aber für die neuen Tiers. Getrennte Funktion, damit
+// kriegerEnemyDef (und alles was daran hängt) unverändert bleibt.
+function kriegerSpecialDef(tier) {
+  if (tier === KRIEGER_CASTLE_WALL.tier) return KRIEGER_CASTLE_WALL;
+  if (tier === KRIEGER_CASTLE_LORD.tier) return KRIEGER_CASTLE_LORD;
+  return KRIEGER_SPECIALISTS.find(s => s.tier === tier)
+      || KRIEGER_GARRISON.find(g => g.tier === tier)
+      || null;
+}
+function kriegerIsSpecialTier(tier) { return !!tier && (tier.startsWith('sp_') || tier.startsWith('burg_')); }
+
+// Kompatibilität mit dem bestehenden Kampf-Prompt (_showKriegerFightPrompt erwartet
+// flavor[] + abilities[]): die neuen Gegner haben je nur EINE Erscheinungsform, deshalb
+// hier einmalig auf die Array-Form normalisiert. Spart einen zweiten, parallelen
+// Kampf-Dialog — der bestehende funktioniert damit unverändert auch für Spezialisten,
+// Garnison, Mauer und Burgherr.
+(function _kriegerNormalizeSpecials() {
+  const all = [...KRIEGER_SPECIALISTS, ...KRIEGER_GARRISON, KRIEGER_CASTLE_WALL, KRIEGER_CASTLE_LORD];
+  for (const e of all) {
+    if (typeof e.flavor === 'string') e.flavor = [e.flavor];
+    if (!Array.isArray(e.flavor)) e.flavor = [`${e.icon} ${e.name}`];
+    if (!Array.isArray(e.abilities)) e.abilities = [null];
+  }
+})();
+
+// kriegerEnemyDef um die neuen Tiers erweitert (Fallback, t1–t4/boss bleiben vorrangig und
+// exakt wie bisher) — dadurch funktionieren Prompt, Statistik und Kampf ohne Sonderweg.
+const _kriegerEnemyDefBase = kriegerEnemyDef;
+kriegerEnemyDef = function (tier) { return _kriegerEnemyDefBase(tier) || kriegerSpecialDef(tier); };
+
+// ── Platzierung auf der Weltkarte (fix aus dem worldSeed) ────────────────────
+// Entscheidung 2026-07-21: alle Spieler einer Gruppe finden dieselben Spezialisten und
+// Burgen an denselben Koordinaten — dadurch sind Ortsangaben im Chat sinnvoll („Nordfeste
+// bei 75/23") und es entsteht ein Wettlauf. Die Sites werden EINMAL pro Seed berechnet.
+//
+// Zwei Fallstricke, die hier abgefangen werden:
+//   a) Der Zielpunkt kann eine Felswand sein → Spiralsuche nach der nächsten freien Wabe.
+//   b) Er kann in einer abgeschlossenen Höhlentasche liegen → nur Felder, die per
+//      Flood-Fill vom Startpunkt aus erreichbar sind, werden akzeptiert. Sonst stünde die
+//      Burg hinter Fels und wäre unerreichbar (das Labyrinth garantiert von Haus aus nur
+//      die Verbindung Start↔Boss).
+let _kriegerReachCache = {};
+function _kriegerReachableMask(worldSeed) {
+  if (_kriegerReachCache[worldSeed]) return _kriegerReachCache[worldSeed];
+  const N = KRIEGER_WORLD;
+  const grid = _kriegerMazeGrid(worldSeed);
+  const seen = new Uint8Array(N * N);
+  const stack = [[KRIEGER_START_X, KRIEGER_START_Y]];
+  seen[KRIEGER_START_Y * N + KRIEGER_START_X] = 1;
+  while (stack.length) {
+    const [x, y] = stack.pop();
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = x + dx, ny = y + dy;
+      if (nx < 0 || ny < 0 || nx >= N || ny >= N) continue;
+      const idx = ny * N + nx;
+      if (seen[idx] || grid[idx] === 1) continue;
+      seen[idx] = 1;
+      stack.push([nx, ny]);
+    }
+  }
+  _kriegerReachCache[worldSeed] = seen;
+  return seen;
+}
+
+// Alle vom Start erreichbaren Felder mit ihrer Ringdistanz — die Kandidatenmenge für
+// Landmarken. WICHTIG (Messung 2026-07-21): im generierten Labyrinth sind nur ~20% der
+// offenen Felder vom Start aus erreichbar (die Höhlen-Generierung verbindet garantiert
+// NUR Start↔Boss, alles andere sind abgeschlossene Taschen). Landmarken deshalb NICHT
+// auf berechnete Himmelsrichtungen setzen — die landen fast immer hinter Fels —, sondern
+// aus dieser Menge auswählen. Sonst wären 9 von 12 Burgen/Spezialisten unerreichbar.
+function _kriegerReachableTiles(worldSeed) {
+  const reach = _kriegerReachableMask(worldSeed);
+  const out = [];
+  for (let y = 2; y < KRIEGER_WORLD - 2; y++) {
+    for (let x = 2; x < KRIEGER_WORLD - 2; x++) {
+      if (!reach[y * KRIEGER_WORLD + x]) continue;
+      if (x === KRIEGER_BOSS_POS.x && y === KRIEGER_BOSS_POS.y) continue;
+      const d = Math.max(Math.abs(x - KRIEGER_START_X), Math.abs(y - KRIEGER_START_Y));
+      if (d < 12) continue; // Startgebiet freihalten
+      out.push({ x, y, d });
+    }
+  }
+  return out;
+}
+
+let _kriegerSiteCache = null;
+function kriegerSpecialSites(worldSeed) {
+  if (_kriegerSiteCache && _kriegerSiteCache.seed === worldSeed) return _kriegerSiteCache.sites;
+  const cand = _kriegerReachableTiles(worldSeed);
+  const chosen = [];
+  const MIN_SEP = 6; // Landmarken sollen nicht aufeinander kleben
+
+  // Bestes erreichbares Feld für eine Wunsch-Distanz: möglichst nah an `targetDist`,
+  // dabei möglichst weit weg von bereits vergebenen Landmarken. Deterministisch
+  // (fester Kandidaten-Durchlauf + seed-abhängiger Mini-Jitter für Gruppenvielfalt).
+  const pick = (targetDist, salt) => {
+    let best = null, bestCost = Infinity;
+    for (const c of cand) {
+      if (c.taken) continue;
+      let nearest = Infinity;
+      for (const s of chosen) {
+        const sep = Math.max(Math.abs(c.x - s.x), Math.abs(c.y - s.y));
+        if (sep < nearest) nearest = sep;
+      }
+      if (nearest < MIN_SEP) continue;
+      const jitter = _tileRng(c.x, c.y, salt, worldSeed)() * 2.5;
+      const cost = Math.abs(c.d - targetDist) - Math.min(nearest, 30) * 0.25 + jitter;
+      if (cost < bestCost) { bestCost = cost; best = c; }
+    }
+    if (best) { best.taken = true; chosen.push(best); }
+    return best;
+  };
+
+  const sites = [];
+  // Spezialisten zuerst (näher am Start), dann die Burgen (weiter draußen) — so bekommen
+  // die knapperen Fernbereiche die Burgen und nicht zufällig ein Spezialist.
+  KRIEGER_SPECIALISTS.forEach((sp, i) => {
+    const p = pick(sp.dist, 6161 + i);
+    if (p) sites.push({ kind: 'specialist', key: `${p.x},${p.y}`, x: p.x, y: p.y, def: sp });
+  });
+  KRIEGER_CASTLES.forEach((c, i) => {
+    const p = pick(c.dist, 6262 + i);
+    if (p) sites.push({ kind: 'castle', key: `${p.x},${p.y}`, x: p.x, y: p.y, def: c, idx: i });
+  });
+
+  _kriegerSiteCache = { seed: worldSeed, sites, map: new Map(sites.map(s => [s.key, s])) };
+  return sites;
+}
+// Steht auf diesem Feld ein Spezialist oder eine Burg? (null = normales Feld)
+function kriegerSiteAt(tx, ty, worldSeed) {
+  kriegerSpecialSites(worldSeed);
+  return _kriegerSiteCache?.map.get(`${tx},${ty}`) || null;
+}
+
+// ── 🔱 Kultur-Siegel ─────────────────────────────────────────────────────────
+// Jeder besiegte Spezialist lässt das Siegel seiner Kultur fallen (dd.seals[culture] = ts).
+function kriegerSeals(dd)      { return dd?.seals || {}; }
+function kriegerSealCount(dd)  { return Object.keys(kriegerSeals(dd)).length; }
+function kriegerHasSeal(dd, c) { return !!kriegerSeals(dd)[c]; }
+
+// ── Gates ────────────────────────────────────────────────────────────────────
+// Einheitliches Ergebnis { ok, reason } — die UI zeigt `reason` VOR dem Kampf an, nie als
+// verlorenen Kampf (Anti-Frust-Regel: der Spieler weiß immer, was ihm konkret fehlt).
+function kriegerSpecialistGate(dd, sp) {
+  const level = dd?.level || 1;
+  if (level < sp.minLevel) return { ok: false, reason: `🔒 ${sp.icon} ${sp.name} — erst ab Stufe ${sp.minLevel} (du bist ${level}).` };
+  if (kriegerActiveSetCulture(dd?.equipped) !== sp.gateCulture) {
+    const cname = KRIEGER_CULTURE_NAMES[sp.gateCulture] || sp.gateCulture;
+    return { ok: false, reason: `${sp.icon} ${sp.gateHint}\n\n🔒 Nötig: komplettes ${cname}-Set (Waffe + Rüstung + Talisman).` };
+  }
+  return { ok: true };
+}
+// Burgmauer: Belagerungswaffe + Siegel fürs Tor.
+function kriegerCastleGate(dd, castle) {
+  const level = dd?.level || 1;
+  if (level < castle.minLevel) return { ok: false, reason: `🔒 ${castle.icon} ${castle.name} — erst ab Stufe ${castle.minLevel} (du bist ${level}).` };
+  // Eigenes Kultur-Siegel zuerst: die Burg einer Kultur öffnet sich erst, wenn ihr
+  // Spezialist gefallen ist (sonst könnte man die Burgen an den Spezialisten vorbeispielen).
+  if (castle.culture && !kriegerHasSeal(dd, castle.culture)) {
+    const sp = KRIEGER_SPECIALISTS.find(s => s.gateCulture === castle.culture);
+    const cname = KRIEGER_CULTURE_NAMES[castle.culture] || castle.culture;
+    return { ok: false, reason: `🔱 Die ${castle.name} öffnet sich nur dem Träger des ${cname}-Siegels.\n\n🔒 Nötig: ${sp ? sp.icon + ' ' + sp.name : 'der Spezialist dieser Kultur'} besiegen.` };
+  }
+  const seals = kriegerSealCount(dd);
+  if (seals < castle.seals) return { ok: false, reason: `🔱 Das Tor der ${castle.name} verlangt ${castle.seals} Kultur-Siegel — du hast ${seals}.\n\nSiegel bekommst du von den 8 Kultur-Spezialisten auf der Karte.` };
+  const siege = kriegerSiegeLevel(dd);
+  if (siege < castle.siege) {
+    const need = KRIEGER_ITEMS.find(i => i.slot === KRIEGER_SIEGE_SLOT && i.siege === castle.siege);
+    return { ok: false, reason: `🧱 Diese Mauer hältst du mit bloßen Händen nicht auf.\n\n🔒 Nötig: ${need ? need.icon + ' ' + need.name : 'Belagerungsstufe ' + castle.siege} (Krieger-Shop).` };
+  }
+  return { ok: true };
+}
+// Burgherr: JEDES Ausrüstungsteil besitzen (User-Wunsch 2026-07-21) — die Kern-Sets
+// (Waffe+Rüstung+Talisman) aller 8 Kulturen plus die Belagerungswaffe der Burg.
+function kriegerLordGate(dd, castle) {
+  const owned = dd?.owned || {};
+  const missing = [];
+  for (const culture of Object.keys(KRIEGER_CULTURE_NAMES)) {
+    if (culture === 'belagerung') continue;
+    const need = ['weapon', 'armor', 'talisman'].some(slot =>
+      !KRIEGER_ITEMS.some(i => i.culture === culture && i.slot === slot && owned[i.key]));
+    if (need) missing.push(KRIEGER_CULTURE_NAMES[culture] || culture);
+  }
+  if (missing.length) {
+    return { ok: false, reason: `👑 Der Burgherr empfängt nur, wer die ganze Welt bereist hat.\n\n🔒 Es fehlt noch Ausrüstung aus: ${missing.join(', ')}.` };
+  }
+  return { ok: true };
 }
 
 // ── Stufen/EP ──────────────────────────────────────────────────────────────────
@@ -785,8 +1226,15 @@ function kriegerXpForLevel(level) { return 50 + 40 * level; }
 // Gespeichert in dd.steps_extra_date (Tages-Key) + dd.steps_extra_count (0..3). Tages-Reset
 // implizit über Datumsvergleich. Fließt über kriegerExtraStepBonus in kriegerStepsAllowed.
 const KRIEGER_EXTRA_STEPS     = 5;
-const KRIEGER_EXTRA_STEP_COST = 10;
+const KRIEGER_EXTRA_STEP_COST = 10;   // Basis/Fallback (Stufe 5) — siehe kriegerExtraStepCost
 const KRIEGER_EXTRA_STEP_MAX  = 3;
+// Regeländerung 2026-07-21 (User: „Schrittkosten immer das Doppelte des Levels, dann ist es
+// fair"): der Zukauf kostete bisher PAUSCHAL 10 CC — für Stufe 2 spürbar, für Stufe 60 nichts.
+// Jetzt skaliert er mit der Stufe: Kosten = Level × 2 CC.
+//   Vorher: Stufe 5 → 10 CC · Stufe 30 → 10 CC · Stufe 60 → 10 CC
+//   Nachher: Stufe 5 → 10 CC · Stufe 30 → 60 CC · Stufe 60 → 120 CC
+// Minimum 2 CC (Stufe 1), damit der Einstieg nicht gratis wird.
+function kriegerExtraStepCost(level) { return Math.max(2, (level || 1) * 2); }
 // Volle Erholung: HP sofort auf 100 % für 60 CC (Alternative zu Cold Brew / „morgen wieder").
 const KRIEGER_FULL_HEAL_COST  = 60;
 function kriegerExtraStepsBought(dd) {
@@ -823,7 +1271,8 @@ function kriegerCanStep(tx, ty, dd, worldSeed) {
   if (kriegerStepsLeft(dd) <= 0) return false;
   if (kriegerIsExplored(tx, ty, dd)) return false;
   if (tx < 0 || tx >= KRIEGER_WORLD || ty < 0 || ty >= KRIEGER_WORLD) return false;
-  if (kriegerIsWall(tx, ty, worldSeed)) return false; // Felswand — Labyrinth-Begrenzung
+  // Aufgesprengte Wände (dd.brokenWalls) sind begehbar → dd-bewusste Variante.
+  if (kriegerIsWallFor(dd, tx, ty, worldSeed)) return false; // Felswand — Labyrinth-Begrenzung
   // Drachenhöhle bleibt versiegelt bis Stufe 80 — "erreichbar" heißt hier wörtlich:
   // man kann nicht einmal HINLAUFEN, nicht nur "nicht kämpfen".
   if (tx === KRIEGER_BOSS_POS.x && ty === KRIEGER_BOSS_POS.y && (dd?.level || 1) < KRIEGER_BOSS_MIN_LEVEL) return false;
@@ -871,7 +1320,7 @@ function kriegerRepairCost(dd, key) {
 function kriegerExploreTile(tx, ty, dd, worldSeed) {
   // Defensiv: eine Felswand kann eigentlich nie hier ankommen (kriegerCanStep blockt das
   // schon in der UI), aber falls doch — unverändert zurückgeben statt einen Stein "begehbar" zu machen.
-  if (kriegerIsWall(tx, ty, worldSeed)) return { newDungeonData: dd, gimmick: null, encounter: null };
+  if (kriegerIsWallFor(dd, tx, ty, worldSeed)) return { newDungeonData: dd, gimmick: null, encounter: null };
 
   const today = _kriegerTodayKey();
   const stepsUsed = kriegerStepsUsed(dd);
@@ -880,7 +1329,13 @@ function kriegerExploreTile(tx, ty, dd, worldSeed) {
   let gimmick = null, encounter = null;
 
   const isBossTile = tx === KRIEGER_BOSS_POS.x && ty === KRIEGER_BOSS_POS.y;
-  if (isBossTile) {
+  // Spezialisten-/Burgfelder (2026-07-21) tragen NIE einen Zufallsgegner oder Fund: das
+  // Betreten deckt die Landmarke nur auf, der Kampf startet erst durch Antippen (sonst
+  // stolperte man ungewollt in einen gegateten Endgame-Kampf, während man nur läuft).
+  const _site = (typeof kriegerSiteAt === 'function') ? kriegerSiteAt(tx, ty, worldSeed) : null;
+  if (_site) {
+    // kein encounter, kein gimmick — bewusst leer
+  } else if (isBossTile) {
     encounter = { tier: 'boss', flavorIdx: 0 };
   } else {
     const dist = Math.max(Math.abs(tx - KRIEGER_START_X), Math.abs(ty - KRIEGER_START_Y));
@@ -1030,7 +1485,7 @@ function kriegerRender(canvas, dd, worldSeed, vpX, vpY) {
   // Wand ODER versiegelte Drachenhöhle (vor Stufe 80 optisch Fels — kein Spoiler)
   const isWallLike = (wx, wy) => {
     if (wx === KRIEGER_BOSS_POS.x && wy === KRIEGER_BOSS_POS.y && level < KRIEGER_BOSS_MIN_LEVEL) return true;
-    return kriegerIsWall(wx, wy, worldSeed);
+    return kriegerIsWallFor(dd, wx, wy, worldSeed);
   };
 
   // Hintergrund (außerhalb der Welt): unverändert fast schwarz
@@ -1229,8 +1684,13 @@ function kriegerRender(canvas, dd, worldSeed, vpX, vpY) {
     if (isBoss) {
       ctx.font = `${Math.floor(T * 0.7)}px sans-serif`;
       ctx.fillText('🐉', t.px + 2, t.py + T - 3);
-    } else if (encounters[key]) {
-      // Respawn (2026-07-15): besiegte, noch nicht regenerierte Gegner nur schwach andeuten.
+    } else if (encounters[key] && !(typeof kriegerEnemyPermaDead === 'function' && kriegerEnemyPermaDead(dd, key))) {
+      // Endgültig besiegte Gegner werden GAR NICHT mehr gezeichnet (Entscheidung 2026-07-21:
+      // „kann man den permaDead einfach entfernen, war schon so") — das Feld sieht wieder aus
+      // wie vor dem Respawn-Umbau. Der Zweig hier greift nur noch für aktive Gegner und für
+      // besiegte, die beim nächsten Tick zurückkehren (schwach angedeutet).
+      // Altbestand: Felder mit permaDead-Flag UND noch vorhandenem encounters-Eintrag fallen
+      // durch die Prüfung oben ebenfalls raus, ohne dass Daten migriert werden müssen.
       const _cd = (typeof kriegerEnemyOnCooldown === 'function') && kriegerEnemyOnCooldown(dd, key);
       if (_cd) ctx.globalAlpha = 0.28;
       ctx.font = `${Math.floor(T * 0.6)}px sans-serif`;
@@ -1267,6 +1727,37 @@ function kriegerRender(canvas, dd, worldSeed, vpX, vpY) {
       ctx.globalAlpha = 0.55;
       ctx.font = `${Math.floor(T * 0.7)}px sans-serif`;
       ctx.fillText('🐉', t.px + 2, t.py + T - 3);
+      ctx.globalAlpha = 1.0;
+    }
+  }
+
+  // ── Pass 5d: 🔱 Spezialisten & 🏰 Burgen (2026-07-21) ─────────────────────────
+  // Landmarken. Sie stehen an FESTEN Orten und werden deshalb — anders als
+  // Zufallsgegner — auch durch den Nebel angedeutet: sie sind Questziele, die man
+  // ansteuern können muss, nicht Überraschungen, die man zufällig findet. Auf
+  // erkundetem Boden voll sichtbar, im Nebel gedimmt (wie das Bossfeld darüber).
+  // Zuletzt gezeichnet → liegen immer über Gegner-/Fund-Icons desselben Feldes.
+  if (typeof kriegerSiteAt === 'function') {
+    for (const t of [...floorTiles, ...fogTiles]) {
+      const site = kriegerSiteAt(t.wx, t.wy, worldSeed);
+      if (!site) continue;
+      const isFog = !explored[`${t.wx},${t.wy}`];
+      let icon = site.def.icon, alpha = isFog ? 0.5 : 1.0;
+      if (site.kind === 'castle') {
+        // Erobert → 🚩 Fahne statt Burg (klar unterscheidbar, „das ist erledigt").
+        if (typeof kriegerCastleTaken === 'function' && kriegerCastleTaken(dd, site.def.key)) {
+          icon = '🚩'; alpha = isFog ? 0.4 : 0.75;
+        }
+      } else if (typeof kriegerHasSeal === 'function' && kriegerHasSeal(dd, site.def.gateCulture)) {
+        icon = '🔱'; alpha = isFog ? 0.4 : 0.7; // Siegel geholt → Spezialist erledigt
+      }
+      // Dezenter Sockel, damit die Landmarke sich vom Untergrund abhebt
+      ctx.globalAlpha = isFog ? 0.25 : 0.4;
+      ctx.fillStyle = site.kind === 'castle' ? 'rgba(250,199,117,.5)' : 'rgba(180,220,255,.45)';
+      ctx.fillRect(t.px + 1, t.py + 1, T - 2, T - 2);
+      ctx.globalAlpha = alpha;
+      ctx.font = `${Math.floor(T * (site.kind === 'castle' ? 0.78 : 0.66))}px sans-serif`;
+      ctx.fillText(icon, t.px + 1, t.py + T - 2);
       ctx.globalAlpha = 1.0;
     }
   }

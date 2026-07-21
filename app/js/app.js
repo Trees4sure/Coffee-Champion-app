@@ -586,12 +586,30 @@ function renderLeaderboard() {
 // 2026-07-12: Version gebumpt für den Kaffee-Krieger-Umbau. Die 5 bisherigen Einträge BLEIBEN
 // bewusst erhalten (Nachzügler, die das vorige Popup nie gesehen haben, verlieren sie sonst —
 // whatsNewSeen merkt sich nur EINE Version). Wer die 5 schon kannte, sieht sie einmal erneut + Krieger.
-const WHATS_NEW_VERSION = '2026-07-18-cafe2';
-// Go-Live-Zeitpunkt (LOKALE Zeit, ISO ohne "Z" → wird als Ortszeit interpretiert):
-// JP 2026-07-17: Café 2.0 erst MORGEN 18.07. um 15:00 ankündigen. Alte Einträge raus.
-const WHATS_NEW_GO_LIVE = new Date('2026-07-18T15:00:00');
-// WHATS_NEW_ITEMS: nur Café 2.0. Kaffee-Garten entfernt (Feature komplett zurückgebaut). Rest bewusst entfernt (JP).
+// 2026-07-21: Version gebumpt für die Krieger-Endgame-Erweiterung (Spezialisten/Burgen/
+// Werkzeug). Der Café-2.0-Eintrag BLEIBT bewusst stehen — whatsNewSeen merkt sich nur EINE
+// Version, Nachzügler würden ihn sonst nie sehen (gleiche Begründung wie beim Krieger-Umbau
+// am 12.07.). Wer Café 2.0 schon kannte, sieht ihn einmal erneut zusammen mit dem Neuen.
+const WHATS_NEW_VERSION = '2026-07-21-krieger-burgen';
+// Go-Live-Zeitpunkt (LOKALE Zeit, ISO ohne "Z" → wird als Ortszeit interpretiert).
+// ⚠️ ANPASSEN, falls der Upload später erfolgt — davor bleibt das Popup still.
+const WHATS_NEW_GO_LIVE = new Date('2026-07-22T15:00:00');
 const WHATS_NEW_ITEMS = [
+  {
+    icon: '🔱',
+    title: 'Neu: Kultur-Spezialisten & 8 Burgen im Kaffee-Krieger',
+    text: 'Der Dungeon bekommt ein Endgame. Überall in der Höhle stehen jetzt 8 Kultur-Spezialisten — vom 🛡️ Panzer-Perkolator über das 🐙 Seeungeheuer bis zum 👻 Geisterritter. Jeder ist NUR mit dem passenden Kultur-Set zu schlagen: gegen die Panzerung des Perkolators hilft ausschließlich der Rüstungsdurchschlag des Mittelalter-Sets, den Steppenreiter holt nur die Leichtfüßigkeit des Steppen-Sets ein. Was dir fehlt, wird dir vor dem Kampf angezeigt — du läufst nie blind in eine Niederlage. Endlich lohnen sich damit alle acht Sets, auch Handel, Späher und Freibeuter. Jeder besiegte Spezialist lässt sein 🔱 Kultur-Siegel fallen, und die Siegel öffnen die Tore von 8 neuen Burgen: erst die 🧱 Mauer mit einer Belagerungswaffe brechen, dann im ⬡ Burghof eine ganze Garnison aus Söldnern, Bogenschützen und Röstmagiern Wabe für Wabe räumen — und ganz zum Schluss wartet der 👑 Burgherr, der nur den empfängt, der die Ausrüstung aller acht Kulturen besitzt. Wer alle 8 Burgen einnimmt, wird 🏰 Eroberer der Kulturen.'
+  },
+  {
+    icon: '🔩',
+    title: 'Neu: Kaffeebohrer & Kaffeegranate — sprengt euch neue Gebiete auf',
+    text: 'Ihr habt es gemerkt: Ein großer Teil der Höhle liegt hinter massivem Fels und war schlicht nicht erreichbar. Dafür gibt es jetzt Werkzeug im Krieger-Shop. Der 🔩 Kaffeebohrer (250 CC) bricht eine einzelne Felswand auf, die 💣 Kaffeegranate (600 CC) sprengt gleich ein 3×3-Feld weg und öffnet ganze Gänge. Tippt dazu im Dungeon einfach auf eine Felswand direkt neben euch — vor dem Einsatz seht ihr, wie viele Felder das jeweilige Werkzeug hier tatsächlich freilegt. Beide sind Verbrauchsgüter: einmal gezündet, sind sie weg. Dafür bleiben eure Durchbrüche dauerhaft bestehen.'
+  },
+  {
+    icon: '👣',
+    title: 'Regeländerung: Schritte-Zukauf kostet jetzt Stufe × 2',
+    text: 'Der Zukauf von +5 Dungeon-Schritten kostete bisher pauschal 10 CC — für einen Anfänger spürbar, für einen Krieger auf Stufe 60 praktisch geschenkt. Ab sofort richtet sich der Preis nach eurer Stufe: Stufe × 2 CC. Auf Stufe 5 zahlt ihr also unverändert 10 CC, auf Stufe 30 sind es 60 CC. Weiterhin maximal 3× pro Tag.'
+  },
   {
     icon: '☕',
     title: 'Neu: Dein Café als eigene Filiale + 6 Café-Stile',
