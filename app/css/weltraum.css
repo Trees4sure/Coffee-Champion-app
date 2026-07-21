@@ -114,7 +114,8 @@
   border: 1px solid #2a3660; border-radius: 12px; overflow: hidden; }
 .wr-lb-art img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .wr-lb-fb { font-size: 4rem; }
-.wr-lb-art img + .wr-lb-fb { display: none; }
+.wr-lb-fb { display: none; }
+.wr-art-fail .wr-lb-fb { display: inline-flex; }
 .wr-lb-title { font-size: 1.05rem; font-weight: 700; color: #dce6ff; margin-bottom: 4px; }
 .wr-lb-desc { font-size: .8rem; color: #8b9ac4; line-height: 1.5; margin-bottom: 12px; }
 .wr-lb-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 4px; }
@@ -136,7 +137,8 @@
   background: radial-gradient(circle at 50% 45%, #1d2a55 0%, #0a0e1c 70%); border: 1px solid #2a3660; }
 .wr-hafen-art img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .wr-hafen-fb { font-size: 2rem; }
-.wr-hafen-art img + .wr-hafen-fb { display: none; }
+.wr-hafen-fb { display: none; }
+.wr-art-fail .wr-hafen-fb { display: inline-flex; }
 .wr-hafen-power { font-size: .88rem; color: #dce6ff; margin-bottom: 4px; }
 .wr-hafen-power strong { color: #ffd15c; }
 .wr-hafen-info .wr-btn { margin-top: 8px; }
@@ -149,7 +151,8 @@
   display: flex; align-items: center; justify-content: center; }
 .wr-slot-art img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .wr-slot-fb { font-size: 1.6rem; }
-.wr-slot-art img + .wr-slot-fb { display: none; }
+.wr-slot-fb { display: none; }
+.wr-art-fail .wr-slot-fb { display: inline-flex; }
 .wr-slot-name { font-size: .76rem; color: #c3cfee; font-weight: 600; margin-bottom: 3px; }
 .wr-slot-atk { font-size: .8rem; color: #ffd15c; font-weight: 700; margin-bottom: 7px; }
 .wr-slot-max { font-size: .7rem; color: #7ad48a; }
@@ -162,7 +165,8 @@
   align-items: center; justify-content: center; cursor: zoom-in; }
 .wr-slot-opt-art img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .wr-slot-opt-fb { font-size: 1.4rem; }
-.wr-slot-opt-art img + .wr-slot-opt-fb { display: none; }
+.wr-slot-opt-fb { display: none; }
+.wr-art-fail .wr-slot-opt-fb { display: inline-flex; }
 .wr-slot-opt-txt { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .wr-slot-opt-n { font-size: .76rem; font-weight: 600; }
 .wr-slot-opt-a { font-size: .72rem; color: #ffd15c; }
@@ -181,7 +185,8 @@
   align-items: center; justify-content: center; }
 .wr-fl-art img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .wr-fl-fb { font-size: 1.1rem; }
-.wr-fl-art img + .wr-fl-fb { display: none; }
+.wr-fl-fb { display: none; }
+.wr-art-fail .wr-fl-fb { display: inline-flex; }
 .wr-fl-name { font-size: .76rem; color: #c3cfee; }
 .wr-fl-n { font-size: .8rem; font-weight: 700; color: #dce6ff; }
 .wr-fl-atk { font-size: .72rem; color: #ffd15c; min-width: 54px; text-align: right; }
@@ -282,7 +287,8 @@
   align-items: center; justify-content: center; }
 .wr-wave-art img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .wr-wave-fb { font-size: 1.7rem; }
-.wr-wave-art img + .wr-wave-fb { display: none; }
+.wr-wave-fb { display: none; }
+.wr-art-fail .wr-wave-fb { display: inline-flex; }
 .wr-wave-title { font-size: .9rem; font-weight: 700; color: #ffdede;
   display: flex; flex-direction: column; line-height: 1.35; }
 .wr-wave-ok .wr-wave-title { color: #d5f0dc; }
@@ -310,7 +316,8 @@
   justify-content: center; width: 40px; height: 40px; flex: 0 0 auto; }
 .wr-foe img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .wr-foe-fb { font-size: 1.3rem; }
-.wr-foe img + .wr-foe-fb { display: none; }
+.wr-foe-fb { display: none; }
+.wr-art-fail .wr-foe-fb { display: inline-flex; }
 .wr-foe-lg { width: 72px; height: 72px; }
 .wr-foe-lg .wr-foe-fb { font-size: 2.2rem; }
 .wr-planet-head { display: flex; align-items: center; gap: 11px; margin-bottom: 10px; }
@@ -327,7 +334,8 @@
   align-items: center; justify-content: center; }
 .wr-rung-art img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .wr-rung-fb { font-size: 1.5rem; }
-.wr-rung-art img + .wr-rung-fb { display: none; }
+.wr-rung-fb { display: none; }
+.wr-art-fail .wr-rung-fb { display: inline-flex; }
 .wr-rung-lv { font-size: .74rem; font-weight: 700; color: #dce6ff; }
 .wr-rung-sl { font-size: .66rem; color: #8b9ac4; }
 .wr-rung-st { font-size: .64rem; color: #7f8fbb; }
@@ -342,7 +350,8 @@
   justify-content: center; width: 22px; height: 22px; vertical-align: -5px; }
 .wr-mini img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .wr-mini-fb { font-size: .95rem; }
-.wr-mini img + .wr-mini-fb { display: none; }
+.wr-mini-fb { display: none; }
+.wr-art-fail .wr-mini-fb { display: inline-flex; }
 .wr-mini-md { width: 32px; height: 32px; }
 .wr-mini-md .wr-mini-fb { font-size: 1.15rem; }
 .wr-fs-ic { display: flex; align-items: center; justify-content: center; }
@@ -354,7 +363,8 @@
   align-items: center; justify-content: center; }
 .wr-werft-art img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .wr-werft-fb { font-size: 2rem; }
-.wr-werft-art img + .wr-werft-fb { display: none; }
+.wr-werft-fb { display: none; }
+.wr-art-fail .wr-werft-fb { display: inline-flex; }
 .wr-werft-head .wr-card-title { margin-bottom: 2px; }
 
 /* ── Laufender Bauauftrag in der Werft ────────────────────────────────────── */
@@ -385,7 +395,13 @@
   justify-content: center; width: 1em; height: 1em; vertical-align: -0.13em; }
 .wr-ic img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .wr-ic-fb { font-size: .95em; line-height: 1; }
-.wr-ic img + .wr-ic-fb { display: none; }
+/* Rückfall an den LADE-ERFOLG knüpfen, nicht an die Anwesenheit des <img>.
+   Vorher: `.wr-ic img + .wr-ic-fb { display:none }` — das versteckte das Emoji auch
+   dann, wenn das Bild nie geladen hatte und `onerror` nicht feuerte. Ergebnis waren
+   leere Kästchen ohne jeden Inhalt (JP: „nur leere Kreise"). */
+.wr-ic-fb { display: none; }
+.wr-art-fail .wr-ic-fb { display: inline-flex; }
+.wr-ic img { min-width: 0; }
 
 /* Fundstück (gekapertes Schiff / geborgenes Wrack) im Rückkehr-Report */
 .wr-rep-found { display: flex; align-items: center; justify-content: center; gap: 8px;
@@ -405,3 +421,84 @@
 
 /* Wrack-Bergung (endliches, geteiltes Feld) */
 .wr-routebox-wreck { border-color: #6b4a2a; background: #1b1510; }
+
+/* ── Gegner-Verband (Rollen, 21j) ─────────────────────────────────────────── */
+.wr-foecomp { margin-top: 8px; padding: 9px 10px; border-radius: 9px;
+  background: rgba(120,150,255,.07); border: 1px solid rgba(140,170,255,.18); }
+.wr-foecomp-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.wr-foe-chip { display: inline-flex; align-items: center; gap: 5px; font-size: .74rem;
+  padding: 3px 8px; border-radius: 999px; background: rgba(255,255,255,.06); }
+.wr-foe-chip strong { color: #dce6ff; }
+
+/* Icons in der Zoom-Ansicht (Bugfix JP 2026-07-21): `.wr-lb-stats span` ist ein
+   Flex-COLUMN — darin wurde das 1em-Icon auf die volle Spaltenbreite gestreckt und
+   das Bild verschwand im Container („leere Kreise"). Emoji waren nicht betroffen,
+   weil sie Text sind. Merke: ein inline-flex-Icon in einem Flex-Column-Container
+   braucht immer flex/align-self, sonst greift align-items:stretch. */
+/* ⚠️ DIE URSACHE DER „LEEREN KREISE" (JP 2026-07-21, per Screenshot gefunden):
+   `.wr-lb-stats span` weiter oben trifft JEDEN Span in der Kachel — also auch
+   `<span class="wr-ic">` und `<span class="wr-ic-fb">`. Beide erbten dadurch
+   background/border/border-radius/padding der Kachel: ein 1.35em grosses Kaestchen
+   mit Rand (sieht rund aus) UND einem Padding, das den Inhaltsbereich auf 0 drueckt
+   — weder Bild noch Emoji waren sichtbar. Die funktionierenden Icons (💰🔷🛡️) sind
+   reiner TEXT, kein Span, und blieben deshalb verschont.
+   Merke: ein Element-Selektor wie `.container span` erwischt auch alles, was spaeter
+   an Icon-Huellen hineingerendert wird. Deshalb hier explizit zuruecksetzen. */
+.wr-lb-stats .wr-ic,
+.wr-lb-stats .wr-ic-fb {
+  background: none; border: 0; border-radius: 0; padding: 0; box-shadow: none;
+}
+.wr-lb-stats .wr-ic { display: inline-flex; flex: 0 0 auto; align-self: flex-start;
+  width: 1.35em; height: 1.35em; margin-bottom: 1px; }
+.wr-lb-stats .wr-art-fail .wr-ic-fb { font-size: 1.15em; line-height: 1; }
+/* Rueckfall auch hier default AUS. Historie: eine fruehere Fassung blendete ihn per
+   `display:inline` ein und schlug dabei die Ausblend-Regel (Gleichstand 0,2,0, spaetere
+   Regel gewinnt) — Bild UND Emoji waren sichtbar. Merke: wer `display` in einem
+   Container ueberschreibt, muss die zugehoerige Zustands-Regel mit-erhoehen. */
+.wr-lb-stats .wr-ic-fb { display: none; }
+.wr-art-fail .wr-ic-fb { display: inline-flex; }
+.wr-lb-stats strong .wr-ic { align-self: center; width: 1em; height: 1em;
+  vertical-align: -0.13em; }
+
+/* Alle Emoji-Rückfälle sind default AUS und erscheinen nur bei `.wr-art-fail`
+   (gesetzt von onerror). Siehe Kommentar am Dateiende. */
+
+/* ── Kein Aufflackern beim Neu-Rendern (JP 2026-07-21) ─────────────────────
+   Vorher blendete `onload` das Emoji AUS, sobald das Bild geladen war. Beim
+   Neuaufbau eines Panels (z.B. Stückzahl im Werftauftrag ändern) war das Emoji
+   dadurch für einen Frame sichtbar — der „aufflackernde Baukran".
+   Jetzt ist der Rückfall grundsätzlich aus und erscheint NUR, wenn `onerror`
+   feuert. Das ist zulässig, weil die „leeren Kreise" nachweislich NICHT an
+   einem fehlenden onerror lagen, sondern am vererbten Padding (siehe oben).
+   Merke: ein Zustand, der beim Rendern kurz falsch ist, wird als Flackern
+   sichtbar — den seltenen Fall zum Sonderfall machen, nicht den Normalfall. */
+
+/* ── 🔬 Forschungsbaum ─────────────────────────────────────────────────────── */
+.wr-tech-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 10px; margin-top: 10px; }
+.wr-tech-ast { background: rgba(120,150,255,.06); border: 1px solid rgba(140,170,255,.16);
+  border-radius: 10px; padding: 9px; }
+.wr-tech-ast-soon { opacity: .65; }
+.wr-tech-ast-head { font-size: .8rem; font-weight: 700; color: #dce6ff; margin-bottom: 7px; }
+.wr-tech-node { display: flex; align-items: center; gap: 8px; padding: 6px 4px;
+  border-top: 1px solid rgba(255,255,255,.06); }
+.wr-tech-node:first-of-type { border-top: 0; }
+.wr-tech-txt { display: flex; flex-direction: column; gap: 1px; flex: 1 1 auto; min-width: 0; }
+.wr-tech-txt strong { font-size: .78rem; color: #dce6ff; }
+.wr-tech-act { flex: 0 0 auto; font-size: .7rem; text-align: right; }
+.wr-tech-ok   { color: #7ad48a; font-weight: 700; }
+.wr-tech-soon { color: #7f8fbb; font-style: italic; }
+.wr-tech-lock { color: #8b9ac4; }
+.wr-tech-poor { color: #e0795a; }
+.wr-tech-owned { opacity: .8; }
+
+/* ── Untertabs + fester Kopf (JP 2026-07-22) ───────────────────────────────── */
+.wr-sticky { position: sticky; top: 0; z-index: 20; padding-top: 4px;
+  background: linear-gradient(180deg, #0b1020 78%, rgba(11,16,32,0)); }
+.wr-tabs { display: flex; gap: 6px; margin: 8px 0 10px; }
+.wr-tab { flex: 1 1 0; min-width: 0; padding: 8px 6px; border-radius: 9px;
+  border: 1px solid #24305a; background: #101733; color: #8b9ac4;
+  font-size: .78rem; font-weight: 600; cursor: pointer; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; }
+.wr-tab.active { background: #1d2a55; border-color: #4d7fd4; color: #dce6ff; }
+@media (max-width: 430px) { .wr-tab-l { display: none; } .wr-tab { font-size: 1rem; } }
