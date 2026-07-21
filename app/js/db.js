@@ -2533,6 +2533,22 @@ const DB = (() => {
   }
 
   // ── Weltraum P2: KI-Angriffswellen + Hilferufe ────────────────────────────
+  // 🔬 Weltraum-Technik kaufen. Kosten/Voraussetzung rechnet der SERVER
+  // (buy_space_tech) — der Client schickt nur den Schlüssel.
+  async function buySpaceTech(memberId, tech) {
+    try {
+      const { data, error } = await _sb.rpc('buy_space_tech', { p_member_id: memberId, p_tech: tech });
+      if (error) return { error: error.message };
+      if (data && data.ok && (data.cc || 0) > 0) {
+        try {
+          await appendTodayLogFresh(memberId, [{ label: `🔬 Weltraum-Technik: ${tech}`,
+            amount: -data.cc, cat: 'weltraum', detail: 'Forschungsbaum', invest: true }]);
+        } catch (e) {}
+      }
+      return data || {};
+    } catch (e) { return { error: e.message }; }
+  }
+
   async function ensureSpaceWave(memberId) {
     try {
       if (!_groupId) return { error: 'no_group' };
@@ -2718,7 +2734,7 @@ const DB = (() => {
     openCafe, buyCafeItem, claimCafe, setCafeBeans, depositCafe, setCafePolicy, setCafeStil, claimCafeTask, unlockCafeRecipe,
     ensureGalaxy, fetchGalaxy, saveSpace, buildSpace, buildSpaceDefense,
     startSpaceTrip, recallSpaceTrip, claimSpaceArrival, harvestSpace, claimSpaceBuild, buildSpaceCart, setSpaceRoute,
-    ensureSpaceWave, fetchSpaceWaves, fetchSpaceHelp,
+    buySpaceTech, ensureSpaceWave, fetchSpaceWaves, fetchSpaceHelp,
     requestSpaceHelp, sendSpaceHelp, resolveSpaceWave,
   };
 })();

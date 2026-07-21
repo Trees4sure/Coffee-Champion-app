@@ -37,8 +37,224 @@ const SPACE_SHIPS = [
     needs:'wt_frachtmodule', desc:'Holt mehr aus Wracks — im Kampf und an befreiten Planeten' },
   { key:'kolonie', buildMin:90, art:'ship_kolonie', icon:'🛸', name:'Kolonieschiff',   atk:0,  mine:0, cc:4000, erz:40, kristall:10,
     needs:'wt_frachtmodule', desc:'Gründet eine Kolonie — bleibt am Zielplaneten' },
+  { key:'fregatte', buildMin:40, art:'ship_fregatte', icon:'🛡️', name:'Fregatte', atk:28, mine:0, cc:2800, erz:30, kristall:0,
+    needs:'wt_frachtmodule', desc:'Leichter Begleitschutz — Schild senkt die Verluste des ganzen Verbands' },
+  { key:'kreuzer', buildMin:70, art:'ship_kreuzer', icon:'🚨', name:'Kreuzer', atk:65, mine:0, cc:6000, erz:80, kristall:10,
+    needs:'wt_frachtmodule', desc:'Kapitalschiff-Jäger: stark gegen schwere Gegner, träge gegen Schwärme' },
+  { key:'bomber', buildMin:100, art:'ship_bomber', icon:'💣', name:'Bomber', atk:90, mine:0, cc:9000, erz:120, kristall:25,
+    needs:'wt_frachtmodule', desc:'Überall stark, gegen Geschütze verheerend' },
+  { key:'schlachtschiff', buildMin:150, art:'ship_schlachtschiff', icon:'⚔️', name:'Schlachtschiff', atk:180, mine:0, cc:18000, erz:250, kristall:60,
+    needs:'wt_frachtmodule', desc:'Überall stark, hoher Schild — das Rückgrat einer großen Flotte' },
+  { key:'dunkle_roestung', buildMin:240, art:'ship_dunkle_roestung', icon:'🌑', name:'Dunkle Röstung', atk:320, mine:0, cc:35000, erz:500, kristall:150,
+    needs:'wt_frachtmodule', desc:'Elite-Kapitalschiff: überall stark, höchster Schild, enormer Preis' },
 ];
 const SPACE_SHIP_BY_KEY = SPACE_SHIPS.reduce((m, s) => (m[s.key] = s, m), {});
+
+// ── 🔬 Weltraum-Technik (Spiegel von migration_2026-07-21k/l) ────────────────
+// ⚠️ CLIENT-SYNC-PFLICHT: Kosten, Ketten und Effekte stehen identisch in
+// _space_tech_def() und den _space_tech_*-Funktionen. Weicht eine Zahl ab, zeigt
+// die Vorschau etwas anderes an, als der Server rechnet.
+//
+// `live:false` = Effekt ist serverseitig NOCH NICHT eingehängt. Solche Techniken
+// sind bewusst NICHT kaufbar — lieber sichtbar „in Vorbereitung" als 25.000 CC für
+// nichts. Ast A ist verdrahtet (21l), B/C/D folgen.
+const SPACE_TECH_ASTE = [
+  { key:'a', icon:'🚀', name:'Antrieb & Hülle',        art:'base_werft_2',        live:true  },
+  { key:'b', icon:'🛡️', name:'Bewaffnung',             art:'turret_plasma',       live:true  },
+  { key:'c', icon:'⛏️', name:'Schürftechnik',          art:'base_erzraffinerie',  live:true  },
+  { key:'d', icon:'🏭', name:'Raffinerie & Logistik',  art:'base_kristallreactor', live:true  },
+];
+const SPACE_TECH = [
+  // Ast A — verdrahtet
+  { key:'wt_a3', ast:'a', stufe:3, name:'Warp-Kessel',    cc:25000, erz:150, kristall:40,  requires:null,
+    wirkung:'Flugzeit −25 %',            art:'base_werft_2', live:true },
+  { key:'wt_a4', ast:'a', stufe:4, name:'Orbitalwerft',   cc:40000, erz:250, kristall:80,  requires:'wt_a3',
+    wirkung:'Bauzeit −15 %',             art:'base_werft_3', live:true },
+  { key:'wt_a5', ast:'a', stufe:5, name:'Dunkle Materie', cc:65000, erz:400, kristall:150, requires:'wt_a4',
+    wirkung:'Flugzeit weitere −25 %',    art:'ship_dunkle_roestung', live:true },
+  // Ast B — noch nicht verdrahtet
+  { key:'wt_b1', ast:'b', stufe:1, name:'Bohnen-Railgun',       cc:8000,  erz:40,  kristall:0,   requires:null,   wirkung:'Geschütz-Feuerkraft +15 %',      art:'turret_railgun',     live:true },
+  { key:'wt_b2', ast:'b', stufe:2, name:'Koffein-Laser',        cc:15000, erz:80,  kristall:15,  requires:'wt_b1', wirkung:'Flotten-Kampfkraft +10 %',       art:'turret_laser',       live:true },
+  { key:'wt_b3', ast:'b', stufe:3, name:'Plasma-Kanone',        cc:25000, erz:150, kristall:40,  requires:'wt_b2', wirkung:'Kampfverluste −15 %',            art:'turret_plasma',      live:true },
+  { key:'wt_b4', ast:'b', stufe:4, name:'EMP-Espresso',         cc:40000, erz:250, kristall:80,  requires:'wt_b3', wirkung:'Hinterhalte halb so oft',        art:'foe_pirat',          live:true },
+  { key:'wt_b5', ast:'b', stufe:5, name:'Singularitätswerfer',  cc:65000, erz:400, kristall:150, requires:'wt_b4', wirkung:'Geschütze +40 %, Reparatur 4 h', art:'turret_singularity', live:true },
+  // Ast C
+  { key:'wt_c2', ast:'c', stufe:2, name:'Tiefenscanner',    cc:15000, erz:80,  kristall:15,  requires:null,   wirkung:'Abbau +15 %',            art:'ic_mine',            live:true },
+  { key:'wt_c3', ast:'c', stufe:3, name:'Plasma-Bohrkopf',  cc:25000, erz:150, kristall:40,  requires:'wt_c2', wirkung:'Dauerernte +25 %',       art:'base_erzraffinerie', live:true },
+  { key:'wt_c4', ast:'c', stufe:4, name:'Schürfdrohnen',    cc:40000, erz:250, kristall:80,  requires:'wt_c3', wirkung:'Treibstoff −50 %',       art:'ship_ernter',        live:true },
+  { key:'wt_c5', ast:'c', stufe:5, name:'Kern-Extraktor',   cc:65000, erz:400, kristall:150, requires:'wt_c4', wirkung:'Kolonie-Ertrag +50 %',   art:'res_kristall',       live:true },
+  // Ast D
+  { key:'wt_d1', ast:'d', stufe:1, name:'Raffinerie',         cc:8000,  erz:40,  kristall:0,   requires:null,   wirkung:'Rohstoffkosten −20 %',    art:'base_erzraffinerie',  live:true },
+  { key:'wt_d2', ast:'d', stufe:2, name:'Handelsdock',        cc:15000, erz:80,  kristall:15,  requires:'wt_d1', wirkung:'Kampf-Bergung +25 %',     art:'ship_berger',         live:true },
+  { key:'wt_d3', ast:'d', stufe:3, name:'Orbitallager',       cc:25000, erz:150, kristall:40,  requires:'wt_d2', wirkung:'Ansammlung 14 → 21 Tage', art:'base_3',              live:true },
+  { key:'wt_d4', ast:'d', stufe:4, name:'Fern-Handelsroute',  cc:40000, erz:250, kristall:80,  requires:'wt_d3', wirkung:'Kolonien geben CC/Tag',   art:'ship_kutter',         live:true },
+  { key:'wt_d5', ast:'d', stufe:5, name:'Sternenbörse',       cc:65000, erz:400, kristall:150, requires:'wt_d4', wirkung:'Wrack-Ausbeute +30 %',    art:'base_kristallreactor', live:true },
+];
+const SPACE_TECH_BY_KEY = SPACE_TECH.reduce((m, t) => (m[t.key] = t, m), {});
+
+function wrTech(m)            { return (m && m.space && m.space.tech) || {}; }
+function wrHasTech(m, key)    { return !!wrTech(m)[key]; }
+// Spiegel von _space_tech_speed / _space_tech_buildtime (21k).
+function wrTechSpeed(m)       { return Math.min(90, (wrHasTech(m,'wt_a3') ? 25 : 0) + (wrHasTech(m,'wt_a5') ? 25 : 0)); }
+function wrTechBuildTime(m)   { return wrHasTech(m,'wt_a4') ? 0.85 : 1.0; }
+// Ast B — Spiegel von _space_tech_turret/_fleet/_loss/_ambush (21k/21n).
+// ⚠️ wt_b5 ERSETZT wt_b1, die Boni addieren sich nicht.
+function wrTechTurret(m) { return wrHasTech(m,'wt_b5') ? 1.40 : (wrHasTech(m,'wt_b1') ? 1.15 : 1.0); }
+function wrTechFleet(m)  { return wrHasTech(m,'wt_b2') ? 1.10 : 1.0; }
+function wrTechLoss(m)   { return wrHasTech(m,'wt_b3') ? 0.85 : 1.0; }
+function wrTechAmbush(m) { return wrHasTech(m,'wt_b4') ? 0.5  : 1.0; }
+// Ast C — Spiegel von _space_tech_mine/_route/_fuel/_colony (21k/21o).
+function wrTechMine(m)   { return wrHasTech(m,'wt_c2') ? 1.15 : 1.0; }
+function wrTechRoute(m)  { return wrHasTech(m,'wt_c3') ? 1.25 : 1.0; }
+function wrTechFuel(m)   { return wrHasTech(m,'wt_c4') ? 0.5  : 1.0; }
+function wrTechColony(m) { return wrHasTech(m,'wt_c5') ? 1.5  : 1.0; }
+// Ast D — Spiegel von _space_tech_rescost/_salvage/_capdays/_wreck/_berger_cap (21k/21p).
+function wrTechResCost(m)  { return wrHasTech(m,'wt_d1') ? 0.8  : 1.0; }
+function wrTechSalvage(m)  { return wrHasTech(m,'wt_d2') ? 1.25 : 1.0; }
+function wrTechCapDays(m)  { return wrHasTech(m,'wt_d3') ? 21   : 14; }
+function wrTechColonyCc(m) { return wrHasTech(m,'wt_d4') ? 25   : 0; }
+function wrTechWreck(m)    { return wrHasTech(m,'wt_d5') ? 1.3  : 1.0; }
+// Kaufbar? (Voraussetzung erfüllt, noch nicht besessen, Effekt verdrahtet)
+function wrTechState(m, t) {
+  if (!t) return 'unknown';
+  if (wrHasTech(m, t.key))                        return 'owned';
+  if (!t.live)                                    return 'soon';
+  if (t.requires && !wrHasTech(m, t.requires))    return 'locked';
+  const sp = (m && m.space) || {};
+  const affordable = (m.coins || 0) >= t.cc
+    && (parseFloat(sp.erz) || 0) >= t.erz && (parseFloat(sp.kristall) || 0) >= t.kristall;
+  return affordable ? 'buy' : 'poor';
+}
+
+
+// ── Rollen (Spiegel von migration_2026-07-21j_weltraum_rollen.sql) ───────────
+// ⚠️ CLIENT-SYNC-PFLICHT: jede Zahl hier steht identisch in _space_ship_role() /
+// _space_foe_role() / _space_foe_comp(). Weicht eine ab, zeigt die Kampfvorschau
+// etwas anderes an, als der Server abrechnet — in diesem Feature ist genau das
+// schon dreimal passiert (doppelte Rundung, Kampfvorschau, Geschützschaden).
+//
+// Modell (JP 2026-07-21): GRÖSSEN-HIERARCHIE, kein Schere-Stein-Papier.
+// Leicht schlägt leicht, schwer schlägt schwer; Bomber/Schlachtschiff/Dunkle
+// Röstung sind gegen alles stark — gebremst wird über den Preis, nicht per Konter.
+const WR_BONUS = 0.8, WR_MALUS = -0.3;   // Konterhärte "mittel" (JP-Entscheidung)
+const SPACE_ROLES = {
+  jaeger:          { cls:'light', shield:0.00, vsLight: WR_BONUS, vsHeavy: WR_MALUS, vsStruct:0,   order:10 },
+  fregatte:        { cls:'light', shield:0.15, vsLight: WR_BONUS, vsHeavy: WR_MALUS, vsStruct:0,   order:20 },
+  sonde:           { cls:'light', shield:0.00, vsLight:0,         vsHeavy:0,         vsStruct:0,   order:30 },
+  kutter:          { cls:'light', shield:0.00, vsLight:0,         vsHeavy:0,         vsStruct:0,   order:40 },
+  berger:          { cls:'light', shield:0.00, vsLight:0,         vsHeavy:0,         vsStruct:0,   order:50 },
+  ernter:          { cls:'light', shield:0.00, vsLight:0,         vsHeavy:0,         vsStruct:0,   order:60 },
+  kreuzer:         { cls:'heavy', shield:0.05, vsLight: WR_MALUS, vsHeavy: WR_BONUS, vsStruct:0,   order:70 },
+  bomber:          { cls:'heavy', shield:0.10, vsLight: WR_BONUS, vsHeavy: WR_BONUS, vsStruct:1.5, order:80 },
+  schlachtschiff:  { cls:'heavy', shield:0.20, vsLight: WR_BONUS, vsHeavy: WR_BONUS, vsStruct:0.8, order:90 },
+  dunkle_roestung: { cls:'heavy', shield:0.30, vsLight: WR_BONUS, vsHeavy: WR_BONUS, vsStruct:0.8, order:95 },
+  kolonie:         { cls:'light', shield:0.00, vsLight:0,         vsHeavy:0,         vsStruct:0,   order:99 },
+};
+// ⚠️ HALBE Modifikatoren gegenüber den eigenen Schiffen. Das ist keine Willkür,
+// sondern notwendig: wären beide Seiten gleich stark moduliert, KÜRZT SICH DIE
+// ROLLE HERAUS. Gemessen (rollen_test.js): 80 Jäger gegen ein Schwarm-Nest ergaben
+// 800×1.8 / 600×1.8 = 1.33, zwölf Kreuzer 780×0.7 / 600×0.7 = 1.30 — die
+// Flottenwahl war praktisch folgenlos. Halbiert: 1.71 gegenüber 1.07.
+// Spielerisch begründet: KI-Verbände sind grob zusammengewürfelt, die eigene
+// Flotte ist bewusst spezialisiert.
+const WR_FOE_BONUS = 0.4, WR_FOE_MALUS = -0.15;
+const SPACE_FOE_ROLES = {
+  schwarm:       { cls:'light', shield:0.00, vsLight: WR_FOE_BONUS, vsHeavy: WR_FOE_MALUS, vsStruct:0    },
+  drohne:        { cls:'light', shield:0.00, vsLight: WR_FOE_BONUS, vsHeavy: WR_FOE_MALUS, vsStruct:0    },
+  pirat:         { cls:'light', shield:0.05, vsLight: WR_FOE_BONUS, vsHeavy: WR_FOE_MALUS, vsStruct:0    },
+  waechter:      { cls:'heavy', shield:0.15, vsLight: WR_FOE_MALUS, vsHeavy: WR_FOE_BONUS, vsStruct:0    },
+  kreuzer_feind: { cls:'heavy', shield:0.05, vsLight: WR_FOE_MALUS, vsHeavy: WR_FOE_BONUS, vsStruct:0    },
+  mutterschiff:  { cls:'heavy', shield:0.20, vsLight: WR_FOE_BONUS, vsHeavy: WR_FOE_BONUS, vsStruct:0.75 },
+};
+// Sechs Verbandsprofile. Welches ein Planet hat, ist DETERMINISTISCH aus seinen
+// Quadranten-Koordinaten abgeleitet — bewusst arithmetisch statt per Hash, damit
+// Client und Server ohne md5 dasselbe Ergebnis bekommen (JS hat kein md5 eingebaut).
+const SPACE_FOE_PROFILES = [
+  { name:'Schwarm-Nest',         comp:{ schwarm:0.70, drohne:0.30 } },
+  { name:'Drohnen-Wache',        comp:{ drohne:0.60, waechter:0.40 } },
+  { name:'Räuberbande',          comp:{ pirat:0.50, schwarm:0.30, kreuzer_feind:0.20 } },
+  { name:'Schwere Wache',        comp:{ waechter:0.60, drohne:0.40 } },
+  { name:'Kreuzer-Patrouille',   comp:{ kreuzer_feind:0.60, schwarm:0.40 } },
+  { name:'Mutterschiff-Verband', comp:{ mutterschiff:0.50, kreuzer_feind:0.30, drohne:0.20 } },
+];
+// Doppeltes Modulo: qx/qy sind Hex-Koordinaten und können negativ sein.
+function wrFoeProfile(p) {
+  const n = ((p && p.qx || 0) * 7 + (p && p.qy || 0) * 13 + (p && p.slot || 0) * 3) % 6;
+  return SPACE_FOE_PROFILES[(n + 6) % 6];
+}
+// Gegner-Zusammensetzung als [{ foe, share, strength }] — Summe = enemy_strength.
+function wrFoeComp(p) {
+  const prof = wrFoeProfile(p), str = parseFloat(p && p.enemy_strength) || 0;
+  return Object.entries(prof.comp).map(([foe, share]) => ({ foe, share, strength: str * share }));
+}
+function wrFoeShares(p) {
+  let light = 0, heavy = 0;
+  for (const c of wrFoeComp(p)) {
+    const r = SPACE_FOE_ROLES[c.foe];
+    if (!r) continue;
+    if (r.cls === 'heavy') heavy += c.share; else light += c.share;
+  }
+  return { light, heavy };
+}
+// Klassenanteile der eigenen Flotte — nach KAMPFKRAFT gewichtet, nicht nach Stückzahl:
+// 40 Sonden neben 3 Schlachtschiffen dürfen die Flotte nicht als "leicht" ausweisen.
+function wrFleetShares(fleet) {
+  let light = 0, heavy = 0;
+  for (const [k, n] of Object.entries(fleet || {})) {
+    const s = SPACE_SHIP_BY_KEY[k]; if (!s) continue;
+    const p = (parseInt(n, 10) || 0) * (s.atk || 0);
+    if ((SPACE_ROLES[k] && SPACE_ROLES[k].cls) === 'heavy') heavy += p; else light += p;
+  }
+  const tot = Math.max(1, light + heavy);
+  return { light: light / tot, heavy: heavy / tot };
+}
+// Effektive Kampfkraft gegen einen Gegner-Mix. Untergrenze 0.1 — ein Schiff soll
+// durch den Malus nie ganz wertlos werden (sonst kippt die Rechnung bei reinen Flotten).
+function wrEffPower(fleet, sLight, sHeavy, sStruct) {
+  let sum = 0;
+  for (const [k, n] of Object.entries(fleet || {})) {
+    const s = SPACE_SHIP_BY_KEY[k]; if (!s) continue;
+    const r = SPACE_ROLES[k] || { vsLight:0, vsHeavy:0, vsStruct:0 };
+    const m = Math.max(0.1, 1 + (sLight || 0) * r.vsLight + (sHeavy || 0) * r.vsHeavy
+                              + (sStruct || 0) * r.vsStruct);
+    sum += (parseInt(n, 10) || 0) * (s.atk || 0) * m;
+  }
+  return sum;
+}
+function wrFleetShield(fleet) {
+  let w = 0, sh = 0;
+  for (const [k, n] of Object.entries(fleet || {})) {
+    const s = SPACE_SHIP_BY_KEY[k]; if (!s) continue;
+    const p = (parseInt(n, 10) || 0) * (s.atk || 0);
+    w += p; sh += p * ((SPACE_ROLES[k] && SPACE_ROLES[k].shield) || 0);
+  }
+  return Math.min(0.4, w > 0 ? sh / w : 0);
+}
+// Effektive Gegnerstärke gegen den eigenen Mix — spiegelbildlich.
+function wrFoeEff(p, sLight, sHeavy, sStruct) {
+  let sum = 0;
+  for (const c of wrFoeComp(p)) {
+    const r = SPACE_FOE_ROLES[c.foe] || { vsLight:0, vsHeavy:0, vsStruct:0 };
+    const m = Math.max(0.1, 1 + (sLight || 0) * r.vsLight + (sHeavy || 0) * r.vsHeavy
+                              + (sStruct || 0) * r.vsStruct);
+    sum += c.strength * m;
+  }
+  return sum;
+}
+// Die EINE Stelle, die einen Planetenkampf vorhersagt. Alles, was der Server in
+// claim_space_arrival rechnet, muss hier identisch stehen.
+function wrBattlePreview(fleet, p, member) {
+  const me = member || _wrMember;
+  const f = wrFoeShares(p), m = wrFleetShares(fleet);
+  // ⚠️ B2 multipliziert NUR die eigene Seite. Käme der Faktor auch auf `foe`,
+  // kürzte er sich vollständig heraus — der Fehler aus den Rollen-Modifikatoren.
+  const eff = wrEffPower(fleet, f.light, f.heavy, 0) * wrTechFleet(me);
+  const foe = wrFoeEff(p, m.light, m.heavy, 0);
+  const shield = wrFleetShield(fleet);
+  const loss = Math.min(0.6, foe / Math.max(1, eff + foe)) * (1 - shield) * wrTechLoss(me);
+  return { eff, foe, shield, loss, win: eff > foe, comp: wrFoeComp(p), profile: wrFoeProfile(p) };
+}
+
 
 // ── Raumhafen & Geschütze ────────────────────────────────────────────────────
 // ⚠️ SPACE_TURRETS/SPACE_PORT spiegeln _space_turret_base()/_space_port_stats() in
@@ -107,6 +323,10 @@ const WR_FOE = {
   waechter: { art:'foe_waechter', icon:'👾', name:'Schwerer Wächter' },
   pirat:    { art:'foe_pirat',    icon:'🏴‍☠️', name:'Räuber' },
   wrack:    { art:'foe_wrack',    icon:'💀', name:'Wrack' },
+  // Seit 21j sind das echte Einheiten im Gegner-Verband, nicht mehr nur Wellen-Deko.
+  schwarm:       { art:'foe_schwarm',       icon:'🦟', name:'Schwarm' },
+  kreuzer_feind: { art:'foe_kreuzer_feind', icon:'🚨', name:'Angriffskreuzer' },
+  mutterschiff:  { art:'foe_mutterschiff',  icon:'🛰️', name:'Mutterschiff' },
 };
 function wrFoeFor(planet) {
   if (!planet) return WR_FOE.drohne;
@@ -116,11 +336,15 @@ function wrFoeFor(planet) {
 // Bild mit Emoji-Rückfall (gleiche Mechanik wie überall)
 function wrFoeArt(foe, cls) {
   return `<span class="${cls || 'wr-foe'}"><img src="assets/space/${foe.art}.png" alt=""
-    onerror="this.remove()"><span class="wr-foe-fb">${foe.icon}</span></span>`;
+    onerror="this.parentNode.classList.add('wr-art-fail');this.remove()"><span class="wr-foe-fb">${foe.icon}</span></span>`;
 }
 
 // Hinterhalt-Wahrscheinlichkeit je Ring — Spiegel von claim_space_arrival.
 const WR_AMBUSH = { 1: { chance: 0.12, min: 20, max: 60 }, 2: { chance: 0.30, min: 60, max: 160 } };
+// B4 EMP-Espresso halbiert die WAHRSCHEINLICHKEIT (nicht den Schaden) — Spiegel von 21n.
+function wrAmbushChance(ring, m) {
+  return ((WR_AMBUSH[ring] || {}).chance || 0) * wrTechAmbush(m || _wrMember);
+}
 
 const SPACE_INTENTS = {
   scout:    { icon:'🛰️', name:'Aufklären',    hint:'Deckt den Quadranten für den ganzen Klan auf' },
@@ -182,7 +406,10 @@ function wrColonies(m)  { return wrSpace(m).colonies || {}; }
 function wrResearch(m)  { return (m && m.research) || {}; }
 
 // Antriebs-Forschung verkürzt Reisen — in P1 gibt es noch keine (Warp = P2/P3).
-function wrSpeedPct() { return 0; }
+// Nur noch fuer die ANZEIGE der Flugzeit. Der Server ignoriert den mitgeschickten
+// Wert seit 21l und rechnet selbst aus space.tech — sonst koennte der Client sich
+// beliebig schnell machen (dieselbe Lehre wie bei den Schiffspreisen).
+function wrSpeedPct(m) { return wrTechSpeed(m || _wrMember); }
 
 function wrShipCount(m, key) { return parseInt(wrHomeShips(m)[key], 10) || 0; }
 function wrFleetPower(fleet) {
@@ -243,10 +470,29 @@ function wrDrawImg(ctx, name, x, y, box) {
 const WR_IC = { atk:'⚔️', def:'🛡️', mine:'⛏️', time:'⏱️', erz:'🪨', kri:'💎',
   fleet:'🚀', travel:'✈️', colony:'🪐', yard:'🏗️', salvage:'♻️', wreck:'💀',
   help:'🤝', yield:'📥' };
+// Beliebiges Asset in Icon-Größe — für Dinge, die kein ic_*-Symbol haben, aber ein
+// Portrait (Raumhafen, Werft). Gleiche Hülle wie wrIc, damit das CSS greift.
+// ⚠️ NUR für flache Grafiken verwenden. Ein detailliertes 3D-Render (base_*, ship_*)
+// wird bei ~16 px zu Matsch — genau deshalb ist „Im Hafen" wieder auf das flache
+// wrIc('fleet') umgestellt worden (JP: „im Hafen — kann man nicht erkennen").
+// Dieselbe Regel galt schon beim Rendern der Icon-Chargen: Schiffe = Render,
+// Eigenschafts-Icons = flach und einfarbig.
+function wrIcArt(art, fb) {
+  return `<span class="wr-ic"><img src="assets/space/${art}.png" alt=""
+    onerror="this.parentNode.classList.add('wr-art-fail');this.remove()"><span class="wr-ic-fb">${fb || '•'}</span></span>`;
+}
 function wrIc(key) {
   const fb = WR_IC[key] || '•';
+  // ⚠️ Der Emoji-Rückfall hängt NICHT mehr am CSS-Nachbarselektor `img + .wr-ic-fb`.
+  // Grund (JP-Meldung 2026-07-21): der versteckt das Emoji, sobald ein <img> im DOM
+  // steht — auch wenn das Bild nie geladen hat. Feuert `onerror` nicht (404 aus dem
+  // Cache, abgebrochener Ladevorgang, fehlendes Asset auf dem Server), blieb ein
+  // leeres Bild-Kästchen stehen UND das Emoji unsichtbar: „leere Kreise".
+  // Jetzt umgekehrt: erst ein ERFOLGREICH geladenes Bild blendet das Emoji aus.
+  // Merke: einen Rückfall nie an die ANWESENHEIT des Elements knüpfen, sondern an
+  // seinen Erfolg.
   return `<span class="wr-ic"><img src="assets/space/ic_${key}.png" alt=""
-    onerror="this.remove()"><span class="wr-ic-fb">${fb}</span></span>`;
+    onerror="this.parentNode.classList.add('wr-art-fail');this.remove()"><span class="wr-ic-fb">${fb}</span></span>`;
 }
 
 // ── Chat ─────────────────────────────────────────────────────────────────────
@@ -266,7 +512,7 @@ function wrShipArt(key, cls) {
   const s = SPACE_SHIP_BY_KEY[key];
   if (!s) return '<span class="' + (cls || 'wr-mini') + '">•</span>';
   return `<span class="${cls || 'wr-mini'}"><img src="assets/space/${s.art}.png" alt=""
-    onerror="this.remove()"><span class="wr-mini-fb">${s.icon}</span></span>`;
+    onerror="this.parentNode.classList.add('wr-art-fail');this.remove()"><span class="wr-mini-fb">${s.icon}</span></span>`;
 }
 
 // Bild-Token für den Chat. `app.js: _chatArt()` ersetzt `[[s:jaeger]]` nach dem Escapen
@@ -397,6 +643,28 @@ async function wrLoadWaves(schedule) {
   } catch (e) { console.warn('wrLoadWaves:', e.message); }
 }
 
+// ── Untertabs (JP 2026-07-22: „nicht ewig weit hinunterscrollen") ───────────
+// Rohstoffleiste + Tabs bleiben oben stehen; darunter wird nur EIN Bereich gezeigt.
+// Wellen, Hilferufe und die laufende Reise stehen BEWUSST über den Tabs: sie sind
+// zeitkritisch und dürfen nicht hinter einem Tab verschwinden.
+let _wrTab = 'karte';
+const WR_TABS = [
+  { key:'karte', icon:'🌌', name:'Karte' },
+  { key:'hafen', icon:'🛰️', name:'Raumhafen' },
+  { key:'werft', icon:'🏗️', name:'Werft' },
+  { key:'tech',  icon:'🔬', name:'Forschung' },
+];
+function wrTabsHtml() {
+  return `<div class="wr-tabs">${WR_TABS.map(t =>
+    `<button class="wr-tab${_wrTab === t.key ? ' active' : ''}" data-wr-tab="${t.key}"
+      >${t.icon} <span class="wr-tab-l">${t.name}</span></button>`).join('')}</div>`;
+}
+function wrSetTab(key) {
+  if (!WR_TABS.some(t => t.key === key) || _wrTab === key) return;
+  _wrTab = key;
+  wrRender();
+}
+
 function wrRender() {
   if (!_wrEl) return;
   const m = _wrMember;
@@ -404,11 +672,14 @@ function wrRender() {
 
   _wrEl.innerHTML = `
     <div class="wr-wrap">
-      ${wrHudHtml(m)}
+      <div class="wr-sticky">
+        ${wrHudHtml(m)}
+        ${wrTabsHtml()}
+      </div>
       ${wrWaveHtml(m)}
       ${wrHelpCallsHtml(m)}
       ${trip ? wrTripHtml(m, trip) : ''}
-      <div class="wr-map-card">
+      <div class="wr-map-card"${_wrTab === 'karte' ? '' : ' hidden'}>
         <div class="wr-card-title">🌌 Sternkarte <span class="wr-sub">— geteilt mit deinem Kaffee-Clan</span></div>
         <canvas id="wr-canvas" class="wr-canvas" width="${WR_CANVAS_W}" height="${WR_CANVAS_H}"></canvas>
         <div class="wr-legend">
@@ -419,14 +690,19 @@ function wrRender() {
           <span><i class="wr-dot wr-dot-clear"></i> befreit</span>
         </div>
       </div>
-      <div id="wr-detail">${wrDetailHtml(m)}</div>
-      ${wrColoniesHtml(m)}
-      ${wrRoutesHtml(m)}
-      ${wrHafenHtml(m)}
-      ${wrWerftHtml(m)}
+      <div id="wr-detail"${_wrTab === 'karte' ? '' : ' hidden'}>${wrDetailHtml(m)}</div>
+      <div${_wrTab === 'hafen' ? '' : ' hidden'}>
+        ${wrHafenHtml(m)}
+        ${wrColoniesHtml(m)}
+        ${wrRoutesHtml(m)}
+      </div>
+      <div${_wrTab === 'werft' ? '' : ' hidden'}>${wrWerftHtml(m)}</div>
+      <div${_wrTab === 'tech'  ? '' : ' hidden'}>${wrTechHtml(m)}</div>
     </div>`;
 
-  wrDrawMap();
+  // Der Canvas wird nur gezeichnet, wenn er sichtbar ist — auf einem versteckten
+  // Element liefert getBoundingClientRect() Nullen und die Klick-Umrechnung wäre kaputt.
+  if (_wrTab === 'karte') wrDrawMap();
   wrBindEvents();
 }
 
@@ -434,7 +710,7 @@ function wrRender() {
 // Rohstoff-Symbol als Bild mit Emoji-Rückfall (gleiche Mechanik wie bei den Schiffen:
 // schlägt das Bild fehl, entfernt sich das <img> und der CSS-Nachbarselektor gibt das Emoji frei).
 function wrResIcon(art, emoji) {
-  return `<img class="wr-res-art" src="assets/space/${art}.png" alt="" onerror="this.remove()"
+  return `<img class="wr-res-art" src="assets/space/${art}.png" alt="" onerror="this.parentNode.classList.add('wr-art-fail');this.remove()"
           ><span class="wr-res-ic wr-res-ic-fb">${emoji}</span>`;
 }
 
@@ -608,7 +884,7 @@ function wrHomeDetailHtml(m) {
     rows += `
       <div class="wr-fl-row">
         <span class="wr-fl-art wr-ship-zoom" data-wr-info="${s.key}" title="Groß ansehen"
-          ><img src="assets/space/${s.art}.png" alt="" onerror="this.remove()"
+          ><img src="assets/space/${s.art}.png" alt="" onerror="this.parentNode.classList.add('wr-art-fail');this.remove()"
           ><span class="wr-fl-fb">${s.icon}</span></span>
         <span class="wr-fl-name">${_wrEsc(s.name)}
           ${gone > 0 ? `<span class="wr-sub">${gone} unterwegs</span>` : ''}</span>
@@ -621,7 +897,7 @@ function wrHomeDetailHtml(m) {
     <div class="wr-detail">
       <div class="wr-planet-head">
         <span class="wr-foe wr-foe-lg wr-ship-zoom" data-wr-pinfo="1" title="Groß ansehen"
-          ><img src="assets/space/base_${wrBaseLevel(m)}.png" alt="" onerror="this.remove()"
+          ><img src="assets/space/base_${wrBaseLevel(m)}.png" alt="" onerror="this.parentNode.classList.add('wr-art-fail');this.remove()"
           ><span class="wr-foe-fb">🛰️</span><span class="wr-zoom-hint">🔍</span></span>
         <div>
           <div class="wr-card-title">Dein Raumhafen
@@ -643,6 +919,92 @@ function wrHomeDetailHtml(m) {
         ? `<div class="wr-ok">✈️ Ein Verband ist unterwegs — Details oben in der Reise-Karte.</div>`
         : '<div class="wr-sub">Wähle einen Quadranten auf der Sternkarte, um eine Flotte auszusenden.</div>'}
     </div>`;
+}
+
+// Gegner-Verband sichtbar machen. OHNE diese Anzeige wären die Rollen unbenutzbar:
+// man könnte nicht wissen, ob dort Schwärme (→ Jäger/Fregatten) oder Kapitalschiffe
+// (→ Kreuzer) stehen. Der Verband ist deterministisch, also darf er offen liegen.
+function wrFoeCompHtml(p) {
+  const comp = wrFoeComp(p);
+  if (!comp.length) return '';
+  const rows = comp
+    .slice().sort((a, b) => b.strength - a.strength)
+    .map(c => {
+      const r  = SPACE_FOE_ROLES[c.foe] || {};
+      const fd = WR_FOE[c.foe] || { art:'foe_drohne', icon: '?', name: c.foe };
+      const cls = r.cls === 'heavy' ? '🔷 schwer' : '🔹 leicht';
+      return `<span class="wr-foe-chip">${wrFoeArt({ art: fd.art, icon: fd.icon }, 'wr-mini')}
+        <strong>${_wrEsc(fd.name)}</strong> ${cls} · ${wrFmt(Math.round(c.strength))}</span>`;
+    }).join('');
+  return `<div class="wr-foecomp">
+      <div class="wr-sub">Aufklärung: <strong>${_wrEsc(wrFoeProfile(p).name)}</strong>
+        — leichte Ziele bekämpfst du mit Jägern und Fregatten, schwere mit Kreuzern.</div>
+      <div class="wr-foecomp-row">${rows}</div>
+    </div>`;
+}
+
+
+// ── 🔬 Forschungsbaum-Karte im 🚀-Tab ───────────────────────────────────────
+// Muster der Kaffee-Krieger-Ausruestung: je Ast eine Spalte, Zustand am Knoten.
+// Nicht verdrahtete Aeste sind sichtbar, aber nicht kaufbar — sie zeigen das Ziel,
+// ohne Geld fuer Wirkungslosigkeit zu nehmen.
+function wrTechHtml(m) {
+  const spalten = SPACE_TECH_ASTE.map(a => {
+    const knoten = SPACE_TECH.filter(t => t.ast === a.key)
+      .sort((x, y) => x.stufe - y.stufe).map(t => {
+        const st = wrTechState(m, t);
+        const aktion = {
+          owned:  '<span class="wr-tech-ok">✓ erforscht</span>',
+          soon:   '<span class="wr-tech-soon">in Vorbereitung</span>',
+          locked: `<span class="wr-tech-lock">🔒 braucht ${_wrEsc((SPACE_TECH_BY_KEY[t.requires] || {}).name || '')}</span>`,
+          poor:   '<span class="wr-tech-poor">Mittel reichen nicht</span>',
+          buy:    `<button class="wr-btn wr-btn-sm" data-wr-tech="${t.key}">Erforschen</button>`,
+        }[st] || '';
+        return `<div class="wr-tech-node wr-tech-${st}">
+            <span class="wr-fl-art"><img src="assets/space/${t.art}.png" alt=""
+              onerror="this.parentNode.classList.add('wr-art-fail');this.remove()"
+              ><span class="wr-fl-fb">${a.icon}</span></span>
+            <span class="wr-tech-txt">
+              <strong>${_wrEsc(t.name)}</strong>
+              <span class="wr-sub">${_wrEsc(t.wirkung)}</span>
+              <span class="wr-sub">${wrFmt(t.cc)} CC · ${wrFmt(t.erz)} ${wrIc('erz')}${
+                t.kristall ? ` · ${wrFmt(t.kristall)} ${wrIc('kri')}` : ''}</span>
+            </span>
+            <span class="wr-tech-act">${aktion}</span>
+          </div>`;
+      }).join('');
+    return `<div class="wr-tech-ast${a.live ? '' : ' wr-tech-ast-soon'}">
+        <div class="wr-tech-ast-head">${a.icon} ${_wrEsc(a.name)}${
+          a.live ? '' : ' <span class="wr-sub">— in Vorbereitung</span>'}</div>
+        ${knoten}
+      </div>`;
+  }).join('');
+  const sp = wrTechSpeed(m), bt = Math.round((1 - wrTechBuildTime(m)) * 100);
+  return `<div class="wr-card">
+      <div class="wr-card-title">🔬 Weltraum-Technik
+        <span class="wr-sub">verstärkt, was du schon hast — schaltet nichts frei</span></div>
+      ${(sp || bt) ? `<div class="wr-facts">
+        ${sp ? `<span>${wrIc('time')} Flugzeit: <strong>−${sp} %</strong></span>` : ''}
+        ${bt ? `<span>${wrIc('yard')} Bauzeit: <strong>−${bt} %</strong></span>` : ''}
+      </div>` : '<div class="wr-sub">Noch keine Technik erforscht.</div>'}
+      <div class="wr-tech-grid">${spalten}</div>
+    </div>`;
+}
+
+async function wrBuyTech(key) {
+  const t = SPACE_TECH_BY_KEY[key];
+  if (_wrBusy || !t || !t.live) return;
+  _wrBusy = true;
+  try {
+    const res = await DB.buySpaceTech(_wrMember.id, key);
+    if (!res || res.error) { wrToast(wrErrText(res.error), 'error'); return; }
+    if (res.space) wrApplySpace(res.space);
+    wrToast(`🔬 ${t.name} erforscht — ${t.wirkung}`, 'success');
+    wrChat(`🔬 ${_wrEsc(_wrMember.name)} hat **${_wrEsc(t.name)}** erforscht (${_wrEsc(t.wirkung)}).`);
+    wrRender();
+  } catch (e) {
+    wrToast('Forschung fehlgeschlagen: ' + e.message, 'error');
+  } finally { _wrBusy = false; }
 }
 
 // ── Planeten-Detail (Auswahl) ────────────────────────────────────────────────
@@ -697,8 +1059,10 @@ function wrDetailHtml(m) {
   const ernter  = mineCap;
   const kolo    = sel.kolonie || 0;
 
-  // Verlust-Vorschau mit der SERVER-Formel (reine Anzeige — gerechnet wird drüben)
-  const lossPct = cleared ? 0 : Math.min(0.6, p.enemy_strength / Math.max(1, power + p.enemy_strength));
+  // Verlust-Vorschau mit der SERVER-Formel (reine Anzeige — gerechnet wird drüben).
+  // Seit 21j laufen Rollen mit: wrBattlePreview spiegelt claim_space_arrival exakt.
+  const bp      = wrBattlePreview(sel, p);
+  const lossPct = cleared ? 0 : bp.loss;
 
   return `
     <div class="wr-detail">
@@ -723,11 +1087,18 @@ function wrDetailHtml(m) {
       ${cleared
         ? `<div class="wr-ok">✅ Befreit${mine ? ' — von dir' : ''}${colon ? ' · ${wrIc("colony")} bereits kolonisiert' : ''}</div>`
         : `<div class="wr-facts wr-facts-fight">
-             <span>Kampfkraft des Verbands: <strong>${wrFmt(power)}</strong></span>
-             <span>Erwartete Verluste: <strong>${Math.round(lossPct * 100)} %</strong> der Flotte</span>
-             <span class="${power > p.enemy_strength ? 'wr-good' : 'wr-bad'}">
-               ${power > p.enemy_strength ? '→ Sieg wahrscheinlich' : '→ zu schwach, du verlierst Schiffe ohne Erfolg'}</span>
-           </div>`}
+             <span>Kampfkraft des Verbands: <strong>${wrFmt(power)}</strong>${
+               Math.round(bp.eff) !== Math.round(power)
+                 ? ` <span class="${bp.eff > power ? 'wr-good' : 'wr-bad'}">→ ${wrFmt(Math.round(bp.eff))} gegen diesen Verband</span>`
+                 : ''}</span>
+             <span>Gegner: <strong>${wrFmt(Math.round(bp.foe))}</strong> effektiv${
+               Math.round(bp.foe) !== Math.round(p.enemy_strength) ? ` (roh ${wrFmt(p.enemy_strength)})` : ''}</span>
+             <span>Erwartete Verluste: <strong>${Math.round(lossPct * 100)} %</strong> der Flotte${
+               bp.shield > 0 ? ` <span class="wr-good">(Schild −${Math.round(bp.shield * 100)} %)</span>` : ''}</span>
+             <span class="${bp.win ? 'wr-good' : 'wr-bad'}">
+               ${bp.win ? '→ Sieg wahrscheinlich' : '→ zu schwach, du verlierst Schiffe ohne Erfolg'}</span>
+           </div>
+           ${wrFoeCompHtml(p)}`}
       ${busy ? '' : wrFleetPickerHtml(m)}
       ${busy ? '' : wrAmbushHint(p.ring, power, wrTurretPower(m))}
       <div class="wr-actions">
@@ -798,7 +1169,7 @@ function wrWaveHtml(m) {
   return `
     <div class="wr-wave ${ok ? 'wr-wave-ok' : 'wr-wave-danger'}">
       <div class="wr-wave-head">
-        <span class="wr-wave-art"><img src="assets/space/${tier.art}.png" alt="" onerror="this.remove()"
+        <span class="wr-wave-art"><img src="assets/space/${tier.art}.png" alt="" onerror="this.parentNode.classList.add('wr-art-fail');this.remove()"
           ><span class="wr-wave-fb">${tier.icon}</span></span>
         <span class="wr-wave-title">${_wrEsc(tier.name)} auf deinen Raumhafen
           <span class="wr-sub">Stärke ${wrFmt(w.strength)}</span></span>
@@ -897,7 +1268,7 @@ function wrHafenHtml(m) {
       slots += `
         <div class="wr-slot wr-slot-full${dmg ? ' wr-slot-dmg' : ''}">
           <div class="wr-slot-art" data-wr-tinfo="${t.key}" title="Groß ansehen">
-            <img src="assets/space/${t.art}.png" alt="" onerror="this.remove()"
+            <img src="assets/space/${t.art}.png" alt="" onerror="this.parentNode.classList.add('wr-art-fail');this.remove()"
               ><span class="wr-slot-fb">${t.icon}</span></div>
           <div class="wr-slot-name">${_wrEsc(t.name)} <span class="wr-sub">Stufe ${clv}</span></div>
           <div class="wr-slot-atk">${dmg
@@ -920,7 +1291,7 @@ function wrHafenHtml(m) {
         opts += `
           <div class="wr-slot-opt${ok ? '' : ' wr-slot-opt-lock'}">
             <span class="wr-slot-opt-art wr-ship-zoom" data-wr-tinfo="${t.key}" title="Groß ansehen">
-              <img src="assets/space/${t.art}.png" alt="" onerror="this.remove()"
+              <img src="assets/space/${t.art}.png" alt="" onerror="this.parentNode.classList.add('wr-art-fail');this.remove()"
                 ><span class="wr-slot-opt-fb">${t.icon}</span><span class="wr-zoom-hint">🔍</span></span>
             <span class="wr-slot-opt-txt">
               <span class="wr-slot-opt-n">${_wrEsc(t.name)}</span>
@@ -945,7 +1316,7 @@ function wrHafenHtml(m) {
         <span class="wr-sub">Stufe ${lv} · ${def.slots} Bauslots</span></div>
       <div class="wr-hafen-head">
         <div class="wr-hafen-art" data-wr-pinfo="1" title="Groß ansehen">
-          <img src="assets/space/base_${lv}.png" alt="" onerror="this.remove()"
+          <img src="assets/space/base_${lv}.png" alt="" onerror="this.parentNode.classList.add('wr-art-fail');this.remove()"
             ><span class="wr-hafen-fb">🛰️</span><span class="wr-zoom-hint">🔍</span></div>
         <div class="wr-hafen-info">
           <div class="wr-hafen-power">${wrIc("def")} Feuerkraft <strong>${wrFmt(power)}</strong></div>
@@ -964,7 +1335,7 @@ function wrHafenHtml(m) {
         ${SPACE_PORT.map(p => `
           <div class="wr-rung ${p.level === lv ? 'wr-rung-now' : (p.level < lv ? 'wr-rung-done' : 'wr-rung-todo')}">
             <span class="wr-rung-art"><img src="assets/space/base_${p.level}.png" alt=""
-              onerror="this.remove()"><span class="wr-rung-fb">🛰️</span></span>
+              onerror="this.parentNode.classList.add('wr-art-fail');this.remove()"><span class="wr-rung-fb">🛰️</span></span>
             <span class="wr-rung-lv">Stufe ${p.level}</span>
             <span class="wr-rung-sl">${p.slots} Slots</span>
             <span class="wr-rung-st">${p.level < lv ? '✓' : (p.level === lv ? 'aktuell'
@@ -1134,7 +1505,7 @@ function wrWerftHtml(m) {
     rows += `
       <div class="wr-ship ${unlocked ? '' : 'wr-ship-locked'}${busy ? ' wr-ship-busy' : ''}">
         <div class="wr-ship-ic wr-ship-zoom" data-wr-info="${s.key}" title="Groß ansehen">${s.art
-          ? `<img class="wr-ship-art" src="assets/space/${s.art}.png" alt="" onerror="this.remove()"
+          ? `<img class="wr-ship-art" src="assets/space/${s.art}.png" alt="" onerror="this.parentNode.classList.add('wr-art-fail');this.remove()"
                ><span class="wr-ship-ic-fb">${s.icon}</span>`
           : s.icon}<span class="wr-zoom-hint">🔍</span></div>
         <div class="wr-ship-main">
@@ -1171,7 +1542,7 @@ function wrWerftHtml(m) {
       if (done) anyDone = true;
       jr += `
         <div class="wr-job ${done ? 'wr-job-done' : ''}">
-          <span class="wr-fl-art"><img src="assets/space/${sd.art}.png" alt="" onerror="this.remove()"
+          <span class="wr-fl-art"><img src="assets/space/${sd.art}.png" alt="" onerror="this.parentNode.classList.add('wr-art-fail');this.remove()"
             ><span class="wr-fl-fb">${sd.icon || '🚀'}</span></span>
           <span class="wr-job-txt">
             <strong>${wrFmt(jobs[k].count)}× ${_wrEsc(sd.name || k)}</strong>
@@ -1187,7 +1558,7 @@ function wrWerftHtml(m) {
   return `<div class="wr-card">
     <div class="wr-werft-head">
       <span class="wr-werft-art wr-ship-zoom" data-wr-winfo="1" title="Groß ansehen"
-        ><img src="assets/space/base_werft_${yl}.png" alt="" onerror="this.remove()"
+        ><img src="assets/space/base_werft_${yl}.png" alt="" onerror="this.parentNode.classList.add('wr-art-fail');this.remove()"
         ><span class="wr-werft-fb">🏗️</span><span class="wr-zoom-hint">🔍</span></span>
       <span>
         <div class="wr-card-title">Werft am Raumhafen
@@ -1367,7 +1738,9 @@ function wrTurretDamaged(slot) {
 }
 
 // Gesamte Feuerkraft des eigenen Hafens (Spiegel von _space_turret_power)
-function wrTurretPower(m) {
+// B1/B5 wirken auf die ANZEIGE genauso wie serverseitig am Aufrufort (21n).
+function wrTurretPower(m) { return wrTurretPowerRaw(m) * wrTechTurret(m); }
+function wrTurretPowerRaw(m) {
   let sum = 0;
   for (const slot of Object.values(wrTurrets(m))) {
     if (!slot || typeof slot !== 'object') continue;
@@ -1790,6 +2163,10 @@ function wrBindEvents() {
     if (e.target.closest('#wr-cart-buy'))   { await wrBuildCart(); return; }
     if (e.target.closest('#wr-cart-clear')) { _wrCart = null; wrRender(); return; }
     // Angriffswellen + Hilferufe
+    const tab = e.target.closest('[data-wr-tab]');
+    if (tab) { wrSetTab(tab.dataset.wrTab); return; }
+    const tech = e.target.closest('[data-wr-tech]');
+    if (tech) { await wrBuyTech(tech.dataset.wrTech); return; }
     if (e.target.closest('#wr-wave-help'))    { await wrRequestHelp(); return; }
     if (e.target.closest('#wr-wave-resolve')) { await wrResolveWave(); return; }
     const help = e.target.closest('[data-wr-help]');
@@ -1842,7 +2219,7 @@ async function wrSend(intent) {
 
   _wrBusy = true;
   try {
-    const res = await DB.startSpaceTrip(m.id, planet.id, intent, fleet, wrSpeedPct());
+    const res = await DB.startSpaceTrip(m.id, planet.id, intent, fleet, wrSpeedPct(m));
     if (!res || res.error) { wrToast(wrErrText(res?.error), 'error'); return; }
     if (res.space) wrApplySpace(res.space);
     const info = SPACE_INTENTS[intent] || {};
@@ -2217,14 +2594,25 @@ function wrChatReport(r, name) {
 // ── Schiff in groß ansehen ──────────────────────────────────────────────────
 // Die Portraits aus assets/space/ sind 256² — in der Werft-Zeile sieht man davon fast
 // nichts. Klick auf das Bild/„Details" öffnet es formatfüllend samt Werten.
+// „Stark gegen" in einem Satz — die Rollen sind sonst nur Zahlen in einer Tabelle.
+function wrRoleVsText(key) {
+  const r = SPACE_ROLES[key];
+  if (!r) return '—';
+  const gut = [];
+  if (r.vsLight  > 0) gut.push('leichte');
+  if (r.vsHeavy  > 0) gut.push('schwere');
+  if (r.vsStruct > 0) gut.push('Geschütze');
+  if (!gut.length) return (r.vsLight < 0 || r.vsHeavy < 0) ? 'nichts (Zivilschiff)' : '—';
+  return gut.join(', ');
+}
 function wrShipLightbox(shipKey) {
   const s = SPACE_SHIP_BY_KEY[shipKey];
   if (!s) return;
   const m = _wrMember;
   const have = wrShipCount(m, s.key);
   const cost = [`${wrFmt(s.cc)} CC`];
-  if (s.erz)      cost.push(`${wrFmt(s.erz)} 🪨`);
-  if (s.kristall) cost.push(`${wrFmt(s.kristall)} 💎`);
+  if (s.erz)      cost.push(`${wrFmt(s.erz)} ${wrIc('erz')}`);
+  if (s.kristall) cost.push(`${wrFmt(s.kristall)} ${wrIc('kri')}`);
   try {
     document.getElementById('wr-overlay')?.remove();
     const ov = document.createElement('div');
@@ -2233,7 +2621,7 @@ function wrShipLightbox(shipKey) {
     ov.innerHTML = `
       <div class="wr-lightbox">
         <div class="wr-lb-art">
-          <img src="assets/space/${s.art}.png" alt="" onerror="this.remove()">
+          <img src="assets/space/${s.art}.png" alt="" onerror="this.parentNode.classList.add('wr-art-fail');this.remove()">
           <span class="wr-lb-fb">${s.icon}</span>
         </div>
         <div class="wr-lb-title">${_wrEsc(s.name)}</div>
@@ -2242,7 +2630,12 @@ function wrShipLightbox(shipKey) {
           <span>${wrIc("atk")} Kampfkraft<strong>${s.atk || '—'}</strong></span>
           <span>${wrIc("mine")} Abbau<strong>${s.mine || '—'}</strong></span>
           <span>💰 Kosten<strong>${cost.join(' · ')}</strong></span>
-          <span>🏠 Im Hafen<strong>${wrFmt(have)}</strong></span>
+          <span>${wrIc("fleet")} Im Hafen<strong>${wrFmt(have)}</strong></span>
+          <span>${wrIc("time")} Bauzeit<strong>${wrDur(s.buildMin)}</strong></span>
+          <span>${(SPACE_ROLES[s.key] && SPACE_ROLES[s.key].cls === 'heavy') ? '🔷' : '🔹'} Klasse<strong>${
+            (SPACE_ROLES[s.key] && SPACE_ROLES[s.key].cls === 'heavy') ? 'schwer' : 'leicht'}</strong></span>
+          <span>🛡️ Schild<strong>${Math.round(((SPACE_ROLES[s.key] || {}).shield || 0) * 100)} %</strong></span>
+          <span>${wrIc("atk")} Stark gegen<strong>${wrRoleVsText(s.key)}</strong></span>
         </div>
         <button class="wr-btn wr-btn-go" id="wr-lb-ok">Schließen</button>
       </div>`;
@@ -2263,7 +2656,7 @@ function wrArtLightbox(art, icon, title, desc, stats) {
     ov.innerHTML = `
       <div class="wr-lightbox">
         <div class="wr-lb-art">
-          <img src="assets/space/${art}.png" alt="" onerror="this.remove()">
+          <img src="assets/space/${art}.png" alt="" onerror="this.parentNode.classList.add('wr-art-fail');this.remove()">
           <span class="wr-lb-fb">${icon}</span>
         </div>
         <div class="wr-lb-title">${_wrEsc(title)}</div>
@@ -2285,8 +2678,8 @@ function wrTurretLightbox(type) {
   if (!t) return;
   const s = [1, 2, 3].map(lv => wrTurretStats(t.key, lv));
   wrArtLightbox(t.art, t.icon, t.name, t.desc, [
-    ['${wrIc("def")} Feuerkraft', `${s[0].atk} / ${s[1].atk} / ${s[2].atk}`],
-    ['🏗️ Hafen ab', `Stufe ${t.minPort}`],
+    [`${wrIc("def")} Feuerkraft`, `${s[0].atk} / ${s[1].atk} / ${s[2].atk}`],
+    [`${wrIc("yard")} Hafen ab`, `Stufe ${t.minPort}`],
     ['💰 Neubau', `${wrFmt(t.cc)} CC`],
     ['⬆️ Ausbau', `${wrFmt(s[1].cc)} / ${wrFmt(s[2].cc)} CC`],
   ]);
@@ -2298,9 +2691,9 @@ function wrWerftLightbox() {
   wrArtLightbox('base_werft', '🏗️', 'Werft am Raumhafen',
     'Das Trockendock deines Hafens. Hier entstehen alle Schiffe; fertige Rümpfe werden '
   + 'direkt in die Heimatflotte übergeben. Eine ausgebaute Werft baut schneller und günstiger.', [
-    ['🚀 Gebaut', wrFmt(built)],
-    ['🏗️ Werft-Stufe', wrYardLevel(m)],
-    ['⚙️ Bauzeit', `−${Math.round(wrYardDef(wrYardLevel(m)).timeCut * 100)} %`],
+    [`${wrIc("fleet")} Gebaut`, wrFmt(built)],
+    [`${wrIc("yard")} Werft-Stufe`, wrYardLevel(m)],
+    [`${wrIc("time")} Bauzeit`, `−${Math.round(wrYardDef(wrYardLevel(m)).timeCut * 100)} %`],
     ['💰 Kosten', `−${Math.round(wrYardDef(wrYardLevel(m)).costCut * 100)} %`],
   ]);
 }
@@ -2312,9 +2705,9 @@ function wrPortLightbox() {
   + 'Geschütze und hier liegt die Heimatflotte. Alle Clan-Mitglieder starten aus demselben '
   + 'Quadranten, aber jeder baut seinen eigenen Hafen aus.', [
     ['⬚ Bauslots', def.slots],
-    ['${wrIc("def")} Feuerkraft', wrFmt(wrTurretPower(m))],
-    ['🚀 Schiffe', wrFmt(Object.values(wrHomeShips(m)).reduce((a, b) => a + (parseInt(b, 10) || 0), 0))],
-    ['🪐 Kolonien', wrFmt(Object.keys(wrColonies(m)).length)],
+    [`${wrIc("def")} Feuerkraft`, wrFmt(wrTurretPower(m))],
+    [`${wrIc("fleet")} Schiffe`, wrFmt(Object.values(wrHomeShips(m)).reduce((a, b) => a + (parseInt(b, 10) || 0), 0))],
+    [`${wrIc("colony")} Kolonien`, wrFmt(Object.keys(wrColonies(m)).length)],
   ]);
 }
 
@@ -2338,7 +2731,7 @@ function wrFleetLightbox() {
     if (!s || (parseInt(n, 10) || 0) < 1) continue;
     rows += `
       <div class="wr-fl-row">
-        <span class="wr-fl-art"><img src="assets/space/${s.art}.png" alt="" onerror="this.remove()"
+        <span class="wr-fl-art"><img src="assets/space/${s.art}.png" alt="" onerror="this.parentNode.classList.add('wr-art-fail');this.remove()"
           ><span class="wr-fl-fb">${s.icon}</span></span>
         <span class="wr-fl-name">${_wrEsc(s.name)}</span>
         <span class="wr-fl-n">×${wrFmt(n)}</span>
