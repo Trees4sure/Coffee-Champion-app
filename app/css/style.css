@@ -820,3 +820,11 @@ nav::-webkit-scrollbar { display: none; }
 
 /* Admin-Export */
 .survey-admin-btns { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+
+/* ── Mini-Bilder im Chat (app.js: _chatArt) ────────────────────────────────
+   Module posten `[[s:jaeger]]`; der Renderer macht daraus das echte Render aus
+   assets/space/. Emoji-Rückfall wie überall: schlägt das Bild fehl, entfernt sich
+   das <img> per onerror und der Nachbar-Selektor gibt das Emoji frei. */
+.chat-art { width: 18px; height: 18px; object-fit: contain; vertical-align: -4px;
+  display: inline-block; margin: 0 1px; }
+.chat-art + .chat-art-fb { display: none; }

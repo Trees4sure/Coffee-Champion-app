@@ -1,0 +1,407 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   weltraum.css — 🚀 Weltraum-Endgame (Phase 1)
+   Dunkles Sternen-Theme, bewusst kühler als der warme Kaffee-Rest der App:
+   der Weltraum soll sich als eigener Ort anfühlen. Nutzt die vorhandenen
+   CSS-Variablen (--muted, --border, --radius) wo es passt.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.wr-wrap { padding: 4px 0 20px; }
+
+/* ── HUD ─────────────────────────────────────────────────────────────────── */
+.wr-hud { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 8px; }
+.wr-res { background: linear-gradient(160deg, #131a30, #0c1020); border: 1px solid #2a3660;
+  border-radius: var(--radius, 10px); padding: 10px 8px; text-align: center; }
+.wr-res-ic { display: block; font-size: 1.15rem; }
+.wr-res-v  { display: block; font-size: 1.05rem; font-weight: 700; color: #dce6ff; }
+.wr-res-l  { display: block; font-size: .66rem; color: #8b9ac4; text-transform: uppercase; letter-spacing: .04em; }
+.wr-note { font-size: .72rem; color: var(--muted); margin: 0 0 14px; line-height: 1.45; }
+
+/* ── Karten-Karte + Canvas ───────────────────────────────────────────────── */
+.wr-card, .wr-map-card { background: #0d1224; border: 1px solid #232e55;
+  border-radius: var(--radius, 10px); padding: 12px; margin-bottom: 12px; }
+.wr-card-title { font-size: .95rem; font-weight: 700; color: #dce6ff; margin-bottom: 8px; }
+.wr-sub { color: #7f8fbb; font-weight: 400; font-size: .78rem; }
+.wr-canvas { width: 100%; height: auto; display: block; border-radius: 8px;
+  background: #080b18; cursor: pointer; touch-action: manipulation; }
+.wr-legend { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px;
+  font-size: .7rem; color: #8b9ac4; }
+.wr-legend i.wr-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%;
+  margin-right: 4px; vertical-align: middle; }
+.wr-dot-home  { background: #d4aa37; }
+.wr-dot-fog   { background: #8278be; }
+.wr-dot-erz   { background: #c89a5a; }
+.wr-dot-kri   { background: #b98fe0; }
+.wr-dot-clear { background: #7ad48a; }
+
+/* ── Laufende Reise ──────────────────────────────────────────────────────── */
+.wr-trip { background: linear-gradient(150deg, #16224a, #0d1428); border: 1px solid #3a4d8f;
+  border-radius: var(--radius, 10px); padding: 12px; margin-bottom: 12px; }
+.wr-trip-done { border-color: #4c8f5c; background: linear-gradient(150deg, #14301f, #0d1a14); }
+.wr-trip-head { font-size: .92rem; color: #dce6ff; margin-bottom: 6px; }
+.wr-trip-body { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap;
+  font-size: .8rem; color: #9fb0dd; }
+.wr-trip-eta { margin-top: 8px; font-size: .82rem; color: #9fd1ff; }
+
+/* ── Detail-Panel ────────────────────────────────────────────────────────── */
+.wr-detail { background: #0d1224; border: 1px solid #232e55; border-radius: var(--radius, 10px);
+  padding: 12px; margin-bottom: 12px; }
+.wr-detail-empty { color: var(--muted); font-size: .84rem; text-align: center; padding: 18px 12px; }
+.wr-p { font-size: .82rem; color: #a8b6dc; line-height: 1.5; margin: 0 0 10px; }
+.wr-facts { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: .78rem;
+  color: #9fb0dd; margin-bottom: 10px; }
+.wr-facts strong { color: #dce6ff; }
+.wr-facts-fight { padding-top: 8px; border-top: 1px dashed #2a3660; }
+.wr-good { color: #7ad48a; }
+.wr-bad  { color: #e08a8a; }
+.wr-ok   { background: rgba(122,212,138,.10); border: 1px solid #3f7a4c; color: #9ee0aa;
+  border-radius: 8px; padding: 8px 10px; font-size: .8rem; margin-bottom: 10px; }
+.wr-warn { background: rgba(224,138,138,.09); border: 1px solid #7a4040; color: #e6a6a6;
+  border-radius: 8px; padding: 7px 10px; font-size: .75rem; margin-top: 8px; }
+.wr-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* ── Buttons ─────────────────────────────────────────────────────────────── */
+.wr-btn { background: #1b2547; border: 1px solid #3a4d8f; color: #dce6ff;
+  border-radius: 8px; padding: 9px 14px; font-size: .82rem; font-weight: 600;
+  cursor: pointer; display: inline-flex; flex-direction: column; align-items: center;
+  gap: 2px; line-height: 1.25; font-family: inherit; }
+.wr-btn:hover:not(:disabled) { background: #24325e; border-color: #5470c4; }
+.wr-btn:disabled { opacity: .42; cursor: not-allowed; }
+.wr-btn-go { background: linear-gradient(150deg, #2c60b8, #1d3f80); border-color: #4d7fd4; width: 100%; }
+.wr-btn-go:hover:not(:disabled) { background: linear-gradient(150deg, #3572d0, #24509c); }
+.wr-btn-sm { padding: 6px 12px; font-size: .76rem; width: auto; }
+.wr-btn-sub { font-size: .66rem; font-weight: 400; color: #a8b6dc; }
+
+/* ── Kolonien ────────────────────────────────────────────────────────────── */
+.wr-col-row { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center;
+  padding: 7px 0; border-bottom: 1px solid #1c2544; font-size: .82rem; color: #c3cfee; }
+.wr-col-row:last-of-type { border-bottom: none; margin-bottom: 8px; }
+.wr-col-row strong { color: #7ad48a; }
+
+/* ── Werft ───────────────────────────────────────────────────────────────── */
+.wr-ship { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center;
+  padding: 10px 0; border-bottom: 1px solid #1c2544; }
+.wr-ship:last-child { border-bottom: none; }
+.wr-ship-locked { opacity: .5; }
+.wr-ship-ic { font-size: 1.5rem; }
+.wr-ship-name { font-size: .86rem; font-weight: 600; color: #dce6ff; }
+.wr-ship-desc { font-size: .73rem; color: #8b9ac4; line-height: 1.35; }
+.wr-ship-stats { font-size: .72rem; color: #9fb0dd; margin-top: 2px; }
+.wr-ship-buy { text-align: right; }
+.wr-ship-price { font-size: .72rem; color: #d4aa37; margin-bottom: 4px; white-space: nowrap; }
+.wr-lock { font-size: .68rem; color: #7f8fbb; display: block; max-width: 120px; }
+
+.wr-empty { text-align: center; color: #c3cfee; padding: 30px 16px; line-height: 1.7;
+  background: #0d1224; border: 1px solid #232e55; border-radius: var(--radius, 10px); }
+.wr-empty code { background: #1b2547; padding: 1px 6px; border-radius: 4px; font-size: .78rem; }
+
+/* ── Rückkehr-Overlay ────────────────────────────────────────────────────── */
+.wr-overlay { position: fixed; inset: 0; background: rgba(4,7,18,.78); z-index: 9000;
+  display: flex; align-items: center; justify-content: center; padding: 20px; }
+.wr-report { background: linear-gradient(160deg, #16224a, #0b1020); border: 1px solid #4d7fd4;
+  border-radius: 14px; padding: 20px; max-width: 380px; width: 100%; text-align: center;
+  color: #c3cfee; font-size: .84rem; line-height: 1.6; box-shadow: 0 10px 40px rgba(0,0,0,.6); }
+.wr-report-title { font-size: 1rem; font-weight: 700; color: #dce6ff; margin-bottom: 10px; }
+.wr-rep-head { font-size: .92rem; font-weight: 600; margin-bottom: 6px; }
+.wr-report .wr-btn { margin-top: 14px; }
+
+/* ── Schiff in groß (Lightbox) ───────────────────────────────────────────── */
+.wr-lightbox { background: linear-gradient(160deg, #16224a, #0b1020); border: 1px solid #4d7fd4;
+  border-radius: 14px; padding: 18px; max-width: 380px; width: 100%; text-align: center;
+  color: #c3cfee; box-shadow: 0 10px 40px rgba(0,0,0,.6); }
+.wr-lb-art { position: relative; width: 100%; max-width: 260px; margin: 0 auto 12px;
+  aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(circle at 50% 45%, #1d2a55 0%, #0a0e1c 70%);
+  border: 1px solid #2a3660; border-radius: 12px; overflow: hidden; }
+.wr-lb-art img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.wr-lb-fb { font-size: 4rem; }
+.wr-lb-art img + .wr-lb-fb { display: none; }
+.wr-lb-title { font-size: 1.05rem; font-weight: 700; color: #dce6ff; margin-bottom: 4px; }
+.wr-lb-desc { font-size: .8rem; color: #8b9ac4; line-height: 1.5; margin-bottom: 12px; }
+.wr-lb-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 4px; }
+.wr-lb-stats span { display: flex; flex-direction: column; gap: 2px; font-size: .68rem;
+  color: #7f8fbb; background: #101733; border: 1px solid #24305a; border-radius: 8px; padding: 7px 6px; }
+.wr-lb-stats strong { font-size: .82rem; color: #dce6ff; }
+
+/* Werft-Portrait als Zoom-Ziel kennzeichnen */
+.wr-ship-zoom { position: relative; cursor: zoom-in; }
+.wr-zoom-hint { position: absolute; right: -3px; bottom: -3px; font-size: .6rem;
+  background: #16224a; border: 1px solid #3a4470; border-radius: 50%;
+  width: 16px; height: 16px; line-height: 14px; text-align: center; pointer-events: none; }
+
+/* ── Raumhafen: Ausbau + Geschütz-Slots ──────────────────────────────────── */
+.wr-hafen-head { display: grid; grid-template-columns: 84px 1fr; gap: 12px;
+  align-items: start; margin-bottom: 12px; }
+.wr-hafen-art { position: relative; width: 84px; height: 84px; cursor: zoom-in;
+  display: flex; align-items: center; justify-content: center; border-radius: 10px;
+  background: radial-gradient(circle at 50% 45%, #1d2a55 0%, #0a0e1c 70%); border: 1px solid #2a3660; }
+.wr-hafen-art img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.wr-hafen-fb { font-size: 2rem; }
+.wr-hafen-art img + .wr-hafen-fb { display: none; }
+.wr-hafen-power { font-size: .88rem; color: #dce6ff; margin-bottom: 4px; }
+.wr-hafen-power strong { color: #ffd15c; }
+.wr-hafen-info .wr-btn { margin-top: 8px; }
+
+.wr-slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 9px; }
+.wr-slot { border-radius: 9px; padding: 9px; border: 1px solid #24305a; background: #0d1430; }
+.wr-slot-empty { border-style: dashed; }
+.wr-slot-full { text-align: center; }
+.wr-slot-art { position: relative; width: 56px; height: 56px; margin: 0 auto 6px; cursor: zoom-in;
+  display: flex; align-items: center; justify-content: center; }
+.wr-slot-art img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.wr-slot-fb { font-size: 1.6rem; }
+.wr-slot-art img + .wr-slot-fb { display: none; }
+.wr-slot-name { font-size: .76rem; color: #c3cfee; font-weight: 600; margin-bottom: 3px; }
+.wr-slot-atk { font-size: .8rem; color: #ffd15c; font-weight: 700; margin-bottom: 7px; }
+.wr-slot-max { font-size: .7rem; color: #7ad48a; }
+.wr-slot-opts { display: flex; flex-direction: column; gap: 5px; margin-top: 6px; }
+.wr-slot-opt { display: grid; grid-template-columns: 46px 1fr auto; gap: 9px;
+  align-items: center; text-align: left; padding: 7px; border-radius: 7px;
+  border: 1px solid #2a3660; background: #101733; color: #c3cfee; }
+.wr-slot-opt-lock { opacity: .55; }
+.wr-slot-opt-art { position: relative; width: 46px; height: 46px; display: flex;
+  align-items: center; justify-content: center; cursor: zoom-in; }
+.wr-slot-opt-art img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.wr-slot-opt-fb { font-size: 1.4rem; }
+.wr-slot-opt-art img + .wr-slot-opt-fb { display: none; }
+.wr-slot-opt-txt { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.wr-slot-opt-n { font-size: .76rem; font-weight: 600; }
+.wr-slot-opt-a { font-size: .72rem; color: #ffd15c; }
+.wr-slot-opt-p { font-size: .66rem; color: #8b9ac4; }
+
+/* ── Flotte unterwegs: Detail-Popup ──────────────────────────────────────── */
+.wr-trip { cursor: pointer; }
+.wr-trip-more { font-size: .66rem; color: #8b9ac4; margin-left: auto; white-space: nowrap; }
+.wr-trip-head { display: flex; align-items: center; gap: 6px; }
+.wr-fleetbox { max-width: 400px; }
+.wr-fl-list { margin: 4px 0 12px; }
+.wr-fl-row { display: grid; grid-template-columns: 34px 1fr auto auto; gap: 8px;
+  align-items: center; padding: 5px 4px; border-bottom: 1px solid #1a2447; text-align: left; }
+.wr-fl-row:last-child { border-bottom: 0; }
+.wr-fl-art { position: relative; width: 34px; height: 34px; display: flex;
+  align-items: center; justify-content: center; }
+.wr-fl-art img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.wr-fl-fb { font-size: 1.1rem; }
+.wr-fl-art img + .wr-fl-fb { display: none; }
+.wr-fl-name { font-size: .76rem; color: #c3cfee; }
+.wr-fl-n { font-size: .8rem; font-weight: 700; color: #dce6ff; }
+.wr-fl-atk { font-size: .72rem; color: #ffd15c; min-width: 54px; text-align: right; }
+.wr-fl-beute { margin-top: 10px; font-size: .74rem; color: #8b9ac4; text-align: left;
+  background: #101733; border: 1px solid #24305a; border-radius: 8px; padding: 7px 9px; }
+.wr-fl-risk { margin-top: 8px; font-size: .72rem; text-align: left; line-height: 1.45; }
+
+/* ── Flottenverband zusammenstellen ──────────────────────────────────────── */
+.wr-fleetsel { margin: 12px 0; padding: 10px 11px; border-radius: 10px;
+  background: #0d1430; border: 1px solid #24305a; }
+.wr-fleetsel-empty { font-size: .78rem; color: var(--muted); text-align: center; padding: 12px; }
+.wr-fs-head { font-size: .82rem; font-weight: 600; color: #dce6ff; margin-bottom: 8px; }
+.wr-fs-row { display: grid; grid-template-columns: 34px 1fr auto; align-items: center;
+  gap: 8px; padding: 5px 4px; border-radius: 7px; }
+.wr-fs-row.wr-fs-on { background: rgba(77,127,212,.13); }
+.wr-fs-ic { font-size: 1.1rem; text-align: center; }
+.wr-fs-name { font-size: .78rem; color: #c3cfee; display: flex; flex-direction: column; line-height: 1.3; }
+.wr-fs-name .wr-sub { font-size: .66rem; }
+.wr-fs-stepper { display: flex; align-items: center; gap: 6px; }
+.wr-fs-btn { width: 26px; height: 26px; border-radius: 6px; border: 1px solid #3a4470;
+  background: #16224a; color: #dce6ff; font-size: .95rem; line-height: 1; cursor: pointer; padding: 0; }
+.wr-fs-btn:disabled { opacity: .32; cursor: default; }
+.wr-fs-n { min-width: 40px; text-align: center; font-size: .82rem; font-weight: 700; color: #dce6ff; }
+.wr-fs-n .wr-sub { font-weight: 400; font-size: .66rem; }
+.wr-fs-quick { display: flex; flex-wrap: wrap; gap: 6px; margin: 9px 0 8px; }
+.wr-fs-q { flex: 1 1 auto; padding: 5px 8px; border-radius: 6px; border: 1px solid #3a4470;
+  background: #101733; color: #a8b6dc; font-size: .7rem; cursor: pointer; }
+.wr-fs-q:active { background: #1d2a55; }
+.wr-fs-sum { display: flex; flex-wrap: wrap; gap: 10px; font-size: .72rem; color: #8b9ac4;
+  border-top: 1px solid #24305a; padding-top: 8px; }
+.wr-fs-sum strong { color: #dce6ff; }
+
+/* ── Schmale Displays ────────────────────────────────────────────────────── */
+@media (max-width: 480px) {
+  .wr-hud { grid-template-columns: repeat(2, 1fr); }
+  .wr-ship { grid-template-columns: auto 1fr; }
+  .wr-ship-buy { grid-column: 1 / -1; text-align: left; display: flex;
+    align-items: center; gap: 10px; }
+  .wr-ship-price { margin-bottom: 0; }
+}
+
+/* ── Weltraum-Zweig im Forschungsbaum (imperium.js: _buildWeltraumZweig) ──── */
+.cc-space-section { margin-top: 18px; padding: 14px; border-radius: var(--radius, 10px);
+  background: linear-gradient(160deg, #101733, #0a0e1e); border: 1px solid #2a3660; }
+.cc-space-section.cc-space-locked { opacity: .75; }
+.cc-space-teaser { font-size: .8rem; color: #a8b6dc; line-height: 1.5; margin: 0 0 12px; }
+.cc-space-card { background: #0d1224; border: 1px solid #232e55; border-radius: 9px;
+  padding: 10px 12px; margin-bottom: 8px; }
+.cc-space-card.cc-space-ready { border-color: #4d7fd4; }
+.cc-space-card.cc-space-owned { border-color: #3f7a4c; background: #0d1c16; }
+.cc-space-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cc-space-ic { font-size: 1.2rem; }
+.cc-space-name { font-size: .88rem; font-weight: 700; color: #dce6ff; }
+.cc-space-ast { font-size: .68rem; color: #7f8fbb; }
+.cc-space-cost { margin-left: auto; font-size: .78rem; color: #d4aa37; font-weight: 600; }
+.cc-space-desc { font-size: .75rem; color: #8b9ac4; line-height: 1.45; margin: 6px 0 8px; }
+
+/* Pixel-Art-Kacheln im Forschungszweig (aus plans/Weltraum_expansion.png zugeschnitten).
+   image-rendering: pixelated — sonst matscht der Browser die 58px-Kachel beim Hochskalieren.
+   Der Emoji-Rückfall daneben ist normalerweise ausgeblendet; schlägt das Bild fehl, entfernt
+   sich das <img> per onerror selbst, der Nachbar-Selektor greift nicht mehr → Emoji erscheint. */
+.cc-space-art { width: 46px; height: 46px; border-radius: 7px; flex: 0 0 auto;
+  image-rendering: pixelated; image-rendering: crisp-edges;
+  border: 1px solid #3a4470; background: #1a1508; }
+.cc-space-art + .cc-space-ic-fb { display: none; }
+.cc-space-owned .cc-space-art { border-color: #4c8f5c; }
+.cc-space-ready .cc-space-art { border-color: #4d7fd4; box-shadow: 0 0 8px rgba(77,127,212,.35); }
+
+/* Schiffs-Portraits in der Werft — gleiche Mechanik (assets/space/ship_*.png).
+   Solange JP die Renders nicht geliefert hat, greift überall der Emoji-Rückfall. */
+.wr-ship-art { width: 44px; height: 44px; border-radius: 8px; display: block;
+  image-rendering: pixelated; image-rendering: crisp-edges;
+  border: 1px solid #2a3660; background: #0a0e1c; }
+.wr-ship-art + .wr-ship-ic-fb { display: none; }
+
+/* Rohstoff-Symbole im HUD (assets/space/res_erz.png · res_kristall.png).
+   Gleiche Rückfall-Mechanik wie bei Schiffen und Forschungs-Icons. */
+.wr-res-art { width: 30px; height: 30px; display: block; margin: 0 auto 1px;
+  image-rendering: auto; filter: drop-shadow(0 1px 2px rgba(0,0,0,.5)); }
+.wr-res-art + .wr-res-ic-fb { display: none; }
+
+/* Rückruf-Button in der Reise-Karte */
+.wr-btn-recall { margin-top: 8px; background: #2a1f16; border-color: #6b4a2a; color: #e0c9a8; }
+
+/* ── Angriffswelle auf den eigenen Raumhafen (P2) ─────────────────────────── */
+.wr-wave { border-radius: var(--radius, 10px); padding: 13px; margin-bottom: 12px;
+  border: 1px solid #7a4040; background: linear-gradient(150deg, #2a1420, #140d16); }
+.wr-wave-ok { border-color: #3f7a4c; background: linear-gradient(150deg, #14301f, #0d1a14); }
+.wr-wave-danger { animation: wr-pulse 2.4s ease-in-out infinite; }
+@keyframes wr-pulse {
+  0%, 100% { box-shadow: 0 0 0 rgba(224,138,138,0); }
+  50%      { box-shadow: 0 0 16px rgba(224,138,138,.30); }
+}
+@media (prefers-reduced-motion: reduce) { .wr-wave-danger { animation: none; } }
+.wr-wave-head { display: grid; grid-template-columns: 52px 1fr; gap: 10px;
+  align-items: center; margin-bottom: 8px; }
+.wr-wave-art { position: relative; width: 52px; height: 52px; display: flex;
+  align-items: center; justify-content: center; }
+.wr-wave-art img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.wr-wave-fb { font-size: 1.7rem; }
+.wr-wave-art img + .wr-wave-fb { display: none; }
+.wr-wave-title { font-size: .9rem; font-weight: 700; color: #ffdede;
+  display: flex; flex-direction: column; line-height: 1.35; }
+.wr-wave-ok .wr-wave-title { color: #d5f0dc; }
+.wr-wave-eta { font-size: .88rem; color: #ffc4c4; margin-bottom: 8px; }
+.wr-wave-ok .wr-wave-eta { color: #9ee0aa; }
+.wr-wave-note { display: block; margin: 8px 0; line-height: 1.45; }
+.wr-wave .wr-btn { margin-top: 4px; }
+
+/* ── Hilferufe aus dem Clan ───────────────────────────────────────────────── */
+.wr-card-call { border-color: #6b4a2a; background: linear-gradient(150deg, #241a12, #0f0c14); }
+.wr-call { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 8px 0; border-bottom: 1px solid #2a2035; }
+.wr-call:last-of-type { border-bottom: none; }
+.wr-call-main { flex: 1 1 190px; font-size: .82rem; color: #e6d8c4;
+  display: flex; flex-direction: column; line-height: 1.4; }
+.wr-call-done { font-size: .76rem; color: #7ad48a; white-space: nowrap; }
+
+/* Beschädigtes Geschütz (nach einer verlorenen Angriffswelle) */
+.wr-slot-dmg { border-color: #7a4040; background: #1e1218; }
+.wr-slot-dmg .wr-slot-art { filter: grayscale(.75) brightness(.7); }
+.wr-slot-dmg .wr-slot-atk { display: flex; flex-direction: column; line-height: 1.3; }
+
+/* ── Gegner-Portraits (assets/space/foe_*.png) ────────────────────────────── */
+.wr-foe { position: relative; display: inline-flex; align-items: center;
+  justify-content: center; width: 40px; height: 40px; flex: 0 0 auto; }
+.wr-foe img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.wr-foe-fb { font-size: 1.3rem; }
+.wr-foe img + .wr-foe-fb { display: none; }
+.wr-foe-lg { width: 72px; height: 72px; }
+.wr-foe-lg .wr-foe-fb { font-size: 2.2rem; }
+.wr-planet-head { display: flex; align-items: center; gap: 11px; margin-bottom: 10px; }
+.wr-planet-head .wr-card-title { margin-bottom: 2px; }
+.wr-rep-foe { display: flex; justify-content: center; margin-bottom: 6px; }
+
+/* ── Ausbau-Leiter des Raumhafens (3 Stufen sichtbar machen) ──────────────── */
+.wr-ladder { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+  margin: 12px 0; }
+.wr-rung { display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 9px 6px; border-radius: 9px; border: 1px solid #24305a; background: #0d1430;
+  text-align: center; }
+.wr-rung-art { position: relative; width: 52px; height: 52px; display: flex;
+  align-items: center; justify-content: center; }
+.wr-rung-art img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.wr-rung-fb { font-size: 1.5rem; }
+.wr-rung-art img + .wr-rung-fb { display: none; }
+.wr-rung-lv { font-size: .74rem; font-weight: 700; color: #dce6ff; }
+.wr-rung-sl { font-size: .66rem; color: #8b9ac4; }
+.wr-rung-st { font-size: .64rem; color: #7f8fbb; }
+.wr-rung-now  { border-color: #ffd15c; background: rgba(255,209,92,.10); }
+.wr-rung-now .wr-rung-st { color: #ffd15c; font-weight: 600; }
+.wr-rung-done { border-color: #3f7a4c; }
+.wr-rung-done .wr-rung-st { color: #7ad48a; }
+.wr-rung-todo .wr-rung-art { filter: grayscale(.85) brightness(.55); }
+
+/* ── Schiffs-Miniaturen (statt Emoji) ─────────────────────────────────────── */
+.wr-mini { position: relative; display: inline-flex; align-items: center;
+  justify-content: center; width: 22px; height: 22px; vertical-align: -5px; }
+.wr-mini img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.wr-mini-fb { font-size: .95rem; }
+.wr-mini img + .wr-mini-fb { display: none; }
+.wr-mini-md { width: 32px; height: 32px; }
+.wr-mini-md .wr-mini-fb { font-size: 1.15rem; }
+.wr-fs-ic { display: flex; align-items: center; justify-content: center; }
+
+/* Werft-Kopf mit Portrait */
+.wr-werft-head { display: grid; grid-template-columns: 62px 1fr; gap: 11px;
+  align-items: center; margin-bottom: 10px; }
+.wr-werft-art { position: relative; width: 62px; height: 62px; display: flex;
+  align-items: center; justify-content: center; }
+.wr-werft-art img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.wr-werft-fb { font-size: 2rem; }
+.wr-werft-art img + .wr-werft-fb { display: none; }
+.wr-werft-head .wr-card-title { margin-bottom: 2px; }
+
+/* ── Laufender Bauauftrag in der Werft ────────────────────────────────────── */
+.wr-job { display: grid; grid-template-columns: 40px 1fr auto; gap: 10px; align-items: center;
+  padding: 9px 10px; margin-bottom: 10px; border-radius: 9px;
+  border: 1px solid #3a4d8f; background: linear-gradient(150deg, #16224a, #0d1428); }
+.wr-job-done { border-color: #4c8f5c; background: linear-gradient(150deg, #14301f, #0d1a14); }
+.wr-job-txt { display: flex; flex-direction: column; font-size: .82rem; color: #c3cfee;
+  line-height: 1.35; }
+.wr-job-note { display: block; margin-bottom: 8px; }
+.wr-werft-head .wr-btn { margin-top: 8px; }
+
+/* ── Werftauftrag (Klassennamen bleiben .wr-cart*) ────────────────────────── */
+.wr-jobs { margin-bottom: 12px; }
+.wr-jobs .wr-btn { margin-top: 6px; }
+.wr-ship-busy { opacity: .72; }
+.wr-cart { margin-top: 12px; padding: 11px; border-radius: 9px;
+  border: 1px solid #4d7fd4; background: rgba(77,127,212,.10); }
+.wr-cart-sum { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: .8rem;
+  color: #c3cfee; margin-bottom: 9px; }
+.wr-cart-sum strong { color: #dce6ff; }
+.wr-cart-act { display: flex; gap: 8px; align-items: stretch; }
+.wr-cart-act .wr-btn-go { flex: 1 1 auto; }
+.wr-ship-buy .wr-fs-stepper { justify-content: flex-end; }
+
+/* ── Eigenschafts-Icons (assets/space/ic_*.png) ───────────────────────────── */
+.wr-ic { position: relative; display: inline-flex; align-items: center;
+  justify-content: center; width: 1em; height: 1em; vertical-align: -0.13em; }
+.wr-ic img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.wr-ic-fb { font-size: .95em; line-height: 1; }
+.wr-ic img + .wr-ic-fb { display: none; }
+
+/* Fundstück (gekapertes Schiff / geborgenes Wrack) im Rückkehr-Report */
+.wr-rep-found { display: flex; align-items: center; justify-content: center; gap: 8px;
+  margin: 8px 0; padding: 7px 9px; border-radius: 8px;
+  border: 1px solid #4c8f5c; background: rgba(122,212,138,.10); }
+
+/* ── Dauerernte-Routen ────────────────────────────────────────────────────── */
+.wr-route { display: grid; grid-template-columns: 36px 1fr auto; gap: 10px;
+  align-items: center; padding: 8px 0; border-bottom: 1px solid #1c2544; }
+.wr-route:last-of-type { border-bottom: none; margin-bottom: 8px; }
+.wr-route-txt { display: flex; flex-direction: column; font-size: .82rem;
+  color: #c3cfee; line-height: 1.35; }
+.wr-route-amt { font-size: .84rem; font-weight: 700; color: #7ad48a; white-space: nowrap; }
+.wr-routebox { margin-top: 12px; padding: 10px 11px; border-radius: 10px;
+  background: #0d1430; border: 1px solid #24305a; }
+.wr-routebox .wr-facts { margin: 8px 0; }
+
+/* Wrack-Bergung (endliches, geteiltes Feld) */
+.wr-routebox-wreck { border-color: #6b4a2a; background: #1b1510; }

@@ -1109,6 +1109,12 @@
 /* 🚐-Mobil als DivIcon */
 .km-mobil-icon { font-size:16px; line-height:24px; text-align:center; filter:drop-shadow(0 1px 2px rgba(0,0,0,.6)); }
 .km-mobil-icon.mine { font-size:21px; }
+/* Farbige Scheibe hinter dem 🚐 in der Spielerfarbe der Auswertungs-Grafik (--kmc wird
+   in kaffeemobil.js aus playerColor() gesetzt). Das Emoji selbst bleibt unverändert. */
+.km-mobil-icon .km-mobil-dot { display:inline-flex; align-items:center; justify-content:center;
+  width:22px; height:22px; border-radius:50%; background:color-mix(in srgb, var(--kmc) 55%, transparent);
+  border:2px solid var(--kmc); box-shadow:0 0 6px color-mix(in srgb, var(--kmc) 70%, transparent); }
+.km-mobil-icon.mine .km-mobil-dot { width:28px; height:28px; border-width:3px; }
 
 .cc-mobil-dest { margin-top:12px; }
 .km-dest-title { margin:6px 0 8px; font-size:.95rem; }
