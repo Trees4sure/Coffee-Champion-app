@@ -39,9 +39,15 @@ const SPACE_SHIPS = [
     needs:'wt_frachtmodule', desc:'Gründet eine Kolonie — bleibt am Zielplaneten' },
   { key:'fregatte', buildMin:40, art:'ship_fregatte', icon:'🛡️', name:'Fregatte', atk:28, mine:0, cc:2800, erz:30, kristall:0,
     needs:'wt_frachtmodule', desc:'Leichter Begleitschutz — Schild senkt die Verluste des ganzen Verbands' },
-  { key:'kreuzer', buildMin:70, art:'ship_kreuzer', icon:'🚨', name:'Kreuzer', atk:65, mine:0, cc:6000, erz:80, kristall:10,
+  // ⚠️ JP 2026-07-22: Bomber ↔ Kreuzer haben NAME/BILD/ICON getauscht — der Kreuzer
+  // ist optisch größer und soll daher das stärkere, teurere Schiff sein. Die KEYS,
+  // Werte und Rollen (SPACE_ROLES) bleiben unverändert: Keys stecken serverseitig in
+  // _space_ship_stats/loss_order UND in den Flottenbeständen der Spieler — ein
+  // Key-Tausch hätte bestehende Flotten still umbewertet. CHAT_ART (app.js) ist
+  // spiegelbildlich mitgetauscht, sonst zeigte der Chat das alte Bild zum neuen Namen.
+  { key:'kreuzer', buildMin:70, art:'ship_bomber', icon:'💣', name:'Bomber', atk:65, mine:0, cc:6000, erz:80, kristall:10,
     needs:'wt_frachtmodule', desc:'Kapitalschiff-Jäger: stark gegen schwere Gegner, träge gegen Schwärme' },
-  { key:'bomber', buildMin:100, art:'ship_bomber', icon:'💣', name:'Bomber', atk:90, mine:0, cc:9000, erz:120, kristall:25,
+  { key:'bomber', buildMin:100, art:'ship_kreuzer', icon:'🚨', name:'Kreuzer', atk:90, mine:0, cc:9000, erz:120, kristall:25,
     needs:'wt_frachtmodule', desc:'Überall stark, gegen Geschütze verheerend' },
   { key:'schlachtschiff', buildMin:150, art:'ship_schlachtschiff', icon:'⚔️', name:'Schlachtschiff', atk:180, mine:0, cc:18000, erz:250, kristall:60,
     needs:'wt_frachtmodule', desc:'Überall stark, hoher Schild — das Rückgrat einer großen Flotte' },
@@ -365,6 +371,35 @@ const WR_HEX_SIZE = 80;
 const WR_CANVAS_W = 640;
 const WR_CANVAS_H = 720;
 
+// ── 🔍 Karten-Zoom (JP 2026-07-22: „mobil etwas klein") ─────────────────────
+// Zoom + Pan als reine ANZEIGE-Transformation um die Canvas-Mitte:
+//   screen = (world − c) · zoom + c + pan
+// wrDrawMap zeichnet die ganze Szene innerhalb dieser Transformation; wrCanvasClick
+// rechnet Zeigerkoordinaten mit der INVERSEN zurück — Zeichnung und Treffertest
+// bleiben damit zwangsläufig deckungsgleich (dieselbe Quelle, wie bei wrPlanetOffset).
+// Bedienung: ➕/➖-Buttons, Pinch mit zwei Fingern, Ziehen verschiebt (ab Zoom > 1).
+let _wrZoom = 1, _wrPanX = 0, _wrPanY = 0;
+function _wrClampPan() {
+  // Inhalt nie aus dem Sichtfenster schieben: bei Zoom z ragt (z−1)·Halbkante über.
+  const mx = (WR_CANVAS_W * (_wrZoom - 1)) / 2, my = (WR_CANVAS_H * (_wrZoom - 1)) / 2;
+  _wrPanX = Math.max(-mx, Math.min(mx, _wrPanX));
+  _wrPanY = Math.max(-my, Math.min(my, _wrPanY));
+}
+function wrSetZoom(z, fx, fy) {
+  const old = _wrZoom;
+  _wrZoom = Math.max(1, Math.min(3, z));
+  if (fx != null && old > 0) {
+    // Fixpunkt (Finger/Buttonmitte) beibehalten: Weltpunkt unter (fx,fy) bleibt liegen
+    const cx = WR_CANVAS_W / 2, cy = WR_CANVAS_H / 2;
+    const wx = (fx - cx - _wrPanX) / old + cx, wy = (fy - cy - _wrPanY) / old + cy;
+    _wrPanX = fx - cx - (wx - cx) * _wrZoom;
+    _wrPanY = fy - cy - (wy - cy) * _wrZoom;
+  }
+  if (_wrZoom === 1) { _wrPanX = 0; _wrPanY = 0; }
+  _wrClampPan();
+  wrDrawMap();
+}
+
 // ── Modul-State ──────────────────────────────────────────────────────────────
 let _wrEl       = null;
 let _wrMember   = null;
@@ -410,6 +445,16 @@ function wrResearch(m)  { return (m && m.research) || {}; }
 // Wert seit 21l und rechnet selbst aus space.tech — sonst koennte der Client sich
 // beliebig schnell machen (dieselbe Lehre wie bei den Schiffspreisen).
 function wrSpeedPct(m) { return wrTechSpeed(m || _wrMember); }
+
+// Flugzeit-Anzeige inkl. Technik-Ersparnis (JP 2026-07-22: die Verkürzung durch die
+// Weiterentwicklungen soll DIREKT am Ziel sichtbar sein, nicht erst beim beauftragten
+// Flug). Reine Anzeige — abgerechnet wird serverseitig aus space.tech (21l).
+function wrTravelHtml(baseMin) {
+  const sp = Math.round(wrSpeedPct(_wrMember) || 0);
+  if (sp <= 0) return `<strong>${baseMin} Min</strong>`;
+  const eff = Math.max(1, Math.round(baseMin * (100 - sp) / 100));
+  return `<strong>${eff} Min</strong> <span class="wr-good">(−${sp} % Technik, statt ${baseMin})</span>`;
+}
 
 function wrShipCount(m, key) { return parseInt(wrHomeShips(m)[key], 10) || 0; }
 function wrFleetPower(fleet) {
@@ -467,9 +512,9 @@ function wrDrawImg(ctx, name, x, y, box) {
 // Anzeigewert — schlägt das PNG fehl, greift der CSS-Nachbarselektor.
 // ⚠️ Nur an Kennzahl-Stellen einsetzen. In Chat-Meldungen und Toasts bleiben Emoji:
 // dort wird kein HTML gerendert (dafür gäbe es die [[s:key]]-Token).
-const WR_IC = { atk:'⚔️', def:'🛡️', mine:'⛏️', time:'⏱️', erz:'🪨', kri:'💎',
+const WR_IC = { atk:'⚔️', def:'🛡️', mine:'🔨', time:'⏱️', erz:'🪨', kri:'💎',
   fleet:'🚀', travel:'✈️', colony:'🪐', yard:'🏗️', salvage:'♻️', wreck:'💀',
-  help:'🤝', yield:'📥' };
+  help:'🤝', yield:'📥', port:'🛰️' };
 // Beliebiges Asset in Icon-Größe — für Dinge, die kein ic_*-Symbol haben, aber ein
 // Portrait (Raumhafen, Werft). Gleiche Hülle wie wrIc, damit das CSS greift.
 // ⚠️ NUR für flache Grafiken verwenden. Ein detailliertes 3D-Render (base_*, ship_*)
@@ -482,6 +527,21 @@ function wrIcArt(art, fb) {
     onerror="this.parentNode.classList.add('wr-art-fail');this.remove()"><span class="wr-ic-fb">${fb || '•'}</span></span>`;
 }
 function wrIc(key) {
+  // JP 2026-07-22: an den Kennzahlen wieder ERKENNBARE Symbole statt der flachen
+  // gelben Icons — ⚔️ Kampfkraft, 🔨 Abbau, ⏱️ Bauzeit/Zeit als REINER TEXT
+  // (bewusst OHNE <span>-Hülle: die Lektion der „leeren Kreise" — Element-Selektoren
+  // wie `.wr-lb-stats span` stylen jede Icon-Hülle mit, reiner Text bleibt verschont,
+  // genau wie die schon immer funktionierenden 💰🔷🛡️).
+  if (key === 'atk')  return '⚔️';
+  if (key === 'mine') return '🔨';
+  if (key === 'time') return '⏱️';
+  // Erz/Kristall zeigen die ECHTEN Rohstoff-Bilder, 'yard' das Werft-I-Portrait
+  // (statt Baukran), 'port' den Raumhafen (für „Im Hafen") — alles JP 2026-07-22.
+  const art = key === 'erz'  ? 'res_erz'
+            : key === 'kri'  ? 'res_kristall'
+            : key === 'yard' ? 'base_werft_1'
+            : key === 'port' ? 'base_1'
+            : 'ic_' + key;
   const fb = WR_IC[key] || '•';
   // ⚠️ Der Emoji-Rückfall hängt NICHT mehr am CSS-Nachbarselektor `img + .wr-ic-fb`.
   // Grund (JP-Meldung 2026-07-21): der versteckt das Emoji, sobald ein <img> im DOM
@@ -491,7 +551,7 @@ function wrIc(key) {
   // Jetzt umgekehrt: erst ein ERFOLGREICH geladenes Bild blendet das Emoji aus.
   // Merke: einen Rückfall nie an die ANWESENHEIT des Elements knüpfen, sondern an
   // seinen Erfolg.
-  return `<span class="wr-ic"><img src="assets/space/ic_${key}.png" alt=""
+  return `<span class="wr-ic"><img src="assets/space/${art}.png" alt=""
     onerror="this.parentNode.classList.add('wr-art-fail');this.remove()"><span class="wr-ic-fb">${fb}</span></span>`;
 }
 
@@ -614,9 +674,31 @@ async function _buildWeltraum(member, el) {
   // Erste Rückkehr direkt einlösen, falls die Flotte während der Abwesenheit gelandet ist
   await wrTryClaim(true);
   await wrClaimBuild(true);
+  await wrAutoHarvest();
   await wrLoadWaves(true);
   wrRender();
   wrStartLoop();
+}
+
+// 📥 Auto-Ernte beim Öffnen des 🚀-Tabs (JP 2026-07-22: „warum wird es nicht
+// automatisch gemacht?"). Kolonien- und Routen-Ertrag werden claim-on-action
+// eingesammelt (Projekt-Philosophie: kein Cron) — bisher aber nur per Button.
+// Jetzt zusätzlich still beim Tab-Öffnen, gedrosselt auf 1×/10 Min; Toast nur,
+// wenn tatsächlich etwas hereinkam. Der Button bleibt für Zwischendurch.
+let _wrAutoHarvestTs = 0;
+async function wrAutoHarvest() {
+  if (Date.now() - _wrAutoHarvestTs < 10 * 60 * 1000) return;
+  _wrAutoHarvestTs = Date.now();
+  try {
+    const res = await DB.harvestSpace(_wrMember.id);
+    if (!res || res.error) return;                 // still — Fehler zeigt der manuelle Weg
+    if (res.space) wrApplySpace(res.space);
+    const parts = [];
+    if (res.erz > 0)      parts.push(`${wrFmt(res.erz)} 🪨`);
+    if (res.kristall > 0) parts.push(`${wrFmt(res.kristall)} 💎`);
+    if (parts.length) wrToast(`📥 Automatisch eingesammelt: ${parts.join(' · ')}`, 'success');
+    if (res.paused > 0) wrToast(`⚠️ ${wrFmt(res.paused)} Route(n) pausieren — der Kristall reicht nicht als Treibstoff.`, 'error');
+  } catch (e) { /* Auto-Ernte darf das Laden des Tabs nie blockieren */ }
 }
 
 // ── Angriffswellen laden ────────────────────────────────────────────────────
@@ -681,7 +763,13 @@ function wrRender() {
       ${trip ? wrTripHtml(m, trip) : ''}
       <div class="wr-map-card"${_wrTab === 'karte' ? '' : ' hidden'}>
         <div class="wr-card-title">🌌 Sternkarte <span class="wr-sub">— geteilt mit deinem Kaffee-Clan</span></div>
-        <canvas id="wr-canvas" class="wr-canvas" width="${WR_CANVAS_W}" height="${WR_CANVAS_H}"></canvas>
+        <div class="wr-canvas-wrap">
+          <canvas id="wr-canvas" class="wr-canvas" width="${WR_CANVAS_W}" height="${WR_CANVAS_H}"></canvas>
+          <div class="wr-zoom">
+            <button type="button" class="wr-zoom-btn" data-wr-zoom="in" title="Vergrößern">➕</button>
+            <button type="button" class="wr-zoom-btn" data-wr-zoom="out" title="Verkleinern">➖</button>
+          </div>
+        </div>
         <div class="wr-legend">
           <span><i class="wr-dot wr-dot-home"></i> Raumhafen</span>
           <span><i class="wr-dot wr-dot-fog"></i> Nebel</span>
@@ -693,6 +781,7 @@ function wrRender() {
       <div id="wr-detail"${_wrTab === 'karte' ? '' : ' hidden'}>${wrDetailHtml(m)}</div>
       <div${_wrTab === 'hafen' ? '' : ' hidden'}>
         ${wrHafenHtml(m)}
+        ${WR_RES_NOTE}
         ${wrColoniesHtml(m)}
         ${wrRoutesHtml(m)}
       </div>
@@ -714,19 +803,23 @@ function wrResIcon(art, emoji) {
           ><span class="wr-res-ic wr-res-ic-fb">${emoji}</span>`;
 }
 
+// JP 2026-07-22: „Die Rohstoffzeile ist viel zu groß und blockiert für ein
+// mobile-phone die komplette Sicht" — eine EINZIGE schmale Zeile statt der
+// 4er-Kachel-Grid. Labels via title-Tooltip, auf schmalen Screens nur Icon+Wert.
+// Die Nicht-käuflich-Notiz ist aus dem Sticky-Header in den Raumhafen-Tab gezogen.
 function wrHudHtml(m) {
   const ships = wrHomeShips(m);
   const total = Object.values(ships).reduce((a, b) => a + (parseInt(b, 10) || 0), 0);
   return `
     <div class="wr-hud">
-      <div class="wr-res">${wrResIcon('res_erz', '🪨')}<span class="wr-res-v">${wrFmt(wrErz(m))}</span><span class="wr-res-l">Erz</span></div>
-      <div class="wr-res">${wrResIcon('res_kristall', '💎')}<span class="wr-res-v">${wrFmt(wrKristall(m))}</span><span class="wr-res-l">Kristall</span></div>
-      <div class="wr-res"><span class="wr-res-ic">🛰️</span><span class="wr-res-v">${wrFmt(total)}</span><span class="wr-res-l">Schiffe im Hafen</span></div>
-      <div class="wr-res"><span class="wr-res-ic">🪐</span><span class="wr-res-v">${wrFmt(Object.keys(wrColonies(m)).length)}</span><span class="wr-res-l">Kolonien</span></div>
-    </div>
-    <div class="wr-note">🪨 Erz und 💎 Koffeinkristall sind <strong>nicht käuflich</strong> — es gibt sie
-      ausschließlich im All. Sie zählen nicht zu deinem CoffeeCoin-Vermögen.</div>`;
+      <div class="wr-res" title="Erz">${wrResIcon('res_erz', '🪨')}<span class="wr-res-v">${wrFmt(wrErz(m))}</span><span class="wr-res-l">Erz</span></div>
+      <div class="wr-res" title="Koffeinkristall">${wrResIcon('res_kristall', '💎')}<span class="wr-res-v">${wrFmt(wrKristall(m))}</span><span class="wr-res-l">Kristall</span></div>
+      <div class="wr-res" title="Schiffe im Hafen"><span class="wr-res-ic">🛰️</span><span class="wr-res-v">${wrFmt(total)}</span><span class="wr-res-l">Hafen</span></div>
+      <div class="wr-res" title="Kolonien"><span class="wr-res-ic">🪐</span><span class="wr-res-v">${wrFmt(Object.keys(wrColonies(m)).length)}</span><span class="wr-res-l">Kolonien</span></div>
+    </div>`;
 }
+const WR_RES_NOTE = `<div class="wr-note">🪨 Erz und 💎 Koffeinkristall sind <strong>nicht käuflich</strong> — es gibt sie
+      ausschließlich im All. Sie zählen nicht zu deinem CoffeeCoin-Vermögen.</div>`;
 
 // ── Laufende Reise ───────────────────────────────────────────────────────────
 function wrTripHtml(m, trip) {
@@ -907,7 +1000,7 @@ function wrHomeDetailHtml(m) {
         </div>
       </div>
       <div class="wr-facts">
-        <span>${wrIc("fleet")} Im Hafen: <strong>${wrFmt(inPort)}</strong></span>
+        <span>${wrIc("port")} Im Hafen: <strong>${wrFmt(inPort)}</strong></span>
         ${out > 0 ? `<span>${wrIc("travel")} Unterwegs: <strong>${wrFmt(out)}</strong></span>` : ''}
         <span>${wrIc("atk")} Kampfkraft: <strong>${wrFmt(wrFleetPower(ships))}</strong></span>
         <span>${wrIc("def")} Geschütze: <strong>${wrFmt(wrTurretPower(m))}</strong></span>
@@ -985,7 +1078,7 @@ function wrTechHtml(m) {
         <span class="wr-sub">verstärkt, was du schon hast — schaltet nichts frei</span></div>
       ${(sp || bt) ? `<div class="wr-facts">
         ${sp ? `<span>${wrIc('time')} Flugzeit: <strong>−${sp} %</strong></span>` : ''}
-        ${bt ? `<span>${wrIc('yard')} Bauzeit: <strong>−${bt} %</strong></span>` : ''}
+        ${bt ? `<span>${wrIc('time')} Bauzeit: <strong>−${bt} %</strong></span>` : ''}
       </div>` : '<div class="wr-sub">Noch keine Technik erforscht.</div>'}
       <div class="wr-tech-grid">${spalten}</div>
     </div>`;
@@ -1000,7 +1093,13 @@ async function wrBuyTech(key) {
     if (!res || res.error) { wrToast(wrErrText(res.error), 'error'); return; }
     if (res.space) wrApplySpace(res.space);
     wrToast(`🔬 ${t.name} erforscht — ${t.wirkung}`, 'success');
-    wrChat(`🔬 ${_wrEsc(_wrMember.name)} hat **${_wrEsc(t.name)}** erforscht (${_wrEsc(t.wirkung)}).`);
+    // JP 2026-07-22: Kosten gehören mit in die Meldung (wie beim Werft-Bau)
+    const kost = [`${wrFmt(t.cc)} CC`];
+    if (t.erz > 0)      kost.push(`${wrFmt(t.erz)} ${wrArtTok('erz')}`);
+    if (t.kristall > 0) kost.push(`${wrFmt(t.kristall)} ${wrArtTok('kristall')}`);
+    // KEIN **Markdown** — der Chat rendert das nicht (JP sah die rohen Sterne).
+    // Das Technik-Icon kommt als [[s:art]]-Token (Präfix-Erkennung in _chatArt).
+    wrChat(`🔬 ${_wrEsc(_wrMember.name)} hat ${wrArtTok(t.art)} ${_wrEsc(t.name)} erforscht (${_wrEsc(t.wirkung)}) — ${kost.join(' · ')}.`);
     wrRender();
   } catch (e) {
     wrToast('Forschung fehlgeschlagen: ' + e.message, 'error');
@@ -1026,7 +1125,7 @@ function wrDetailHtml(m) {
            für den <strong>gesamten Klan</strong> aufzudecken. Gib ihr Geleitschutz mit — draußen ist
            nicht jeder Nebel leer.</p>
         <div class="wr-facts">
-          <span>Flugzeit: <strong>${min} Min</strong> hin, ${min} Min zurück</span>
+          <span>Flugzeit: ${wrTravelHtml(min)} je Strecke</span>
           <span>Sonden im Hafen: <strong>${wrShipCount(m, 'sonde')}</strong></span>
         </div>
         ${busy ? '' : wrFleetPickerHtml(m)}
@@ -1081,7 +1180,7 @@ function wrDetailHtml(m) {
       <div class="wr-facts">
         <span>Vorkommen: <strong>${resName}</strong></span>
         <span>Reichtum: <strong>${'★'.repeat(p.richness)}${'☆'.repeat(Math.max(0, 5 - p.richness))}</strong></span>
-        <span>Flugzeit: <strong>${min} Min</strong> je Strecke</span>
+        <span>Flugzeit: ${wrTravelHtml(min)} je Strecke</span>
         <span>Wächter: <strong>${cleared ? '— befreit' : wrFmt(p.enemy_strength)}</strong></span>
       </div>
       ${cleared
@@ -1918,6 +2017,13 @@ function wrDrawMap() {
     ctx.fillRect(sx, sy, 1, 1);
   }
 
+  // 🔍 Ab hier zeichnet ALLES innerhalb der Zoom/Pan-Transformation (Sterne bewusst
+  // davor — der Hintergrund bleibt ruhig, nur die Szene zoomt). restore() am Ende.
+  ctx.save();
+  ctx.translate(cx + _wrPanX, cy + _wrPanY);
+  ctx.scale(_wrZoom, _wrZoom);
+  ctx.translate(-cx, -cy);
+
   const me = _wrMember?.id;
   for (const q of wrAllQuadrants()) {
     const c = wrHexCenter(q.qx, q.qy, size);
@@ -2030,6 +2136,8 @@ function wrDrawMap() {
       }
     }
   }
+
+  ctx.restore();   // 🔍 Ende der Zoom/Pan-Transformation
 }
 
 // Klick → Quadrant/Planet auswählen
@@ -2037,9 +2145,13 @@ function wrCanvasClick(ev) {
   const cv = document.getElementById('wr-canvas');
   if (!cv) return;
   const rect = cv.getBoundingClientRect();
-  const mx = (ev.clientX - rect.left) * (cv.width / rect.width);
-  const my = (ev.clientY - rect.top)  * (cv.height / rect.height);
   const size = WR_HEX_SIZE, cx = cv.width / 2, cy = cv.height / 2;
+  // 🔍 Zeiger → Canvas → INVERSE der Zoom/Pan-Transformation aus wrDrawMap.
+  // So testen Klick und Zeichnung immer gegen dieselben Welt-Koordinaten.
+  const rawX = (ev.clientX - rect.left) * (cv.width / rect.width);
+  const rawY = (ev.clientY - rect.top)  * (cv.height / rect.height);
+  const mx = (rawX - cx - _wrPanX) / _wrZoom + cx;
+  const my = (rawY - cy - _wrPanY) / _wrZoom + cy;
 
   // Zuerst prüfen, ob die eigene reisende Flotte getroffen wurde — sie liegt ÜBER den
   // Waben, also muss sie auch beim Klick Vorrang haben. Position identisch zu wrDrawMap.
@@ -2091,9 +2203,56 @@ function wrRefreshDetail() {
 // ── Events ───────────────────────────────────────────────────────────────────
 function wrBindEvents() {
   const cv = document.getElementById('wr-canvas');
-  if (cv) cv.onclick = wrCanvasClick;
+  if (cv) {
+    // 🔍 Pointer-Gesten statt onclick: Tap = Auswahl (wrCanvasClick), Ziehen = Pan
+    // (ab Zoom > 1), zwei Finger = Pinch-Zoom. 8-px-Schwelle trennt Tap von Drag
+    // (Muster karte.js). touch-action:none steht im CSS, sonst scrollt die Seite mit.
+    const pts = new Map();
+    let start = null, moved = false, pinch0 = 0, z0 = 1;
+    cv.onclick = null;
+    cv.onpointerdown = (e) => {
+      try { cv.setPointerCapture(e.pointerId); } catch (err) {}
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pts.size === 1) { start = { x: e.clientX, y: e.clientY, px: _wrPanX, py: _wrPanY }; moved = false; }
+      else if (pts.size === 2) {
+        const a = [...pts.values()];
+        pinch0 = Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y); z0 = _wrZoom; moved = true;
+      }
+    };
+    cv.onpointermove = (e) => {
+      if (!pts.has(e.pointerId)) return;
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      const rect = cv.getBoundingClientRect();
+      const sx = cv.width / rect.width, sy = cv.height / rect.height;
+      if (pts.size === 2 && pinch0 > 0) {
+        const a = [...pts.values()];
+        const d = Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y);
+        const midx = ((a[0].x + a[1].x) / 2 - rect.left) * sx;
+        const midy = ((a[0].y + a[1].y) / 2 - rect.top) * sy;
+        wrSetZoom(z0 * d / pinch0, midx, midy);
+      } else if (start) {
+        const dx = e.clientX - start.x, dy = e.clientY - start.y;
+        if (Math.hypot(dx, dy) > 8) moved = true;
+        if (moved && _wrZoom > 1) {
+          _wrPanX = start.px + dx * sx; _wrPanY = start.py + dy * sy;
+          _wrClampPan(); wrDrawMap();
+        }
+      }
+    };
+    cv.onpointerup = (e) => {
+      pts.delete(e.pointerId);
+      if (pts.size === 0) { if (!moved) wrCanvasClick(e); start = null; pinch0 = 0; }
+    };
+    cv.onpointercancel = (e) => { pts.delete(e.pointerId); if (!pts.size) { start = null; pinch0 = 0; } };
+  }
 
   _wrEl.onclick = async (e) => {
+    const zb = e.target.closest('[data-wr-zoom]');
+    if (zb) {
+      wrSetZoom(_wrZoom + (zb.dataset.wrZoom === 'in' ? 0.5 : -0.5),
+                WR_CANVAS_W / 2, WR_CANVAS_H / 2);
+      return;
+    }
     // Flottenauswahl zuerst — sie ändert nur das Detail-Panel, kein Server-Roundtrip
     const adj = e.target.closest('[data-wr-fadj]');
     if (adj && !adj.disabled) {
@@ -2115,7 +2274,10 @@ function wrBindEvents() {
     if (e.target.closest('[data-wr-winfo]')) { wrWerftLightbox(); return; }
 
     // Reise-Karte anklicken → Verband-Details (auch das Schiff auf der Sternkarte, s. wrCanvasClick)
-    if (e.target.closest('#wr-trip-card') && !e.target.closest('#wr-claim')) { wrFleetLightbox(); return; }
+    // ⚠️ ALLE Buttons in der Trip-Karte ausnehmen — der Karten-Klick (Lightbox) steht
+    // VOR den Button-Handlern und schluckte sonst den Klick (JP: „Zurückrufen geht
+    // nicht — da öffnet sich nur der Verband").
+    if (e.target.closest('#wr-trip-card') && !e.target.closest('#wr-claim') && !e.target.closest('#wr-recall')) { wrFleetLightbox(); return; }
 
     // Raumhafen: Ausbau + Geschütze
     if (e.target.closest('#wr-port-up')) { await wrDefense('port_upgrade', null, null); return; }
@@ -2260,6 +2422,9 @@ async function wrBuildCart() {
       const sd = SPACE_SHIP_BY_KEY[l.ship];
       if (sd) for (let i = 0; i < (l.count || 0); i++) wrBuyTrack(sd);
     }
+    // Sofort in den Chat statt 60-s-Sammler: ein Warenkorb IST schon die Sammlung —
+    // und wer die App direkt nach dem Auftrag schließt, verlöre die Meldung sonst.
+    wrBuyFlush();
     wrRender();
   } catch (e) {
     wrToast('Bau fehlgeschlagen: ' + e.message, 'error');
@@ -2575,7 +2740,13 @@ function wrChatReport(r, name) {
           ? ` Dabei wurde ein feindliches Schiff gekapert: ${wrArtTok(r.foundShip)} `
             + `${_wrEsc(SPACE_SHIP_BY_KEY[r.foundShip]?.name || r.foundShip)}!`
           : '';
-        wrChat(`⚔️ ${who} hat die Wächter von ${_wrEsc(r.planet)} besiegt — Planet befreit!${loss}${kap}`, name);
+        // JP 2026-07-22: die Beute gehört in die Meldung — bisher stand sie nur im Popup
+        const b = [];
+        if (r.cc > 0)       b.push(`${wrFmt(r.cc)} CC`);
+        if (r.erz > 0)      b.push(`${wrFmt(r.erz)} ${wrArtTok('erz')} Erz`);
+        if (r.kristall > 0) b.push(`${wrFmt(r.kristall)} ${wrArtTok('kristall')} Kristall`);
+        const beute = b.length ? ` Beute: ${b.join(' · ')}.` : '';
+        wrChat(`⚔️ ${who} hat die Wächter von ${_wrEsc(r.planet)} besiegt — Planet befreit!${loss}${beute}${kap}`, name);
       } else {
         wrChat(`💥 ${who} ist bei ${_wrEsc(r.planet)} an den Wächtern gescheitert${loss}.`, name);
       }
@@ -2630,12 +2801,12 @@ function wrShipLightbox(shipKey) {
           <span>${wrIc("atk")} Kampfkraft<strong>${s.atk || '—'}</strong></span>
           <span>${wrIc("mine")} Abbau<strong>${s.mine || '—'}</strong></span>
           <span>💰 Kosten<strong>${cost.join(' · ')}</strong></span>
-          <span>${wrIc("fleet")} Im Hafen<strong>${wrFmt(have)}</strong></span>
+          <span>${wrIc("port")} Im Hafen<strong>${wrFmt(have)}</strong></span>
           <span>${wrIc("time")} Bauzeit<strong>${wrDur(s.buildMin)}</strong></span>
           <span>${(SPACE_ROLES[s.key] && SPACE_ROLES[s.key].cls === 'heavy') ? '🔷' : '🔹'} Klasse<strong>${
             (SPACE_ROLES[s.key] && SPACE_ROLES[s.key].cls === 'heavy') ? 'schwer' : 'leicht'}</strong></span>
           <span>🛡️ Schild<strong>${Math.round(((SPACE_ROLES[s.key] || {}).shield || 0) * 100)} %</strong></span>
-          <span>${wrIc("atk")} Stark gegen<strong>${wrRoleVsText(s.key)}</strong></span>
+          <span>➜ Stark gegen<strong>${wrRoleVsText(s.key)}</strong></span>
         </div>
         <button class="wr-btn wr-btn-go" id="wr-lb-ok">Schließen</button>
       </div>`;

@@ -336,8 +336,9 @@ const CHAT_ART = {
   // ⚠️ Beim Anlegen eines neuen Schiffstyps MUSS er auch hier eintragen werden —
   // sonst steht das rohe Token `[[s:key]]` im Chat (JP 2026-07-22: berger fehlte).
   berger:  ['ship_berger', '♻️'],
-  fregatte:['ship_fregatte', '🛡️'], kreuzer:['ship_kreuzer', '🚨'],
-  bomber:  ['ship_bomber', '💣'],    schlachtschiff:['ship_schlachtschiff', '⚔️'],
+  // kreuzer/bomber: Name+Bild getauscht (JP 2026-07-22, s. SPACE_SHIPS) — Keys bleiben
+  fregatte:['ship_fregatte', '🛡️'], kreuzer:['ship_bomber', '💣'],
+  bomber:  ['ship_kreuzer', '🚨'],   schlachtschiff:['ship_schlachtschiff', '⚔️'],
   dunkle_roestung: ['ship_dunkle_roestung', '🌑'],
   erz:     ['res_erz', '🪨'],      kristall:['res_kristall', '💎'],
   railgun: ['turret_railgun', '🔩'], laser:     ['turret_laser', '⚡'],
@@ -349,7 +350,11 @@ function _chatArt(escaped) {
     .replace(/\[\[s:([a-z0-9_]{1,20})\]\]/g, (tok, key) => {
       // Unbekannter Schlüssel: NIE das rohe Token zeigen (das sah JP im Chat).
       // Lieber ein neutrales Symbol als `[[s:berger]]` im Fließtext.
-      const a = CHAT_ART[key] || [null, '🚀'];
+      // JP 2026-07-22: Tokens mit bekanntem Asset-Präfix (Weltraum-Technik schickt
+      // ihre art-Namen direkt, z.B. [[s:turret_laser]]) rendern das Bild unmittelbar —
+      // sonst müsste CHAT_ART jede einzelne Technik kennen.
+      const a = CHAT_ART[key]
+             || (/^(ship_|base_|turret_|res_|ic_|foe_)/.test(key) ? [key, '🔬'] : [null, '🚀']);
       if (!a[0]) return `<span class="chat-art-fb">${a[1]}</span>`;
       return `<img class="chat-art" src="assets/space/${a[0]}.png" alt="" onerror="this.remove()"`
            + `><span class="chat-art-fb">${a[1]}</span>`;

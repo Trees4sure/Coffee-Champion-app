@@ -105,16 +105,25 @@ async function renderImperium() {
     </div>
 
     <div class="imperium-tabs" id="imp-tabs">
-      <button class="imp-tab active" data-tab="baum">🌳 Forschung</button>
-      <button class="imp-tab" data-tab="karte">🗺️ Karte</button>
+      ${(() => {
+        // JP 2026-07-22: Wer ALLES erforscht hat, braucht die Forschung nicht mehr als
+        // ersten Tab — sie rückt dann nach rechts (vor die Statistik), und die 🗺️ Karte
+        // wird zum Start-Tab. Für alle anderen bleibt die Forschung vorn.
+        const allDone = typeof isAllResearchComplete === 'function' && isAllResearchComplete(research);
+        const baum = '<button class="imp-tab" data-tab="baum">🌳 Forschung</button>';
+        return `
+      ${allDone ? '' : baum.replace('imp-tab"', 'imp-tab active"')}
+      <button class="imp-tab${allDone ? ' active' : ''}" data-tab="karte">🗺️ Karte</button>
       <button class="imp-tab" data-tab="welt">🌍 Weltkarte</button>
       <button class="imp-tab" data-tab="krieger">⚔️ Krieger</button>
       ${(research.kaffeemobil && research.barista_kurs && research.fahrender_haendler) ? '<button class="imp-tab" data-tab="mobil">🚐 Kaffeemobil</button>' : ''}
       ${research.erstes_cafe ? '<button class="imp-tab" data-tab="cafe">☕ Café</button>' : ''}
       ${(typeof spaceBranchComplete === 'function' && spaceBranchComplete(research)) ? '<button class="imp-tab" data-tab="weltall">🚀 Weltall</button>' : ''}
+      ${allDone ? baum : ''}
       <button class="imp-tab" data-tab="stats">📊 Statistik</button>
       <button class="imp-tab" data-tab="kasse">🏛️ Kasse</button>
-      <button class="imp-tab" data-tab="cosmetics">🎨 Cosmetics</button>
+      <button class="imp-tab" data-tab="cosmetics">🎨 Cosmetics</button>`;
+      })()}
     </div>
 
     <div id="imp-content"></div>
@@ -130,7 +139,11 @@ async function renderImperium() {
     _renderImperiumTab(btn.dataset.tab, freshMember);
   });
 
-  _renderImperiumTab('baum', member);
+  // Start-Tab passend zur Tab-Reihenfolge oben: alles erforscht → 🗺️ Karte zuerst
+  _renderImperiumTab(
+    (typeof isAllResearchComplete === 'function' && isAllResearchComplete(member.research || {}))
+      ? 'karte' : 'baum',
+    member);
 }
 
 async function _renderImperiumTab(tab, member) {

@@ -142,7 +142,33 @@ const DB = (() => {
     }
     const sums = { gross: Math.round(sGross * 100) / 100, spent: Math.round(sSpent * 100) / 100, net: Math.round(sNet * 100) / 100, cats: sCats };
     const ledger = _accrueLedger(mapData?.ledger, entries);
-    return { ...(mapData || {}), todayLog: { date: day, entries: next, sums }, ledger };
+    const out = { ...(mapData || {}), todayLog: { date: day, entries: next, sums }, ledger };
+    // 📊 Tagesbilanz v2 (2026-07-22): DELTA der gerade angehängten Einträge mitgeben.
+    // Der Server ADDIERT diese Deltas atomar (add_day_stats) — im Gegensatz zu den
+    // Totalen oben (sums) sind sie korrekt, egal wie veraltet die lokale map_data-Kopie
+    // ist. Die alte Total+GREATEST-Fortschreibung fror ein, sobald der lokale todayLog
+    // einmal zurückrollte („ab einem bestimmten Moment zählt es nicht mehr", JP).
+    // `_dayDelta` ist ein NORMALES (enumerierbares) Feld, damit es Spreads wie
+    // `{ ...md, x }` zwischen append und updateMapData überlebt — updateMapData
+    // entfernt es VOR dem save_map_data-Write wieder (es darf nie im Blob landen).
+    // Spiegelbild der sums-Regeln oben: kapital nie, invest nicht als Ausgabe.
+    let dGross = 0, dSpent = 0; const dCats = {};
+    for (const raw of entries) {
+      const amt = raw.amount || 0;
+      if (raw.kapital) continue;
+      if (amt > 0) dGross += amt;
+      else if (!raw.invest) dSpent += -amt;
+      else continue;
+      const rk = raw.cat || 'beute';
+      dCats[rk] = Math.round(((dCats[rk] || 0) + amt) * 100) / 100;
+    }
+    const prevD = (mapData && mapData._dayDelta && mapData._dayDelta.day === day) ? mapData._dayDelta : null;
+    if (prevD) {                                    // unbestätigtes Delta mitnehmen (Retry)
+      dGross += prevD.gross || 0; dSpent += prevD.spent || 0;
+      for (const k in (prevD.cats || {})) dCats[k] = Math.round(((dCats[k] || 0) + prevD.cats[k]) * 100) / 100;
+    }
+    out._dayDelta = { day, gross: Math.round(dGross * 100) / 100, spent: Math.round(dSpent * 100) / 100, cats: dCats };
+    return out;
   }
 
   // ── 📊 Tagesbilanz: die EINE Quelle für „was kam heute rein" (0:00–24:00) ─────
@@ -1685,34 +1711,45 @@ const DB = (() => {
 
   // ── Karte ────────────────────────────────────────────────────────────────────
   async function updateMapData(memberId, mapData) {
-    const { error } = await _sb.rpc('save_map_data', { p_member_id: memberId, p_map_data: mapData });
+    // 📊 Tagesbilanz v2: das von appendTodayLog angehängte Delta darf NIE in den
+    // Blob — vor dem Write abtrennen, danach an add_day_stats flushen.
+    const { _dayDelta, ...clean } = mapData || {};
+    const { error } = await _sb.rpc('save_map_data', { p_member_id: memberId, p_map_data: clean });
     if (error) throw new Error(error.message);
-    await _bumpDayStats(memberId, mapData);
+    await _flushDayDelta(memberId, mapData, _dayDelta);
   }
 
-  // 📊 Tagesbilanz aus dem map_data-Blob herausziehen (migration_2026-07-21h).
-  // WARUM das hier steht und nicht in appendTodayLog: map_data ist ein GETEILTES
-  // JSON-Dokument, das ~15 Client-Stellen als lokale Kopie halten und wholesale
-  // zurückschreiben (`DB.appendTodayLog(state.mapData, …)`). Ein Karten-Schritt nach
-  // 18 Uhr rollte so den Stand von vor dem Laden zurück und nahm den Tages-Brutto mit.
-  // `bump_day_stats` schreibt MONOTON (GREATEST) in eine eigene Spalte — ein
-  // veralteter Client kann den Wert dadurch nicht mehr senken.
+  // 📊 Tagesbilanz v2 (migration_2026-07-22c): die Deltas der neu angehängten
+  // Log-Einträge werden serverseitig ADDIERT (add_day_stats, FOR UPDATE) statt wie
+  // in v1 client-berechnete Totale zu GREATEST-en. Die v1 fror ein, sobald der
+  // lokale todayLog einmal zurückrollte: der Client schickte fortan Totale unter
+  // dem gespeicherten Maximum, und alles danach Verdiente fehlte in der Summe.
   // updateMapData ist der EINE Ort, durch den jeder map_data-Write läuft; deshalb
-  // muss keine der Aufrufstellen angefasst werden.
+  // muss keine der ~15 Aufrufstellen angefasst werden.
   // Best-effort: ein Fehler hier darf den eigentlichen Write nie eskalieren.
-  async function _bumpDayStats(memberId, mapData) {
+  // Bei Fehlschlag bleibt `_dayDelta` am lokalen Objekt hängen → der nächste
+  // appendTodayLog/updateMapData desselben Objekts versucht es erneut.
+  async function _flushDayDelta(memberId, mapDataObj, delta) {
+    if (!memberId || !delta || !delta.day) return null;
+    if (!(delta.gross > 0 || delta.spent > 0 || Object.keys(delta.cats || {}).length)) {
+      if (mapDataObj) try { delete mapDataObj._dayDelta; } catch (e) {}
+      return null;
+    }
     try {
-      const tl = mapData && mapData.todayLog;
-      if (!memberId || !tl || !tl.date || !tl.sums) return null;
-      const { data } = await _sb.rpc('bump_day_stats', {
+      const { data, error } = await _sb.rpc('add_day_stats', {
         p_member_id: memberId,
-        p_day:       tl.date,
-        p_gross:     tl.sums.gross || 0,
-        p_spent:     tl.sums.spent || 0,
-        p_cats:      tl.sums.cats || {},
+        p_day:       delta.day,
+        p_gross:     delta.gross || 0,
+        p_spent:     delta.spent || 0,
+        p_cats:      delta.cats || {},
       });
+      if (error) throw new Error(error.message);
+      if (mapDataObj) try { delete mapDataObj._dayDelta; } catch (e) {}
       return data || null;
-    } catch (e) { console.warn('bump_day_stats fehlgeschlagen:', e.message); return null; }
+    } catch (e) {
+      console.warn('add_day_stats fehlgeschlagen:', e.message);
+      return null;
+    }
   }
 
   // ── Kaffee-Krieger ───────────────────────────────────────────────────────────

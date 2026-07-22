@@ -47,25 +47,31 @@ const CAFE_P = {
 };
 
 // ── Stil-Katalog: jeder Stil zieht andere Klientel an (Menge × Ausgabe) ──────
-// Freischaltung über Café-Lifetime-Umsatz (minUmsatz). sterne = Prestige (1..3).
+// Freischaltung über das CAFÉ-LEVEL (minLevel) — JP 2026-07-22: „die Experience
+// sollte ausschlaggebend sein" (vorher rohe Umsatz-Schwellen bis 250k, unerreichbar
+// bei ~2.500 CC Umsatz/Tag Voll-Ausstattung). Das Level speist sich aus demselben
+// lifetime.umsatz (cafeLevelInfo), deshalb braucht der Server KEINE Änderung:
+// set_cafe_stil prüft weiter p_min_umsatz — der Client schickt den Umsatz-Gegenwert
+// des Levels (_cafeLvlThreshold). Erreichbarkeit bei ~2.500/Tag:
+// Hipp L2 ≈ 1 Tag · Inn L4 ≈ 4 Tage · Chic L6 ≈ 9 Tage · Edel L8 ≈ 16 Tage · Adlig L10 ≈ 25 Tage.
 const CAFE_STIL = {
   klassisch: { name:'Klassisch', color:'#c9a24a', tag:'Der bewährte Klassiker. Gemütlich, zuverlässig, immer beliebt.',
-    klientel:'Studenten, Berufstätige, Nachbarn', sterne:1, kundenMult:1.00, ccMult:1.00, zufrBias:0.00, minUmsatz:0,
+    klientel:'Studenten, Berufstätige, Nachbarn', sterne:1, kundenMult:1.00, ccMult:1.00, zufrBias:0.00, minLevel:1,
     thumb:'assets/cafe/thumb_klassisch.jpg', scene:'assets/cafe/scene_klassisch.jpg' },
   hipp: { name:'Hipp', color:'#7fc99a', tag:'Kreativ. Bunt. Frei. Ein Treffpunkt für Visionäre.',
-    klientel:'Studenten, Kreative, Freelancer', sterne:2, kundenMult:1.20, ccMult:1.10, zufrBias:0.02, minUmsatz:5000,
+    klientel:'Studenten, Kreative, Freelancer', sterne:2, kundenMult:1.20, ccMult:1.10, zufrBias:0.02, minLevel:2,
     thumb:'assets/cafe/thumb_hipp.jpg', scene:'assets/cafe/scene_hipp.jpg' },
   inn: { name:'Inn (Gemütlich)', color:'#8bbf5a', tag:'Gemütlich. Echt. Herzlich. Wie zu Hause – nur besser.',
-    klientel:'Familien, Touristen, Genießer', sterne:2, kundenMult:1.10, ccMult:1.25, zufrBias:0.04, minUmsatz:15000,
+    klientel:'Familien, Touristen, Genießer', sterne:2, kundenMult:1.10, ccMult:1.25, zufrBias:0.04, minLevel:4,
     thumb:'assets/cafe/thumb_inn.jpg', scene:'assets/cafe/scene_inn.jpg' },
   chic: { name:'Chic', color:'#d98fb0', tag:'Stilvoll. Trendbewusst. Ein Erlebnis.',
-    klientel:'Influencer, Trendsetter, Lifestyle-Liebhaber', sterne:3, kundenMult:0.90, ccMult:1.60, zufrBias:-0.02, minUmsatz:40000,
+    klientel:'Influencer, Trendsetter, Lifestyle-Liebhaber', sterne:3, kundenMult:0.90, ccMult:1.60, zufrBias:-0.02, minLevel:6,
     thumb:'assets/cafe/thumb_chic.jpg', scene:'assets/cafe/scene_chic.jpg' },
   edel: { name:'Edel', color:'#9fb0c9', tag:'Exklusiv. Elegant. Perfekt.',
-    klientel:'Geschäftsleute, Feinschmecker, Anspruchsvolle', sterne:3, kundenMult:0.70, ccMult:2.10, zufrBias:-0.04, minUmsatz:100000,
+    klientel:'Geschäftsleute, Feinschmecker, Anspruchsvolle', sterne:3, kundenMult:0.70, ccMult:2.10, zufrBias:-0.04, minLevel:8,
     thumb:'assets/cafe/thumb_edel.jpg', scene:'assets/cafe/scene_edel.jpg' },
   adlig: { name:'Adlig', color:'#b58fd9', tag:'Luxus. Prestige. Ein Statement.',
-    klientel:'High Society, VIPs, Sammler', sterne:3, kundenMult:0.50, ccMult:3.20, zufrBias:-0.06, minUmsatz:250000,
+    klientel:'High Society, VIPs, Sammler', sterne:3, kundenMult:0.50, ccMult:3.20, zufrBias:-0.06, minLevel:10,
     thumb:'assets/cafe/thumb_adlig.jpg', scene:'assets/cafe/scene_adlig.jpg' },
 };
 const CAFE_STIL_ORDER = ['klassisch','hipp','inn','chic','edel','adlig'];
@@ -512,13 +518,16 @@ function _cafeRezeptePanel(member, st, b) {
 // ── Stil-Auswahl-Screen ──────────────────────────────────────────────────────
 function _cafeRenderStilScreen(member, st) {
   const umsatz = st.lifetime.umsatz || 0;
+  const lvl    = cafeLevelInfo(umsatz).level;
   const cards = CAFE_STIL_ORDER.map(id => {
     const s = CAFE_STIL[id];
-    const unlocked = umsatz >= s.minUmsatz;
+    // Freischaltung nach Café-LEVEL (JP 2026-07-22) — der Server prüft weiter den
+    // Umsatz-Gegenwert, deshalb wandert _cafeLvlThreshold(minLevel) in data-min.
+    const unlocked = lvl >= s.minLevel;
     const current = st.stil === id;
     const btn = current ? `<span class="cc-stil-cur">✓ Aktiv</span>`
-      : unlocked ? `<button class="cc-stil-pick" data-cafe-pickstil="${id}" data-min="${s.minUmsatz}">Auswählen</button>`
-      : `<span class="cc-stil-lock">🔒 ab ${_cFmt(s.minUmsatz)} Umsatz</span>`;
+      : unlocked ? `<button class="cc-stil-pick" data-cafe-pickstil="${id}" data-min="${_cafeLvlThreshold(s.minLevel)}">Auswählen</button>`
+      : `<span class="cc-stil-lock">🔒 ab Café-Level ${s.minLevel}</span>`;
     return `<div class="cc-stil-card ${current?'is-current':''} ${unlocked?'':'is-locked'}" style="--stil:${s.color}">
       <div class="cc-stil-banner">${_cEsc(s.name)}</div>
       <div class="cc-stil-thumbwrap"><img class="cc-stil-thumb" src="${s.thumb}" alt="${_cEsc(s.name)}" loading="lazy">
@@ -536,7 +545,7 @@ function _cafeRenderStilScreen(member, st) {
     <div class="cc-stil-head">
       <button class="cc-stil-back" data-cafe-stilback="1">◂ Zurück</button>
       <h3>Wähle deinen Café-Stil ☕</h3>
-      <p>Jeder Stil zieht andere Gäste an — von Studenten bis zur High Society. (Café-Umsatz gesamt: ${_cFmt(umsatz)} CC)</p>
+      <p>Jeder Stil zieht andere Gäste an — von Studenten bis zur High Society. (Dein Café: Level ${lvl} · ${_cFmt(umsatz)} CC Umsatz gesamt)</p>
     </div>
     <div class="cc-stil-grid">${cards}</div>
   </div>`;
