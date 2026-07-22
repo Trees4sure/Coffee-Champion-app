@@ -287,6 +287,26 @@
 /* Rückruf-Button in der Reise-Karte */
 .wr-btn-recall { margin-top: 8px; background: #2a1f16; border-color: #6b4a2a; color: #e0c9a8; }
 
+/* ── 📜 Ereignis-Protokoll (2026-07-22) ──────────────────────────────────── */
+.wr-log-list { display: flex; flex-direction: column; gap: 6px; max-height: 440px; overflow-y: auto; }
+.wr-log-row { display: flex; gap: 8px; font-size: .78rem; line-height: 1.45; padding: 6px 8px;
+  background: #0f1526; border: 1px solid #1e2947; border-radius: 8px; }
+.wr-log-t { color: #7f8fbb; white-space: nowrap; font-size: .7rem; padding-top: 1px; }
+.wr-log-msg { color: #c9d4f0; min-width: 0; overflow-wrap: anywhere; }
+.wr-log-msg img.chat-art { width: 16px; height: 16px; vertical-align: -3px; }
+
+/* ── 🤝 Clan-Handel (2026-07-22) ─────────────────────────────────────────── */
+.wr-trade-form { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.wr-trade-in { background: #0f1526; border: 1px solid #2a3660; border-radius: 8px;
+  color: #dce6ff; padding: 7px 8px; font-size: .82rem; min-width: 0; }
+#wr-tr-amount, #wr-tr-price { flex: 1 1 90px; width: 90px; }
+.wr-trade-row { display: flex; align-items: center; gap: 8px; padding: 7px 8px; margin-bottom: 6px;
+  background: #0f1526; border: 1px solid #1e2947; border-radius: 8px; font-size: .8rem; }
+.wr-trade-row.is-own { border-color: #4a3d1e; }
+.wr-trade-what { min-width: 72px; color: #dce6ff; }
+.wr-trade-who { flex: 1; color: #8b9ac4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wr-trade-price { white-space: nowrap; color: #dce6ff; }
+
 /* ── Angriffswelle auf den eigenen Raumhafen (P2) ─────────────────────────── */
 .wr-wave { border-radius: var(--radius, 10px); padding: 13px; margin-bottom: 12px;
   border: 1px solid #7a4040; background: linear-gradient(150deg, #2a1420, #140d16); }
