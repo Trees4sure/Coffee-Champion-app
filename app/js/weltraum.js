@@ -439,6 +439,16 @@ function wrHomeShips(m) { return wrSpace(m).fleets?.home?.ships || {}; }
 function wrAway(m)      { return wrSpace(m).fleets?.away || null; }
 function wrTrip(m)      { const t = wrAway(m)?.trip; return (t && typeof t === 'object') ? t : null; }
 function wrColonies(m)  { return wrSpace(m).colonies || {}; }
+// Wie viele Schiffe eines Typs sind auf Dauerernte-/Bergungs-Routen gebunden?
+// (JP 2026-07-22: die „Röstkometen im Verband"-Warnung war unverständlich, wenn
+// alle Ernter auf Routen standen — jetzt sagt sie, WO die Schiffe stecken.)
+function wrRouteBound(m, shipKey) {
+  let n = 0;
+  for (const r of Object.values(wrSpace(m).routes || {})) {
+    if (r && r.ship === shipKey) n += parseInt(r.count, 10) || 0;
+  }
+  return n;
+}
 function wrResearch(m)  { return (m && m.research) || {}; }
 
 // Antriebs-Forschung verkürzt Reisen — in P1 gibt es noch keine (Warp = P2/P3).
@@ -468,6 +478,15 @@ function wrFleetMine(fleet) {
   for (const [k, n] of Object.entries(fleet || {})) p += (SPACE_SHIP_BY_KEY[k]?.mine || 0) * (parseInt(n, 10) || 0);
   return p;
 }
+// 📋 Verlust-Aufschlüsselung je Typ (JP 2026-07-22: „WELCHE hat man verloren?").
+// r.lost = { jaeger: 5, fregatte: 2, … } aus claim_space_arrival/resolve_space_wave (22j).
+function wrLossBreakdown(lost) {
+  const parts = Object.entries(lost || {})
+    .filter(([, n]) => (parseInt(n, 10) || 0) > 0)
+    .map(([k, n]) => `${n}× ${SPACE_SHIP_BY_KEY[k]?.name || k}`);
+  return parts.length ? ` — ${parts.join(' · ')}` : '';
+}
+
 // 💎 Treibstoff je Reise (JP 2026-07-22): schwere/Nutz-Schiffe × (Ring − 1) Kristall —
 // Spiegel von start_space_trip (22h). DOPPELT deadlock-sicher: Ring 1 ist frei UND
 // Sonde/Jäger/Kutter fliegen immer treibstofffrei (JP: „sonst könnte man anfangs
@@ -1275,6 +1294,20 @@ function wrFleetPickerHtml(m) {
           return `<span class="${ok ? '' : 'wr-bad'}">💎 Treibstoff: <strong>${wrFmt(fuel)}</strong>`
                + `${ok ? '' : ` <span class="wr-sub">(nur ${wrFmt(wrKristall(m))} auf Lager!)</span>`}</span>`;
         })()}
+        ${(() => {
+          // JP 2026-07-22 (#33): Kutter & Co. im Kampfverband sind Kanonenfutter —
+          // die Verlust-Reihenfolge trifft kleine Schiffe zuerst. Warnen, solange das
+          // Ziel noch Wächter hat und Nutzschiffe (atk ≤ 3) in der Auswahl stecken.
+          const pt = _wrSel?.planet;
+          if (!pt || pt.cleared_by) return '';
+          const weak = Object.entries(wrSyncFleetSel(m))
+            .filter(([k, n]) => n > 0 && (SPACE_SHIP_BY_KEY[k]?.atk || 0) <= 3)
+            .map(([k]) => SPACE_SHIP_BY_KEY[k]?.name || k);
+          return weak.length
+            ? `<span class="wr-bad" style="flex-basis:100%">⚠️ ${_wrEsc(weak.join(' & '))} sind im Kampf `
+              + `Kanonenfutter — Verluste treffen kleine Schiffe zuerst. Für den Angriff besser draußen lassen.</span>`
+            : '';
+        })()}
       </div>
     </div>`;
 }
@@ -1540,7 +1573,8 @@ function wrDetailHtml(m) {
         ${cleared ? `<button class="wr-btn" data-wr-send="harvest" ${(busy || ernter < 1) ? 'disabled' : ''}>
             ${wrIc("mine")} Abbauen <span class="wr-btn-sub">≈ ${wrFmt(ernter * p.richness * (p.resource_type === 'erz' ? 1 : 0.5))} ${resIcon}</span></button>` : ''}
         ${cleared && !colon ? `<button class="wr-btn" data-wr-send="colonize" ${(busy || kolo < 1) ? 'disabled' : ''}>
-            🛸 Kolonisieren <span class="wr-btn-sub">verbraucht 1 Kolonieschiff</span></button>` : ''}
+            🛸 Kolonisieren <span class="wr-btn-sub">Schiff bleibt dort · dauerhaft ~${p.resource_type === 'erz'
+              ? `${p.richness * 3} 🪨` : `${Math.round(p.richness * 3 * 0.5)} 💎`}/Tag</span></button>` : ''}
       </div>
       ${cleared ? wrRoutePanelHtml(m, p) : ''}
       ${/* ⚠️ Bei laufender Reise NUR diesen Hinweis zeigen. Vorher lief der Verband-Picker
@@ -1550,7 +1584,10 @@ function wrDetailHtml(m) {
       ${busy
         ? '<div class="wr-warn">Deine Flotte ist bereits unterwegs — du kannst erst nach ihrer Rückkehr wieder starten.</div>'
         : `${!cleared && jaeger < 1 ? '<div class="wr-warn">Nimm kampffähige Schiffe in den Verband — ohne Kampfkraft kein Angriff.</div>' : ''}
-           ${cleared && ernter < 1 ? '<div class="wr-warn">Zum Abbauen müssen ⛏️ Röstkometen im Verband sein.</div>' : ''}`}
+           ${cleared && ernter < 1 ? `<div class="wr-warn">Für einen EINMAL-Flug „🔨 Abbauen" müssen Röstkometen im Verband sein.${
+             wrRouteBound(m, 'ernter') > 0
+               ? ` Deine ${wrFmt(wrRouteBound(m, 'ernter'))} Röstkometen sind auf 🛰️ Dauerernte-Routen gebunden — Route verkleinern/auflösen oder neue in der Werft bauen.`
+               : ''}</div>` : ''}`}
     </div>`;
 }
 
@@ -2743,8 +2780,14 @@ async function wrSend(intent) {
     if (!res || res.error) { wrToast(wrErrText(res?.error), 'error'); return; }
     if (res.space) wrApplySpace(res.space);
     const info = SPACE_INTENTS[intent] || {};
-    wrToast(`${info.icon || '🚀'} Flotte gestartet — zurück in ${wrCountdown(Date.parse(res.trip.returnAt) - Date.now())}`
-          + `${(res.fuel > 0) ? ` · 💎 −${wrFmt(res.fuel)} Treibstoff` : ''}`, 'success');
+    // JP 2026-07-22 (#32): „zurück in 30 Min" ergab bei der Kolonie keinen Sinn —
+    // das Kolonieschiff BLEIBT am Ziel, nur die Eskorte kehrt zurück.
+    const fuelTxt = (res.fuel > 0) ? ` · 💎 −${wrFmt(res.fuel)} Treibstoff` : '';
+    wrToast(intent === 'colonize'
+      ? `🛸 Kolonie-Mission gestartet — Gründung bei Ankunft in ${wrCountdown(Date.parse(res.trip.arriveAt) - Date.now())}; `
+        + `das Kolonieschiff bleibt dort, der Rest kehrt zurück${fuelTxt}`
+      : `${info.icon || '🚀'} Flotte gestartet — zurück in ${wrCountdown(Date.parse(res.trip.returnAt) - Date.now())}${fuelTxt}`,
+      'success');
 
     // Chat: offene Werft-Käufe zuerst rausschreiben, damit die Reihenfolge stimmt
     wrBuyFlush();
@@ -3087,7 +3130,8 @@ function wrChatReport(r, name) {
   try {
     if (!r || r.nothing) return;
     const who = _wrEsc(name || _wrMember?.name || 'Jemand');
-    const loss = r.shipsLost > 0 ? ` (Verluste: ${wrFmt(r.shipsLost)} Schiff(e))` : '';
+    const loss = r.shipsLost > 0
+      ? ` (Verluste: ${wrFmt(r.shipsLost)} Schiff(e)${_wrEsc(wrLossBreakdown(r.lost))})` : '';
     if (r.recalled) {
       return;   // beim Auslösen bereits gepostet
     } else if (r.ambushed) {
@@ -3333,7 +3377,7 @@ function wrWaveReport(r) {
     + (r.help > 0 ? ` · 🤝 ${wrFmt(r.help)} Verstärkung` : '') + '</div>');
   if (r.shipsLost > 0) {
     lines.push(`<div class="wr-bad">Verluste: ${wrFmt(r.shipsLost)} Schiff(e)
-      (${Math.round((r.lossRatio || 0) * 100)} %)</div>`);
+      (${Math.round((r.lossRatio || 0) * 100)} %)${_wrEsc(wrLossBreakdown(r.lost))}</div>`);
   }
   if (!r.won) {
     const pl = [];
@@ -3386,12 +3430,15 @@ function wrChatWave(r) {
     const who = _wrEsc(_wrMember?.name || 'Jemand');
     const tier = wrWaveTier(r.strength);
     const helpTxt = r.help > 0 ? ' — mit Verstärkung aus dem Clan' : '';
+    // Verlust-Aufschlüsselung (22j) auch im Chat — welche Schiffe es erwischt hat
+    const lossTxt = r.shipsLost > 0
+      ? ` Verluste: ${wrFmt(r.shipsLost)} Schiff(e)${_wrEsc(wrLossBreakdown(r.lost))}.` : '';
     if (r.won) {
       wrChat(`🛡️ ${who} hat einen ${_wrEsc(tier.name)} (Stärke ${wrFmt(r.strength)}) `
-           + `am Raumhafen abgewehrt${helpTxt}!`);
+           + `am Raumhafen abgewehrt${helpTxt}!${lossTxt}`);
     } else {
       wrChat(`💥 ${who} wurde von einem ${_wrEsc(tier.name)} überrannt — Rohstoffe geplündert, `
-           + `${wrFmt(r.turretsDamaged)} Geschütz(e) beschädigt.`);
+           + `${wrFmt(r.turretsDamaged)} Geschütz(e) beschädigt.${lossTxt}`);
     }
   } catch (e) { /* non-critical */ }
 }
@@ -3445,7 +3492,7 @@ function wrReport(r) {
   } else {
     lines.push(`<div class="wr-rep-head">${info.icon} ${_wrEsc(r.planet)}</div>`);
   }
-  if (r.shipsLost > 0) lines.push(`<div class="wr-bad">Verluste: ${wrFmt(r.shipsLost)} Schiff(e) (${Math.round((r.lossRatio || 0) * 100)} %)</div>`);
+  if (r.shipsLost > 0) lines.push(`<div class="wr-bad">Verluste: ${wrFmt(r.shipsLost)} Schiff(e) (${Math.round((r.lossRatio || 0) * 100)} %)${_wrEsc(wrLossBreakdown(r.lost))}</div>`);
   // NEU: gekapertes Schiff / treibendes Wrack
   if (r.foundShip && r.foundCount > 0) {
     const fs = SPACE_SHIP_BY_KEY[r.foundShip];
@@ -3465,7 +3512,12 @@ function wrReport(r) {
   }
   if (r.wreckField > 0) {
     lines.push(`<div class="wr-sub">${wrIc("wreck")} Auf ${_wrEsc(r.planet)} liegt jetzt ein Wrackfeld mit `
-             + `${wrFmt(r.wreckField)} Einheiten — mit ${wrIc("salvage")} Bergungsschiffen abbaubar.</div>`);
+             + `${wrFmt(r.wreckField)} Einheiten${r.ownWreck > 0
+               ? ` <span class="wr-good">(davon ${wrFmt(r.ownWreck)} aus deinen eigenen Verlusten — hol dir den Wert zurück!)</span>` : ''}`
+             + ` — mit ${wrIc("salvage")} Bergungsschiffen abbaubar.</div>`);
+  } else if (r.ownWreck > 0) {
+    lines.push(`<div class="wr-sub">${wrIc("wreck")} Deine Verluste liegen als <strong>${wrFmt(r.ownWreck)}</strong> `
+             + `bergbare Wrack-Einheiten bei ${_wrEsc(r.planet)} — nach der Eroberung mit ${wrIc("salvage")} Bergungsschiffen abtragbar.</div>`);
   }
 
   // Eigenes, selbstgenügsames Overlay: die vorhandenen Popups (`cc-karte-popup`,
