@@ -468,6 +468,19 @@ function wrFleetMine(fleet) {
   for (const [k, n] of Object.entries(fleet || {})) p += (SPACE_SHIP_BY_KEY[k]?.mine || 0) * (parseInt(n, 10) || 0);
   return p;
 }
+// 💎 Treibstoff je Reise (JP 2026-07-22): schwere/Nutz-Schiffe × (Ring − 1) Kristall —
+// Spiegel von start_space_trip (22h). DOPPELT deadlock-sicher: Ring 1 ist frei UND
+// Sonde/Jäger/Kutter fliegen immer treibstofffrei (JP: „sonst könnte man anfangs
+// gar nicht fliegen" — Kristall gibt es nur im All).
+const WR_FUEL_FREE = { sonde: true, jaeger: true, kutter: true };
+function wrTripFuel(fleet, ring) {
+  let tot = 0;
+  for (const [k, n] of Object.entries(fleet || {})) {
+    if (WR_FUEL_FREE[k]) continue;
+    tot += parseInt(n, 10) || 0;
+  }
+  return tot * Math.max(0, (parseInt(ring, 10) || 0) - 1);
+}
 function _wrEsc(s) { return (typeof _esc === 'function') ? _esc(s) : String(s == null ? '' : s); }
 function wrFmt(n) { return Math.round(n || 0).toLocaleString('de-DE'); }
 // Minutenangabe menschenlesbar (Bauzeiten/Flugzeiten)
@@ -872,65 +885,170 @@ async function wrCheckHelpPopup() {
   } catch (e) { /* Popup darf den Poll nie stören */ }
 }
 
-// ── 🤝 Clan-Handel (JP 2026-07-22, migration_2026-07-22f) ────────────────────
-// P2P-Marktplatz CC ↔ Erz/Kristall mit FREIEM Preis. Rohstoffe werden beim
-// Einstellen serverseitig gesperrt; alle Mutationen laufen über RPCs.
+// ── 🤝 Clan-Handel v2: KAUFGESUCHE (JP 2026-07-22, migration_2026-07-22i) ────
+// JP: keine weißen Eingabefelder — Rohstoff + Menge als Schaltflächen, der Preis
+// wird GENERIERT (Festpreis, Server-autoritativ), abschicken, der Clan liefert.
+// ⚠️ CLIENT-SYNC: WR_TRADE_PRICE spiegelt _space_trade_price() in 22i.
+// Kaufen ist bewusst teurer als Selbst-Ernten (Komfort-Aufschlag): Erz 25,
+// Kristall 60 CC/Stück (Beute-Verhältnis ≈ 2:1 + Treibstoff-Premium für Kristall).
+const WR_TRADE_PRICE = { erz: 25, kristall: 60 };
+const WR_TRADE_AMOUNTS = [25, 50, 75, 100];
+let _wrTrType = 'erz', _wrTrAmount = 50;
+
 async function wrLoadHandel() {
   const el = document.getElementById('wr-handel');
   if (!el) return;
-  el.innerHTML = '<p style="color:var(--muted);padding:12px">🤝 Lade Angebote …</p>';
+  el.innerHTML = '<p style="color:var(--muted);padding:12px">🤝 Lade Gesuche …</p>';
   const offers = await DB.fetchSpaceTrades();
   if (!document.getElementById('wr-handel')) return;   // Tab inzwischen gewechselt
   const m = _wrMember;
   const rows = (offers || []).map(o => {
-    const icon = o.resource_type === 'erz' ? '🪨' : '💎';
     const own = o.seller_id === m?.id;
-    const perUnit = Math.round((o.price_cc / Math.max(1, o.amount)) * 10) / 10;
+    // 🚀 Schiffsangebot: resource_type trägt den Schiffs-Key, Preis = normaler Kaufpreis
+    if (o.kind === 'ship') {
+      const sd = SPACE_SHIP_BY_KEY[o.resource_type];
+      if (!sd) return '';
+      const cc = sd.cc * o.amount, erz = sd.erz * o.amount, kri = sd.kristall * o.amount;
+      const afford = (parseFloat(m?.coins) || 0) >= cc && wrErz(m) >= erz && wrKristall(m) >= kri;
+      const kost = [`${wrFmt(cc)} CC`];
+      if (erz > 0) kost.push(`${wrFmt(erz)} 🪨`);
+      if (kri > 0) kost.push(`${wrFmt(kri)} 💎`);
+      return `<div class="wr-trade-row${own ? ' is-own' : ''}">
+        <span class="wr-trade-what">${sd.icon} <strong>${o.amount}×</strong> ${_wrEsc(sd.name)}</span>
+        <span class="wr-trade-who">${own ? 'dein Angebot' : _wrEsc(o.seller_name || 'Clan-Mitglied') + ' bietet'}</span>
+        <span class="wr-trade-price"><strong>${kost.join(' + ')}</strong></span>
+        ${own
+          ? `<button class="wr-btn wr-btn-sm" data-wr-trade-cancel="${o.id}">Zurückziehen</button>`
+          : `<button class="wr-btn wr-btn-sm wr-btn-go" data-wr-trade-shipbuy="${o.id}" ${afford ? '' : 'disabled'}>⚡ Zuschlag</button>`}
+      </div>`;
+    }
+    const icon = o.resource_type === 'erz' ? '🪨' : '💎';
+    const isReq = o.kind === 'request';
+    const have = o.resource_type === 'erz' ? wrErz(m) : wrKristall(m);
+    const canFill = !own && have >= o.amount;
     return `<div class="wr-trade-row${own ? ' is-own' : ''}">
       <span class="wr-trade-what">${icon} <strong>${wrFmt(o.amount)}</strong></span>
-      <span class="wr-trade-who">${own ? 'dein Angebot' : _wrEsc(o.seller_name || 'Clan-Mitglied')}</span>
-      <span class="wr-trade-price"><strong>${wrFmt(o.price_cc)} CC</strong> <span class="wr-sub">(${perUnit}/Stk)</span></span>
+      <span class="wr-trade-who">${own ? (isReq ? 'dein Gesuch' : 'dein Angebot')
+        : _wrEsc(o.seller_name || 'Clan-Mitglied') + (isReq ? ' sucht' : ' bietet')}</span>
+      <span class="wr-trade-price"><strong>${wrFmt(o.price_cc)} CC</strong></span>
       ${own
         ? `<button class="wr-btn wr-btn-sm" data-wr-trade-cancel="${o.id}">Zurückziehen</button>`
-        : `<button class="wr-btn wr-btn-sm wr-btn-go" data-wr-trade-buy="${o.id}">Kaufen</button>`}
+        : isReq
+          ? `<button class="wr-btn wr-btn-sm wr-btn-go" data-wr-trade-fill="${o.id}" ${canFill ? '' : 'disabled'}>📦 Liefern</button>`
+          : `<button class="wr-btn wr-btn-sm wr-btn-go" data-wr-trade-buy="${o.id}">Kaufen</button>`}
     </div>`;
   }).join('');
+  // 🚀 Eigene Hafen-Schiffe zum Anbieten (je Klick 1 Schiff — bewusst simpel)
+  const ships = wrHomeShips(m);
+  const shipBtns = SPACE_SHIPS
+    .filter(s => (parseInt(ships[s.key], 10) || 0) > 0)
+    .map(s => `<button class="wr-tr-btn" data-wr-tr-shipoffer="${s.key}"
+        title="Preis: ${wrFmt(s.cc)} CC${s.erz ? ` + ${wrFmt(s.erz)} 🪨` : ''}${s.kristall ? ` + ${wrFmt(s.kristall)} 💎` : ''}">
+        ${s.icon} ${_wrEsc(s.name)} <span class="wr-sub">×${wrFmt(parseInt(ships[s.key], 10) || 0)}</span></button>`)
+    .join('');
+  const price = _wrTrAmount * (WR_TRADE_PRICE[_wrTrType] || 0);
+  const afford = (parseFloat(m?.coins) || 0) >= price;
   el.innerHTML = `
     <div class="wr-card">
-      <div class="wr-card-title">🤝 Clan-Handel <span class="wr-sub">— CC gegen Rohstoffe, Preis frei wählbar</span></div>
-      <div class="wr-trade-form">
-        <select id="wr-tr-type" class="wr-trade-in">
-          <option value="erz">🪨 Erz</option><option value="kristall">💎 Kristall</option>
-        </select>
-        <input id="wr-tr-amount" class="wr-trade-in" type="number" min="1" step="1" inputmode="numeric" placeholder="Menge">
-        <input id="wr-tr-price" class="wr-trade-in" type="number" min="1" step="1" inputmode="numeric" placeholder="Preis (CC gesamt)">
-        <button class="wr-btn wr-btn-go" id="wr-tr-create">Anbieten</button>
+      <div class="wr-card-title">🤝 Kaufgesuch aufgeben <span class="wr-sub">— der Clan liefert, du zahlst den Festpreis</span></div>
+      <div class="wr-tr-btnrow">
+        <button class="wr-tr-btn${_wrTrType === 'erz' ? ' active' : ''}" data-wr-tr-type="erz">🪨 Erz <span class="wr-sub">${WR_TRADE_PRICE.erz} CC/Stk</span></button>
+        <button class="wr-tr-btn${_wrTrType === 'kristall' ? ' active' : ''}" data-wr-tr-type="kristall">💎 Kristall <span class="wr-sub">${WR_TRADE_PRICE.kristall} CC/Stk</span></button>
       </div>
-      <p class="wr-sub" style="margin:6px 0 0">Beim Einstellen wird die Ware gesperrt; Rückzug erstattet sie.
+      <div class="wr-tr-btnrow">
+        ${WR_TRADE_AMOUNTS.map(a =>
+          `<button class="wr-tr-btn${_wrTrAmount === a ? ' active' : ''}" data-wr-tr-amount="${a}">${a}</button>`).join('')}
+      </div>
+      <div class="wr-tr-sum">
+        <span>Du zahlst: <strong class="${afford ? '' : 'wr-bad'}">${wrFmt(price)} CC</strong>
+          ${afford ? '' : '<span class="wr-sub">(zu wenig CC!)</span>'}</span>
+        <button class="wr-btn wr-btn-go" id="wr-tr-request" ${afford ? '' : 'disabled'}>📨 Gesuch abschicken</button>
+      </div>
+      <p class="wr-sub" style="margin:6px 0 0">Die CC werden beim Abschicken gesperrt; Rückzug erstattet.
         Dein Lager: ${wrFmt(wrErz(m))} 🪨 · ${wrFmt(wrKristall(m))} 💎</p>
     </div>
     <div class="wr-card">
-      <div class="wr-card-title">📋 Offene Angebote</div>
-      ${rows || '<p class="wr-sub" style="padding:4px 0 8px">Keine offenen Angebote — stell das erste ein!</p>'}
+      <div class="wr-card-title">🚀 Schiff anbieten <span class="wr-sub">— zum normalen Kaufpreis, Käufer erhält es sofort (ohne Bauzeit)</span></div>
+      ${shipBtns
+        ? `<div class="wr-tr-btnrow wr-tr-ships">${shipBtns}</div>
+           <p class="wr-sub" style="margin:6px 0 0">Je Klick wird 1 Schiff eingestellt (und gesperrt) — Rückzug holt es zurück.</p>`
+        : '<p class="wr-sub" style="padding:4px 0 8px">Keine Schiffe im Hafen.</p>'}
+    </div>
+    <div class="wr-card">
+      <div class="wr-card-title">📋 Offene Gesuche & Angebote</div>
+      ${rows || '<p class="wr-sub" style="padding:4px 0 8px">Nichts offen — gib das erste Gesuch auf!</p>'}
     </div>`;
 }
 
-async function wrTradeCreate() {
+async function wrShipOffer(shipKey) {
   if (_wrBusy) return;
-  const type   = document.getElementById('wr-tr-type')?.value || 'erz';
-  const amount = parseInt(document.getElementById('wr-tr-amount')?.value, 10) || 0;
-  const price  = parseInt(document.getElementById('wr-tr-price')?.value, 10) || 0;
-  if (amount < 1 || price < 1) { wrToast('Menge und Preis angeben (mind. 1).', 'error'); return; }
+  const sd = SPACE_SHIP_BY_KEY[shipKey];
+  if (!sd) return;
   _wrBusy = true;
   try {
-    const res = await DB.createSpaceTrade(_wrMember.id, type, amount, price);
+    const res = await DB.createSpaceShipOffer(_wrMember.id, shipKey, 1);
     if (!res || res.error) { wrToast(wrErrText(res?.error), 'error'); return; }
     if (res.space) wrApplySpace(res.space);
-    wrToast('🤝 Angebot eingestellt — die Ware ist gesperrt.', 'success');
-    wrChat(`🤝 ${_wrEsc(_wrMember.name)} bietet ${wrFmt(amount)} ${wrArtTok(type)} für ${wrFmt(price)} CC an — im 🚀-Tab unter Handel.`);
+    wrToast(`🚀 ${sd.name} eingestellt — im Hafen gesperrt.`, 'success');
+    wrChat(`🤝 ${_wrEsc(_wrMember.name)} bietet ${wrArtTok(shipKey)} ${_wrEsc(sd.name)} zum Kaufpreis an — `
+         + `Zuschlag im 🚀-Tab unter Handel.`);
     wrRender();
   } catch (e) {
     wrToast('Anbieten fehlgeschlagen: ' + e.message, 'error');
+  } finally { _wrBusy = false; }
+}
+
+async function wrShipBuy(tradeId) {
+  if (_wrBusy) return;
+  _wrBusy = true;
+  try {
+    const res = await DB.buySpaceShipOffer(_wrMember.id, tradeId);
+    if (!res || res.error) { wrToast(wrErrText(res?.error), 'error'); return; }
+    if (res.space) wrApplySpace(res.space);
+    if (typeof res.coins === 'number') wrApplyCoins(res.coins);
+    const sd = SPACE_SHIP_BY_KEY[res.ship];
+    wrToast(`⚡ Zuschlag: ${res.count}× ${sd?.name || res.ship} — sofort im Hafen!`, 'success');
+    wrChat(`⚡ ${_wrEsc(_wrMember.name)} hat den Zuschlag für ${wrArtTok(res.ship)} `
+         + `${_wrEsc(sd?.name || res.ship)} von ${_wrEsc(res.seller || 'einem Clan-Mitglied')} erhalten.`);
+    wrRender();
+  } catch (e) {
+    wrToast('Zuschlag fehlgeschlagen: ' + e.message, 'error');
+  } finally { _wrBusy = false; }
+}
+
+async function wrTradeRequest() {
+  if (_wrBusy) return;
+  const type = _wrTrType, amount = _wrTrAmount;
+  const price = amount * (WR_TRADE_PRICE[type] || 0);
+  _wrBusy = true;
+  try {
+    const res = await DB.createSpaceRequest(_wrMember.id, type, amount);
+    if (!res || res.error) { wrToast(wrErrText(res?.error), 'error'); return; }
+    if (typeof res.coins === 'number') wrApplyCoins(res.coins);
+    wrToast(`📨 Gesuch abgeschickt — ${wrFmt(res.price || price)} CC gesperrt.`, 'success');
+    wrChat(`🤝 ${_wrEsc(_wrMember.name)} sucht ${wrFmt(amount)} ${wrArtTok(type)} für ${wrFmt(res.price || price)} CC — `
+         + `liefern im 🚀-Tab unter Handel.`);
+    wrRender();
+  } catch (e) {
+    wrToast('Gesuch fehlgeschlagen: ' + e.message, 'error');
+  } finally { _wrBusy = false; }
+}
+
+async function wrTradeFulfill(tradeId) {
+  if (_wrBusy) return;
+  _wrBusy = true;
+  try {
+    const res = await DB.fulfillSpaceRequest(_wrMember.id, tradeId);
+    if (!res || res.error) { wrToast(wrErrText(res?.error), 'error'); return; }
+    if (res.space) wrApplySpace(res.space);
+    if (typeof res.coins === 'number') wrApplyCoins(res.coins);
+    const icon = res.type === 'erz' ? '🪨' : '💎';
+    wrToast(`📦 Geliefert: ${wrFmt(res.amount)} ${icon} — +${wrFmt(res.price)} CC`, 'success');
+    wrChat(`📦 ${_wrEsc(_wrMember.name)} hat das Gesuch von ${_wrEsc(res.requester || 'einem Clan-Mitglied')} beliefert: `
+         + `${wrFmt(res.amount)} ${wrArtTok(res.type)} für ${wrFmt(res.price)} CC.`);
+    wrRender();
+  } catch (e) {
+    wrToast('Liefern fehlgeschlagen: ' + e.message, 'error');
   } finally { _wrBusy = false; }
 }
 
@@ -959,7 +1077,7 @@ async function wrTradeCancel(tradeId) {
     const res = await DB.cancelSpaceTrade(_wrMember.id, tradeId);
     if (!res || res.error) { wrToast(wrErrText(res?.error), 'error'); return; }
     if (res.space) wrApplySpace(res.space);
-    wrToast('↩️ Angebot zurückgezogen — Ware erstattet.', 'info');
+    wrToast('↩️ Zurückgezogen — die Sperre (CC/Ware/Schiff) ist erstattet.', 'info');
     wrRender();
   } catch (e) {
     wrToast('Zurückziehen fehlgeschlagen: ' + e.message, 'error');
@@ -1147,6 +1265,16 @@ function wrFleetPickerHtml(m) {
         <span>Schiffe: <strong>${wrFmt(wrSelTotal())}</strong></span>
         <span>${wrIc("atk")} Kampfkraft: <strong>${wrFmt(power)}</strong></span>
         ${mine > 0 ? `<span>${wrIc("mine")} Abbau: <strong>${wrFmt(mine)}</strong></span>` : ''}
+        ${(() => {
+          // 💎 Treibstoff der aktuellen Auswahl zum gewählten Ziel (Ring aus der Auswahl)
+          const ring = _wrSel?.planet?.ring ?? _wrSel?.q?.ring ?? 0;
+          if (!ring) return '';
+          const fuel = wrTripFuel(wrSyncFleetSel(m), ring);
+          if (fuel <= 0) return `<span>💎 Treibstoff: <strong>frei</strong></span>`;
+          const ok = wrKristall(m) >= fuel;
+          return `<span class="${ok ? '' : 'wr-bad'}">💎 Treibstoff: <strong>${wrFmt(fuel)}</strong>`
+               + `${ok ? '' : ` <span class="wr-sub">(nur ${wrFmt(wrKristall(m))} auf Lager!)</span>`}</span>`;
+        })()}
       </div>
     </div>`;
 }
@@ -2497,8 +2625,18 @@ function wrBindEvents() {
     const tu = e.target.closest('[data-wr-tup]');
     if (tu && !tu.disabled) { await wrDefense('turret_upgrade', tu.dataset.wrTup, null); return; }
 
-    // 🤝 Clan-Handel
-    if (e.target.closest('#wr-tr-create')) { await wrTradeCreate(); return; }
+    // 🤝 Clan-Handel v2 (Gesuche + Schiffshandel)
+    const trType = e.target.closest('[data-wr-tr-type]');
+    if (trType) { _wrTrType = trType.dataset.wrTrType; wrLoadHandel(); return; }
+    const trAmt = e.target.closest('[data-wr-tr-amount]');
+    if (trAmt) { _wrTrAmount = parseInt(trAmt.dataset.wrTrAmount, 10) || 50; wrLoadHandel(); return; }
+    if (e.target.closest('#wr-tr-request')) { await wrTradeRequest(); return; }
+    const trFill = e.target.closest('[data-wr-trade-fill]');
+    if (trFill && !trFill.disabled) { await wrTradeFulfill(trFill.dataset.wrTradeFill); return; }
+    const trShipOffer = e.target.closest('[data-wr-tr-shipoffer]');
+    if (trShipOffer) { await wrShipOffer(trShipOffer.dataset.wrTrShipoffer); return; }
+    const trShipBuy = e.target.closest('[data-wr-trade-shipbuy]');
+    if (trShipBuy && !trShipBuy.disabled) { await wrShipBuy(trShipBuy.dataset.wrTradeShipbuy); return; }
     const trBuy = e.target.closest('[data-wr-trade-buy]');
     if (trBuy) { await wrTradeBuy(trBuy.dataset.wrTradeBuy); return; }
     const trCancel = e.target.closest('[data-wr-trade-cancel]');
@@ -2592,13 +2730,21 @@ async function wrSend(intent) {
   if (intent === 'harvest'  && wrFleetMine(fleet) < 1) { wrToast('Ohne ⛏️ Röstkometen gibt es nichts abzubauen.', 'error'); return; }
   if (intent === 'attack'   && wrFleetPower(fleet) < 1) { wrToast('Dieser Verband hat keine Kampfkraft.', 'error'); return; }
 
+  // 💎 Treibstoff-Vorabcheck (Server prüft autoritativ nochmal — 22h)
+  const fuel = wrTripFuel(fleet, planet.ring);
+  if (fuel > 0 && wrKristall(m) < fuel) {
+    wrToast(`Nicht genug 💎 Kristall als Treibstoff: Reise braucht ${wrFmt(fuel)}, du hast ${wrFmt(wrKristall(m))}.`, 'error');
+    return;
+  }
+
   _wrBusy = true;
   try {
     const res = await DB.startSpaceTrip(m.id, planet.id, intent, fleet, wrSpeedPct(m));
     if (!res || res.error) { wrToast(wrErrText(res?.error), 'error'); return; }
     if (res.space) wrApplySpace(res.space);
     const info = SPACE_INTENTS[intent] || {};
-    wrToast(`${info.icon || '🚀'} Flotte gestartet — zurück in ${wrCountdown(Date.parse(res.trip.returnAt) - Date.now())}`, 'success');
+    wrToast(`${info.icon || '🚀'} Flotte gestartet — zurück in ${wrCountdown(Date.parse(res.trip.returnAt) - Date.now())}`
+          + `${(res.fuel > 0) ? ` · 💎 −${wrFmt(res.fuel)} Treibstoff` : ''}`, 'success');
 
     // Chat: offene Werft-Käufe zuerst rausschreiben, damit die Reihenfolge stimmt
     wrBuyFlush();
@@ -3467,6 +3613,8 @@ function wrErrText(err) {
     too_many:              'Höchstens 50 Schiffe je Auftrag.',
     yard_max:              'Deine Werft ist bereits voll ausgebaut.',
     still_building:        'Das Schiff ist noch nicht fertig.',
+    // 💎 Treibstoff (22h)
+    not_enough_fuel:       'Nicht genug 💎 Kristall als Treibstoff für diese Reise.',
     // 🤝 Clan-Handel (22f)
     bad_type:              'Unbekannter Rohstoff.',
     bad_amount:            'Menge und Preis müssen mindestens 1 sein.',

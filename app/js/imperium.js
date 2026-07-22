@@ -177,6 +177,22 @@ async function _renderImperiumTab(tab, member) {
 }
 
 // ── Forschungsbaum ────────────────────────────────────────────────────────────
+// 🔬 CIQ Forscherdrang (JP 2026-07-22): db.js bucht seit jeher die −15 % ab —
+// aber die Anzeige zeigte den vollen Preis, sodass „keine Reduktion" zu sehen war.
+// Diese Helfer rendern den rabattierten Preis (durchgestrichener Altpreis + 🔬).
+function _impDiscMult() {
+  try {
+    return (typeof ciqResearchCostMult === 'function')
+      ? ciqResearchCostMult((currentUserData || {}).cosmetics || {}) : 1;
+  } catch (e) { return 1; }
+}
+function _impCostHtml(cost) {
+  const c = cost || 0;
+  const mult = _impDiscMult();
+  if (!(c > 0) || mult >= 1) return c.toLocaleString('de-DE') + ' CC';
+  const d = Math.max(1, Math.round(c * mult));
+  return `<s style="opacity:.55">${c.toLocaleString('de-DE')}</s> ${d.toLocaleString('de-DE')} CC <span title="CIQ Forscherdrang −15 %">🔬</span>`;
+}
 function _buildForschungsbaum(research) {
   if (typeof RESEARCH_PATHS === 'undefined') return '<p style="color:var(--muted);padding:16px">Lade Forschungsdaten…</p>';
 
@@ -215,7 +231,7 @@ function _buildForschungsbaum(research) {
         <span class="cc-ri-path">${item.pathIcon}</span>
         <div class="cc-ri-icon">${item.icon}</div>
         <p class="cc-ri-name">${_esc2(item.name)}</p>
-        <p class="cc-ri-cost">${owned ? '✓' : item.cost.toLocaleString('de-DE') + ' CC'}</p>
+        <p class="cc-ri-cost">${owned ? '✓' : _impCostHtml(item.cost)}</p>
         <p class="cc-ri-bonus">${_esc2(bonus)}</p>
         ${owned ? ''
           : prereqOk ? `<button class="cc-buy-btn" data-buy="${item.id}">Kaufen</button>`
@@ -243,7 +259,7 @@ function _buildForschungsbaum(research) {
         }).join('<span class="cc-combo-plus">+</span>')}
         <span class="cc-combo-arrow">→</span>
         <span class="cc-combo-result">${combo.icon} ${_esc2(combo.name)}</span>
-        ${combo.cost === 0 ? '<span class="cc-combo-free">gratis!</span>' : `<span class="cc-combo-cost">${combo.cost} CC</span>`}
+        ${combo.cost === 0 ? '<span class="cc-combo-free">gratis!</span>' : `<span class="cc-combo-cost">${_impCostHtml(combo.cost)}</span>`}
       </div>
       <p class="cc-combo-desc">${_esc2(combo.desc)}</p>
       ${owned ? '<p class="cc-combo-owned-lbl">✓ Freigeschaltet</p>' :
@@ -302,7 +318,7 @@ function _buildWeltraumZweig(research) {
           ${art}
           <span class="cc-space-name">${_esc2(it.name)}</span>
           <span class="cc-space-ast">${_esc2(it.ast)} · WT${it.wt}</span>
-          <span class="cc-space-cost">${owned ? '✓' : it.cost.toLocaleString('de-DE') + ' CC'}</span>
+          <span class="cc-space-cost">${owned ? '✓' : _impCostHtml(it.cost)}</span>
         </div>
         <p class="cc-space-desc">${_esc2(it.desc)}</p>
         ${owned ? '<p class="cc-combo-owned-lbl">✓ Erforscht</p>'

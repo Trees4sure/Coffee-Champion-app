@@ -2662,12 +2662,85 @@ const DB = (() => {
     try {
       if (!_groupId) return [];
       const { data, error } = await _sb.from('space_trades')
-        .select('id, seller_id, seller_name, resource_type, amount, price_cc, created_at')
+        .select('id, seller_id, seller_name, resource_type, amount, price_cc, created_at, kind')
         .eq('group_id', _groupId).eq('status', 'open')
         .order('created_at', { ascending: false });
       if (error) return [];
       return data || [];
     } catch (e) { return []; }
+  }
+
+  // 🤝 v2 (22i): KAUFGESUCH — Gesucher zahlt den vom Server generierten Festpreis
+  // sofort (CC-Sperre); Lieferant erfüllt und bekommt die CC.
+  async function createSpaceRequest(memberId, type, amount) {
+    try {
+      const { data, error } = await _sb.rpc('create_space_request', {
+        p_member_id: memberId, p_group_id: _groupId, p_type: type, p_amount: amount });
+      if (error) return { error: error.message };
+      if (data && data.ok && (data.price || 0) > 0) {
+        const icon = type === 'erz' ? '🪨' : '💎';
+        try {
+          await appendTodayLogFresh(memberId, [{
+            label: `🤝 Kaufgesuch: ${Math.round(amount)} ${icon}`, amount: -data.price,
+            cat: 'weltraum', invest: true, detail: 'CC gesperrt bis Lieferung/Rückzug',
+            aggKey: 'space_trade_req' }]);
+        } catch (e) {}
+      }
+      return data || {};
+    } catch (e) { return { error: e.message }; }
+  }
+
+  // 🚀 Schiffshandel (22i): Anbieten sperrt die Schiffe; Zuschlag zahlt den
+  // NORMALEN Kaufpreis (Server rechnet CC+Erz+Kristall) an den Anbieter, die
+  // Schiffe landen sofort im Käufer-Hafen (keine Bauzeit).
+  async function createSpaceShipOffer(memberId, ship, count) {
+    try {
+      const { data, error } = await _sb.rpc('create_space_ship_offer', {
+        p_member_id: memberId, p_group_id: _groupId, p_ship: ship, p_count: count | 0 });
+      if (error) return { error: error.message };
+      return data || {};
+    } catch (e) { return { error: e.message }; }
+  }
+
+  async function buySpaceShipOffer(memberId, tradeId) {
+    try {
+      const { data, error } = await _sb.rpc('buy_space_ship_offer', {
+        p_member_id: memberId, p_trade_id: tradeId });
+      if (error) return { error: error.message };
+      if (data && data.ok) {
+        try {
+          if ((data.cc || 0) > 0) await appendTodayLogFresh(memberId, [{
+            label: `🤝 Schiff gekauft: ${data.count}× ${data.ship}`, amount: -data.cc,
+            cat: 'weltraum', invest: true, detail: `von ${data.seller || 'Clan-Mitglied'}`,
+            aggKey: 'space_trade_ship_buy' }]);
+        } catch (e) {}
+        try {
+          if (data.seller_id && (data.cc || 0) > 0) await appendTodayLogFresh(data.seller_id, [{
+            label: `🤝 Schiff verkauft: ${data.count}× ${data.ship}`, amount: data.cc,
+            cat: 'weltraum', aggKey: 'space_trade_ship_sell', aggBase: '🤝 Clan-Handel (Schiffe)' }]);
+        } catch (e) {}
+      }
+      return data || {};
+    } catch (e) { return { error: e.message }; }
+  }
+
+  async function fulfillSpaceRequest(memberId, tradeId) {
+    try {
+      const { data, error } = await _sb.rpc('fulfill_space_request', {
+        p_member_id: memberId, p_trade_id: tradeId });
+      if (error) return { error: error.message };
+      if (data && data.ok) {
+        const icon = data.type === 'erz' ? '🪨' : '💎';
+        try {
+          await appendTodayLogFresh(memberId, [{
+            label: `🤝 Clan-Handel: ${Math.round(data.amount)} ${icon} geliefert`,
+            amount: data.price, cat: 'weltraum',
+            detail: `an ${data.requester || 'Clan-Mitglied'}`,
+            aggKey: 'space_trade_sell', aggBase: '🤝 Clan-Handel (Lieferungen)' }]);
+        } catch (e) {}
+      }
+      return data || {};
+    } catch (e) { return { error: e.message }; }
   }
 
   async function createSpaceTrade(memberId, type, amount, price) {
@@ -2685,6 +2758,16 @@ const DB = (() => {
       const { data, error } = await _sb.rpc('cancel_space_trade', {
         p_member_id: memberId, p_trade_id: tradeId });
       if (error) return { error: error.message };
+      // Gesuch zurückgezogen → CC-Erstattung als reine Kapitalbewegung loggen
+      // (kapital:true — die Sperre war als Investition gebucht, der Rückfluss darf
+      // weder Einnahme noch erneute Investition zählen).
+      if (data && data.ok && (data.refund_cc || 0) > 0) {
+        try {
+          await appendTodayLogFresh(memberId, [{
+            label: '🤝 Kaufgesuch zurückgezogen', amount: data.refund_cc,
+            kapital: true, detail: 'CC-Sperre erstattet' }]);
+        } catch (e) {}
+      }
       return data || {};
     } catch (e) { return { error: e.message }; }
   }
@@ -2832,6 +2915,7 @@ const DB = (() => {
     startSpaceTrip, recallSpaceTrip, claimSpaceArrival, harvestSpace, claimSpaceBuild, buildSpaceCart, setSpaceRoute,
     buySpaceTech, ensureSpaceWave, fetchSpaceWaves, fetchSpaceHelp,
     fetchSpaceTrades, createSpaceTrade, cancelSpaceTrade, buySpaceTrade,
+    createSpaceRequest, fulfillSpaceRequest, createSpaceShipOffer, buySpaceShipOffer,
     requestSpaceHelp, sendSpaceHelp, resolveSpaceWave,
   };
 })();
