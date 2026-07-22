@@ -295,11 +295,17 @@
 .wr-log-msg { color: #c9d4f0; min-width: 0; overflow-wrap: anywhere; }
 .wr-log-msg img.chat-art { width: 16px; height: 16px; vertical-align: -3px; }
 
-/* ── 🤝 Clan-Handel (2026-07-22) ─────────────────────────────────────────── */
-.wr-trade-form { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-.wr-trade-in { background: #0f1526; border: 1px solid #2a3660; border-radius: 8px;
-  color: #dce6ff; padding: 7px 8px; font-size: .82rem; min-width: 0; }
-#wr-tr-amount, #wr-tr-price { flex: 1 1 90px; width: 90px; }
+/* ── 🤝 Clan-Handel v2: Gesuche + Schiffshandel (2026-07-22) ─────────────── */
+/* JP: keine weißen Eingabefelder — alles Schaltflächen im Weltraum-Look. */
+.wr-tr-btnrow { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.wr-tr-btn { background: #0f1526; border: 1px solid #2a3660; border-radius: 8px;
+  color: #dce6ff; padding: 8px 12px; font-size: .82rem; cursor: pointer; line-height: 1.25; }
+.wr-tr-btn .wr-sub { display: block; font-size: .62rem; }
+.wr-tr-btn.active { border-color: #d4aa37; background: #1c2440; color: #ffd15c; }
+.wr-tr-btn:active { background: #1a2547; }
+.wr-tr-ships .wr-tr-btn { flex: 1 1 45%; text-align: left; }
+.wr-tr-sum { display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; flex-wrap: wrap; margin-top: 4px; color: #dce6ff; font-size: .88rem; }
 .wr-trade-row { display: flex; align-items: center; gap: 8px; padding: 7px 8px; margin-bottom: 6px;
   background: #0f1526; border: 1px solid #1e2947; border-radius: 8px; font-size: .8rem; }
 .wr-trade-row.is-own { border-color: #4a3d1e; }
