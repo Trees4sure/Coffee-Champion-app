@@ -439,6 +439,19 @@ function wrHomeShips(m) { return wrSpace(m).fleets?.home?.ships || {}; }
 function wrAway(m)      { return wrSpace(m).fleets?.away || null; }
 function wrTrip(m)      { const t = wrAway(m)?.trip; return (t && typeof t === 'object') ? t : null; }
 function wrColonies(m)  { return wrSpace(m).colonies || {}; }
+// 🛸 ANZEIGE-Flotte des Away-Verbands (JP 2026-07-22, #36): Bei einer Kolonie-
+// Mission auf dem RÜCKFLUG das Kolonieschiff nicht mehr mitzeigen — es bleibt am
+// Ziel, aber die Buchhaltung läuft erst beim Rückkehr-Claim. Ohne diesen Filter
+// sah es aus, als käme das Kolonieschiff zurück. Reine Anzeige, keine Logik.
+function wrAwayShipsDisplay(m) {
+  const ships = wrAway(m)?.ships || {};
+  const trip  = wrTrip(m);
+  if (!trip || trip.intent !== 'colonize') return ships;
+  if (Date.now() < Date.parse(trip.arriveAt)) return ships;   // Hinflug: noch an Bord
+  const n = parseInt(ships.kolonie, 10) || 0;
+  if (n < 1) return ships;
+  return { ...ships, kolonie: n - 1 };
+}
 // Wie viele Schiffe eines Typs sind auf Dauerernte-/Bergungs-Routen gebunden?
 // (JP 2026-07-22: die „Röstkometen im Verband"-Warnung war unverständlich, wenn
 // alle Ernter auf Routen standen — jetzt sagt sie, WO die Schiffe stecken.)
@@ -1551,7 +1564,7 @@ function wrDetailHtml(m) {
         <span>Wächter: <strong>${cleared ? '— befreit' : wrFmt(p.enemy_strength)}</strong></span>
       </div>
       ${cleared
-        ? `<div class="wr-ok">✅ Befreit${mine ? ' — von dir' : ''}${colon ? ' · ${wrIc("colony")} bereits kolonisiert' : ''}</div>`
+        ? `<div class="wr-ok">✅ Befreit${mine ? ' — von dir' : ''}${colon ? ' · ' + wrIc("colony") + ' bereits kolonisiert' : ''}</div>`
         : `<div class="wr-facts wr-facts-fight">
              <span>Kampfkraft des Verbands: <strong>${wrFmt(power)}</strong>${
                Math.round(bp.eff) !== Math.round(power)
@@ -2500,7 +2513,7 @@ function wrDrawMap() {
       ctx.restore();
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       // Das Leitschiff des Verbands zeigen statt eines generischen 🚀
-      const lead = wrLeadShip(wrAway(_wrMember)?.ships);
+      const lead = wrLeadShip(wrAwayShipsDisplay(_wrMember));
       if (!(lead && wrDrawImg(ctx, lead.art, fx, fy, 46))) {
         ctx.font = '18px system-ui'; ctx.fillStyle = '#fff';
         ctx.fillText(lead?.icon || '🚀', fx, fy);
@@ -3291,7 +3304,7 @@ function wrFleetLightbox() {
   const m = _wrMember;
   const trip = wrTrip(m);
   if (!trip) return;
-  const ships  = wrAway(m)?.ships || {};
+  const ships  = wrAwayShipsDisplay(m);   // #36: Kolonieschiff auf dem Rückflug nicht mehr zeigen
   const target = (_wrGalaxy?.planets || []).find(p => p.id === trip.planetId);
   const info   = SPACE_INTENTS[trip.intent] || { icon: '🚀', name: trip.intent };
   const power  = wrFleetPower(ships), mine = wrFleetMine(ships);
