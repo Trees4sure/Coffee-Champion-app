@@ -31,13 +31,13 @@ const SPACE_SHIPS = [
     needs:'wt_ionenantrieb', desc:'Billige Kampfkraft — Anzahl entscheidet' },
   { key:'kutter', buildMin:25, art:'ship_kutter',  icon:'🚀', name:'Espresso-Kutter', atk:2,  mine:0, cc:1200, erz:0,  kristall:0,
     needs:'wt_frachtmodule', desc:'Frachter, bringt Ausbeute sicher heim' },
-  { key:'ernter', buildMin:35, art:'ship_ernter',  icon:'⛏️', name:'Röstkomet',       atk:3,  mine:8, cc:1500, erz:10, kristall:0,
+  { key:'ernter', buildMin:35, art:'ship_ernter',  icon:'⛏️', name:'Röstkomet',       atk:3,  mine:8, cc:1200, erz:20, kristall:0,
     needs:'wt_handbohrer',   desc:'Baut Erz und Koffeinkristall ab' },
-  { key:'berger', buildMin:30, art:'ship_berger',  icon:'♻️', name:'Bergungsschiff', atk:1,  mine:0, cc:2000, erz:20, kristall:0,
+  { key:'berger', buildMin:30, art:'ship_berger',  icon:'♻️', name:'Bergungsschiff', atk:1,  mine:0, cc:1500, erz:40, kristall:0,
     needs:'wt_frachtmodule', desc:'Holt mehr aus Wracks — im Kampf und an befreiten Planeten' },
-  { key:'kolonie', buildMin:90, art:'ship_kolonie', icon:'🛸', name:'Kolonieschiff',   atk:0,  mine:0, cc:4000, erz:40, kristall:10,
+  { key:'kolonie', buildMin:90, art:'ship_kolonie', icon:'🛸', name:'Kolonieschiff',   atk:0,  mine:0, cc:3000, erz:70, kristall:20,
     needs:'wt_frachtmodule', desc:'Gründet eine Kolonie — bleibt am Zielplaneten' },
-  { key:'fregatte', buildMin:40, art:'ship_fregatte', icon:'🛡️', name:'Fregatte', atk:28, mine:0, cc:2800, erz:30, kristall:0,
+  { key:'fregatte', buildMin:40, art:'ship_fregatte', icon:'🛡️', name:'Fregatte', atk:28, mine:0, cc:1800, erz:55, kristall:0,
     needs:'wt_frachtmodule', desc:'Leichter Begleitschutz — Schild senkt die Verluste des ganzen Verbands' },
   // ⚠️ JP 2026-07-22: Bomber ↔ Kreuzer haben NAME/BILD/ICON getauscht — der Kreuzer
   // ist optisch größer und soll daher das stärkere, teurere Schiff sein. Die KEYS,
@@ -45,13 +45,13 @@ const SPACE_SHIPS = [
   // _space_ship_stats/loss_order UND in den Flottenbeständen der Spieler — ein
   // Key-Tausch hätte bestehende Flotten still umbewertet. CHAT_ART (app.js) ist
   // spiegelbildlich mitgetauscht, sonst zeigte der Chat das alte Bild zum neuen Namen.
-  { key:'kreuzer', buildMin:70, art:'ship_bomber', icon:'💣', name:'Bomber', atk:65, mine:0, cc:6000, erz:80, kristall:10,
+  { key:'kreuzer', buildMin:70, art:'ship_bomber', icon:'💣', name:'Bomber', atk:65, mine:0, cc:3600, erz:140, kristall:20,
     needs:'wt_frachtmodule', desc:'Kapitalschiff-Jäger: stark gegen schwere Gegner, träge gegen Schwärme' },
-  { key:'bomber', buildMin:100, art:'ship_kreuzer', icon:'🚨', name:'Kreuzer', atk:90, mine:0, cc:9000, erz:120, kristall:25,
+  { key:'bomber', buildMin:100, art:'ship_kreuzer', icon:'🚨', name:'Kreuzer', atk:90, mine:0, cc:5500, erz:210, kristall:45,
     needs:'wt_frachtmodule', desc:'Überall stark, gegen Geschütze verheerend' },
-  { key:'schlachtschiff', buildMin:150, art:'ship_schlachtschiff', icon:'⚔️', name:'Schlachtschiff', atk:180, mine:0, cc:18000, erz:250, kristall:60,
+  { key:'schlachtschiff', buildMin:150, art:'ship_schlachtschiff', icon:'⚔️', name:'Schlachtschiff', atk:180, mine:0, cc:11000, erz:440, kristall:110,
     needs:'wt_frachtmodule', desc:'Überall stark, hoher Schild — das Rückgrat einer großen Flotte' },
-  { key:'dunkle_roestung', buildMin:240, art:'ship_dunkle_roestung', icon:'🌑', name:'Dunkle Röstung', atk:320, mine:0, cc:35000, erz:500, kristall:150,
+  { key:'dunkle_roestung', buildMin:240, art:'ship_dunkle_roestung', icon:'🌑', name:'Dunkle Röstung', atk:320, mine:0, cc:21000, erz:850, kristall:260,
     needs:'wt_frachtmodule', desc:'Elite-Kapitalschiff: überall stark, höchster Schild, enormer Preis' },
 ];
 const SPACE_SHIP_BY_KEY = SPACE_SHIPS.reduce((m, s) => (m[s.key] = s, m), {});
@@ -72,29 +72,29 @@ const SPACE_TECH_ASTE = [
 ];
 const SPACE_TECH = [
   // Ast A — verdrahtet
-  { key:'wt_a3', ast:'a', stufe:3, name:'Warp-Kessel',    cc:25000, erz:150, kristall:40,  requires:null,
+  { key:'wt_a3', ast:'a', stufe:3, name:'Warp-Kessel',    cc:15000, erz:240, kristall:65,  requires:null,
     wirkung:'Flugzeit −25 %',            art:'base_werft_2', live:true },
-  { key:'wt_a4', ast:'a', stufe:4, name:'Orbitalwerft',   cc:40000, erz:250, kristall:80,  requires:'wt_a3',
+  { key:'wt_a4', ast:'a', stufe:4, name:'Orbitalwerft',   cc:24000, erz:400, kristall:130,  requires:'wt_a3',
     wirkung:'Bauzeit −15 %',             art:'base_werft_3', live:true },
-  { key:'wt_a5', ast:'a', stufe:5, name:'Dunkle Materie', cc:65000, erz:400, kristall:150, requires:'wt_a4',
+  { key:'wt_a5', ast:'a', stufe:5, name:'Dunkle Materie', cc:39000, erz:640, kristall:240, requires:'wt_a4',
     wirkung:'Flugzeit weitere −25 %',    art:'ship_dunkle_roestung', live:true },
   // Ast B — noch nicht verdrahtet
-  { key:'wt_b1', ast:'b', stufe:1, name:'Bohnen-Railgun',       cc:8000,  erz:40,  kristall:0,   requires:null,   wirkung:'Geschütz-Feuerkraft +15 %',      art:'turret_railgun',     live:true },
-  { key:'wt_b2', ast:'b', stufe:2, name:'Koffein-Laser',        cc:15000, erz:80,  kristall:15,  requires:'wt_b1', wirkung:'Flotten-Kampfkraft +10 %',       art:'turret_laser',       live:true },
-  { key:'wt_b3', ast:'b', stufe:3, name:'Plasma-Kanone',        cc:25000, erz:150, kristall:40,  requires:'wt_b2', wirkung:'Kampfverluste −15 %',            art:'turret_plasma',      live:true },
-  { key:'wt_b4', ast:'b', stufe:4, name:'EMP-Espresso',         cc:40000, erz:250, kristall:80,  requires:'wt_b3', wirkung:'Hinterhalte halb so oft',        art:'foe_pirat',          live:true },
-  { key:'wt_b5', ast:'b', stufe:5, name:'Singularitätswerfer',  cc:65000, erz:400, kristall:150, requires:'wt_b4', wirkung:'Geschütze +40 %, Reparatur 4 h', art:'turret_singularity', live:true },
+  { key:'wt_b1', ast:'b', stufe:1, name:'Bohnen-Railgun',       cc:4800,  erz:65,  kristall:0,   requires:null,   wirkung:'Geschütz-Feuerkraft +15 %',      art:'turret_railgun',     live:true },
+  { key:'wt_b2', ast:'b', stufe:2, name:'Koffein-Laser',        cc:9000, erz:130,  kristall:25,  requires:'wt_b1', wirkung:'Flotten-Kampfkraft +10 %',       art:'turret_laser',       live:true },
+  { key:'wt_b3', ast:'b', stufe:3, name:'Plasma-Kanone',        cc:15000, erz:240, kristall:65,  requires:'wt_b2', wirkung:'Kampfverluste −15 %',            art:'turret_plasma',      live:true },
+  { key:'wt_b4', ast:'b', stufe:4, name:'EMP-Espresso',         cc:24000, erz:400, kristall:130,  requires:'wt_b3', wirkung:'Hinterhalte halb so oft',        art:'foe_pirat',          live:true },
+  { key:'wt_b5', ast:'b', stufe:5, name:'Singularitätswerfer',  cc:39000, erz:640, kristall:240, requires:'wt_b4', wirkung:'Geschütze +40 %, Reparatur 4 h', art:'turret_singularity', live:true },
   // Ast C
-  { key:'wt_c2', ast:'c', stufe:2, name:'Tiefenscanner',    cc:15000, erz:80,  kristall:15,  requires:null,   wirkung:'Abbau +15 %',            art:'ic_mine',            live:true },
-  { key:'wt_c3', ast:'c', stufe:3, name:'Plasma-Bohrkopf',  cc:25000, erz:150, kristall:40,  requires:'wt_c2', wirkung:'Dauerernte +25 %',       art:'base_erzraffinerie', live:true },
-  { key:'wt_c4', ast:'c', stufe:4, name:'Schürfdrohnen',    cc:40000, erz:250, kristall:80,  requires:'wt_c3', wirkung:'Treibstoff −50 %',       art:'ship_ernter',        live:true },
-  { key:'wt_c5', ast:'c', stufe:5, name:'Kern-Extraktor',   cc:65000, erz:400, kristall:150, requires:'wt_c4', wirkung:'Kolonie-Ertrag +50 %',   art:'res_kristall',       live:true },
+  { key:'wt_c2', ast:'c', stufe:2, name:'Tiefenscanner',    cc:9000, erz:130,  kristall:25,  requires:null,   wirkung:'Abbau +15 %',            art:'ic_mine',            live:true },
+  { key:'wt_c3', ast:'c', stufe:3, name:'Plasma-Bohrkopf',  cc:15000, erz:240, kristall:65,  requires:'wt_c2', wirkung:'Dauerernte +25 %',       art:'base_erzraffinerie', live:true },
+  { key:'wt_c4', ast:'c', stufe:4, name:'Schürfdrohnen',    cc:24000, erz:400, kristall:130,  requires:'wt_c3', wirkung:'Treibstoff −50 %',       art:'ship_ernter',        live:true },
+  { key:'wt_c5', ast:'c', stufe:5, name:'Kern-Extraktor',   cc:39000, erz:640, kristall:240, requires:'wt_c4', wirkung:'Kolonie-Ertrag +50 %',   art:'res_kristall',       live:true },
   // Ast D
-  { key:'wt_d1', ast:'d', stufe:1, name:'Raffinerie',         cc:8000,  erz:40,  kristall:0,   requires:null,   wirkung:'Rohstoffkosten −20 %',    art:'base_erzraffinerie',  live:true },
-  { key:'wt_d2', ast:'d', stufe:2, name:'Handelsdock',        cc:15000, erz:80,  kristall:15,  requires:'wt_d1', wirkung:'Kampf-Bergung +25 %',     art:'ship_berger',         live:true },
-  { key:'wt_d3', ast:'d', stufe:3, name:'Orbitallager',       cc:25000, erz:150, kristall:40,  requires:'wt_d2', wirkung:'Ansammlung 14 → 21 Tage', art:'base_3',              live:true },
-  { key:'wt_d4', ast:'d', stufe:4, name:'Fern-Handelsroute',  cc:40000, erz:250, kristall:80,  requires:'wt_d3', wirkung:'Kolonien geben CC/Tag',   art:'ship_kutter',         live:true },
-  { key:'wt_d5', ast:'d', stufe:5, name:'Sternenbörse',       cc:65000, erz:400, kristall:150, requires:'wt_d4', wirkung:'Wrack-Ausbeute +30 %',    art:'base_kristallreactor', live:true },
+  { key:'wt_d1', ast:'d', stufe:1, name:'Raffinerie',         cc:4800,  erz:65,  kristall:0,   requires:null,   wirkung:'Rohstoffkosten −20 %',    art:'base_erzraffinerie',  live:true },
+  { key:'wt_d2', ast:'d', stufe:2, name:'Handelsdock',        cc:9000, erz:130,  kristall:25,  requires:'wt_d1', wirkung:'Kampf-Bergung +25 %',     art:'ship_berger',         live:true },
+  { key:'wt_d3', ast:'d', stufe:3, name:'Orbitallager',       cc:15000, erz:240, kristall:65,  requires:'wt_d2', wirkung:'Ansammlung 14 → 21 Tage', art:'base_3',              live:true },
+  { key:'wt_d4', ast:'d', stufe:4, name:'Fern-Handelsroute',  cc:24000, erz:400, kristall:130,  requires:'wt_d3', wirkung:'Kolonien geben CC/Tag',   art:'ship_kutter',         live:true },
+  { key:'wt_d5', ast:'d', stufe:5, name:'Sternenbörse',       cc:39000, erz:640, kristall:240, requires:'wt_d4', wirkung:'Wrack-Ausbeute +30 %',    art:'base_kristallreactor', live:true },
 ];
 const SPACE_TECH_BY_KEY = SPACE_TECH.reduce((m, t) => (m[t.key] = t, m), {});
 
@@ -346,7 +346,8 @@ function wrFoeArt(foe, cls) {
 }
 
 // Hinterhalt-Wahrscheinlichkeit je Ring — Spiegel von claim_space_arrival.
-const WR_AMBUSH = { 1: { chance: 0.12, min: 20, max: 60 }, 2: { chance: 0.30, min: 60, max: 160 } };
+const WR_AMBUSH = { 1: { chance: 0.12, min: 20, max: 60 }, 2: { chance: 0.30, min: 60, max: 160 },
+                    3: { chance: 0.45, min: 150, max: 400 } };   // Ring 3 (Spiegel 22g)
 // B4 EMP-Espresso halbiert die WAHRSCHEINLICHKEIT (nicht den Schaden) — Spiegel von 21n.
 function wrAmbushChance(ring, m) {
   return ((WR_AMBUSH[ring] || {}).chance || 0) * wrTechAmbush(m || _wrMember);
@@ -367,7 +368,7 @@ const SPACE_MIN_PER_RING = 20;  // Minuten je Ring und Strecke — Spiegel von s
 // (nachgerechnet im Test): Breite = 8 × size, Höhe = (4√3 + 2) × size ≈ 8,93 × size.
 // Bei size 80 → 640 × 715, gerundet auf 720 Höhe. Mit kleinerem Canvas ragten die
 // äußeren Ring-2-Quadranten aus dem Bild.
-const WR_HEX_SIZE = 80;
+const WR_HEX_SIZE = 56;   // 80 → 56: Ring 3 muss in den Canvas passen (Zoom gleicht mobil aus)
 const WR_CANVAS_W = 640;
 const WR_CANVAS_H = 720;
 
@@ -559,10 +560,15 @@ function wrIc(key) {
 // Alle anderen Module posten ihre Ereignisse in den Gruppen-Chat (world.js, krieger,
 // cafe, kaffeemobil …) — der Weltraum tat es bisher nicht. Immer in try/catch:
 // ein fehlgeschlagener Post darf die Aktion nie blockieren (CLAUDE.md Regel 3).
+// Jede Weltraum-Meldung trägt den unsichtbaren Marker `[[wr]]` am Anfang —
+// _chatArt (app.js) entfernt ihn beim Rendern. Er macht die Meldungen VERLÄSSLICH
+// filterbar (JP 2026-07-22: Ereignis-Protokoll im 🚀-Tab; vorher wären sie nur am
+// Emoji erkennbar gewesen). Das 📜-Protokoll zeigt alles ab Einführung des Markers.
+const WR_CHAT_MARK = '[[wr]]';
 function wrChat(msg, author) {
   try {
     if (typeof DB === 'undefined' || !DB.postMessage) return;
-    DB.postMessage(msg, author || _wrMember?.name || 'Weltraum').catch(() => {});
+    DB.postMessage(WR_CHAT_MARK + msg, author || _wrMember?.name || 'Weltraum').catch(() => {});
   } catch (e) { /* non-critical */ }
 }
 
@@ -604,9 +610,9 @@ function wrQKey(qx, qy) { return qx + ',' + qy; }
 function wrRing(qx, qy) { return (Math.abs(qx) + Math.abs(qy) + Math.abs(qx + qy)) / 2; }
 function wrAllQuadrants() {
   const out = [];
-  for (let qx = -2; qx <= 2; qx++) for (let qy = -2; qy <= 2; qy++) {
+  for (let qx = -3; qx <= 3; qx++) for (let qy = -3; qy <= 3; qy++) {
     const r = wrRing(qx, qy);
-    if (r <= 2) out.push({ qx, qy, ring: r, key: wrQKey(qx, qy) });
+    if (r <= 3) out.push({ qx, qy, ring: r, key: wrQKey(qx, qy) });   // Ring 3: JP 2026-07-22
   }
   return out;
 }
@@ -735,6 +741,8 @@ const WR_TABS = [
   { key:'hafen', icon:'🛰️', name:'Raumhafen' },
   { key:'werft', icon:'🏗️', name:'Werft' },
   { key:'tech',  icon:'🔬', name:'Forschung' },
+  { key:'handel', icon:'🤝', name:'Handel' },
+  { key:'log',   icon:'📜', name:'Protokoll' },
 ];
 function wrTabsHtml() {
   return `<div class="wr-tabs">${WR_TABS.map(t =>
@@ -787,12 +795,210 @@ function wrRender() {
       </div>
       <div${_wrTab === 'werft' ? '' : ' hidden'}>${wrWerftHtml(m)}</div>
       <div${_wrTab === 'tech'  ? '' : ' hidden'}>${wrTechHtml(m)}</div>
+      <div id="wr-handel"${_wrTab === 'handel' ? '' : ' hidden'}></div>
+      <div id="wr-log"${_wrTab === 'log' ? '' : ' hidden'}></div>
     </div>`;
+
+  if (_wrTab === 'log')    wrLoadProtokoll();
+  if (_wrTab === 'handel') wrLoadHandel();
 
   // Der Canvas wird nur gezeichnet, wenn er sichtbar ist — auf einem versteckten
   // Element liefert getBoundingClientRect() Nullen und die Klick-Umrechnung wäre kaputt.
   if (_wrTab === 'karte') wrDrawMap();
   wrBindEvents();
+}
+
+// ── 📣 Hilferuf-Broadcast-Popup (JP-Backlog §3, Muster js/loans.js) ──────────
+// Läuft APP-WEIT im Poll (app.js ruft wrCheckHelpPopup), nicht nur im 🚀-Tab —
+// sonst erfährt ein Verbündeter erst vom Hilferuf, wenn er zufällig vorbeischaut.
+// ⚠️ Merker PRO WELLEN-ID (nicht pro Tag) — sonst verschluckt er den zweiten
+// Hilferuf desselben Tages. localStorage, auf 60 IDs gedeckelt.
+const _WR_HELP_SEEN_KEY = 'wr_help_seen_waves';
+function _wrHelpSeen() {
+  try { return JSON.parse(localStorage.getItem(_WR_HELP_SEEN_KEY)) || []; } catch (e) { return []; }
+}
+function _wrHelpMarkSeen(ids) {
+  try {
+    const s = [...new Set(_wrHelpSeen().concat(ids))].slice(-60);
+    localStorage.setItem(_WR_HELP_SEEN_KEY, JSON.stringify(s));
+  } catch (e) {}
+}
+async function wrCheckHelpPopup() {
+  try {
+    const me = (typeof currentUserData !== 'undefined' && currentUserData) || _wrMember;
+    if (!me?.id) return;
+    // Nicht über andere Modals legen (Quiz/Kredit/eigenes)
+    if (document.getElementById('wr-help-modal') || document.getElementById('loan-modal')?.innerHTML) return;
+    if (typeof DB === 'undefined' || !DB.fetchSpaceWaves) return;
+    const waves = await DB.fetchSpaceWaves();
+    const seen = new Set(_wrHelpSeen());
+    const fresh = (waves || []).filter(w => w.help_open && w.member_id !== me.id
+      && !seen.has(w.id) && Date.parse(w.arrive_at) > Date.now());
+    if (!fresh.length) return;
+    _wrHelpMarkSeen(fresh.map(w => w.id));
+    const nameOf = (id) => {
+      const u = (typeof appData !== 'undefined' && appData?.users || []).find(x => x.id === id);
+      return u?.name || 'Ein Clan-Mitglied';
+    };
+    const list = fresh.map(w => {
+      const tier = wrWaveTier(w.strength);
+      return `<div style="margin:8px 0"><strong>${_wrEsc(nameOf(w.member_id))}</strong> ruft um Hilfe —
+        ${_wrEsc(tier.name)} (Stärke ${wrFmt(w.strength)}) schlägt in
+        <b>${wrCountdown(Date.parse(w.arrive_at) - Date.now())}</b> ein!</div>`;
+    }).join('');
+    let mEl = document.getElementById('wr-help-modal');
+    if (!mEl) { mEl = document.createElement('div'); mEl.id = 'wr-help-modal'; document.body.appendChild(mEl); }
+    mEl.innerHTML = `
+      <div class="quiz-backdrop"></div>
+      <div class="quiz-box"><div class="quiz-card" style="text-align:center">
+        <div class="quiz-emoji">📣</div>
+        <h2>Hilferuf aus dem All!</h2>
+        ${list}
+        <p style="color:var(--muted);font-size:.8rem">Schick einen Verband zur Verstärkung — bei
+        erfolgreicher Abwehr winkt eine Bergungsprämie. Scheitert sie, verlierst auch du anteilig Schiffe.</p>
+        <div style="display:flex;gap:8px;justify-content:center;margin-top:10px">
+          <button class="wr-btn" id="wr-help-later">Später</button>
+          <button class="wr-btn wr-btn-go" id="wr-help-go">🚀 Zum Weltall</button>
+        </div>
+      </div></div>`;
+    mEl.querySelector('#wr-help-later').onclick = () => mEl.remove();
+    mEl.querySelector('#wr-help-go').onclick = () => {
+      mEl.remove();
+      try {
+        if (typeof switchView === 'function') switchView('imperium');
+        setTimeout(() => document.querySelector('#imp-tabs [data-tab="weltall"]')?.click(), 250);
+      } catch (e) {}
+    };
+  } catch (e) { /* Popup darf den Poll nie stören */ }
+}
+
+// ── 🤝 Clan-Handel (JP 2026-07-22, migration_2026-07-22f) ────────────────────
+// P2P-Marktplatz CC ↔ Erz/Kristall mit FREIEM Preis. Rohstoffe werden beim
+// Einstellen serverseitig gesperrt; alle Mutationen laufen über RPCs.
+async function wrLoadHandel() {
+  const el = document.getElementById('wr-handel');
+  if (!el) return;
+  el.innerHTML = '<p style="color:var(--muted);padding:12px">🤝 Lade Angebote …</p>';
+  const offers = await DB.fetchSpaceTrades();
+  if (!document.getElementById('wr-handel')) return;   // Tab inzwischen gewechselt
+  const m = _wrMember;
+  const rows = (offers || []).map(o => {
+    const icon = o.resource_type === 'erz' ? '🪨' : '💎';
+    const own = o.seller_id === m?.id;
+    const perUnit = Math.round((o.price_cc / Math.max(1, o.amount)) * 10) / 10;
+    return `<div class="wr-trade-row${own ? ' is-own' : ''}">
+      <span class="wr-trade-what">${icon} <strong>${wrFmt(o.amount)}</strong></span>
+      <span class="wr-trade-who">${own ? 'dein Angebot' : _wrEsc(o.seller_name || 'Clan-Mitglied')}</span>
+      <span class="wr-trade-price"><strong>${wrFmt(o.price_cc)} CC</strong> <span class="wr-sub">(${perUnit}/Stk)</span></span>
+      ${own
+        ? `<button class="wr-btn wr-btn-sm" data-wr-trade-cancel="${o.id}">Zurückziehen</button>`
+        : `<button class="wr-btn wr-btn-sm wr-btn-go" data-wr-trade-buy="${o.id}">Kaufen</button>`}
+    </div>`;
+  }).join('');
+  el.innerHTML = `
+    <div class="wr-card">
+      <div class="wr-card-title">🤝 Clan-Handel <span class="wr-sub">— CC gegen Rohstoffe, Preis frei wählbar</span></div>
+      <div class="wr-trade-form">
+        <select id="wr-tr-type" class="wr-trade-in">
+          <option value="erz">🪨 Erz</option><option value="kristall">💎 Kristall</option>
+        </select>
+        <input id="wr-tr-amount" class="wr-trade-in" type="number" min="1" step="1" inputmode="numeric" placeholder="Menge">
+        <input id="wr-tr-price" class="wr-trade-in" type="number" min="1" step="1" inputmode="numeric" placeholder="Preis (CC gesamt)">
+        <button class="wr-btn wr-btn-go" id="wr-tr-create">Anbieten</button>
+      </div>
+      <p class="wr-sub" style="margin:6px 0 0">Beim Einstellen wird die Ware gesperrt; Rückzug erstattet sie.
+        Dein Lager: ${wrFmt(wrErz(m))} 🪨 · ${wrFmt(wrKristall(m))} 💎</p>
+    </div>
+    <div class="wr-card">
+      <div class="wr-card-title">📋 Offene Angebote</div>
+      ${rows || '<p class="wr-sub" style="padding:4px 0 8px">Keine offenen Angebote — stell das erste ein!</p>'}
+    </div>`;
+}
+
+async function wrTradeCreate() {
+  if (_wrBusy) return;
+  const type   = document.getElementById('wr-tr-type')?.value || 'erz';
+  const amount = parseInt(document.getElementById('wr-tr-amount')?.value, 10) || 0;
+  const price  = parseInt(document.getElementById('wr-tr-price')?.value, 10) || 0;
+  if (amount < 1 || price < 1) { wrToast('Menge und Preis angeben (mind. 1).', 'error'); return; }
+  _wrBusy = true;
+  try {
+    const res = await DB.createSpaceTrade(_wrMember.id, type, amount, price);
+    if (!res || res.error) { wrToast(wrErrText(res?.error), 'error'); return; }
+    if (res.space) wrApplySpace(res.space);
+    wrToast('🤝 Angebot eingestellt — die Ware ist gesperrt.', 'success');
+    wrChat(`🤝 ${_wrEsc(_wrMember.name)} bietet ${wrFmt(amount)} ${wrArtTok(type)} für ${wrFmt(price)} CC an — im 🚀-Tab unter Handel.`);
+    wrRender();
+  } catch (e) {
+    wrToast('Anbieten fehlgeschlagen: ' + e.message, 'error');
+  } finally { _wrBusy = false; }
+}
+
+async function wrTradeBuy(tradeId) {
+  if (_wrBusy) return;
+  _wrBusy = true;
+  try {
+    const res = await DB.buySpaceTrade(_wrMember.id, tradeId);
+    if (!res || res.error) { wrToast(wrErrText(res?.error), 'error'); return; }
+    if (res.space) wrApplySpace(res.space);
+    if (typeof res.coins === 'number') wrApplyCoins(res.coins);
+    const icon = res.type === 'erz' ? '🪨' : '💎';
+    wrToast(`🤝 Gekauft: ${wrFmt(res.amount)} ${icon} für ${wrFmt(res.price)} CC`, 'success');
+    wrChat(`🤝 ${_wrEsc(_wrMember.name)} hat das Angebot von ${_wrEsc(res.seller || 'einem Clan-Mitglied')} gekauft: `
+         + `${wrFmt(res.amount)} ${wrArtTok(res.type)} für ${wrFmt(res.price)} CC.`);
+    wrRender();
+  } catch (e) {
+    wrToast('Kauf fehlgeschlagen: ' + e.message, 'error');
+  } finally { _wrBusy = false; }
+}
+
+async function wrTradeCancel(tradeId) {
+  if (_wrBusy) return;
+  _wrBusy = true;
+  try {
+    const res = await DB.cancelSpaceTrade(_wrMember.id, tradeId);
+    if (!res || res.error) { wrToast(wrErrText(res?.error), 'error'); return; }
+    if (res.space) wrApplySpace(res.space);
+    wrToast('↩️ Angebot zurückgezogen — Ware erstattet.', 'info');
+    wrRender();
+  } catch (e) {
+    wrToast('Zurückziehen fehlgeschlagen: ' + e.message, 'error');
+  } finally { _wrBusy = false; }
+}
+
+// ── 📜 Ereignis-Protokoll (JP 2026-07-22) ────────────────────────────────────
+// Alle Weltraum-Meldungen laufen bereits durch wrChat → Gruppen-Chat; der Marker
+// [[wr]] macht sie dort verlässlich herausfilterbar. Kein eigenes Backend nötig.
+// Zeigt die jüngsten 80 Ereignisse ab Marker-Einführung, neueste zuerst.
+async function wrLoadProtokoll() {
+  const el = document.getElementById('wr-log');
+  if (!el) return;
+  el.innerHTML = '<p style="color:var(--muted);padding:12px">📜 Lade Protokoll …</p>';
+  let msgs = [];
+  try { msgs = (await DB.fetchMessages()) || []; } catch (e) {}
+  const rows = msgs
+    .filter(x => typeof x.message === 'string' && x.message.indexOf(WR_CHAT_MARK) !== -1)
+    .slice(-80).reverse();
+  if (!document.getElementById('wr-log')) return;   // Tab inzwischen gewechselt
+  if (!rows.length) {
+    el.innerHTML = `<div class="wr-card"><div class="wr-card-title">📜 Ereignis-Protokoll</div>
+      <p class="wr-sub" style="padding:4px 0 8px">Noch keine Einträge — das Protokoll sammelt ab jetzt
+      alle Weltraum-Meldungen des Clans (Kämpfe, Wellen, Bauten, Forschung, Kolonien).</p></div>`;
+    return;
+  }
+  const fmtT = (ts) => {
+    try {
+      const d = new Date(ts);
+      return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }) + ' '
+           + d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+    } catch (e) { return ''; }
+  };
+  el.innerHTML = `<div class="wr-card"><div class="wr-card-title">📜 Ereignis-Protokoll
+      <span class="wr-sub">— alle Weltraum-Meldungen des Clans</span></div>
+    <div class="wr-log-list">${rows.map(x => `
+      <div class="wr-log-row"><span class="wr-log-t">${fmtT(x.created_at)}</span>
+        <span class="wr-log-msg">${(typeof _chatArt === 'function' ? _chatArt(_wrEsc(x.message)) : _wrEsc(x.message))}</span></div>`).join('')}
+    </div></div>`;
 }
 
 // ── HUD ──────────────────────────────────────────────────────────────────────
@@ -1486,7 +1692,7 @@ function wrRouteModeHtml(m, p, mode) {
 
   return `
     <div class="wr-routebox${wreck ? ' wr-routebox-wreck' : ''}">
-      <div class="wr-fs-head">${wreck ? '${wrIc("salvage")} Wracks bergen' : '🛰️ Dauerernte einrichten'}
+      <div class="wr-fs-head">${wreck ? wrIc("salvage") + ' Wracks bergen' : '🛰️ Dauerernte einrichten'}
         <span class="wr-sub">— ${wreck
           ? 'das Feld ist endlich und wird mit dem ganzen Clan geteilt'
           : 'sie sammeln automatisch, verteidigen aber den Hafen nicht mehr'}</span></div>
@@ -2291,6 +2497,13 @@ function wrBindEvents() {
     const tu = e.target.closest('[data-wr-tup]');
     if (tu && !tu.disabled) { await wrDefense('turret_upgrade', tu.dataset.wrTup, null); return; }
 
+    // 🤝 Clan-Handel
+    if (e.target.closest('#wr-tr-create')) { await wrTradeCreate(); return; }
+    const trBuy = e.target.closest('[data-wr-trade-buy]');
+    if (trBuy) { await wrTradeBuy(trBuy.dataset.wrTradeBuy); return; }
+    const trCancel = e.target.closest('[data-wr-trade-cancel]');
+    if (trCancel) { await wrTradeCancel(trCancel.dataset.wrTradeCancel); return; }
+
     const send = e.target.closest('[data-wr-send]');
     if (send && !send.disabled) { await wrSend(send.dataset.wrSend); return; }
     const cart = e.target.closest('[data-wr-cart]');
@@ -2911,12 +3124,15 @@ function wrFleetLightbox() {
   }
 
   // Erwartete Ausbeute — dieselben Formeln wie in claim_space_arrival, rein als Vorschau.
+  // ⚠️ Doppelseitig (21p + 22d): Rebalance Stärke×50 + Reichtum×400 mit Boden 2000 CC,
+  // Rohstoff-Beute Reichtum×45 (Erz) bzw. ×22 (Kristall). Die alte Vorformel (×4/×60)
+  // zeigte JP „624 CC", während der Server längst mehr auszahlt.
   const beute = [];
   if (target) {
     if (trip.intent === 'attack' && !target.cleared_by) {
-      beute.push(`${wrFmt(target.enemy_strength * 4 + target.richness * 60)} CC bei Sieg`);
+      beute.push(`${wrFmt(Math.max(2000, target.enemy_strength * 50 + target.richness * 400))} CC bei Sieg`);
       beute.push(target.resource_type === 'erz'
-        ? `${wrFmt(target.richness * 12)} 🪨 Erz` : `${wrFmt(target.richness * 6)} 💎 Kristall`);
+        ? `${wrFmt(target.richness * 45)} 🪨 Erz` : `${wrFmt(target.richness * 22)} 💎 Kristall`);
     } else if (trip.intent === 'harvest') {
       beute.push(target.resource_type === 'erz'
         ? `${wrFmt(mine * target.richness)} 🪨 Erz`
@@ -3251,6 +3467,14 @@ function wrErrText(err) {
     too_many:              'Höchstens 50 Schiffe je Auftrag.',
     yard_max:              'Deine Werft ist bereits voll ausgebaut.',
     still_building:        'Das Schiff ist noch nicht fertig.',
+    // 🤝 Clan-Handel (22f)
+    bad_type:              'Unbekannter Rohstoff.',
+    bad_amount:            'Menge und Preis müssen mindestens 1 sein.',
+    not_enough_resources:  'So viel hast du nicht auf Lager.',
+    not_enough_cc:         'Nicht genug CoffeeCoins für dieses Angebot.',
+    not_yours:             'Das ist nicht dein Angebot.',
+    not_open:              'Dieses Angebot ist nicht mehr verfügbar.',
+    own_offer:             'Dein eigenes Angebot kannst du nicht kaufen.',
   };
   return map[err] || ('Fehler: ' + (err || 'unbekannt'));
 }

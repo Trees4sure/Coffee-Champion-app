@@ -112,6 +112,8 @@ function showApp() {
   // 🤝 Offene Kreditanfragen der Gruppe einmalig als Popup zeigen (nach What's-New;
   // checkAndMaybePopup gated selbst gegen offene Quiz-/Umfrage-/What's-New-/Loan-Modals).
   setTimeout(() => { if (typeof Loans !== 'undefined') Loans.checkAndMaybePopup(); }, 1400);
+  // 📣 Weltraum-Hilferufe der Verbündeten (Merker pro Wellen-ID, gestaffelt nach Loans)
+  setTimeout(() => { if (typeof wrCheckHelpPopup === 'function') wrCheckHelpPopup(); }, 2100);
   // Passives Einkommen beim App-Start einlösen (entkoppelt von Tassen). Der
   // Gehalts-Snapshot läuft ERST danach (verkettet), nicht parallel: sein map_data-Write
   // (`{...md0, salaryHistory}`) würde sonst den frisch von claimPassive geschriebenen
@@ -279,6 +281,8 @@ async function refreshData() {
   // 🤝 Neue Kreditanfragen auch bei offener App zeigen (nicht nur bei Login/Wechsel).
   // Self-gated: Einmal-pro-Spieler-Sperre + kein Popup wenn schon ein Modal offen ist.
   if (typeof Loans !== 'undefined') Loans.checkAndMaybePopup();
+  // 📣 Weltraum-Hilferufe auch bei offener App (self-gated, Merker pro Wellen-ID)
+  if (typeof wrCheckHelpPopup === 'function') wrCheckHelpPopup();
   // Passives Einkommen für lange offene Sessions (intern auf 15 Min / 1 Std gedrosselt).
   // Snapshot verkettet DANACH (nicht parallel), sonst clobbert sein map_data-Write den
   // frisch geschriebenen Passiv-Eintrag im Tages-Log. Bucket-gedrosselt, idempotent.
@@ -347,6 +351,8 @@ const CHAT_ART = {
 };
 function _chatArt(escaped) {
   return String(escaped == null ? '' : escaped)
+    // Unsichtbarer Weltraum-Marker (Filter fürs 📜-Protokoll im 🚀-Tab) — nie anzeigen
+    .replace(/\[\[wr\]\]/g, '')
     .replace(/\[\[s:([a-z0-9_]{1,20})\]\]/g, (tok, key) => {
       // Unbekannter Schlüssel: NIE das rohe Token zeigen (das sah JP im Chat).
       // Lieber ein neutrales Symbol als `[[s:berger]]` im Fließtext.

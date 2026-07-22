@@ -106,23 +106,24 @@ async function renderImperium() {
 
     <div class="imperium-tabs" id="imp-tabs">
       ${(() => {
-        // JP 2026-07-22: Wer ALLES erforscht hat, braucht die Forschung nicht mehr als
-        // ersten Tab — sie rückt dann nach rechts (vor die Statistik), und die 🗺️ Karte
-        // wird zum Start-Tab. Für alle anderen bleibt die Forschung vorn.
+        // JP 2026-07-22: Wer ALLES erforscht hat, bekommt das Endgame nach vorn —
+        // 🚀 Weltall ganz links (das Aktuellste), dann ☕ Café, 🚐 Kaffeemobil,
+        // 🌍 Weltkarte, 🗺️ Karte, ⚔️ Krieger; die 🌳 Forschung rückt nach rechts
+        // vor die Statistik. Für alle anderen bleibt die Forschung vorn.
         const allDone = typeof isAllResearchComplete === 'function' && isAllResearchComplete(research);
-        const baum = '<button class="imp-tab" data-tab="baum">🌳 Forschung</button>';
-        return `
-      ${allDone ? '' : baum.replace('imp-tab"', 'imp-tab active"')}
-      <button class="imp-tab${allDone ? ' active' : ''}" data-tab="karte">🗺️ Karte</button>
-      <button class="imp-tab" data-tab="welt">🌍 Weltkarte</button>
-      <button class="imp-tab" data-tab="krieger">⚔️ Krieger</button>
-      ${(research.kaffeemobil && research.barista_kurs && research.fahrender_haendler) ? '<button class="imp-tab" data-tab="mobil">🚐 Kaffeemobil</button>' : ''}
-      ${research.erstes_cafe ? '<button class="imp-tab" data-tab="cafe">☕ Café</button>' : ''}
-      ${(typeof spaceBranchComplete === 'function' && spaceBranchComplete(research)) ? '<button class="imp-tab" data-tab="weltall">🚀 Weltall</button>' : ''}
-      ${allDone ? baum : ''}
-      <button class="imp-tab" data-tab="stats">📊 Statistik</button>
-      <button class="imp-tab" data-tab="kasse">🏛️ Kasse</button>
-      <button class="imp-tab" data-tab="cosmetics">🎨 Cosmetics</button>`;
+        const t = (key, label) => `<button class="imp-tab" data-tab="${key}">${label}</button>`;
+        const baum    = t('baum', '🌳 Forschung');
+        const karte   = t('karte', '🗺️ Karte');
+        const welt    = t('welt', '🌍 Weltkarte');
+        const krieger = t('krieger', '⚔️ Krieger');
+        const mobil   = (research.kaffeemobil && research.barista_kurs && research.fahrender_haendler) ? t('mobil', '🚐 Kaffeemobil') : '';
+        const cafe    = research.erstes_cafe ? t('cafe', '☕ Café') : '';
+        const wall    = (typeof spaceBranchComplete === 'function' && spaceBranchComplete(research)) ? t('weltall', '🚀 Weltall') : '';
+        const rest    = t('stats', '📊 Statistik') + t('kasse', '🏛️ Kasse') + t('cosmetics', '🎨 Cosmetics');
+        const html = allDone
+          ? wall + cafe + mobil + welt + karte + krieger + baum + rest
+          : baum + karte + welt + krieger + mobil + cafe + wall + rest;
+        return html.replace('class="imp-tab"', 'class="imp-tab active"');   // erster Tab = aktiv
       })()}
     </div>
 
@@ -139,11 +140,16 @@ async function renderImperium() {
     _renderImperiumTab(btn.dataset.tab, freshMember);
   });
 
-  // Start-Tab passend zur Tab-Reihenfolge oben: alles erforscht → 🗺️ Karte zuerst
-  _renderImperiumTab(
-    (typeof isAllResearchComplete === 'function' && isAllResearchComplete(member.research || {}))
-      ? 'karte' : 'baum',
-    member);
+  // Start-Tab = der erste Tab der Reihenfolge oben (alles erforscht → 🚀 Weltall)
+  _renderImperiumTab((() => {
+    const r = member.research || {};
+    const allDone = typeof isAllResearchComplete === 'function' && isAllResearchComplete(r);
+    if (!allDone) return 'baum';
+    if (typeof spaceBranchComplete === 'function' && spaceBranchComplete(r)) return 'weltall';
+    if (r.erstes_cafe) return 'cafe';
+    if (r.kaffeemobil && r.barista_kurs && r.fahrender_haendler) return 'mobil';
+    return 'welt';
+  })(), member);
 }
 
 async function _renderImperiumTab(tab, member) {

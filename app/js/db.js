@@ -2654,6 +2654,65 @@ const DB = (() => {
     } catch (e) { return { error: e.message }; }
   }
 
+  // ── 🤝 Clan-Handel: CC ↔ Erz/Kristall (migration_2026-07-22f) ────────────
+  // Freier Angebotspreis, Rohstoffe beim Einstellen gesperrt (Server). Käufer-CC
+  // ist eine Investition (wie Schiffsbau: CC → Sachwert), Verkäufer-CC eine echte
+  // Einnahme — beides landet im Tages-Log (Statistik-Checkliste).
+  async function fetchSpaceTrades() {
+    try {
+      if (!_groupId) return [];
+      const { data, error } = await _sb.from('space_trades')
+        .select('id, seller_id, seller_name, resource_type, amount, price_cc, created_at')
+        .eq('group_id', _groupId).eq('status', 'open')
+        .order('created_at', { ascending: false });
+      if (error) return [];
+      return data || [];
+    } catch (e) { return []; }
+  }
+
+  async function createSpaceTrade(memberId, type, amount, price) {
+    try {
+      const { data, error } = await _sb.rpc('create_space_trade', {
+        p_member_id: memberId, p_group_id: _groupId,
+        p_type: type, p_amount: amount, p_price: price });
+      if (error) return { error: error.message };
+      return data || {};
+    } catch (e) { return { error: e.message }; }
+  }
+
+  async function cancelSpaceTrade(memberId, tradeId) {
+    try {
+      const { data, error } = await _sb.rpc('cancel_space_trade', {
+        p_member_id: memberId, p_trade_id: tradeId });
+      if (error) return { error: error.message };
+      return data || {};
+    } catch (e) { return { error: e.message }; }
+  }
+
+  async function buySpaceTrade(memberId, tradeId) {
+    try {
+      const { data, error } = await _sb.rpc('buy_space_trade', {
+        p_member_id: memberId, p_trade_id: tradeId });
+      if (error) return { error: error.message };
+      if (data && data.ok) {
+        const icon = data.type === 'erz' ? '🪨' : '💎';
+        try {
+          await appendTodayLogFresh(memberId, [{
+            label: `🤝 Clan-Handel: ${Math.round(data.amount)} ${icon} gekauft`,
+            amount: -data.price, cat: 'weltraum', invest: true,
+            detail: `von ${data.seller || 'Clan-Mitglied'}`, aggKey: 'space_trade_buy' }]);
+        } catch (e) {}
+        try {
+          if (data.seller_id) await appendTodayLogFresh(data.seller_id, [{
+            label: `🤝 Clan-Handel: ${Math.round(data.amount)} ${icon} verkauft`,
+            amount: data.price, cat: 'weltraum',
+            aggKey: 'space_trade_sell', aggBase: '🤝 Clan-Handel (Verkäufe)' }]);
+        } catch (e) {}
+      }
+      return data || {};
+    } catch (e) { return { error: e.message }; }
+  }
+
   // Flotte zurückrufen — nur auf dem Hinflug. Der Server rechnet die neue Rückkehrzeit
   // selbst (Rückweg = bereits geflogene Zeit); der Client schickt bewusst keine Zeiten mit.
   // Werftauftrag: mehrere Typen auf einmal bestellen. Preise rechnet der Server.
@@ -2772,6 +2831,7 @@ const DB = (() => {
     ensureGalaxy, fetchGalaxy, saveSpace, buildSpace, buildSpaceDefense,
     startSpaceTrip, recallSpaceTrip, claimSpaceArrival, harvestSpace, claimSpaceBuild, buildSpaceCart, setSpaceRoute,
     buySpaceTech, ensureSpaceWave, fetchSpaceWaves, fetchSpaceHelp,
+    fetchSpaceTrades, createSpaceTrade, cancelSpaceTrade, buySpaceTrade,
     requestSpaceHelp, sendSpaceHelp, resolveSpaceWave,
   };
 })();
