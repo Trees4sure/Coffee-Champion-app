@@ -647,7 +647,12 @@ function wrBuyFlush() {
   const parts = Object.entries(s.ships)
     .map(([k, n]) => `${wrArtTok(k)} ${n}× ${SPACE_SHIP_BY_KEY[k]?.name || k}`);
   if (!parts.length) return;
-  wrChat(`🏗️ ${_wrEsc(s.name)} hat in der Werft gebaut: ${parts.join(' · ')} (${wrFmt(s.cc)} CC).`, s.name);
+  // Kosten inkl. Rohstoffe — die ECHTE Server-Abbuchung (wrBuildCart überschreibt
+  // s.cc/erz/kri mit res.*), nicht die unrabattierten Basispreise (JP 2026-07-23).
+  const cost = [`${wrFmt(s.cc)} CC`]
+    .concat(s.erz ? [`${wrFmt(s.erz)} 🪨`] : [])
+    .concat(s.kri ? [`${wrFmt(s.kri)} 💎`] : []).join(' · ');
+  wrChat(`🏗️ ${_wrEsc(s.name)} hat in der Werft gebaut: ${parts.join(' · ')} (${cost}).`, s.name);
 }
 
 // ── Quadranten / Hex-Geometrie ───────────────────────────────────────────────
@@ -2160,20 +2165,26 @@ function wrYardDef(level) { return SPACE_YARD[Math.max(1, Math.min(3, level || 1
 
 // ⚠️ Rundungs-Reihenfolge exakt wie in build_space: erst Rabatt auf den Einzelpreis,
 // DANN mal Stückzahl, DANN runden. Andersherum weicht die Vorschau um 1 ab.
+// D1 Raffinerie −20 % Rohstoffkosten: wirkt NUR auf Erz/Kristall, nie auf CC —
+// exakt wie _space_tech_rescost in build_space/-_cart. Fehlte hier zunächst:
+// der Server rechnete rabattiert, die Anzeige nicht (JP-Fund 2026-07-23).
 function wrShipCost(s, m, count) {
   const cut = wrYardDef(wrYardLevel(m)).costCut, n = count || 1;
+  const res = wrTechResCost(m);
   return {
     cc:       Math.round((s.cc || 0)       * (1 - cut) * n),
-    erz:      Math.round((s.erz || 0)      * (1 - cut) * n),
-    kristall: Math.round((s.kristall || 0) * (1 - cut) * n),
+    erz:      Math.round((s.erz || 0)      * (1 - cut) * n * res),
+    kristall: Math.round((s.kristall || 0) * (1 - cut) * n * res),
   };
 }
 // ⚠️ JP-Formel: Grundzeit + 1 Minute JE STÜCK — nicht Grundzeit × Stück.
 // 2 Sonden = 10 + 2 = 12 Min. Serienbau lohnt sich dadurch massiv; die Bremse
-// sind die Kosten, nicht die Uhr. Spiegel von build_space_cart.
+// sind die Kosten, nicht die Uhr. Spiegel von build_space_cart —
+// inkl. A4 Orbitalwerft (_space_tech_buildtime), die hier ebenfalls fehlte.
 function wrShipBuildMin(s, m, count) {
   const cut = wrYardDef(wrYardLevel(m)).timeCut;
-  return Math.max(1, Math.round(((s.buildMin || 10) + (count || 1)) * (1 - cut)));
+  return Math.max(1, Math.round(((s.buildMin || 10) + (count || 1))
+                                * (1 - cut) * wrTechBuildTime(m)));
 }
 
 // Laufende Aufträge: Objekt { schiffsTyp: {count, doneAt} } — der Schlüssel ist der Typ,
@@ -2832,13 +2843,24 @@ async function wrBuildCart() {
     const lines = Array.isArray(res.lines) ? res.lines : [];
     const total = lines.reduce((a, l) => a + (l.count || 0), 0);
     const longest = lines.reduce((a, l) => Math.max(a, l.minutes || 0), 0);
-    wrToast(`🏗️ ${wrFmt(total)} Schiff(e) in Bau — fertig in ${wrDur(longest)}`, 'success');
+    // Abgebuchte Kosten im Toast — der Server liefert die ECHTEN Beträge (inkl.
+    // Werft-Rabatt + Raffinerie), damit sieht JP sofort, was wirklich abging.
+    const paid = [`${wrFmt(res.cc || 0)} CC`]
+      .concat(res.erz ? [`${wrFmt(res.erz)} 🪨`] : [])
+      .concat(res.kristall ? [`${wrFmt(res.kristall)} 💎`] : []).join(' · ');
+    wrToast(`🏗️ ${wrFmt(total)} Schiff(e) in Bau — fertig in ${wrDur(longest)} (${paid})`, 'success');
     for (const l of lines) {
       const sd = SPACE_SHIP_BY_KEY[l.ship];
       if (sd) for (let i = 0; i < (l.count || 0); i++) wrBuyTrack(sd);
     }
     // Sofort in den Chat statt 60-s-Sammler: ein Warenkorb IST schon die Sammlung —
     // und wer die App direkt nach dem Auftrag schließt, verlöre die Meldung sonst.
+    // Chat-Protokoll bekommt die Server-Beträge statt der aufsummierten Basispreise.
+    if (_wrBuySession) {
+      _wrBuySession.cc  = res.cc || 0;
+      _wrBuySession.erz = res.erz || 0;
+      _wrBuySession.kri = res.kristall || 0;
+    }
     wrBuyFlush();
     wrRender();
   } catch (e) {
