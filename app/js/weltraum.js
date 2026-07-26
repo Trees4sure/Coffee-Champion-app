@@ -101,57 +101,58 @@ const SPACE_TECH = [
   // ── Fortgeschrittene Forschung (26d), Kosten teils in 🟣/🌀. LIVE: wt_e7/wt_f5 (Abbau-Gates)
   //    + wt_f9 (Transmuter-Sink). Die übrigen 22 sind sichtbare Roadmap (live:false). ──
   // 🟣 Ast E — Plasmoid-Technik (Ring-2-Stufe)
-  { key:'wt_e1',  ast:'e', stufe:1,  name:'Plasmoid-Torpedo',        cc:22000, erz:300, kristall:60,  plasmoid:20, quantum:0, requires:'wt_b3', wirkung:'Schiffs-Angriff +12 % gegen schwere Ziele', art:'wt6_plasmoid_torpedo',  live:false },
-  { key:'wt_e2',  ast:'e', stufe:2,  name:'Resonanz-Geschütz',       cc:26000, erz:360, kristall:90,  plasmoid:30, quantum:0, requires:'wt_b5', wirkung:'Neues Geschütz atk 200 (hebt Cap)',          art:'wt6_resonanz_geschuetz', live:false },
-  { key:'wt_e3',  ast:'e', stufe:3,  name:'Schwarmraketen',          cc:20000, erz:280, kristall:50,  plasmoid:20, quantum:0, requires:'wt_b2', wirkung:'+20 % gegen Schwärme / leichte Gegner',      art:'wt6_schwarmraketen',    live:false },
-  { key:'wt_e4',  ast:'e', stufe:4,  name:'Plasmoid-Triebwerk',      cc:24000, erz:320, kristall:80,  plasmoid:30, quantum:0, requires:'wt_a5', wirkung:'Flugzeit −20 %',                            art:'wt6_plasmoid_triebwerk', live:false },
-  { key:'wt_e5',  ast:'e', stufe:5,  name:'Trägheitsdämpfer',        cc:20000, erz:260, kristall:60,  plasmoid:20, quantum:0, requires:'wt_d2', wirkung:'Verlust-Rückbergung +25 %',                 art:'wt6_traegheitsdaempfer', live:false },
+  { key:'wt_e1',  ast:'e', stufe:1,  name:'Plasmoid-Torpedo',        cc:22000, erz:300, kristall:60,  plasmoid:20, quantum:0, requires:'wt_b3', wirkung:'Schiffs-Angriff +12 % gegen schwere Ziele', art:'wt6_plasmoid_torpedo',  live:true  },
+  { key:'wt_e2',  ast:'e', stufe:2,  name:'Resonanz-Geschütz',       cc:26000, erz:360, kristall:90,  plasmoid:30, quantum:0, requires:'wt_b5', wirkung:'Neues Geschütz atk 200 (hebt Cap)',          art:'wt6_resonanz_geschuetz', live:true  },
+  { key:'wt_e3',  ast:'e', stufe:3,  name:'Schwarmraketen',          cc:20000, erz:280, kristall:50,  plasmoid:20, quantum:0, requires:'wt_b2', wirkung:'+20 % gegen Schwärme / leichte Gegner',      art:'wt6_schwarmraketen',    live:true  },
+  { key:'wt_e4',  ast:'e', stufe:4,  name:'Plasmoid-Triebwerk',      cc:24000, erz:320, kristall:80,  plasmoid:30, quantum:0, requires:'wt_a5', wirkung:'Flugzeit −20 %',                            art:'wt6_plasmoid_triebwerk', live:true  },
+  { key:'wt_e5',  ast:'e', stufe:5,  name:'Trägheitsdämpfer',        cc:20000, erz:260, kristall:60,  plasmoid:20, quantum:0, requires:'wt_d2', wirkung:'Verlust-Rückbergung +25 %',                 art:'wt6_traegheitsdaempfer', live:true  },
   { key:'wt_e6',  ast:'e', stufe:6,  name:'Deep-Space-Sensorik',     cc:18000, erz:240, kristall:50,  plasmoid:15, quantum:0, requires:'wt_a3', wirkung:'Gegnerstärke sichtbar ohne Sonde',          art:'wt6_deepspace_sensor',  live:false },
   { key:'wt_e7',  ast:'e', stufe:7,  name:'Plasmoid-Kollektor',      cc:20000, erz:300, kristall:80,  plasmoid:0,  quantum:0, requires:'wt_c4', wirkung:'Schaltet 🟣 Plasmoiden-Abbau frei',        art:'wt6_plasmoid_kollektor', live:true  },
-  { key:'wt_e8',  ast:'e', stufe:8,  name:'Wrack-Tiefenscanner',     cc:22000, erz:300, kristall:70,  plasmoid:25, quantum:0, requires:'wt_c2', wirkung:'+30 % Wrack-Ausbeute',                      art:'wt6_wrack_scanner',     live:false },
-  { key:'wt_e9',  ast:'e', stufe:9,  name:'Auto-Ernte-Protokoll',    cc:28000, erz:400, kristall:120, plasmoid:40, quantum:0, requires:'wt_c5', wirkung:'Kolonien ernten selbsttätig',               art:'wt6_auto_ernte',        live:false },
+  { key:'wt_e8',  ast:'e', stufe:8,  name:'Wrack-Tiefenscanner',     cc:22000, erz:300, kristall:70,  plasmoid:25, quantum:0, requires:'wt_c2', wirkung:'+30 % Wrack-Ausbeute',                      art:'wt6_wrack_scanner',     live:true  },
+  { key:'wt_e9',  ast:'e', stufe:9,  name:'Auto-Ernte-Protokoll',    cc:28000, erz:400, kristall:120, plasmoid:40, quantum:0, requires:'wt_c5', wirkung:'Kolonien ernten selbsttätig',               art:'wt6_auto_ernte',        live:true  },
   { key:'wt_e10', ast:'e', stufe:10, name:'Planetar-Schildgenerator',cc:26000, erz:380, kristall:100, plasmoid:40, quantum:0, requires:'wt_b4', wirkung:'Schaltet Planeten-Geschütze frei',          art:'wt6_planetar_schild',   live:false },
-  { key:'wt_e11', ast:'e', stufe:11, name:'Selbstreparatur-Nanobots',cc:24000, erz:340, kristall:90,  plasmoid:35, quantum:0, requires:'wt_e10',wirkung:'Geschütz-Ausfallzeit −50 %',                art:'wt6_nanobots',          live:false },
+  { key:'wt_e11', ast:'e', stufe:11, name:'Selbstreparatur-Nanobots',cc:24000, erz:340, kristall:90,  plasmoid:35, quantum:0, requires:'wt_e10',wirkung:'Geschütz-Ausfallzeit −50 %',                art:'wt6_nanobots',          live:true  },
   { key:'wt_e12', ast:'e', stufe:12, name:'Frühwarn-Netz',           cc:22000, erz:300, kristall:80,  plasmoid:30, quantum:0, requires:'wt_e6', wirkung:'Rückfall-Frist +2 Tage + Wellen-Vorwarnung',art:'wt6_fruehwarnnetz',     live:false },
-  { key:'wt_e13', ast:'e', stufe:13, name:'Plasma-Raffinerie',       cc:30000, erz:500, kristall:150, plasmoid:50, quantum:0, requires:'wt_d5', wirkung:'Höchste Raffinerie-Stufe',                   art:'wt6_plasma_raffinerie', live:false },
-  { key:'wt_e14', ast:'e', stufe:14, name:'Orbital-Fabrik',          cc:26000, erz:400, kristall:110, plasmoid:40, quantum:0, requires:'wt_a4', wirkung:'Bauzeit −25 %',                             art:'wt6_orbital_fabrik',    live:false },
-  { key:'wt_e15', ast:'e', stufe:15, name:'Handelskolonie',          cc:28000, erz:420, kristall:120, plasmoid:45, quantum:0, requires:'wt_d4', wirkung:'Kolonien geben zusätzlich CC/Tag',          art:'wt6_handelskolonie',    live:false },
+  { key:'wt_e13', ast:'e', stufe:13, name:'Plasma-Raffinerie',       cc:30000, erz:500, kristall:150, plasmoid:50, quantum:0, requires:'wt_d5', wirkung:'Höchste Raffinerie-Stufe',                   art:'wt6_plasma_raffinerie', live:true  },
+  { key:'wt_e14', ast:'e', stufe:14, name:'Orbital-Fabrik',          cc:26000, erz:400, kristall:110, plasmoid:40, quantum:0, requires:'wt_a4', wirkung:'Bauzeit −25 %',                             art:'wt6_orbital_fabrik',    live:true  },
+  { key:'wt_e15', ast:'e', stufe:15, name:'Handelskolonie',          cc:28000, erz:420, kristall:120, plasmoid:45, quantum:0, requires:'wt_d4', wirkung:'Kolonien geben zusätzlich CC/Tag',          art:'wt6_handelskolonie',    live:true  },
   // 🌀 Ast F — Quanten-Technik (Ring-3-Stufe)
-  { key:'wt_f1',  ast:'f', stufe:1,  name:'Quanten-Lanze',           cc:40000, erz:500, kristall:180, plasmoid:60, quantum:30, requires:'wt_e2', wirkung:'Neues Geschütz atk 320',                    art:'wt7_quanten_lanze',     live:false },
-  { key:'wt_f2',  ast:'f', stufe:2,  name:'Antimaterie-Sprengkopf',  cc:45000, erz:550, kristall:200, plasmoid:70, quantum:40, requires:'wt_f1', wirkung:'Erstschlag −15 % Gegnerstärke',             art:'wt7_antimaterie_kopf',  live:false },
+  { key:'wt_f1',  ast:'f', stufe:1,  name:'Quanten-Lanze',           cc:40000, erz:500, kristall:180, plasmoid:60, quantum:30, requires:'wt_e2', wirkung:'Neues Geschütz atk 320',                    art:'wt7_quanten_lanze',     live:true  },
+  { key:'wt_f2',  ast:'f', stufe:2,  name:'Antimaterie-Sprengkopf',  cc:45000, erz:550, kristall:200, plasmoid:70, quantum:40, requires:'wt_f1', wirkung:'Erstschlag −15 % Gegnerstärke',             art:'wt7_antimaterie_kopf',  live:true  },
   { key:'wt_f3',  ast:'f', stufe:3,  name:'Sprungtor-Netzwerk',      cc:38000, erz:480, kristall:160, plasmoid:50, quantum:25, requires:'wt_e4', wirkung:'Multi-Flotten-Strafe +15 → +8 min',         art:'wt7_sprungtor',         live:false },
   { key:'wt_f4',  ast:'f', stufe:4,  name:'Faltraum-Anker',          cc:42000, erz:520, kristall:180, plasmoid:60, quantum:35, requires:'wt_f3', wirkung:'1×/Tag sofortiger Flotten-Rückruf',         art:'wt7_faltraum_anker',    live:false },
   { key:'wt_f5',  ast:'f', stufe:5,  name:'Quantenschaum-Extraktor', cc:30000, erz:400, kristall:120, plasmoid:60, quantum:0,  requires:'wt_e7', wirkung:'Schaltet 🌀 Quantenschaum-Abbau frei',      art:'wt7_quantum_extraktor', live:true  },
-  { key:'wt_f6',  ast:'f', stufe:6,  name:'Resonanz-Bohrung',        cc:40000, erz:500, kristall:170, plasmoid:50, quantum:40, requires:'wt_f5', wirkung:'Abbau Ring 2/3 +25 %',                      art:'wt7_resonanz_bohrung',  live:false },
+  { key:'wt_f6',  ast:'f', stufe:6,  name:'Resonanz-Bohrung',        cc:40000, erz:500, kristall:170, plasmoid:50, quantum:40, requires:'wt_f5', wirkung:'Abbau Ring 2/3 +25 %',                      art:'wt7_resonanz_bohrung',  live:true  },
   { key:'wt_f7',  ast:'f', stufe:7,  name:'Quadranten-Kommandostation',cc:48000,erz:600, kristall:220, plasmoid:80, quantum:50, requires:'wt_e10',wirkung:'Schaltet Quadranten-Station frei',          art:'wt7_quadranten_station',live:false },
-  { key:'wt_f8',  ast:'f', stufe:8,  name:'Terraforming-Kern',       cc:44000, erz:560, kristall:200, plasmoid:70, quantum:45, requires:'wt_c5', wirkung:'Kolonie-Ertrag +50 %',                      art:'wt7_terraforming_kern', live:false },
+  { key:'wt_f8',  ast:'f', stufe:8,  name:'Terraforming-Kern',       cc:44000, erz:560, kristall:200, plasmoid:70, quantum:45, requires:'wt_c5', wirkung:'Kolonie-Ertrag +50 %',                      art:'wt7_terraforming_kern', live:true  },
   { key:'wt_f9',  ast:'f', stufe:9,  name:'Transmuter',              cc:40000, erz:0,   kristall:0,   plasmoid:40, quantum:30, requires:'wt_f5', wirkung:'Wandelt 🟣/🌀 in CC (🟣 60 · 🌀 150 CC)',   art:'wt7_transmuter',        live:true  },
-  { key:'wt_f10', ast:'f', stufe:10, name:'Xeno-Diplomatie',         cc:46000, erz:580, kristall:210, plasmoid:75, quantum:50, requires:'wt_f7', wirkung:'Hinterhalt −20 %, gelegentl. Gratis-Rohstoffe',art:'wt7_xeno_diplomatie',  live:false },
+  { key:'wt_f10', ast:'f', stufe:10, name:'Xeno-Diplomatie',         cc:46000, erz:580, kristall:210, plasmoid:75, quantum:50, requires:'wt_f7', wirkung:'Hinterhalt −20 %, gelegentl. Gratis-Rohstoffe',art:'wt7_xeno_diplomatie',  live:true  },
 ];
 const SPACE_TECH_BY_KEY = SPACE_TECH.reduce((m, t) => (m[t.key] = t, m), {});
 
 function wrTech(m)            { return (m && m.space && m.space.tech) || {}; }
 function wrHasTech(m, key)    { return !!wrTech(m)[key]; }
 // Spiegel von _space_tech_speed / _space_tech_buildtime (21k).
-function wrTechSpeed(m)       { return Math.min(90, (wrHasTech(m,'wt_a3') ? 25 : 0) + (wrHasTech(m,'wt_a5') ? 25 : 0)); }
-function wrTechBuildTime(m)   { return wrHasTech(m,'wt_a4') ? 0.85 : 1.0; }
-// Ast B — Spiegel von _space_tech_turret/_fleet/_loss/_ambush (21k/21n).
-// ⚠️ wt_b5 ERSETZT wt_b1, die Boni addieren sich nicht.
-function wrTechTurret(m) { return wrHasTech(m,'wt_b5') ? 1.40 : (wrHasTech(m,'wt_b1') ? 1.15 : 1.0); }
-function wrTechFleet(m)  { return wrHasTech(m,'wt_b2') ? 1.10 : 1.0; }
-function wrTechLoss(m)   { return wrHasTech(m,'wt_b3') ? 0.85 : 1.0; }
-function wrTechAmbush(m) { return wrHasTech(m,'wt_b4') ? 0.5  : 1.0; }
-// Ast C — Spiegel von _space_tech_mine/_route/_fuel/_colony (21k/21o).
-function wrTechMine(m)   { return wrHasTech(m,'wt_c2') ? 1.15 : 1.0; }
+// Spiegel der _space_tech_*-Helfer inkl. 26e-Effekte (wt_e*/wt_f*).
+function wrTechSpeed(m)       { return Math.min(90, (wrHasTech(m,'wt_a3') ? 25 : 0) + (wrHasTech(m,'wt_a5') ? 25 : 0) + (wrHasTech(m,'wt_e4') ? 20 : 0)); }
+function wrTechBuildTime(m)   { return (wrHasTech(m,'wt_a4') ? 0.85 : 1.0) * (wrHasTech(m,'wt_e14') ? 0.75 : 1.0); }
+// Ast B (+ E2/F1 Geschütz-Tiers, E1/E3 Flotte, F2 Verluste, F10 Hinterhalt).
+// ⚠️ Geschütz-Tiers ERSETZEN sich (höchster gewinnt), Flotte/Verluste multiplizieren.
+function wrTechTurret(m) { return wrHasTech(m,'wt_f1') ? 2.20 : wrHasTech(m,'wt_e2') ? 1.70 : wrHasTech(m,'wt_b5') ? 1.40 : wrHasTech(m,'wt_b1') ? 1.15 : 1.0; }
+function wrTechFleet(m)  { return (wrHasTech(m,'wt_b2') ? 1.10 : 1.0) * (wrHasTech(m,'wt_e1') ? 1.10 : 1.0) * (wrHasTech(m,'wt_e3') ? 1.08 : 1.0); }
+function wrTechLoss(m)   { return (wrHasTech(m,'wt_b3') ? 0.85 : 1.0) * (wrHasTech(m,'wt_f2') ? 0.85 : 1.0); }
+function wrTechAmbush(m) { return (wrHasTech(m,'wt_b4') ? 0.5  : 1.0) * (wrHasTech(m,'wt_f10') ? 0.8 : 1.0); }
+// Ast C (+ F6 Abbau, E9 Kolonie).
+function wrTechMine(m)   { return (wrHasTech(m,'wt_c2') ? 1.15 : 1.0) * (wrHasTech(m,'wt_f6') ? 1.25 : 1.0); }
 function wrTechRoute(m)  { return wrHasTech(m,'wt_c3') ? 1.25 : 1.0; }
 function wrTechFuel(m)   { return wrHasTech(m,'wt_c4') ? 0.5  : 1.0; }
-function wrTechColony(m) { return wrHasTech(m,'wt_c5') ? 1.5  : 1.0; }
-// Ast D — Spiegel von _space_tech_rescost/_salvage/_capdays/_wreck/_berger_cap (21k/21p).
+function wrTechColony(m) { return (wrHasTech(m,'wt_c5') ? 1.5 : 1.0) * (wrHasTech(m,'wt_f8') ? 1.5 : 1.0) * (wrHasTech(m,'wt_e9') ? 1.15 : 1.0); }
+// Ast D (+ E5 Bergung, E15 Kolonie-CC, E8 Wrack).
 function wrTechResCost(m)  { return wrHasTech(m,'wt_d1') ? 0.8  : 1.0; }
-function wrTechSalvage(m)  { return wrHasTech(m,'wt_d2') ? 1.25 : 1.0; }
+function wrTechSalvage(m)  { return (wrHasTech(m,'wt_d2') ? 1.25 : 1.0) * (wrHasTech(m,'wt_e5') ? 1.25 : 1.0); }
 function wrTechCapDays(m)  { return wrHasTech(m,'wt_d3') ? 21   : 14; }
-function wrTechColonyCc(m) { return wrHasTech(m,'wt_d4') ? 25   : 0; }
-function wrTechWreck(m)    { return wrHasTech(m,'wt_d5') ? 1.3  : 1.0; }
+function wrTechColonyCc(m) { return (wrHasTech(m,'wt_d4') ? 25 : 0) + (wrHasTech(m,'wt_e15') ? 25 : 0); }
+function wrTechWreck(m)    { return (wrHasTech(m,'wt_d5') ? 1.3 : 1.0) * (wrHasTech(m,'wt_e8') ? 1.3 : 1.0); }
 // Kaufbar? (Voraussetzung erfüllt, noch nicht besessen, Effekt verdrahtet)
 function wrTechState(m, t) {
   if (!t) return 'unknown';
@@ -1611,8 +1612,13 @@ const WR_REFINE = [
   { capErz: 140, capKri: 55,  hours: 4, rErz: 36, rKri: 88  },
   { capErz: 240, capKri: 100, hours: 3, rErz: 38, rKri: 92  },
   { capErz: 400, capKri: 160, hours: 2, rErz: 42, rKri: 100 },
+  { capErz: 600, capKri: 260, hours: 1.5, rErz: 46, rKri: 110 },   // Stufe 6: wt_e13 Plasma-Raffinerie
 ];
-function wrRefineTier(m) { for (let i = 5; i >= 1; i--) if (wrHasTech(m, 'wt_d' + i)) return i; return 0; }
+function wrRefineTier(m) {
+  if (wrHasTech(m, 'wt_e13')) return 6;
+  for (let i = 5; i >= 1; i--) if (wrHasTech(m, 'wt_d' + i)) return i;
+  return 0;
+}
 let _wrRefErz = 0, _wrRefKri = 0;
 function wrRefineRemaining(readyAt) {
   const t = new Date(readyAt).getTime() - Date.now();
@@ -3596,7 +3602,7 @@ function wrTechLightbox(key) {
 function wrWerftLightbox() {
   const m = _wrMember;
   const built = SPACE_SHIPS.reduce((a, s) => a + wrShipCount(m, s.key), 0);
-  wrArtLightbox('base_werft', '🏗️', 'Werft am Raumhafen',
+  wrArtLightbox('base_werft_' + wrYardLevel(m), '🏗️', 'Werft am Raumhafen',
     'Das Trockendock deines Hafens. Hier entstehen alle Schiffe; fertige Rümpfe werden '
   + 'direkt in die Heimatflotte übergeben. Eine ausgebaute Werft baut schneller und günstiger.', [
     [`${wrIc("fleet")} Gebaut`, wrFmt(built)],
