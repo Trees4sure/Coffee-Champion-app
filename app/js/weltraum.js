@@ -69,6 +69,8 @@ const SPACE_TECH_ASTE = [
   { key:'b', icon:'🛡️', name:'Bewaffnung',             art:'turret_plasma',       live:true  },
   { key:'c', icon:'⛏️', name:'Schürftechnik',          art:'base_erzraffinerie',  live:true  },
   { key:'d', icon:'🏭', name:'Raffinerie & Logistik',  art:'base_kristallreactor', live:true  },
+  { key:'e', icon:'🟣', name:'Plasmoid-Technik',       art:'res_plasmoid',        live:true  },
+  { key:'f', icon:'🌀', name:'Quanten-Technik',        art:'res_quantum',         live:true  },
 ];
 const SPACE_TECH = [
   // Ast A — verdrahtet
@@ -96,6 +98,35 @@ const SPACE_TECH = [
   { key:'wt_d3', ast:'d', stufe:3, name:'Orbitallager',       cc:15000, erz:240, kristall:65,  requires:'wt_d2', wirkung:'Ansammlung 14 → 21 Tage', art:'wt3_lager',           live:true },
   { key:'wt_d4', ast:'d', stufe:4, name:'Fern-Handelsroute',  cc:24000, erz:400, kristall:130,  requires:'wt_d3', wirkung:'Kolonien geben CC/Tag',   art:'wt4_handelsroute',    live:true },
   { key:'wt_d5', ast:'d', stufe:5, name:'Sternenbörse',       cc:39000, erz:640, kristall:240, requires:'wt_d4', wirkung:'Wrack-Ausbeute +30 %',    art:'wt5_sternenboerse',   live:true },
+  // ── Fortgeschrittene Forschung (26d), Kosten teils in 🟣/🌀. LIVE: wt_e7/wt_f5 (Abbau-Gates)
+  //    + wt_f9 (Transmuter-Sink). Die übrigen 22 sind sichtbare Roadmap (live:false). ──
+  // 🟣 Ast E — Plasmoid-Technik (Ring-2-Stufe)
+  { key:'wt_e1',  ast:'e', stufe:1,  name:'Plasmoid-Torpedo',        cc:22000, erz:300, kristall:60,  plasmoid:20, quantum:0, requires:'wt_b3', wirkung:'Schiffs-Angriff +12 % gegen schwere Ziele', art:'wt6_plasmoid_torpedo',  live:false },
+  { key:'wt_e2',  ast:'e', stufe:2,  name:'Resonanz-Geschütz',       cc:26000, erz:360, kristall:90,  plasmoid:30, quantum:0, requires:'wt_b5', wirkung:'Neues Geschütz atk 200 (hebt Cap)',          art:'wt6_resonanz_geschuetz', live:false },
+  { key:'wt_e3',  ast:'e', stufe:3,  name:'Schwarmraketen',          cc:20000, erz:280, kristall:50,  plasmoid:20, quantum:0, requires:'wt_b2', wirkung:'+20 % gegen Schwärme / leichte Gegner',      art:'wt6_schwarmraketen',    live:false },
+  { key:'wt_e4',  ast:'e', stufe:4,  name:'Plasmoid-Triebwerk',      cc:24000, erz:320, kristall:80,  plasmoid:30, quantum:0, requires:'wt_a5', wirkung:'Flugzeit −20 %',                            art:'wt6_plasmoid_triebwerk', live:false },
+  { key:'wt_e5',  ast:'e', stufe:5,  name:'Trägheitsdämpfer',        cc:20000, erz:260, kristall:60,  plasmoid:20, quantum:0, requires:'wt_d2', wirkung:'Verlust-Rückbergung +25 %',                 art:'wt6_traegheitsdaempfer', live:false },
+  { key:'wt_e6',  ast:'e', stufe:6,  name:'Deep-Space-Sensorik',     cc:18000, erz:240, kristall:50,  plasmoid:15, quantum:0, requires:'wt_a3', wirkung:'Gegnerstärke sichtbar ohne Sonde',          art:'wt6_deepspace_sensor',  live:false },
+  { key:'wt_e7',  ast:'e', stufe:7,  name:'Plasmoid-Kollektor',      cc:20000, erz:300, kristall:80,  plasmoid:0,  quantum:0, requires:'wt_c4', wirkung:'Schaltet 🟣 Plasmoiden-Abbau frei',        art:'wt6_plasmoid_kollektor', live:true  },
+  { key:'wt_e8',  ast:'e', stufe:8,  name:'Wrack-Tiefenscanner',     cc:22000, erz:300, kristall:70,  plasmoid:25, quantum:0, requires:'wt_c2', wirkung:'+30 % Wrack-Ausbeute',                      art:'wt6_wrack_scanner',     live:false },
+  { key:'wt_e9',  ast:'e', stufe:9,  name:'Auto-Ernte-Protokoll',    cc:28000, erz:400, kristall:120, plasmoid:40, quantum:0, requires:'wt_c5', wirkung:'Kolonien ernten selbsttätig',               art:'wt6_auto_ernte',        live:false },
+  { key:'wt_e10', ast:'e', stufe:10, name:'Planetar-Schildgenerator',cc:26000, erz:380, kristall:100, plasmoid:40, quantum:0, requires:'wt_b4', wirkung:'Schaltet Planeten-Geschütze frei',          art:'wt6_planetar_schild',   live:false },
+  { key:'wt_e11', ast:'e', stufe:11, name:'Selbstreparatur-Nanobots',cc:24000, erz:340, kristall:90,  plasmoid:35, quantum:0, requires:'wt_e10',wirkung:'Geschütz-Ausfallzeit −50 %',                art:'wt6_nanobots',          live:false },
+  { key:'wt_e12', ast:'e', stufe:12, name:'Frühwarn-Netz',           cc:22000, erz:300, kristall:80,  plasmoid:30, quantum:0, requires:'wt_e6', wirkung:'Rückfall-Frist +2 Tage + Wellen-Vorwarnung',art:'wt6_fruehwarnnetz',     live:false },
+  { key:'wt_e13', ast:'e', stufe:13, name:'Plasma-Raffinerie',       cc:30000, erz:500, kristall:150, plasmoid:50, quantum:0, requires:'wt_d5', wirkung:'Höchste Raffinerie-Stufe',                   art:'wt6_plasma_raffinerie', live:false },
+  { key:'wt_e14', ast:'e', stufe:14, name:'Orbital-Fabrik',          cc:26000, erz:400, kristall:110, plasmoid:40, quantum:0, requires:'wt_a4', wirkung:'Bauzeit −25 %',                             art:'wt6_orbital_fabrik',    live:false },
+  { key:'wt_e15', ast:'e', stufe:15, name:'Handelskolonie',          cc:28000, erz:420, kristall:120, plasmoid:45, quantum:0, requires:'wt_d4', wirkung:'Kolonien geben zusätzlich CC/Tag',          art:'wt6_handelskolonie',    live:false },
+  // 🌀 Ast F — Quanten-Technik (Ring-3-Stufe)
+  { key:'wt_f1',  ast:'f', stufe:1,  name:'Quanten-Lanze',           cc:40000, erz:500, kristall:180, plasmoid:60, quantum:30, requires:'wt_e2', wirkung:'Neues Geschütz atk 320',                    art:'wt7_quanten_lanze',     live:false },
+  { key:'wt_f2',  ast:'f', stufe:2,  name:'Antimaterie-Sprengkopf',  cc:45000, erz:550, kristall:200, plasmoid:70, quantum:40, requires:'wt_f1', wirkung:'Erstschlag −15 % Gegnerstärke',             art:'wt7_antimaterie_kopf',  live:false },
+  { key:'wt_f3',  ast:'f', stufe:3,  name:'Sprungtor-Netzwerk',      cc:38000, erz:480, kristall:160, plasmoid:50, quantum:25, requires:'wt_e4', wirkung:'Multi-Flotten-Strafe +15 → +8 min',         art:'wt7_sprungtor',         live:false },
+  { key:'wt_f4',  ast:'f', stufe:4,  name:'Faltraum-Anker',          cc:42000, erz:520, kristall:180, plasmoid:60, quantum:35, requires:'wt_f3', wirkung:'1×/Tag sofortiger Flotten-Rückruf',         art:'wt7_faltraum_anker',    live:false },
+  { key:'wt_f5',  ast:'f', stufe:5,  name:'Quantenschaum-Extraktor', cc:30000, erz:400, kristall:120, plasmoid:60, quantum:0,  requires:'wt_e7', wirkung:'Schaltet 🌀 Quantenschaum-Abbau frei',      art:'wt7_quantum_extraktor', live:true  },
+  { key:'wt_f6',  ast:'f', stufe:6,  name:'Resonanz-Bohrung',        cc:40000, erz:500, kristall:170, plasmoid:50, quantum:40, requires:'wt_f5', wirkung:'Abbau Ring 2/3 +25 %',                      art:'wt7_resonanz_bohrung',  live:false },
+  { key:'wt_f7',  ast:'f', stufe:7,  name:'Quadranten-Kommandostation',cc:48000,erz:600, kristall:220, plasmoid:80, quantum:50, requires:'wt_e10',wirkung:'Schaltet Quadranten-Station frei',          art:'wt7_quadranten_station',live:false },
+  { key:'wt_f8',  ast:'f', stufe:8,  name:'Terraforming-Kern',       cc:44000, erz:560, kristall:200, plasmoid:70, quantum:45, requires:'wt_c5', wirkung:'Kolonie-Ertrag +50 %',                      art:'wt7_terraforming_kern', live:false },
+  { key:'wt_f9',  ast:'f', stufe:9,  name:'Transmuter',              cc:40000, erz:0,   kristall:0,   plasmoid:40, quantum:30, requires:'wt_f5', wirkung:'Wandelt 🟣/🌀 in CC (🟣 60 · 🌀 150 CC)',   art:'wt7_transmuter',        live:true  },
+  { key:'wt_f10', ast:'f', stufe:10, name:'Xeno-Diplomatie',         cc:46000, erz:580, kristall:210, plasmoid:75, quantum:50, requires:'wt_f7', wirkung:'Hinterhalt −20 %, gelegentl. Gratis-Rohstoffe',art:'wt7_xeno_diplomatie',  live:false },
 ];
 const SPACE_TECH_BY_KEY = SPACE_TECH.reduce((m, t) => (m[t.key] = t, m), {});
 
@@ -129,7 +160,8 @@ function wrTechState(m, t) {
   if (t.requires && !wrHasTech(m, t.requires))    return 'locked';
   const sp = (m && m.space) || {};
   const affordable = (m.coins || 0) >= t.cc
-    && (parseFloat(sp.erz) || 0) >= t.erz && (parseFloat(sp.kristall) || 0) >= t.kristall;
+    && (parseFloat(sp.erz) || 0) >= (t.erz || 0) && (parseFloat(sp.kristall) || 0) >= (t.kristall || 0)
+    && (parseFloat(sp.plasmoid) || 0) >= (t.plasmoid || 0) && (parseFloat(sp.quantum) || 0) >= (t.quantum || 0);
   return affordable ? 'buy' : 'poor';
 }
 
@@ -436,6 +468,20 @@ const WR_BUY_FLUSH_MS = 60000;
 function wrSpace(m)     { return (m && m.space) || {}; }
 function wrErz(m)       { return Math.floor(parseFloat(wrSpace(m).erz) || 0); }
 function wrKristall(m)  { return Math.floor(parseFloat(wrSpace(m).kristall) || 0); }
+// 🪨 Ring-Rohstoffe (26c): Plasmoiden-Staub (Ring 2) + Quantenschaum (Ring 3).
+// SPIEGELT _space_res_ok() (SQL 26c) + die Abbau-Faktoren aus claim_space_arrival.
+const WR_RES_META = {
+  erz:      { icon: '🪨', name: 'Erz',              art: 'res_erz',      mine: 1,   loot: 45, color: '#c89a5a' },
+  kristall: { icon: '💎', name: 'Koffeinkristall',  art: 'res_kristall', mine: 0.5, loot: 22, color: '#b98fe0' },
+  plasmoid: { icon: '🟣', name: 'Plasmoiden-Staub', art: 'res_plasmoid', mine: 0.3, loot: 10, color: '#a24bd8' },
+  quantum:  { icon: '🌀', name: 'Quantenschaum',    art: 'res_quantum',  mine: 0.2, loot: 5,  color: '#5fe0c0' },
+};
+function wrResMeta(t)     { return WR_RES_META[t] || WR_RES_META.erz; }
+function wrPlasmoid(m)    { return Math.floor(parseFloat(wrSpace(m).plasmoid) || 0); }
+function wrQuantum(m)     { return Math.floor(parseFloat(wrSpace(m).quantum) || 0); }
+function wrResHave(m, t)  { return t === 'plasmoid' ? wrPlasmoid(m) : t === 'quantum' ? wrQuantum(m) : t === 'kristall' ? wrKristall(m) : wrErz(m); }
+// Abbau-Gate: erz/kristall immer, Ring-Rohstoffe nur mit passendem Abbau-Tech (wt_e7/wt_f5).
+function wrResMinable(m, t) { return t === 'plasmoid' ? wrHasTech(m, 'wt_e7') : t === 'quantum' ? wrHasTech(m, 'wt_f5') : true; }
 function wrHomeShips(m) { return wrSpace(m).fleets?.home?.ships || {}; }
 function wrAway(m)      { return wrSpace(m).fleets?.away || null; }
 // 🚀 Multi-Flotte (26b): away = { trips: [ {id, ships, …} ] }. Legacy-Einzeltrip
@@ -1194,6 +1240,8 @@ function wrHudHtml(m) {
     <div class="wr-hud">
       <div class="wr-res" title="Erz">${wrResIcon('res_erz', '🪨')}<span class="wr-res-v">${wrFmt(wrErz(m))}</span><span class="wr-res-l">Erz</span></div>
       <div class="wr-res" title="Koffeinkristall">${wrResIcon('res_kristall', '💎')}<span class="wr-res-v">${wrFmt(wrKristall(m))}</span><span class="wr-res-l">Kristall</span></div>
+      ${wrPlasmoid(m) > 0 ? `<div class="wr-res" title="Plasmoiden-Staub (Ring 2)">${wrResIcon('res_plasmoid', '🟣')}<span class="wr-res-v">${wrFmt(wrPlasmoid(m))}</span><span class="wr-res-l">Plasmoid</span></div>` : ''}
+      ${wrQuantum(m) > 0 ? `<div class="wr-res" title="Quantenschaum (Ring 3)">${wrResIcon('res_quantum', '🌀')}<span class="wr-res-v">${wrFmt(wrQuantum(m))}</span><span class="wr-res-l">Quantum</span></div>` : ''}
       <div class="wr-res" title="Schiffe im Hafen"><span class="wr-res-ic">🛰️</span><span class="wr-res-v">${wrFmt(total)}</span><span class="wr-res-l">Hafen</span></div>
       <div class="wr-res" title="Kolonien"><span class="wr-res-ic">🪐</span><span class="wr-res-v">${wrFmt(Object.keys(wrColonies(m)).length)}</span><span class="wr-res-l">Kolonien</span></div>
     </div>`;
@@ -1458,14 +1506,16 @@ function wrTechHtml(m) {
           buy:    `<button class="wr-btn wr-btn-sm" data-wr-tech="${t.key}">Erforschen</button>`,
         }[st] || '';
         return `<div class="wr-tech-node wr-tech-${st}">
-            <span class="wr-fl-art"><img src="assets/weltraum/${t.art}.png" alt=""
+            <span class="wr-fl-art wr-ship-zoom" data-wr-techinfo="${t.key}" title="Groß ansehen"><img src="assets/weltraum/${t.art}.png" alt=""
               onerror="this.parentNode.classList.add('wr-art-fail');this.remove()"
-              ><span class="wr-fl-fb">${a.icon}</span></span>
+              ><span class="wr-fl-fb">${a.icon}</span><span class="wr-zoom-hint">🔍</span></span>
             <span class="wr-tech-txt">
               <strong>${_wrEsc(t.name)}</strong>
               <span class="wr-sub">${_wrEsc(t.wirkung)}</span>
-              <span class="wr-sub">${wrFmt(t.cc)} CC · ${wrFmt(t.erz)} ${wrIc('erz')}${
-                t.kristall ? ` · ${wrFmt(t.kristall)} ${wrIc('kri')}` : ''}</span>
+              <span class="wr-sub">${wrFmt(t.cc)} CC${t.erz ? ` · ${wrFmt(t.erz)} ${wrIc('erz')}` : ''}${
+                t.kristall ? ` · ${wrFmt(t.kristall)} ${wrIc('kri')}` : ''}${
+                t.plasmoid ? ` · ${wrFmt(t.plasmoid)} 🟣` : ''}${
+                t.quantum ? ` · ${wrFmt(t.quantum)} 🌀` : ''}</span>
             </span>
             <span class="wr-tech-act">${aktion}</span>
           </div>`;
@@ -1477,15 +1527,55 @@ function wrTechHtml(m) {
       </div>`;
   }).join('');
   const sp = wrTechSpeed(m), bt = Math.round((1 - wrTechBuildTime(m)) * 100);
-  return `<div class="wr-card">
+  return `${wrTransmuterHtml(m)}<div class="wr-card">
       <div class="wr-card-title">🔬 Weltraum-Technik
-        <span class="wr-sub">verstärkt, was du schon hast — schaltet nichts frei</span></div>
+        <span class="wr-sub">verstärkt, was du schon hast</span></div>
       ${(sp || bt) ? `<div class="wr-facts">
         ${sp ? `<span>${wrIc('time')} Flugzeit: <strong>−${sp} %</strong></span>` : ''}
         ${bt ? `<span>${wrIc('time')} Bauzeit: <strong>−${bt} %</strong></span>` : ''}
       </div>` : '<div class="wr-sub">Noch keine Technik erforscht.</div>'}
       <div class="wr-tech-grid">${spalten}</div>
     </div>`;
+}
+
+// ⚗️ Transmuter (wt_f9): Ring-Rohstoffe → CC. Erscheint im Forschungs-Tab, sobald erforscht.
+function wrTransmuterHtml(m) {
+  if (!wrHasTech(m, 'wt_f9')) return '';
+  const pla = wrPlasmoid(m), qua = wrQuantum(m);
+  return `<div class="wr-card">
+    <div class="wr-card-title">⚗️ Transmuter <span class="wr-sub">— Ring-Rohstoffe zu CC</span></div>
+    <div class="wr-refine-row">
+      <span>🟣 Plasmoiden-Staub: <strong>${wrFmt(pla)}</strong></span>
+      <button class="wr-btn wr-btn-sm" data-wr-transmute="plasmoid" ${pla < 1 ? 'disabled' : ''}>→ ${wrFmt(pla * 60)} CC</button>
+    </div>
+    <div class="wr-refine-row">
+      <span>🌀 Quantenschaum: <strong>${wrFmt(qua)}</strong></span>
+      <button class="wr-btn wr-btn-sm" data-wr-transmute="quantum" ${qua < 1 ? 'disabled' : ''}>→ ${wrFmt(qua * 150)} CC</button>
+    </div>
+    <p class="wr-sub" style="margin:4px 0 0">Kurs: 🟣 60 CC · 🌀 150 CC je Einheit.</p>
+  </div>`;
+}
+async function wrTransmute(type) {
+  if (_wrBusy) return;
+  const amt = type === 'plasmoid' ? wrPlasmoid(_wrMember) : wrQuantum(_wrMember);
+  if (amt < 1) return;
+  _wrBusy = true;
+  try {
+    const res = await DB.spaceTransmute(_wrMember.id, type, amt);
+    if (!res || res.error) { wrToast(wrErrText(res?.error), 'error'); return; }
+    if (res.space) wrApplySpace(res.space);
+    if (typeof res.coins === 'number') wrApplyCoins(res.coins);
+    const rm = wrResMeta(type);
+    wrToast(`⚗️ ${wrFmt(res.amount)} ${rm.icon} → ${wrFmt(res.cc)} CC`, 'success');
+    wrChat(`⚗️ ${_wrEsc(_wrMember.name)} hat ${wrFmt(res.amount)} ${rm.name} zu ${wrFmt(res.cc)} CC transmutiert.`);
+    try {
+      await DB.appendTodayLogFresh(_wrMember.id, [{ label: '⚗️ Transmuter', amount: res.cc,
+        cat: 'weltraum', detail: rm.name, aggKey: 'transmute', aggBase: '⚗️ Transmuter' }]);
+    } catch (e) {}
+    wrRender();
+  } catch (e) {
+    wrToast('Transmutation fehlgeschlagen: ' + e.message, 'error');
+  } finally { _wrBusy = false; }
 }
 
 async function wrBuyTech(key) {
@@ -1686,8 +1776,10 @@ function wrDetailHtml(m) {
   const cleared = !!p.cleared_by;
   const mine    = p.cleared_by === m?.id;
   const colon   = !!p.colonized_by;
-  const resIcon = p.resource_type === 'erz' ? '🪨' : '💎';
-  const resName = p.resource_type === 'erz' ? 'Erz' : 'Koffeinkristall';
+  const resMeta = wrResMeta(p.resource_type);
+  const resIcon = resMeta.icon;
+  const resName = resMeta.name;
+  const resGated = !wrResMinable(m, p.resource_type);   // Ring-Rohstoff ohne Abbau-Tech
   const min     = p.ring * SPACE_MIN_PER_RING;
   const nAway    = wrTrips(m).length;
   const busy    = nAway >= 5;
@@ -1747,11 +1839,11 @@ function wrDetailHtml(m) {
         ${!cleared ? `<button class="wr-btn wr-btn-go" data-wr-send="attack" ${(busy || jaeger < 1) ? 'disabled' : ''}>
             ⚔️ Angreifen <span class="wr-btn-sub">⚔️ ${wrFmt(power)} Kampfkraft</span></button>` : ''}
         ${cleared ? `<button class="wr-btn" data-wr-send="harvest" ${(busy || ernter < 1) ? 'disabled' : ''}>
-            ${wrIc("mine")} Abbauen <span class="wr-btn-sub">≈ ${wrFmt(ernter * p.richness * (p.resource_type === 'erz' ? 1 : 0.5))} ${resIcon}</span></button>` : ''}
+            ${wrIc("mine")} Abbauen <span class="wr-btn-sub">${resGated ? '🔒 Abbau-Tech fehlt' : `≈ ${wrFmt(Math.round(ernter * p.richness * resMeta.mine))} ${resIcon}`}</span></button>` : ''}
         ${cleared && !colon ? `<button class="wr-btn" data-wr-send="colonize" ${(busy || kolo < 1) ? 'disabled' : ''}>
-            🛸 Kolonisieren <span class="wr-btn-sub">Schiff bleibt dort · dauerhaft ~${p.resource_type === 'erz'
-              ? `${p.richness * 3} 🪨` : `${Math.round(p.richness * 3 * 0.5)} 💎`}/Tag</span></button>` : ''}
+            🛸 Kolonisieren <span class="wr-btn-sub">Schiff bleibt dort · dauerhaft ~${wrFmt(Math.round(p.richness * 3 * resMeta.mine))} ${resIcon}/Tag</span></button>` : ''}
       </div>
+      ${resGated && cleared ? `<div class="wr-warn">🔒 ${resName} lässt sich erst mit der Forschung <strong>${p.resource_type === 'plasmoid' ? 'Plasmoid-Kollektor' : 'Quantenschaum-Extraktor'}</strong> abbauen — bis dahin wirft dieser Planet nichts ab.</div>` : ''}
       ${cleared ? wrRoutePanelHtml(m, p) : ''}
       ${/* ⚠️ Bei laufender Reise NUR diesen Hinweis zeigen. Vorher lief der Verband-Picker
             weiter, klemmte die Auswahl auf den (jetzt leeren) Hafen und meldete deshalb
@@ -2028,7 +2120,7 @@ function wrRouteModeHtml(m, p, mode) {
              <span>Restbestand: <strong>${wrFmt(left)}</strong>${
                sel > 0 ? ` (leer in ${tage} Tag${tage === 1 ? '' : 'en'})` : ''}</span>`;
   } else {
-    const ic = p.resource_type === 'erz' ? wrIc('erz') : wrIc('kri');
+    const ic = wrResMeta(p.resource_type).icon;
     facts = `<span>Ertrag: <strong>${wrFmt(wrRouteRate(p.resource_type, p.richness, sel))} ${ic}/Tag</strong></span>`;
   }
 
@@ -2644,7 +2736,7 @@ function wrDrawMap() {
       }
       ctx.beginPath(); ctx.arc(px, py, selP ? o.r + 3 : o.r, 0, Math.PI * 2);
       ctx.fillStyle = p.cleared_by ? (p.cleared_by === me ? '#7ad48a' : '#68a0d8')
-                                   : (p.resource_type === 'erz' ? '#c89a5a' : '#b98fe0');
+                                   : wrResMeta(p.resource_type).color;
       ctx.fill();
       ctx.lineWidth = selP ? 3 : 1.2;
       ctx.strokeStyle = selP ? '#ffd15c' : 'rgba(0,0,0,.5)';
@@ -2823,6 +2915,8 @@ function wrBindEvents() {
     if (info) { wrShipLightbox(info.dataset.wrInfo); return; }
     const tinfo = e.target.closest('[data-wr-tinfo]');
     if (tinfo) { wrTurretLightbox(tinfo.dataset.wrTinfo); return; }
+    const techInfo = e.target.closest('[data-wr-techinfo]');
+    if (techInfo) { wrTechLightbox(techInfo.dataset.wrTechinfo); return; }
     if (e.target.closest('[data-wr-pinfo]')) { wrPortLightbox(); return; }
     if (e.target.closest('[data-wr-winfo]')) { wrWerftLightbox(); return; }
 
@@ -2900,6 +2994,8 @@ function wrBindEvents() {
     if (tab) { wrSetTab(tab.dataset.wrTab); return; }
     const tech = e.target.closest('[data-wr-tech]');
     if (tech) { await wrBuyTech(tech.dataset.wrTech); return; }
+    const tm = e.target.closest('[data-wr-transmute]');
+    if (tm && !tm.disabled) { await wrTransmute(tm.dataset.wrTransmute); return; }
     if (e.target.closest('#wr-wave-help'))    { await wrRequestHelp(); return; }
     if (e.target.closest('#wr-wave-resolve')) { await wrResolveWave(); return; }
     const help = e.target.closest('[data-wr-help]');
@@ -3441,7 +3537,7 @@ function wrShipLightbox(shipKey) {
 }
 
 // Gemeinsames Gerüst für alle „groß ansehen"-Popups (Schiff, Geschütz, Raumhafen).
-function wrArtLightbox(art, icon, title, desc, stats) {
+function wrArtLightbox(art, icon, title, desc, stats, folder) {
   try {
     document.getElementById('wr-overlay')?.remove();
     const ov = document.createElement('div');
@@ -3450,7 +3546,7 @@ function wrArtLightbox(art, icon, title, desc, stats) {
     ov.innerHTML = `
       <div class="wr-lightbox">
         <div class="wr-lb-art">
-          <img src="assets/space/${art}.png" alt="" onerror="this.parentNode.classList.add('wr-art-fail');this.remove()">
+          <img src="assets/${folder || 'space'}/${art}.png" alt="" onerror="this.parentNode.classList.add('wr-art-fail');this.remove()">
           <span class="wr-lb-fb">${icon}</span>
         </div>
         <div class="wr-lb-title">${_wrEsc(title)}</div>
@@ -3477,6 +3573,24 @@ function wrTurretLightbox(type) {
     ['💰 Neubau', `${wrFmt(t.cc)} CC`],
     ['⬆️ Ausbau', `${wrFmt(s[1].cc)} / ${wrFmt(s[2].cc)} CC`],
   ]);
+}
+
+// 🔬 Zoom für Forschungselemente (JP 2026-07-26): großes Bild + Wirkung/Kosten/Status.
+function wrTechLightbox(key) {
+  const t = SPACE_TECH_BY_KEY[key];
+  if (!t) return;
+  const st = wrTechState(_wrMember, t);
+  const stLabel = { owned: '✓ erforscht', soon: 'in Vorbereitung', locked: '🔒 Voraussetzung fehlt',
+                    poor: 'Mittel reichen nicht', buy: 'erforschbar' }[st] || '';
+  const ast = SPACE_TECH_ASTE.find(a => a.key === t.ast) || {};
+  const cost = [`${wrFmt(t.cc)} CC`]
+    .concat(t.erz ? [`${wrFmt(t.erz)} 🪨`] : [])
+    .concat(t.kristall ? [`${wrFmt(t.kristall)} 💎`] : [])
+    .concat(t.plasmoid ? [`${wrFmt(t.plasmoid)} 🟣`] : [])
+    .concat(t.quantum ? [`${wrFmt(t.quantum)} 🌀`] : []).join(' · ');
+  const rows = [['💰 Kosten', cost], ['📊 Status', stLabel], [`${ast.icon || '🔬'} Ast`, _wrEsc(ast.name || '')]];
+  if (t.requires) rows.push(['🔗 Braucht', _wrEsc((SPACE_TECH_BY_KEY[t.requires] || {}).name || t.requires)]);
+  wrArtLightbox(t.art, ast.icon || '🔬', t.name, t.wirkung, rows, 'weltraum');
 }
 
 function wrWerftLightbox() {
@@ -3542,12 +3656,15 @@ function wrFleetLightbox(tripId) {
   if (target) {
     if (trip.intent === 'attack' && !target.cleared_by) {
       beute.push(`${wrFmt(Math.max(2000, target.enemy_strength * 50 + target.richness * 400))} CC bei Sieg`);
-      beute.push(target.resource_type === 'erz'
-        ? `${wrFmt(target.richness * 45)} 🪨 Erz` : `${wrFmt(target.richness * 22)} 💎 Kristall`);
+      { const rm = wrResMeta(target.resource_type);
+        beute.push(wrResMinable(m, target.resource_type)
+          ? `${wrFmt(Math.round(target.richness * rm.loot))} ${rm.icon} ${rm.name}`
+          : `🔒 ${rm.name} (Abbau-Tech fehlt)`); }
     } else if (trip.intent === 'harvest') {
-      beute.push(target.resource_type === 'erz'
-        ? `${wrFmt(mine * target.richness)} 🪨 Erz`
-        : `${wrFmt(Math.round(mine * target.richness * 0.5))} 💎 Kristall`);
+      const rm = wrResMeta(target.resource_type);
+      beute.push(wrResMinable(m, target.resource_type)
+        ? `${wrFmt(Math.round(mine * target.richness * rm.mine))} ${rm.icon} ${rm.name}`
+        : `🔒 ${rm.name} (Abbau-Tech fehlt)`);
     } else if (trip.intent === 'scout') {
       beute.push('Quadrant wird für den ganzen Clan aufgedeckt');
     } else if (trip.intent === 'colonize') {
@@ -3903,6 +4020,10 @@ function wrErrText(err) {
     // 💎 Treibstoff (22h)
     not_enough_fuel:       'Nicht genug 💎 Kristall als Treibstoff für diese Reise.',
     fleet_limit:           'Maximal 5 Flotten gleichzeitig unterwegs.',
+    no_plasmoid:           'Nicht genug 🟣 Plasmoiden-Staub.',
+    no_quantum:            'Nicht genug 🌀 Quantenschaum.',
+    no_transmuter:         'Erforsche zuerst den Transmuter (Ast 🌀 Quanten-Technik).',
+    bad_type:              'Unbekannter Rohstoff.',
     // 🤝 Clan-Handel (22f)
     bad_type:              'Unbekannter Rohstoff.',
     bad_amount:            'Menge und Preis müssen mindestens 1 sein.',

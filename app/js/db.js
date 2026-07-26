@@ -2799,6 +2799,16 @@ const DB = (() => {
   // Flotte zurückrufen — nur auf dem Hinflug. Der Server rechnet die neue Rückkehrzeit
   // selbst (Rückweg = bereits geflogene Zeit); der Client schickt bewusst keine Zeiten mit.
   // Werftauftrag: mehrere Typen auf einmal bestellen. Preise rechnet der Server.
+  // ⚗️ Transmuter (26d): Ring-Rohstoffe → CC (Sink, gated hinter wt_f9).
+  async function spaceTransmute(memberId, type, amount) {
+    try {
+      const { data, error } = await _sb.rpc('space_transmute', {
+        p_member_id: memberId, p_type: type, p_amount: amount });
+      if (error) return { error: error.message };
+      return data || {};
+    } catch (e) { return { error: e.message }; }
+  }
+
   async function buildSpaceCart(memberId, cart) {
     try {
       const { data, error } = await _sb.rpc('build_space_cart', {
@@ -2935,7 +2945,7 @@ const DB = (() => {
     openCafe, buyCafeItem, claimCafe, setCafeBeans, depositCafe, setCafePolicy, setCafeStil, claimCafeTask, unlockCafeRecipe,
     ensureGalaxy, fetchGalaxy, saveSpace, buildSpace, buildSpaceDefense,
     startSpaceTrip, recallSpaceTrip, claimSpaceArrival, harvestSpace, claimSpaceBuild, buildSpaceCart, setSpaceRoute,
-    refineStart, refineClaim,
+    refineStart, refineClaim, spaceTransmute,
     buySpaceTech, ensureSpaceWave, fetchSpaceWaves, fetchSpaceHelp,
     fetchSpaceTrades, createSpaceTrade, cancelSpaceTrade, buySpaceTrade,
     createSpaceRequest, fulfillSpaceRequest, createSpaceShipOffer, buySpaceShipOffer,
