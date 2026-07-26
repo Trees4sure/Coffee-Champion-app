@@ -106,7 +106,7 @@ const SPACE_TECH = [
   { key:'wt_e3',  ast:'e', stufe:3,  name:'Schwarmraketen',          cc:20000, erz:280, kristall:50,  plasmoid:20, quantum:0, requires:'wt_b2', wirkung:'+20 % gegen Schwärme / leichte Gegner',      art:'wt6_schwarmraketen',    live:true  },
   { key:'wt_e4',  ast:'e', stufe:4,  name:'Plasmoid-Triebwerk',      cc:24000, erz:320, kristall:80,  plasmoid:30, quantum:0, requires:'wt_a5', wirkung:'Flugzeit −20 %',                            art:'wt6_plasmoid_triebwerk', live:true  },
   { key:'wt_e5',  ast:'e', stufe:5,  name:'Trägheitsdämpfer',        cc:20000, erz:260, kristall:60,  plasmoid:20, quantum:0, requires:'wt_d2', wirkung:'Verlust-Rückbergung +25 %',                 art:'wt6_traegheitsdaempfer', live:true  },
-  { key:'wt_e6',  ast:'e', stufe:6,  name:'Deep-Space-Sensorik',     cc:18000, erz:240, kristall:50,  plasmoid:15, quantum:0, requires:'wt_a3', wirkung:'Gegnerstärke sichtbar ohne Sonde',          art:'wt6_deepspace_sensor',  live:false },
+  { key:'wt_e6',  ast:'e', stufe:6,  name:'Deep-Space-Sensorik',     cc:18000, erz:240, kristall:50,  plasmoid:15, quantum:0, requires:'wt_a3', wirkung:'Gegnerstärke sichtbar ohne Sonde',          art:'wt6_deepspace_sensor',  live:true  },
   { key:'wt_e7',  ast:'e', stufe:7,  name:'Plasmoid-Kollektor',      cc:20000, erz:300, kristall:80,  plasmoid:0,  quantum:0, requires:'wt_c4', wirkung:'Schaltet 🟣 Plasmoiden-Abbau frei',        art:'wt6_plasmoid_kollektor', live:true  },
   { key:'wt_e8',  ast:'e', stufe:8,  name:'Wrack-Tiefenscanner',     cc:22000, erz:300, kristall:70,  plasmoid:25, quantum:0, requires:'wt_c2', wirkung:'+30 % Wrack-Ausbeute',                      art:'wt6_wrack_scanner',     live:true  },
   { key:'wt_e9',  ast:'e', stufe:9,  name:'Auto-Ernte-Protokoll',    cc:28000, erz:400, kristall:120, plasmoid:40, quantum:0, requires:'wt_c5', wirkung:'Kolonien ernten selbsttätig',               art:'wt6_auto_ernte',        live:true  },
@@ -119,8 +119,8 @@ const SPACE_TECH = [
   // 🌀 Ast F — Quanten-Technik (Ring-3-Stufe)
   { key:'wt_f1',  ast:'f', stufe:1,  name:'Quanten-Lanze',           cc:40000, erz:500, kristall:180, plasmoid:60, quantum:30, requires:'wt_e2', wirkung:'Neues Geschütz atk 320',                    art:'wt7_quanten_lanze',     live:true  },
   { key:'wt_f2',  ast:'f', stufe:2,  name:'Antimaterie-Sprengkopf',  cc:45000, erz:550, kristall:200, plasmoid:70, quantum:40, requires:'wt_f1', wirkung:'Erstschlag −15 % Gegnerstärke',             art:'wt7_antimaterie_kopf',  live:true  },
-  { key:'wt_f3',  ast:'f', stufe:3,  name:'Sprungtor-Netzwerk',      cc:38000, erz:480, kristall:160, plasmoid:50, quantum:25, requires:'wt_e4', wirkung:'Multi-Flotten-Strafe +15 → +8 min',         art:'wt7_sprungtor',         live:false },
-  { key:'wt_f4',  ast:'f', stufe:4,  name:'Faltraum-Anker',          cc:42000, erz:520, kristall:180, plasmoid:60, quantum:35, requires:'wt_f3', wirkung:'1×/Tag sofortiger Flotten-Rückruf',         art:'wt7_faltraum_anker',    live:false },
+  { key:'wt_f3',  ast:'f', stufe:3,  name:'Sprungtor-Netzwerk',      cc:38000, erz:480, kristall:160, plasmoid:50, quantum:25, requires:'wt_e4', wirkung:'Multi-Flotten-Strafe +15 → +8 min',         art:'wt7_sprungtor',         live:true  },
+  { key:'wt_f4',  ast:'f', stufe:4,  name:'Faltraum-Anker',          cc:42000, erz:520, kristall:180, plasmoid:60, quantum:35, requires:'wt_f3', wirkung:'1×/Tag sofortiger Flotten-Rückruf',         art:'wt7_faltraum_anker',    live:true  },
   { key:'wt_f5',  ast:'f', stufe:5,  name:'Quantenschaum-Extraktor', cc:30000, erz:400, kristall:120, plasmoid:60, quantum:0,  requires:'wt_e7', wirkung:'Schaltet 🌀 Quantenschaum-Abbau frei',      art:'wt7_quantum_extraktor', live:true  },
   { key:'wt_f6',  ast:'f', stufe:6,  name:'Resonanz-Bohrung',        cc:40000, erz:500, kristall:170, plasmoid:50, quantum:40, requires:'wt_f5', wirkung:'Abbau Ring 2/3 +25 %',                      art:'wt7_resonanz_bohrung',  live:true  },
   { key:'wt_f7',  ast:'f', stufe:7,  name:'Quadranten-Kommandostation',cc:48000,erz:600, kristall:220, plasmoid:80, quantum:50, requires:'wt_e10',wirkung:'Schaltet Quadranten-Station frei',          art:'wt7_quadranten_station',live:false },
@@ -735,7 +735,11 @@ function wrHexCenter(qx, qy, size) {
   return { x: size * 1.5 * qx, y: size * Math.sqrt(3) * (qy + qx / 2) };
 }
 // Der Heimatquadrant ist immer bekannt (dort steht der Raumhafen).
-function wrRevealed(qkey) { return qkey === '0,0' || !!(_wrGalaxy?.revealed || {})[qkey]; }
+// E6 Deep-Space-Sensorik (26g): der Besitzer sieht die ganze Karte ohne Aufklärung
+// (persönlich — der Klan-Reveal via Sonde bleibt davon unberührt).
+function wrRevealed(qkey) { return qkey === '0,0' || !!(_wrGalaxy?.revealed || {})[qkey] || wrHasTech(_wrMember, 'wt_e6'); }
+// F3 Sprungtor-Netzwerk: Multi-Flotten-Strafe je bereits unterwegs befindlicher Flotte.
+function wrFleetGap(m) { return wrHasTech(m, 'wt_f3') ? 8 : 15; }
 
 // Ring-2-Quadranten lassen sich erst aufklären, wenn ein benachbarter Ring-1-Quadrant
 // bekannt ist — sonst könnte man den ganzen Nebel in beliebiger Reihenfolge abräumen.
@@ -1763,7 +1767,7 @@ function wrDetailHtml(m) {
            für den <strong>gesamten Klan</strong> aufzudecken. Gib ihr Geleitschutz mit — draußen ist
            nicht jeder Nebel leer.</p>
         <div class="wr-facts">
-          <span>Flugzeit: ${wrTravelHtml(min)} je Strecke${nAway > 0 ? ` <span class="wr-sub">+${15 * nAway} min (${nAway} unterwegs)</span>` : ''}</span>
+          <span>Flugzeit: ${wrTravelHtml(min)} je Strecke${nAway > 0 ? ` <span class="wr-sub">+${wrFleetGap(m) * nAway} min (${nAway} unterwegs)</span>` : ''}</span>
           <span>Sonden im Hafen: <strong>${wrShipCount(m, 'sonde')}</strong></span>
         </div>
         ${busy ? '' : wrFleetPickerHtml(m)}
@@ -1857,7 +1861,7 @@ function wrDetailHtml(m) {
             genau dann, wenn alles richtig gemacht wurde. */ ''}
       ${busy
         ? '<div class="wr-warn">Maximal 5 Flotten gleichzeitig unterwegs — warte, bis eine zurückkehrt.</div>'
-        : `${nAway > 0 ? `<div class="wr-sub">✈️ ${nAway} unterwegs — diese Flotte fliegt +${15 * nAway} min länger.</div>` : ''}
+        : `${nAway > 0 ? `<div class="wr-sub">✈️ ${nAway} unterwegs — diese Flotte fliegt +${wrFleetGap(m) * nAway} min länger.</div>` : ''}
            ${!cleared && jaeger < 1 ? '<div class="wr-warn">Nimm kampffähige Schiffe in den Verband — ohne Kampfkraft kein Angriff.</div>' : ''}
            ${cleared && ernter < 1 ? `<div class="wr-warn">Für einen EINMAL-Flug „🔨 Abbauen" müssen Röstkometen im Verband sein.${
              wrRouteBound(m, 'ernter') > 0
