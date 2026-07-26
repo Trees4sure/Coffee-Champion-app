@@ -554,3 +554,5 @@
 .wr-refine-sum .wr-btn-go { width: auto; flex: 1 1 160px; }
 .wr-refine-run, .wr-refine-done { padding: 6px 0; }
 .wr-refine-done .wr-btn-go { margin-top: 8px; }
+.wr-refine-ic { width: 30px; height: 30px; vertical-align: middle; margin-right: 6px;
+  border-radius: 5px; }
