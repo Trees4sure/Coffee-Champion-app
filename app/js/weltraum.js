@@ -1519,7 +1519,7 @@ function wrRaffinerieHtml(m) {
   const tier = wrRefineTier(m);
   if (tier < 1) {
     return `<div class="wr-card wr-refine">
-      <div class="wr-card-title">🏭 Raffinerie <span class="wr-sub">— Rohstoffe zu CC veredeln</span></div>
+      <div class="wr-card-title"><img class="wr-refine-ic" src="assets/space/base_erzraffinerie.png" alt="" onerror="this.remove()">🏭 Raffinerie <span class="wr-sub">— Rohstoffe zu CC veredeln</span></div>
       <p class="wr-sub" style="padding:6px 0">🔒 Erforsche zuerst <strong>Raffinerie</strong> (Forschung → Ast 🏭 Raffinerie &amp; Logistik). Jede weitere Ausbaustufe erhöht Menge, Tempo und Kurs.</p>
     </div>`;
   }
@@ -1568,7 +1568,7 @@ function wrRaffinerieHtml(m) {
       <p class="wr-sub" style="margin:4px 0 0">Stufe ${tier} · Kurs ${def.rErz} CC/🪨 · ${def.rKri} CC/💎 · max ${wrFmt(def.capErz)} 🪨 / ${wrFmt(def.capKri)} 💎 je Charge</p>`;
   }
   return `<div class="wr-card wr-refine">
-    <div class="wr-card-title">🏭 Raffinerie <span class="wr-sub">— Rohstoffe zu CC (Stufe ${tier})</span></div>
+    <div class="wr-card-title"><img class="wr-refine-ic" src="assets/space/base_erzraffinerie.png" alt="" onerror="this.remove()">🏭 Raffinerie <span class="wr-sub">— Rohstoffe zu CC (Stufe ${tier})</span></div>
     ${body}
   </div>`;
 }
