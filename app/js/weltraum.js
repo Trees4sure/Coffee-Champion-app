@@ -438,15 +438,31 @@ function wrErz(m)       { return Math.floor(parseFloat(wrSpace(m).erz) || 0); }
 function wrKristall(m)  { return Math.floor(parseFloat(wrSpace(m).kristall) || 0); }
 function wrHomeShips(m) { return wrSpace(m).fleets?.home?.ships || {}; }
 function wrAway(m)      { return wrSpace(m).fleets?.away || null; }
-function wrTrip(m)      { const t = wrAway(m)?.trip; return (t && typeof t === 'object') ? t : null; }
+// 🚀 Multi-Flotte (26b): away = { trips: [ {id, ships, …} ] }. Legacy-Einzeltrip
+// { trip, ships } wird on the fly zu einem Ein-Element-Array normalisiert; jeder
+// Trip bekommt garantiert eine id (für ETA-/Recall-Zuordnung).
+function wrTrips(m) {
+  const a = wrAway(m);
+  if (!a) return [];
+  let arr = Array.isArray(a.trips) ? a.trips.slice()
+          : (a.trip && typeof a.trip === 'object') ? [{ ...a.trip, ships: a.ships || {} }] : [];
+  return arr.filter(t => t && typeof t === 'object')
+            .map((t, i) => t.id ? t : { ...t, id: t.startAt || ('t' + i) });
+}
+function wrTrip(m)      { return wrTrips(m)[0] || null; }   // erster Trip (Legacy-Aufrufer)
+// Summe aller unterwegs befindlichen Schiffe über ALLE Trips (Hafen-Übersicht).
+function wrAwayShipsAll(m) {
+  const agg = {};
+  for (const t of wrTrips(m)) for (const [k, n] of Object.entries(t.ships || {})) agg[k] = (agg[k] || 0) + (parseInt(n, 10) || 0);
+  return agg;
+}
 function wrColonies(m)  { return wrSpace(m).colonies || {}; }
 // 🛸 ANZEIGE-Flotte des Away-Verbands (JP 2026-07-22, #36): Bei einer Kolonie-
 // Mission auf dem RÜCKFLUG das Kolonieschiff nicht mehr mitzeigen — es bleibt am
 // Ziel, aber die Buchhaltung läuft erst beim Rückkehr-Claim. Ohne diesen Filter
 // sah es aus, als käme das Kolonieschiff zurück. Reine Anzeige, keine Logik.
-function wrAwayShipsDisplay(m) {
-  const ships = wrAway(m)?.ships || {};
-  const trip  = wrTrip(m);
+function wrTripShipsDisplay(trip) {
+  const ships = trip?.ships || {};
   if (!trip || trip.intent !== 'colonize') return ships;
   if (Date.now() < Date.parse(trip.arriveAt)) return ships;   // Hinflug: noch an Bord
   const n = parseInt(ships.kolonie, 10) || 0;
@@ -810,7 +826,7 @@ function wrSetTab(key) {
 function wrRender() {
   if (!_wrEl) return;
   const m = _wrMember;
-  const trip = wrTrip(m);
+  const trips = wrTrips(m);
 
   _wrEl.innerHTML = `
     <div class="wr-wrap">
@@ -820,7 +836,7 @@ function wrRender() {
       </div>
       ${wrWaveHtml(m)}
       ${wrHelpCallsHtml(m)}
-      ${trip ? wrTripHtml(m, trip) : ''}
+      ${trips.map(t => wrTripHtml(m, t)).join('')}
       <div class="wr-map-card"${_wrTab === 'karte' ? '' : ' hidden'}>
         <div class="wr-card-title">🌌 Sternkarte <span class="wr-sub">— geteilt mit deinem Kaffee-Clan</span></div>
         <div class="wr-canvas-wrap">
@@ -1193,22 +1209,22 @@ function wrTripHtml(m, trip) {
   const phase = back ? 'zurück im Hafen' : (now >= arrive ? 'am Ziel — Rückflug läuft' : 'auf dem Hinflug');
   const target = (_wrGalaxy?.planets || []).find(p => p.id === trip.planetId);
   const info = SPACE_INTENTS[trip.intent] || { icon: '🚀', name: trip.intent };
-  const ships = wrAway(m)?.ships || {};
+  const ships = wrTripShipsDisplay(trip);   // 🚀 pro Trip (nicht mehr away.ships)
   const list = Object.entries(ships).filter(([, n]) => n > 0)
     .map(([k, n]) => `${wrShipArt(k)} ${n}`).join(' · ');
   return `
-    <div class="wr-trip ${back ? 'wr-trip-done' : ''}" id="wr-trip-card" title="Verband ansehen">
+    <div class="wr-trip ${back ? 'wr-trip-done' : ''}" data-wr-tripcard="${trip.id}" title="Verband ansehen">
       <div class="wr-trip-head">${info.icon} <strong>${_wrEsc(info.name)}</strong> → ${_wrEsc(target?.name || 'Planet')}
         <span class="wr-trip-more">🔍 Details</span></div>
       <div class="wr-trip-body">
         <span class="wr-trip-ships">${list || '—'}</span>
-        <span class="wr-trip-phase" id="wr-trip-phase">${phase}</span>
+        <span class="wr-trip-phase">${phase}</span>
       </div>
       ${back
-        ? '<button class="wr-btn wr-btn-go" id="wr-claim">📥 Flotte empfangen</button>'
-        : `<div class="wr-trip-eta">Rückkehr in <strong id="wr-trip-eta">${wrCountdown(ret - now)}</strong></div>
+        ? '<button class="wr-btn wr-btn-go" data-wr-claim="1">📥 Flotte empfangen</button>'
+        : `<div class="wr-trip-eta">Rückkehr in <strong data-wr-eta="${trip.id}">${wrCountdown(ret - now)}</strong></div>
            ${(now < arrive && !trip.recalled)
-             ? '<button class="wr-btn wr-btn-sm wr-btn-recall" id="wr-recall">↩️ Zurückrufen'
+             ? `<button class="wr-btn wr-btn-sm wr-btn-recall" data-wr-recall="${trip.id}">↩️ Zurückrufen`
                + '<span class="wr-btn-sub">Auftrag verfällt · Rückweg = bisherige Flugzeit</span></button>'
              : ''}
            ${trip.recalled ? '<div class="wr-sub">↩️ Auf dem Rückweg — der Auftrag wurde abgebrochen.</div>' : ''}`}
@@ -1352,8 +1368,8 @@ function wrFleetQuick(kind, m) {
 // einen Planeten anklickte, und dort auch nur als Auswahl-Stepper.
 function wrHomeDetailHtml(m) {
   const ships  = wrHomeShips(m);
-  const away   = wrAway(m)?.ships || {};
-  const trip   = wrTrip(m);
+  const away   = wrAwayShipsAll(m);
+  const nTrips = wrTrips(m).length;
   const inPort = SPACE_SHIPS.reduce((a, s) => a + (parseInt(ships[s.key], 10) || 0), 0);
   const out    = SPACE_SHIPS.reduce((a, s) => a + (parseInt(away[s.key], 10) || 0), 0);
 
@@ -1396,8 +1412,8 @@ function wrHomeDetailHtml(m) {
       ${rows
         ? `<div class="wr-fl-list">${rows}</div>`
         : '<div class="wr-warn">Noch kein Schiff gebaut — schau in der Werft weiter unten.</div>'}
-      ${trip
-        ? `<div class="wr-ok">✈️ Ein Verband ist unterwegs — Details oben in der Reise-Karte.</div>`
+      ${nTrips
+        ? `<div class="wr-ok">✈️ ${nTrips === 1 ? 'Ein Verband ist' : nTrips + ' Verbände sind'} unterwegs (max. 5 gleichzeitig) — Details oben in den Reise-Karten.</div>`
         : '<div class="wr-sub">Wähle einen Quadranten auf der Sternkarte, um eine Flotte auszusenden.</div>'}
     </div>`;
 }
@@ -1641,7 +1657,8 @@ function wrDetailHtml(m) {
     const canScout = wrScoutable(q);
     const sel      = wrSyncFleetSel(m);
     const sonden   = sel.sonde || 0;
-    const busy     = !!wrTrip(m);
+    const nAway    = wrTrips(m).length;
+    const busy     = nAway >= 5;
     const min = q.ring * SPACE_MIN_PER_RING;
     return `
       <div class="wr-detail">
@@ -1650,14 +1667,14 @@ function wrDetailHtml(m) {
            für den <strong>gesamten Klan</strong> aufzudecken. Gib ihr Geleitschutz mit — draußen ist
            nicht jeder Nebel leer.</p>
         <div class="wr-facts">
-          <span>Flugzeit: ${wrTravelHtml(min)} je Strecke</span>
+          <span>Flugzeit: ${wrTravelHtml(min)} je Strecke${nAway > 0 ? ` <span class="wr-sub">+${15 * nAway} min (${nAway} unterwegs)</span>` : ''}</span>
           <span>Sonden im Hafen: <strong>${wrShipCount(m, 'sonde')}</strong></span>
         </div>
         ${busy ? '' : wrFleetPickerHtml(m)}
         ${busy ? '' : wrAmbushHint(q.ring, wrFleetPower(sel), wrTurretPower(m))}
         ${!canScout ? '<div class="wr-warn">Zu weit draußen — erkunde zuerst einen angrenzenden Quadranten weiter innen.</div>' : ''}
         ${busy
-          ? '<div class="wr-warn">Deine Flotte ist bereits unterwegs — du kannst erst nach ihrer Rückkehr wieder starten.</div>'
+          ? '<div class="wr-warn">Maximal 5 Flotten gleichzeitig unterwegs — warte, bis eine zurückkehrt.</div>'
           : (canScout && sonden < 1 ? '<div class="wr-warn">Für die Aufklärung muss mindestens eine 🛰️ Bohnen-Sonde im Verband sein.</div>' : '')}
         <button class="wr-btn wr-btn-go" data-wr-send="scout" ${(!canScout || sonden < 1 || busy) ? 'disabled' : ''}>
           🛰️ Verband entsenden</button>
@@ -1672,7 +1689,8 @@ function wrDetailHtml(m) {
   const resIcon = p.resource_type === 'erz' ? '🪨' : '💎';
   const resName = p.resource_type === 'erz' ? 'Erz' : 'Koffeinkristall';
   const min     = p.ring * SPACE_MIN_PER_RING;
-  const busy    = !!wrTrip(m);
+  const nAway    = wrTrips(m).length;
+  const busy    = nAway >= 5;
 
   // ⚠️ Vorschau IMMER aus dem gewählten Verband rechnen, nicht aus der Heimatflotte —
   // sonst verspricht die Anzeige eine Kampfkraft, die gar nicht mitfliegt.
@@ -1740,8 +1758,9 @@ function wrDetailHtml(m) {
             „⚔️ 0" plus „Nimm kampffähige Schiffe mit" — direkt nach dem Aussenden, also
             genau dann, wenn alles richtig gemacht wurde. */ ''}
       ${busy
-        ? '<div class="wr-warn">Deine Flotte ist bereits unterwegs — du kannst erst nach ihrer Rückkehr wieder starten.</div>'
-        : `${!cleared && jaeger < 1 ? '<div class="wr-warn">Nimm kampffähige Schiffe in den Verband — ohne Kampfkraft kein Angriff.</div>' : ''}
+        ? '<div class="wr-warn">Maximal 5 Flotten gleichzeitig unterwegs — warte, bis eine zurückkehrt.</div>'
+        : `${nAway > 0 ? `<div class="wr-sub">✈️ ${nAway} unterwegs — diese Flotte fliegt +${15 * nAway} min länger.</div>` : ''}
+           ${!cleared && jaeger < 1 ? '<div class="wr-warn">Nimm kampffähige Schiffe in den Verband — ohne Kampfkraft kein Angriff.</div>' : ''}
            ${cleared && ernter < 1 ? `<div class="wr-warn">Für einen EINMAL-Flug „🔨 Abbauen" müssen Röstkometen im Verband sein.${
              wrRouteBound(m, 'ernter') > 0
                ? ` Deine ${wrFmt(wrRouteBound(m, 'ernter'))} Röstkometen sind auf 🛰️ Dauerernte-Routen gebunden — Route verkleinern/auflösen oder neue in der Werft bauen.`
@@ -2641,9 +2660,8 @@ function wrDrawMap() {
     ctx.fillText(`${q.key} · ${pls.length}`, x, y + size * 0.80);
   }
 
-  // Reisende Flotte als Punkt zwischen Hafen und Ziel (Muster kmPos)
-  const trip = wrTrip(_wrMember);
-  if (trip) {
+  // 🚀 Alle reisenden Flotten als Punkt zwischen Hafen und Ziel (Muster kmPos)
+  for (const trip of wrTrips(_wrMember)) {
     const tp = (_wrGalaxy?.planets || []).find(p => p.id === trip.planetId);
     if (tp) {
       // Ziel ist der PLANET, nicht die Wabenmitte — sonst endet die Flugbahn daneben
@@ -2664,7 +2682,7 @@ function wrDrawMap() {
       ctx.restore();
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       // Das Leitschiff des Verbands zeigen statt eines generischen 🚀
-      const lead = wrLeadShip(wrAwayShipsDisplay(_wrMember));
+      const lead = wrLeadShip(wrTripShipsDisplay(trip));
       if (!(lead && wrDrawImg(ctx, lead.art, fx, fy, 46))) {
         ctx.font = '18px system-ui'; ctx.fillStyle = '#fff';
         ctx.fillText(lead?.icon || '🚀', fx, fy);
@@ -2812,7 +2830,8 @@ function wrBindEvents() {
     // ⚠️ ALLE Buttons in der Trip-Karte ausnehmen — der Karten-Klick (Lightbox) steht
     // VOR den Button-Handlern und schluckte sonst den Klick (JP: „Zurückrufen geht
     // nicht — da öffnet sich nur der Verband").
-    if (e.target.closest('#wr-trip-card') && !e.target.closest('#wr-claim') && !e.target.closest('#wr-recall')) { wrFleetLightbox(); return; }
+    const tripCard = e.target.closest('[data-wr-tripcard]');
+    if (tripCard && !e.target.closest('[data-wr-claim]') && !e.target.closest('[data-wr-recall]')) { wrFleetLightbox(tripCard.dataset.wrTripcard); return; }
 
     // Raumhafen: Ausbau + Geschütze
     if (e.target.closest('#wr-port-up')) { await wrDefense('port_upgrade', null, null); return; }
@@ -2903,8 +2922,9 @@ function wrBindEvents() {
     if (e.target.closest('#wr-refine-start')) { await wrRefineStart(); return; }
     if (e.target.closest('#wr-refine-claim')) { await wrRefineClaim(); return; }
 
-    if (e.target.closest('#wr-recall'))  { await wrRecall(); return; }
-    if (e.target.closest('#wr-claim'))   { await wrTryClaim(false); return; }
+    const recallBtn = e.target.closest('[data-wr-recall]');
+    if (recallBtn) { await wrRecall(recallBtn.dataset.wrRecall); return; }
+    if (e.target.closest('[data-wr-claim]')) { await wrTryClaim(false); return; }
     if (e.target.closest('#wr-harvest')) { await wrHarvest(); return; }
   };
 }
@@ -2929,7 +2949,7 @@ function wrFleetFor(intent, m) {
 async function wrSend(intent) {
   if (_wrBusy) return;
   const m = _wrMember;
-  if (wrTrip(m)) { wrToast('Deine Flotte ist bereits unterwegs.', 'error'); return; }
+  if (wrTrips(m).length >= 5) { wrToast('Maximal 5 Flotten gleichzeitig unterwegs.', 'error'); return; }
 
   // Ziel bestimmen: bei Nebel der erste Planet des Quadranten (Aufklärung gilt dem Quadranten)
   let planet = _wrSel?.planet;
@@ -3205,13 +3225,13 @@ async function wrSetRoute(planetId, count, mode) {
 
 // Flotte zurückrufen. Nur auf dem Hinflug sinnvoll — der Button wird sonst gar nicht
 // gerendert, der Server lehnt es zusätzlich ab (Client-Prüfungen sind nie die letzte Instanz).
-async function wrRecall() {
+async function wrRecall(tripId) {
   if (_wrBusy) return;
   const m = _wrMember;
-  if (!wrTrip(m)) return;
+  if (!wrTrips(m).length) return;
   _wrBusy = true;
   try {
-    const res = await DB.recallSpaceTrip(m.id);
+    const res = await DB.recallSpaceTrip(m.id, tripId || null);
     if (!res || res.error) { wrToast(wrErrText(res?.error), 'error'); return; }
     if (res.space) wrApplySpace(res.space);
     const back = Date.parse(res.trip?.returnAt) - Date.now();
@@ -3262,25 +3282,33 @@ async function wrDefense(action, slot, type) {
 // silent = beim Öffnen des Tabs (kein Popup, wenn nichts zu tun ist)
 async function wrTryClaim(silent) {
   const m = _wrMember;
-  const trip = wrTrip(m);
-  if (!trip || _wrClaiming) return false;
-  if (Date.now() < Date.parse(trip.returnAt)) return false;
+  if (_wrClaiming) return false;
+  // 🚀 Multi-Flotte: ist IRGENDEIN Trip fällig? Dann in Schleife alle fälligen abrechnen.
+  const due = wrTrips(m).some(t => Date.now() >= Date.parse(t.returnAt));
+  if (!due) return false;
   _wrClaiming = true;
   try {
-    const res = await DB.claimSpaceArrival(m.id);
-    if (!res || res.error) {
-      if (res?.error !== 'still_traveling' && !silent) wrToast(wrErrText(res?.error), 'error');
-      return false;
+    let any = false, guard = 0;
+    while (guard++ < 6) {   // Schutz: maximal 5 Flotten gleichzeitig
+      const res = await DB.claimSpaceArrival(m.id);
+      if (!res || res.error) {
+        if (res?.error !== 'still_traveling' && !silent) wrToast(wrErrText(res?.error), 'error');
+        break;
+      }
+      if (res.space) wrApplySpace(res.space);
+      if (!res.nothing) {
+        wrReport(res);
+        wrChatReport(res, m?.name);
+        try { if (typeof checkSpaceAchievements === 'function') await checkSpaceAchievements(_wrMember, res); } catch (e) {}
+      }
+      any = true;
+      if (!res.more) break;   // keine weiteren fälligen Trips
     }
-    if (res.space) wrApplySpace(res.space);
-    await wrEnsureGalaxy(true);          // Planeten-Status/Nebel können sich geändert haben
-    if (!res.nothing) {
-      wrReport(res);
-      wrChatReport(res, m?.name);
-      try { if (typeof checkSpaceAchievements === 'function') await checkSpaceAchievements(_wrMember, res); } catch (e) {}
+    if (any) {
+      await wrEnsureGalaxy(true);          // Planeten-Status/Nebel können sich geändert haben
+      if (!silent) wrRender();
     }
-    if (!silent) wrRender();
-    return true;
+    return any;
   } catch (e) {
     if (!silent) wrToast('Abrechnung fehlgeschlagen: ' + e.message, 'error');
     return false;
@@ -3479,11 +3507,12 @@ function wrPortLightbox() {
 
 // ── Flotte unterwegs: Detail-Ansicht ────────────────────────────────────────
 // Erreichbar über den Klick auf die Reise-Karte ODER auf das Schiff auf der Sternkarte.
-function wrFleetLightbox() {
+function wrFleetLightbox(tripId) {
   const m = _wrMember;
-  const trip = wrTrip(m);
+  const trips = wrTrips(m);
+  const trip = tripId ? (trips.find(t => t.id === tripId) || trips[0]) : trips[0];
   if (!trip) return;
-  const ships  = wrAwayShipsDisplay(m);   // #36: Kolonieschiff auf dem Rückflug nicht mehr zeigen
+  const ships  = wrTripShipsDisplay(trip);   // #36: Kolonieschiff auf dem Rückflug nicht mehr zeigen
   const target = (_wrGalaxy?.planets || []).find(p => p.id === trip.planetId);
   const info   = SPACE_INTENTS[trip.intent] || { icon: '🚀', name: trip.intent };
   const power  = wrFleetPower(ships), mine = wrFleetMine(ships);
@@ -3741,13 +3770,17 @@ function wrStartLoop() {
   _wrTimer = setInterval(async () => {
     // Tab verlassen → Loop beenden (Muster kmStartLoop)
     if (!document.getElementById('wr-canvas')) { clearInterval(_wrTimer); _wrTimer = null; return; }
-    const trip = wrTrip(_wrMember);
-    if (!trip) return;
-    const rem = Date.parse(trip.returnAt) - Date.now();
-    const eta = document.getElementById('wr-trip-eta');
-    if (eta) eta.textContent = wrCountdown(rem);
+    const trips = wrTrips(_wrMember);
+    if (!trips.length) return;
+    let due = false;
+    for (const t of trips) {
+      const rem = Date.parse(t.returnAt) - Date.now();
+      const eta = document.querySelector(`[data-wr-eta="${t.id}"]`);
+      if (eta) eta.textContent = wrCountdown(rem);
+      if (rem <= 0) due = true;
+    }
     wrDrawMap();
-    if (rem <= 0) { await wrTryClaim(false); }
+    if (due) { await wrTryClaim(false); }
   }, 1000);
 
   // Wellen-Countdown getrennt: er läuft auch, wenn gerade keine Reise unterwegs ist.
@@ -3783,19 +3816,25 @@ async function wrMaybeArrive() {
   try {
     const u = (typeof currentUserData !== 'undefined') ? currentUserData : null;
     if (!u || !u.id) return false;
-    const trip = wrTrip(u);
-    if (!trip || Date.now() < Date.parse(trip.returnAt)) return false;
-    const res = await DB.claimSpaceArrival(u.id);
-    if (!res || res.error || res.nothing) return false;
-    wrApplySpace(res.space);
-    if (_wrMember && _wrMember.id === u.id) _wrMember.space = res.space;
+    // 🚀 Multi-Flotte: ist irgendein Trip fällig? Dann alle fälligen in Schleife abrechnen.
+    if (!wrTrips(u).some(t => Date.now() >= Date.parse(t.returnAt))) return false;
+    let cc = 0, erz = 0, kri = 0, n = 0, guard = 0, last = null;
+    while (guard++ < 6) {
+      const res = await DB.claimSpaceArrival(u.id);
+      if (!res || res.error || res.nothing) { if (res && res.space) wrApplySpace(res.space); if (!res || !res.more) break; else continue; }
+      wrApplySpace(res.space);
+      if (_wrMember && _wrMember.id === u.id) _wrMember.space = res.space;
+      cc += res.cc || 0; erz += res.erz || 0; kri += res.kristall || 0; n++; last = res;
+      wrChatReport(res, u.name);
+      try { if (typeof checkSpaceAchievements === 'function') await checkSpaceAchievements(u, res); } catch (e) {}
+      if (!res.more) break;
+    }
+    if (n === 0) return false;
     const beute = [];
-    if (res.cc > 0)       beute.push(`${wrFmt(res.cc)} CC`);
-    if (res.erz > 0)      beute.push(`${wrFmt(res.erz)} 🪨`);
-    if (res.kristall > 0) beute.push(`${wrFmt(res.kristall)} 💎`);
-    wrToast(`🚀 Deine Flotte ist zurück${beute.length ? ' — ' + beute.join(' · ') : ''}`, 'success');
-    wrChatReport(res, u.name);
-    try { if (typeof checkSpaceAchievements === 'function') await checkSpaceAchievements(u, res); } catch (e) {}
+    if (cc > 0)  beute.push(`${wrFmt(cc)} CC`);
+    if (erz > 0) beute.push(`${wrFmt(erz)} 🪨`);
+    if (kri > 0) beute.push(`${wrFmt(kri)} 💎`);
+    wrToast(`🚀 ${n === 1 ? 'Deine Flotte ist' : n + ' Flotten sind'} zurück${beute.length ? ' — ' + beute.join(' · ') : ''}`, 'success');
     return true;
   } catch (e) { console.warn('wrMaybeArrive:', e.message); return false; }
 }
@@ -3863,6 +3902,7 @@ function wrErrText(err) {
     still_building:        'Das Schiff ist noch nicht fertig.',
     // 💎 Treibstoff (22h)
     not_enough_fuel:       'Nicht genug 💎 Kristall als Treibstoff für diese Reise.',
+    fleet_limit:           'Maximal 5 Flotten gleichzeitig unterwegs.',
     // 🤝 Clan-Handel (22f)
     bad_type:              'Unbekannter Rohstoff.',
     bad_amount:            'Menge und Preis müssen mindestens 1 sein.',

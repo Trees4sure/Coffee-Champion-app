@@ -2837,9 +2837,10 @@ const DB = (() => {
     } catch (e) { return { error: e.message }; }
   }
 
-  async function recallSpaceTrip(memberId) {
+  async function recallSpaceTrip(memberId, tripId) {
     try {
-      const { data, error } = await _sb.rpc('recall_space_trip', { p_member_id: memberId });
+      const { data, error } = await _sb.rpc('recall_space_trip', {
+        p_member_id: memberId, p_trip_id: tripId || null });
       if (error) return { error: error.message };
       return data || {};
     } catch (e) { return { error: e.message }; }
