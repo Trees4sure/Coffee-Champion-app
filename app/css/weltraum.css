@@ -544,3 +544,13 @@
   overflow: hidden; text-overflow: ellipsis; }
 .wr-tab.active { background: #1d2a55; border-color: #4d7fd4; color: #dce6ff; }
 @media (max-width: 430px) { .wr-tab-l { display: none; } .wr-tab { font-size: 1rem; } }
+
+/* 🏭 Raffinerie (Plan 2026-07-26 §3) */
+.wr-refine-row { display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; padding: 6px 0; border-bottom: 1px solid #1a2344; flex-wrap: wrap; }
+.wr-refine-adj { display: flex; gap: 6px; }
+.wr-refine-sum { display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+.wr-refine-sum .wr-btn-go { width: auto; flex: 1 1 160px; }
+.wr-refine-run, .wr-refine-done { padding: 6px 0; }
+.wr-refine-done .wr-btn-go { margin-top: 8px; }
