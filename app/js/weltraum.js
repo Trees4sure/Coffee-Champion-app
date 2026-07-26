@@ -72,29 +72,30 @@ const SPACE_TECH_ASTE = [
 ];
 const SPACE_TECH = [
   // Ast A — verdrahtet
+  // art: dedizierte Forschungs-Icons aus assets/weltraum/ (JP-Fix 2026-07-26), nicht mehr generische space/-Namen
   { key:'wt_a3', ast:'a', stufe:3, name:'Warp-Kessel',    cc:15000, erz:240, kristall:65,  requires:null,
-    wirkung:'Flugzeit −25 %',            art:'base_werft_2', live:true },
+    wirkung:'Flugzeit −25 %',            art:'wt3_warp_kessel', live:true },
   { key:'wt_a4', ast:'a', stufe:4, name:'Orbitalwerft',   cc:24000, erz:400, kristall:130,  requires:'wt_a3',
-    wirkung:'Bauzeit −15 %',             art:'base_werft_3', live:true },
+    wirkung:'Bauzeit −15 %',             art:'wt4_werft', live:true },
   { key:'wt_a5', ast:'a', stufe:5, name:'Dunkle Materie', cc:39000, erz:640, kristall:240, requires:'wt_a4',
-    wirkung:'Flugzeit weitere −25 %',    art:'ship_dunkle_roestung', live:true },
+    wirkung:'Flugzeit weitere −25 %',    art:'wt5_dunkle_materie', live:true },
   // Ast B — noch nicht verdrahtet
-  { key:'wt_b1', ast:'b', stufe:1, name:'Bohnen-Railgun',       cc:4800,  erz:65,  kristall:0,   requires:null,   wirkung:'Geschütz-Feuerkraft +15 %',      art:'turret_railgun',     live:true },
-  { key:'wt_b2', ast:'b', stufe:2, name:'Koffein-Laser',        cc:9000, erz:130,  kristall:25,  requires:'wt_b1', wirkung:'Flotten-Kampfkraft +10 %',       art:'turret_laser',       live:true },
-  { key:'wt_b3', ast:'b', stufe:3, name:'Plasma-Kanone',        cc:15000, erz:240, kristall:65,  requires:'wt_b2', wirkung:'Kampfverluste −15 %',            art:'turret_plasma',      live:true },
-  { key:'wt_b4', ast:'b', stufe:4, name:'EMP-Espresso',         cc:24000, erz:400, kristall:130,  requires:'wt_b3', wirkung:'Hinterhalte halb so oft',        art:'foe_pirat',          live:true },
-  { key:'wt_b5', ast:'b', stufe:5, name:'Singularitätswerfer',  cc:39000, erz:640, kristall:240, requires:'wt_b4', wirkung:'Geschütze +40 %, Reparatur 4 h', art:'turret_singularity', live:true },
+  { key:'wt_b1', ast:'b', stufe:1, name:'Bohnen-Railgun',       cc:4800,  erz:65,  kristall:0,   requires:null,   wirkung:'Geschütz-Feuerkraft +15 %',      art:'wt1_railgun',        live:true },
+  { key:'wt_b2', ast:'b', stufe:2, name:'Koffein-Laser',        cc:9000, erz:130,  kristall:25,  requires:'wt_b1', wirkung:'Flotten-Kampfkraft +10 %',       art:'wt2_koffein_laser',  live:true },
+  { key:'wt_b3', ast:'b', stufe:3, name:'Plasma-Kanone',        cc:15000, erz:240, kristall:65,  requires:'wt_b2', wirkung:'Kampfverluste −15 %',            art:'wt3_plasma_kanone',  live:true },
+  { key:'wt_b4', ast:'b', stufe:4, name:'EMP-Espresso',         cc:24000, erz:400, kristall:130,  requires:'wt_b3', wirkung:'Hinterhalte halb so oft',        art:'wt4_emp_espresso',   live:true },
+  { key:'wt_b5', ast:'b', stufe:5, name:'Singularitätswerfer',  cc:39000, erz:640, kristall:240, requires:'wt_b4', wirkung:'Geschütze +40 %, Reparatur 4 h', art:'wt5_singularitaet',  live:true },
   // Ast C
-  { key:'wt_c2', ast:'c', stufe:2, name:'Tiefenscanner',    cc:9000, erz:130,  kristall:25,  requires:null,   wirkung:'Abbau +15 %',            art:'ic_mine',            live:true },
-  { key:'wt_c3', ast:'c', stufe:3, name:'Plasma-Bohrkopf',  cc:15000, erz:240, kristall:65,  requires:'wt_c2', wirkung:'Dauerernte +25 %',       art:'base_erzraffinerie', live:true },
-  { key:'wt_c4', ast:'c', stufe:4, name:'Schürfdrohnen',    cc:24000, erz:400, kristall:130,  requires:'wt_c3', wirkung:'Treibstoff −50 %',       art:'ship_ernter',        live:true },
-  { key:'wt_c5', ast:'c', stufe:5, name:'Kern-Extraktor',   cc:39000, erz:640, kristall:240, requires:'wt_c4', wirkung:'Kolonie-Ertrag +50 %',   art:'res_kristall',       live:true },
+  { key:'wt_c2', ast:'c', stufe:2, name:'Tiefenscanner',    cc:9000, erz:130,  kristall:25,  requires:null,   wirkung:'Abbau +15 %',            art:'wt2_scanner',        live:true },
+  { key:'wt_c3', ast:'c', stufe:3, name:'Plasma-Bohrkopf',  cc:15000, erz:240, kristall:65,  requires:'wt_c2', wirkung:'Dauerernte +25 %',       art:'wt3_plasma_bohrkopf', live:true },
+  { key:'wt_c4', ast:'c', stufe:4, name:'Schürfdrohnen',    cc:24000, erz:400, kristall:130,  requires:'wt_c3', wirkung:'Treibstoff −50 %',       art:'wt4_schuerfdrohnen', live:true },
+  { key:'wt_c5', ast:'c', stufe:5, name:'Kern-Extraktor',   cc:39000, erz:640, kristall:240, requires:'wt_c4', wirkung:'Kolonie-Ertrag +50 %',   art:'wt5_kern_extraktor', live:true },
   // Ast D
-  { key:'wt_d1', ast:'d', stufe:1, name:'Raffinerie',         cc:4800,  erz:65,  kristall:0,   requires:null,   wirkung:'Rohstoffkosten −20 %',    art:'base_erzraffinerie',  live:true },
-  { key:'wt_d2', ast:'d', stufe:2, name:'Handelsdock',        cc:9000, erz:130,  kristall:25,  requires:'wt_d1', wirkung:'Kampf-Bergung +25 %',     art:'ship_berger',         live:true },
-  { key:'wt_d3', ast:'d', stufe:3, name:'Orbitallager',       cc:15000, erz:240, kristall:65,  requires:'wt_d2', wirkung:'Ansammlung 14 → 21 Tage', art:'base_3',              live:true },
-  { key:'wt_d4', ast:'d', stufe:4, name:'Fern-Handelsroute',  cc:24000, erz:400, kristall:130,  requires:'wt_d3', wirkung:'Kolonien geben CC/Tag',   art:'ship_kutter',         live:true },
-  { key:'wt_d5', ast:'d', stufe:5, name:'Sternenbörse',       cc:39000, erz:640, kristall:240, requires:'wt_d4', wirkung:'Wrack-Ausbeute +30 %',    art:'base_kristallreactor', live:true },
+  { key:'wt_d1', ast:'d', stufe:1, name:'Raffinerie',         cc:4800,  erz:65,  kristall:0,   requires:null,   wirkung:'Rohstoffkosten −20 %',    art:'wt1_raffinerie',      live:true },
+  { key:'wt_d2', ast:'d', stufe:2, name:'Handelsdock',        cc:9000, erz:130,  kristall:25,  requires:'wt_d1', wirkung:'Kampf-Bergung +25 %',     art:'wt2_handelsdock',     live:true },
+  { key:'wt_d3', ast:'d', stufe:3, name:'Orbitallager',       cc:15000, erz:240, kristall:65,  requires:'wt_d2', wirkung:'Ansammlung 14 → 21 Tage', art:'wt3_lager',           live:true },
+  { key:'wt_d4', ast:'d', stufe:4, name:'Fern-Handelsroute',  cc:24000, erz:400, kristall:130,  requires:'wt_d3', wirkung:'Kolonien geben CC/Tag',   art:'wt4_handelsroute',    live:true },
+  { key:'wt_d5', ast:'d', stufe:5, name:'Sternenbörse',       cc:39000, erz:640, kristall:240, requires:'wt_d4', wirkung:'Wrack-Ausbeute +30 %',    art:'wt5_sternenboerse',   live:true },
 ];
 const SPACE_TECH_BY_KEY = SPACE_TECH.reduce((m, t) => (m[t.key] = t, m), {});
 
@@ -731,6 +732,7 @@ async function _buildWeltraum(member, el) {
   await wrTryClaim(true);
   await wrClaimBuild(true);
   await wrAutoHarvest();
+  await wrAutoRefineClaim();
   await wrLoadWaves(true);
   wrRender();
   wrStartLoop();
@@ -840,6 +842,7 @@ function wrRender() {
       <div${_wrTab === 'hafen' ? '' : ' hidden'}>
         ${wrHafenHtml(m)}
         ${WR_RES_NOTE}
+        ${wrRaffinerieHtml(m)}
         ${wrColoniesHtml(m)}
         ${wrRoutesHtml(m)}
       </div>
@@ -981,7 +984,7 @@ async function wrLoadHandel() {
     .filter(s => (parseInt(ships[s.key], 10) || 0) > 0)
     .map(s => `<button class="wr-tr-btn" data-wr-tr-shipoffer="${s.key}"
         title="Preis: ${wrFmt(s.cc)} CC${s.erz ? ` + ${wrFmt(s.erz)} 🪨` : ''}${s.kristall ? ` + ${wrFmt(s.kristall)} 💎` : ''}">
-        ${s.icon} ${_wrEsc(s.name)} <span class="wr-sub">×${wrFmt(parseInt(ships[s.key], 10) || 0)}</span></button>`)
+        ${wrShipArt(s.key, 'wr-mini')} ${_wrEsc(s.name)} <span class="wr-sub">×${wrFmt(parseInt(ships[s.key], 10) || 0)}</span></button>`)
     .join('');
   const price = _wrTrAmount * (WR_TRADE_PRICE[_wrTrType] || 0);
   const afford = (parseFloat(m?.coins) || 0) >= price;
@@ -1439,7 +1442,7 @@ function wrTechHtml(m) {
           buy:    `<button class="wr-btn wr-btn-sm" data-wr-tech="${t.key}">Erforschen</button>`,
         }[st] || '';
         return `<div class="wr-tech-node wr-tech-${st}">
-            <span class="wr-fl-art"><img src="assets/space/${t.art}.png" alt=""
+            <span class="wr-fl-art"><img src="assets/weltraum/${t.art}.png" alt=""
               onerror="this.parentNode.classList.add('wr-art-fail');this.remove()"
               ><span class="wr-fl-fb">${a.icon}</span></span>
             <span class="wr-tech-txt">
@@ -1489,6 +1492,143 @@ async function wrBuyTech(key) {
   } catch (e) {
     wrToast('Forschung fehlgeschlagen: ' + e.message, 'error');
   } finally { _wrBusy = false; }
+}
+
+// ── 🏭 Raffinerie (Plan 2026-07-26 §3): Erz + Kristall → CC im Batch ──────────
+// Stufe = höchste besessene Ast-d-Forschung. WR_REFINE SPIEGELT _space_refine_def()
+// (SQL 26a) — bei Änderung BEIDE Seiten + scratchpad/test_raffinerie.js. Kurse liegen
+// über dem Clan-Handelsboden (25/60). Zeitbasiert, Auto-Claim beim Tab-Öffnen.
+const WR_REFINE = [
+  null,
+  { capErz: 40,  capKri: 15,  hours: 6, rErz: 32, rKri: 80  },
+  { capErz: 80,  capKri: 30,  hours: 5, rErz: 34, rKri: 84  },
+  { capErz: 140, capKri: 55,  hours: 4, rErz: 36, rKri: 88  },
+  { capErz: 240, capKri: 100, hours: 3, rErz: 38, rKri: 92  },
+  { capErz: 400, capKri: 160, hours: 2, rErz: 42, rKri: 100 },
+];
+function wrRefineTier(m) { for (let i = 5; i >= 1; i--) if (wrHasTech(m, 'wt_d' + i)) return i; return 0; }
+let _wrRefErz = 0, _wrRefKri = 0;
+function wrRefineRemaining(readyAt) {
+  const t = new Date(readyAt).getTime() - Date.now();
+  if (!(t > 0)) return 'fertig';
+  const h = Math.floor(t / 3600000), min = Math.round((t % 3600000) / 60000);
+  return h > 0 ? `${h} h ${min} min` : `${min} min`;
+}
+
+function wrRaffinerieHtml(m) {
+  const tier = wrRefineTier(m);
+  if (tier < 1) {
+    return `<div class="wr-card wr-refine">
+      <div class="wr-card-title">🏭 Raffinerie <span class="wr-sub">— Rohstoffe zu CC veredeln</span></div>
+      <p class="wr-sub" style="padding:6px 0">🔒 Erforsche zuerst <strong>Raffinerie</strong> (Forschung → Ast 🏭 Raffinerie &amp; Logistik). Jede weitere Ausbaustufe erhöht Menge, Tempo und Kurs.</p>
+    </div>`;
+  }
+  const def = WR_REFINE[tier];
+  const r = wrSpace(m).refinery;
+  let body;
+  if (r && Object.keys(r).length) {
+    const ready = new Date(r.readyAt).getTime() <= Date.now();
+    body = ready
+      ? `<div class="wr-refine-done">
+           <div class="wr-ok">✅ Charge fertig — <strong>${wrFmt(r.cc)} CC</strong> aus ${wrFmt(r.erz)} 🪨 · ${wrFmt(r.kristall)} 💎</div>
+           <button class="wr-btn wr-btn-go" id="wr-refine-claim">CC abholen</button>
+         </div>`
+      : `<div class="wr-refine-run">
+           <div>⚙️ Läuft — <strong>${wrFmt(r.cc)} CC</strong> in <strong>${wrRefineRemaining(r.readyAt)}</strong></div>
+           <div class="wr-sub">verarbeitet ${wrFmt(r.erz)} 🪨 · ${wrFmt(r.kristall)} 💎</div>
+         </div>`;
+  } else {
+    const maxE = Math.min(def.capErz, wrErz(m));
+    const maxK = Math.min(def.capKri, wrKristall(m));
+    _wrRefErz = Math.max(0, Math.min(_wrRefErz, maxE));
+    _wrRefKri = Math.max(0, Math.min(_wrRefKri, maxK));
+    const cc = Math.round(_wrRefErz * def.rErz + _wrRefKri * def.rKri);
+    const canStart = (_wrRefErz + _wrRefKri) > 0;
+    body = `
+      <div class="wr-refine-row">
+        <span>🪨 Erz <strong>${wrFmt(_wrRefErz)}</strong> <span class="wr-sub">/ ${wrFmt(maxE)}</span></span>
+        <span class="wr-refine-adj">
+          <button class="wr-btn wr-btn-sm" data-wr-refadj="erz:-10" ${_wrRefErz <= 0 ? 'disabled' : ''}>−10</button>
+          <button class="wr-btn wr-btn-sm" data-wr-refadj="erz:10" ${_wrRefErz >= maxE ? 'disabled' : ''}>+10</button>
+          <button class="wr-btn wr-btn-sm" data-wr-refadj="erz:max" ${_wrRefErz >= maxE ? 'disabled' : ''}>Max</button>
+        </span>
+      </div>
+      <div class="wr-refine-row">
+        <span>💎 Kristall <strong>${wrFmt(_wrRefKri)}</strong> <span class="wr-sub">/ ${wrFmt(maxK)}</span></span>
+        <span class="wr-refine-adj">
+          <button class="wr-btn wr-btn-sm" data-wr-refadj="kri:-5" ${_wrRefKri <= 0 ? 'disabled' : ''}>−5</button>
+          <button class="wr-btn wr-btn-sm" data-wr-refadj="kri:5" ${_wrRefKri >= maxK ? 'disabled' : ''}>+5</button>
+          <button class="wr-btn wr-btn-sm" data-wr-refadj="kri:max" ${_wrRefKri >= maxK ? 'disabled' : ''}>Max</button>
+        </span>
+      </div>
+      <div class="wr-refine-sum">
+        <span>Ertrag: <strong>${wrFmt(cc)} CC</strong> in ${def.hours} h</span>
+        <button class="wr-btn wr-btn-go" id="wr-refine-start" ${canStart ? '' : 'disabled'}>Verarbeiten starten</button>
+      </div>
+      <p class="wr-sub" style="margin:4px 0 0">Stufe ${tier} · Kurs ${def.rErz} CC/🪨 · ${def.rKri} CC/💎 · max ${wrFmt(def.capErz)} 🪨 / ${wrFmt(def.capKri)} 💎 je Charge</p>`;
+  }
+  return `<div class="wr-card wr-refine">
+    <div class="wr-card-title">🏭 Raffinerie <span class="wr-sub">— Rohstoffe zu CC (Stufe ${tier})</span></div>
+    ${body}
+  </div>`;
+}
+
+async function wrRefineStart() {
+  if (_wrBusy) return;
+  if ((_wrRefErz + _wrRefKri) <= 0) return;
+  _wrBusy = true;
+  try {
+    const res = await DB.refineStart(_wrMember.id, _wrRefErz, _wrRefKri);
+    if (!res || res.error) { wrToast(wrErrText(res?.error), 'error'); return; }
+    if (res.space) wrApplySpace(res.space);
+    _wrRefErz = 0; _wrRefKri = 0;
+    wrToast(`🏭 Verarbeitung gestartet — ${wrFmt(res.cc)} CC in ${res.hours} h.`, 'success');
+    wrRender();
+  } catch (e) {
+    wrToast('Start fehlgeschlagen: ' + e.message, 'error');
+  } finally { _wrBusy = false; }
+}
+
+async function wrRefineClaim() {
+  if (_wrBusy) return;
+  _wrBusy = true;
+  try {
+    const res = await DB.refineClaim(_wrMember.id);
+    if (!res || res.error) { wrToast(wrErrText(res?.error), 'error'); return; }
+    if (res.space) wrApplySpace(res.space);
+    if (typeof res.coins === 'number') wrApplyCoins(res.coins);
+    if ((res.cc || 0) > 0) {
+      wrToast(`🏭 +${wrFmt(res.cc)} CC aus der Raffinerie`, 'success');
+      wrChat(`🏭 ${_wrEsc(_wrMember.name)} hat in der Raffinerie ${wrFmt(res.cc)} CC veredelt.`);
+      try {
+        await DB.appendTodayLogFresh(_wrMember.id, [{ label: '🏭 Raffinerie', amount: res.cc,
+          cat: 'weltraum', detail: 'Rohstoff-Veredelung', aggKey: 'refine', aggBase: '🏭 Raffinerie' }]);
+      } catch (e) {}
+    }
+    wrRender();
+  } catch (e) {
+    wrToast('Abholen fehlgeschlagen: ' + e.message, 'error');
+  } finally { _wrBusy = false; }
+}
+
+// Auto-Claim beim Tab-Öffnen (analog wrAutoHarvest) — still, nur Toast wenn etwas kam.
+async function wrAutoRefineClaim() {
+  const r = wrSpace(_wrMember).refinery;
+  if (!r || !Object.keys(r).length) return;
+  if (new Date(r.readyAt).getTime() > Date.now()) return;
+  try {
+    const res = await DB.refineClaim(_wrMember.id);
+    if (!res || res.error) return;
+    if (res.space) wrApplySpace(res.space);
+    if (typeof res.coins === 'number') wrApplyCoins(res.coins);
+    if ((res.cc || 0) > 0) {
+      wrToast(`🏭 Raffinerie fertig: +${wrFmt(res.cc)} CC`, 'success');
+      try {
+        await DB.appendTodayLogFresh(_wrMember.id, [{ label: '🏭 Raffinerie', amount: res.cc,
+          cat: 'weltraum', detail: 'Rohstoff-Veredelung', aggKey: 'refine', aggBase: '🏭 Raffinerie' }]);
+      } catch (e) {}
+    }
+  } catch (e) { /* Auto-Claim darf das Laden nie blockieren */ }
 }
 
 // ── Planeten-Detail (Auswahl) ────────────────────────────────────────────────
@@ -2746,6 +2886,23 @@ function wrBindEvents() {
     const help = e.target.closest('[data-wr-help]');
     if (help && !help.disabled) { wrHelpDialog(help.dataset.wrHelp); return; }
 
+    // 🏭 Raffinerie
+    const rfa = e.target.closest('[data-wr-refadj]');
+    if (rfa && !rfa.disabled) {
+      const [k, d] = rfa.dataset.wrRefadj.split(':');
+      const def = WR_REFINE[wrRefineTier(_wrMember)] || { capErz: 0, capKri: 0 };
+      if (k === 'erz') {
+        const maxE = Math.min(def.capErz, wrErz(_wrMember));
+        _wrRefErz = d === 'max' ? maxE : Math.max(0, Math.min(maxE, _wrRefErz + parseInt(d, 10)));
+      } else {
+        const maxK = Math.min(def.capKri, wrKristall(_wrMember));
+        _wrRefKri = d === 'max' ? maxK : Math.max(0, Math.min(maxK, _wrRefKri + parseInt(d, 10)));
+      }
+      wrRender(); return;
+    }
+    if (e.target.closest('#wr-refine-start')) { await wrRefineStart(); return; }
+    if (e.target.closest('#wr-refine-claim')) { await wrRefineClaim(); return; }
+
     if (e.target.closest('#wr-recall'))  { await wrRecall(); return; }
     if (e.target.closest('#wr-claim'))   { await wrTryClaim(false); return; }
     if (e.target.closest('#wr-harvest')) { await wrHarvest(); return; }
@@ -3692,6 +3849,10 @@ function wrErrText(err) {
     wave_done:             'Dieser Angriff ist bereits abgerechnet.',
     wave_too_late:         'Zu spät — die Welle schlägt gleich ein.',
     self_help:             'Du kannst dir nicht selbst Verstärkung schicken.',
+    no_refinery:           'Erforsche zuerst die Raffinerie (Ast 🏭 Raffinerie & Logistik).',
+    refine_busy:           'Die Raffinerie verarbeitet bereits eine Charge — erst abholen.',
+    empty_batch:           'Lege Erz oder Kristall in die Raffinerie.',
+    still_refining:        'Die Charge ist noch nicht fertig.',
     already_helping:       'Du hast dieser Verteidigung bereits Schiffe geschickt.',
     not_yet:               'Die Welle ist noch nicht eingetroffen.',
     yard_busy:             'Von diesem Schiffstyp läuft bereits ein Bauauftrag.',

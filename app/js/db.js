@@ -2883,6 +2883,27 @@ const DB = (() => {
     } catch (e) { return { error: e.message }; }
   }
 
+  // 🏭 Raffinerie (26a): Erz+Kristall → CC im Batch. refine_start legt eine Charge
+  // ein, refine_claim schreibt die fertige CC gut (wie die Beute-Gutschrift).
+  async function refineStart(memberId, erz, kri) {
+    try {
+      if (!_groupId) return { error: 'no_group' };
+      const { data, error } = await _sb.rpc('refine_start', {
+        p_member_id: memberId, p_group_id: _groupId, p_erz: erz || 0, p_kri: kri || 0 });
+      if (error) return { error: error.message };
+      return data || {};
+    } catch (e) { return { error: e.message }; }
+  }
+  async function refineClaim(memberId) {
+    try {
+      if (!_groupId) return { error: 'no_group' };
+      const { data, error } = await _sb.rpc('refine_claim', {
+        p_member_id: memberId, p_group_id: _groupId });
+      if (error) return { error: error.message };
+      return data || {};
+    } catch (e) { return { error: e.message }; }
+  }
+
   return {
     init, setGroup, createGroup, joinGroup,
     fetchData, registerUser, addCups, closeSeason, autoCloseSeasonIfDue,
@@ -2913,6 +2934,7 @@ const DB = (() => {
     openCafe, buyCafeItem, claimCafe, setCafeBeans, depositCafe, setCafePolicy, setCafeStil, claimCafeTask, unlockCafeRecipe,
     ensureGalaxy, fetchGalaxy, saveSpace, buildSpace, buildSpaceDefense,
     startSpaceTrip, recallSpaceTrip, claimSpaceArrival, harvestSpace, claimSpaceBuild, buildSpaceCart, setSpaceRoute,
+    refineStart, refineClaim,
     buySpaceTech, ensureSpaceWave, fetchSpaceWaves, fetchSpaceHelp,
     fetchSpaceTrades, createSpaceTrade, cancelSpaceTrade, buySpaceTrade,
     createSpaceRequest, fulfillSpaceRequest, createSpaceShipOffer, buySpaceShipOffer,

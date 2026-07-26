@@ -359,10 +359,14 @@ function _chatArt(escaped) {
       // JP 2026-07-22: Tokens mit bekanntem Asset-Präfix (Weltraum-Technik schickt
       // ihre art-Namen direkt, z.B. [[s:turret_laser]]) rendern das Bild unmittelbar —
       // sonst müsste CHAT_ART jede einzelne Technik kennen.
+      // Forschungs-Icons (wt1_… bis wt7_…) liegen in assets/weltraum/, alle anderen in assets/space/.
+      const isWt = /^wt\d/.test(key);
       const a = CHAT_ART[key]
-             || (/^(ship_|base_|turret_|res_|ic_|foe_)/.test(key) ? [key, '🔬'] : [null, '🚀']);
+             || (isWt ? [key, '🔬']
+                      : (/^(ship_|base_|turret_|res_|ic_|foe_)/.test(key) ? [key, '🔬'] : [null, '🚀']));
       if (!a[0]) return `<span class="chat-art-fb">${a[1]}</span>`;
-      return `<img class="chat-art" src="assets/space/${a[0]}.png" alt="" onerror="this.remove()"`
+      const folder = isWt ? 'weltraum' : 'space';
+      return `<img class="chat-art" src="assets/${folder}/${a[0]}.png" alt="" onerror="this.remove()"`
            + `><span class="chat-art-fb">${a[1]}</span>`;
     });
 }
