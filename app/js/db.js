@@ -2894,6 +2894,62 @@ const DB = (() => {
     } catch (e) { return { error: e.message }; }
   }
 
+  // 🛡️ Feature ④ (26h): Kolonie ausbauen / Planeten-Geschütz / Quadranten-Station.
+  // Wie buildSpaceDefense schickt der Client KEINE Kosten mit — build_planet_defense
+  // rechnet sie selbst; der Log-Betrag kommt aus der Antwort zurück (echte Abbuchung,
+  // Muster aus dem Werft-Preisfix Teil 16).
+  async function buildPlanetDefense(memberId, planetId, action) {
+    try {
+      const { data, error } = await _sb.rpc('build_planet_defense', {
+        p_member_id: memberId, p_planet_id: planetId, p_action: action });
+      if (error) return { error: error.message };
+      if (data && data.ok && (data.cc || 0) > 0) {
+        const label = action === 'colony_upgrade'
+          ? `🏙️ Kolonie ausgebaut: ${data.planet || 'Planet'} (Stufe ${data.level})`
+          : action === 'station_build'
+            ? `📡 Quadranten-Station errichtet: ${data.planet || 'Planet'}`
+            : `🛡️ Planeten-Geschütz: ${data.planet || 'Planet'} (Stufe ${data.level})`;
+        try {
+          await appendTodayLogFresh(memberId, [{
+            label, amount: -data.cc, cat: 'weltraum',
+            detail: 'Kolonie-Ausbau & Verteidigung', invest: true,
+            aggKey: 'space_planet_defense' }]);
+        } catch (e) {}
+      }
+      return data || {};
+    } catch (e) { return { error: e.message }; }
+  }
+
+  // 🛸 Mutterschiff (26j): löst 40 Jäger + 20 Große Jäger + 10 Fregatten + 1 Kreuzer aus
+  // der Heimatflotte ein und legt das Flaggschiff in der Werft auf Kiel. Bauteile und
+  // Kosten prüft der Server — der Client schickt nur seine ID.
+  async function buildMutterschiff(memberId) {
+    try {
+      const { data, error } = await _sb.rpc('build_mutterschiff', { p_member_id: memberId });
+      if (error) return { error: error.message };
+      if (data && data.ok && (data.cc || 0) > 0) {
+        try {
+          await appendTodayLogFresh(memberId, [{
+            label: '🛸 Mutterschiff auf Kiel gelegt', amount: -data.cc, cat: 'weltraum',
+            detail: 'Werft — Rümpfe eingelöst', invest: true, aggKey: 'space_flagship' }]);
+        } catch (e) {}
+      }
+      return data || {};
+    } catch (e) { return { error: e.message }; }
+  }
+
+  // Lazy-Rückeroberung: ungeschützte befreite Planeten fallen nach Ablauf der Frist an
+  // die Feinde zurück. Kein Cron — der Sweep läuft beim Öffnen des 🚀-Tabs (Projekt-
+  // Philosophie). Fehler sind still: der Weltraum-Tab darf davon nie abhängen.
+  async function sweepSpaceReconquest() {
+    try {
+      if (!_groupId) return { ok: true, lost: [], count: 0 };
+      const { data, error } = await _sb.rpc('sweep_space_reconquest', { p_group_id: _groupId });
+      if (error) return { error: error.message };
+      return data || { ok: true, lost: [], count: 0 };
+    } catch (e) { return { error: e.message }; }
+  }
+
   // 🏭 Raffinerie (26a): Erz+Kristall → CC im Batch. refine_start legt eine Charge
   // ein, refine_claim schreibt die fertige CC gut (wie die Beute-Gutschrift).
   async function refineStart(memberId, erz, kri) {
@@ -2944,6 +3000,7 @@ const DB = (() => {
     fetchMobilGraph, startTrip, claimArrival,
     openCafe, buyCafeItem, claimCafe, setCafeBeans, depositCafe, setCafePolicy, setCafeStil, claimCafeTask, unlockCafeRecipe,
     ensureGalaxy, fetchGalaxy, saveSpace, buildSpace, buildSpaceDefense,
+    buildPlanetDefense, sweepSpaceReconquest, buildMutterschiff,
     startSpaceTrip, recallSpaceTrip, claimSpaceArrival, harvestSpace, claimSpaceBuild, buildSpaceCart, setSpaceRoute,
     refineStart, refineClaim, spaceTransmute,
     buySpaceTech, ensureSpaceWave, fetchSpaceWaves, fetchSpaceHelp,

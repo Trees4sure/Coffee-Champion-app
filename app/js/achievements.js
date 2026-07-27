@@ -89,6 +89,10 @@ const ACHIEVEMENTS = [
   { id: 'space_defend',    icon: '🛡️', name: 'Hafenmeister',       desc: 'Einen Angriff auf deinen Raumhafen abgewehrt',         condition: null, coinReward: 200 },
   { id: 'space_defend_big',icon: '🏰', name: 'Unbezwungen',        desc: 'Ein Mutterschiff am Raumhafen abgewehrt',              condition: null, coinReward: 500 },
   { id: 'space_helper',    icon: '🤝', name: 'Waffenbruder',       desc: 'Einem Clan-Mitglied Verstärkung geschickt',            condition: null, coinReward: 150 },
+  // 🛡️ Feature ④ — Kolonie-Ausbau, Planeten-Geschütze, Quadranten-Station (26h)
+  { id: 'space_colony3',   icon: '🏙️', name: 'Metropole',          desc: 'Eine Kolonie auf Stufe 3 ausgebaut',                   condition: null, coinReward: 300 },
+  { id: 'space_fortress',  icon: '🛡️', name: 'Festungswelt',       desc: 'Planeten-Geschütze auf Stufe 3 gebracht',              condition: null, coinReward: 400 },
+  { id: 'space_station',   icon: '📡', name: 'Quadranten-Kommando', desc: 'Eine Quadranten-Station errichtet',                    condition: null, coinReward: 600 },
 ];
 
 // 🚀 Vergabe nach einer eingelösten Weltraum-Rückkehr. Nach dem Muster von _cafeGrantAch:
@@ -118,6 +122,12 @@ async function checkSpaceAchievements(member, res) {
       grant.space_defend_big = true;
     }
     if (!ex.space_helper && res.helped) grant.space_helper = true;
+    // 🛡️ Feature ④ (26h): `res.action` kommt AUSSCHLIESSLICH aus build_planet_defense —
+    // die Hafen-Aktionen (port_upgrade/turret_build am Hafen) laufen über wrDefense und
+    // rufen diese Funktion nicht auf, können hier also nicht durchschlagen.
+    if (!ex.space_colony3  && res.action === 'colony_upgrade' && res.level >= 3) grant.space_colony3  = true;
+    if (!ex.space_fortress && res.action === 'turret_build'   && res.level >= 3) grant.space_fortress = true;
+    if (!ex.space_station  && res.action === 'station_build')                    grant.space_station  = true;
 
     const keys = Object.keys(grant);
     if (!keys.length) return;

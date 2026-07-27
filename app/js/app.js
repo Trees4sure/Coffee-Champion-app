@@ -340,6 +340,8 @@ const CHAT_ART = {
   // ⚠️ Beim Anlegen eines neuen Schiffstyps MUSS er auch hier eintragen werden —
   // sonst steht das rohe Token `[[s:key]]` im Chat (JP 2026-07-22: berger fehlte).
   berger:  ['ship_berger', '♻️'],
+  grossjaeger: ['ship_grossjaeger', '🛩️'],
+  mutterschiff: ['ship_mutterschiff', '🛸'],
   // kreuzer/bomber: Name+Bild getauscht (JP 2026-07-22, s. SPACE_SHIPS) — Keys bleiben
   fregatte:['ship_fregatte', '🛡️'], kreuzer:['ship_bomber', '💣'],
   bomber:  ['ship_kreuzer', '🚨'],   schlachtschiff:['ship_schlachtschiff', '⚔️'],
