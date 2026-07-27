@@ -556,3 +556,52 @@
 .wr-refine-done .wr-btn-go { margin-top: 8px; }
 .wr-refine-ic { width: 30px; height: 30px; vertical-align: middle; margin-right: 6px;
   border-radius: 5px; }
+
+/* 🛡️ Feature ④ — Kolonie-Ausbau, Planeten-Geschütze, Quadranten-Station (26h) */
+.wr-pdef { margin-top: 10px; padding: 10px; border-radius: 9px;
+  border: 1px solid #2b3a6b; background: linear-gradient(150deg, #121c3d, #0d1430); }
+.wr-pdef-row { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px;
+  align-items: center; padding: 7px 0; border-bottom: 1px solid #1a2344; }
+.wr-pdef-row:last-of-type { border-bottom: 0; }
+.wr-pdef-lbl { font-size: .78rem; color: #c3cfee; font-weight: 600; }
+.wr-pdef-val { font-size: .8rem; color: #ffd15c; font-weight: 700; text-align: right; }
+/* Button/Hinweis rutschen unter beide Spalten — sonst wird es auf dem Handy zu eng */
+.wr-pdef-row > .wr-btn, .wr-pdef-row > .wr-warn, .wr-pdef-row > .wr-sub,
+.wr-pdef-row > .wr-slot-max { grid-column: 1 / -1; margin-top: 4px; }
+.wr-pdef .wr-ok { margin-top: 8px; }
+.wr-pdef > .wr-sub { margin-top: 8px; }
+/* Legenden-Punkte für die neuen Kartenmarkierungen */
+.wr-dot-colony { background: linear-gradient(135deg, #7ad48a, #d47ad4); }
+.wr-dot-risk   { background: transparent; border: 1.5px dashed #ff8c78; }
+/* 📡 Quadranten-Station: Portrait im Kolonie-Panel (Feature ④, Assets 2026-07-27) */
+.wr-station-art { position: relative; display: inline-block; width: 34px; height: 34px;
+  vertical-align: middle; margin-right: 6px; cursor: zoom-in; }
+.wr-station-art img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.wr-station-fb { display: none; font-size: 1.1rem; }
+.wr-art-fail.wr-station-art img { display: none; }
+.wr-art-fail .wr-station-fb { display: inline; }
+.wr-station-done { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.wr-station-done .wr-station-art { width: 46px; height: 46px; flex: 0 0 46px; margin: 0; }
+
+/* 🛸 Mutterschiff-Panel in der Werft (26j) */
+.wr-mutter { margin: 10px 0; padding: 11px; border-radius: 10px;
+  border: 1px solid #3a4d8f; background: linear-gradient(150deg, #17224c, #0c1226); }
+.wr-mutter-ready { border-color: #d4aa37; box-shadow: 0 0 0 1px rgba(212,170,55,.25) inset; }
+.wr-mutter-head { display: flex; gap: 10px; align-items: flex-start; }
+.wr-mutter-art { position: relative; width: 74px; height: 74px; flex: 0 0 74px; cursor: zoom-in; }
+.wr-mutter-art img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.wr-mutter-note { margin: 8px 0; line-height: 1.45; }
+.wr-mutter-parts { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 6px; }
+.wr-mutter-part { display: flex; align-items: center; gap: 7px; padding: 5px 7px;
+  border-radius: 8px; background: #0d1430; border: 1px solid #24305a; font-size: .78rem; }
+.wr-mutter-part .wr-sub { display: block; }
+.wr-mutter-foot { display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+.wr-mutter-foot .wr-btn-go { width: auto; flex: 1 1 220px; }
+/* 🔬 Ast-Kopf im Forschungsbaum: echtes Portrait statt Emoji, klickbar (JP 2026-07-27) */
+.wr-ast-art { position: relative; display: inline-block; width: 26px; height: 26px;
+  vertical-align: middle; margin-right: 5px; cursor: zoom-in; }
+.wr-ast-art img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.wr-ast-fb { display: none; }
+.wr-art-fail.wr-ast-art img { display: none; }
+.wr-art-fail .wr-ast-fb { display: inline; }
