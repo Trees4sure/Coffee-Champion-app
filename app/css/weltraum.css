@@ -45,8 +45,55 @@
 .wr-dot-home  { background: #d4aa37; }
 .wr-dot-fog   { background: #8278be; }
 .wr-dot-erz   { background: #c89a5a; }
-.wr-dot-kri   { background: #b98fe0; }
+/* Eisblau statt Violett — sonst nicht vom Plasmoid zu unterscheiden (JP 2026-07-29).
+   ⚠️ Spiegel von WR_RES_META.kristall.color in weltraum.js — beide Stellen anfassen. */
+.wr-dot-kri   { background: #7fd4ff; }
+.wr-dot-pla   { background: #a24bd8; }
+.wr-dot-qua   { background: #5fe0c0; }
 .wr-dot-clear { background: #7ad48a; }
+
+/* ── 🛩️ Kompakte Verbands-Leiste über den Tabs (JP 2026-07-29) ───────────────
+   Ersetzt die vollen Reise-Karten, die früher über JEDEM Tab standen. Sie muss klein
+   bleiben (sonst wäre nichts gewonnen), aber eine fällige Rückkehr muss auffallen. */
+.wr-tripstrip { display: flex; flex-direction: column; gap: 4px; margin: 6px 0 10px; }
+.wr-ts-row { display: flex; align-items: center; gap: 8px; width: 100%; cursor: pointer;
+  background: linear-gradient(150deg, #16224a, #0d1428); border: 1px solid #3a4d8f;
+  border-radius: 8px; padding: 6px 10px; color: #c3cfee; font-size: .76rem;
+  font-family: inherit; text-align: left; }
+.wr-ts-row:hover { border-color: #5b7fd4; }
+.wr-ts-ic  { font-size: .95rem; flex: 0 0 auto; }
+.wr-ts-txt { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; font-weight: 600; }
+.wr-ts-eta { flex: 0 0 auto; color: #8b9ac4; font-variant-numeric: tabular-nums; }
+/* Fällige Rückkehr: grün und kräftig — das ist der eine Fall, der nicht untergehen darf. */
+.wr-ts-done { border-color: #7ad48a; background: linear-gradient(150deg, #14331f, #0d1428); }
+.wr-ts-done .wr-ts-eta { color: #7ad48a; font-weight: 700; }
+
+/* ── 📋 Flottenkommando: gespeicherte Verbände ───────────────────────────── */
+.wr-tpl-list { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 10px; }
+.wr-tpl { display: flex; align-items: stretch; gap: 6px; }
+.wr-tpl-load { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px;
+  background: #101733; border: 1px solid #24305a; border-radius: 8px; padding: 7px 10px;
+  cursor: pointer; color: #c3cfee; font-family: inherit; text-align: left; }
+.wr-tpl-load:hover { border-color: #5b7fd4; }
+.wr-tpl-name  { font-size: .8rem; font-weight: 700; color: #dce6ff; }
+.wr-tpl-ships { font-size: .72rem; color: #8b9ac4; display: flex; flex-wrap: wrap;
+  align-items: center; gap: 3px; }
+.wr-tpl-av    { font-size: .68rem; }
+/* Unvollständige Vorlage ist kein Fehler — sie lädt, was da ist. Nur dezent markieren. */
+.wr-tpl-part .wr-tpl-load { border-style: dashed; }
+.wr-tpl-del { flex: 0 0 auto; align-self: center; }
+.wr-tpl-new { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.wr-tpl-input { flex: 1 1 150px; min-width: 0; background: #0b1020; color: #dce6ff;
+  border: 1px solid #24305a; border-radius: 8px; padding: 7px 10px; font-size: .78rem;
+  font-family: inherit; }
+.wr-tpl-input::placeholder { color: #5d6b96; }
+.wr-tpl-input:focus { outline: none; border-color: #5b7fd4; }
+
+/* Restlaufzeit einer Route/eines Wrackfelds — eigene Zeile, damit sie nicht in der
+   ohnehin dichten Untertitelzeile untergeht. */
+.wr-route-eta { display: block; font-size: .72rem; color: #9fb0dc; margin-top: 2px; }
+.wr-route-eta .wr-sub { display: inline; }
 
 /* ── Laufende Reise ──────────────────────────────────────────────────────── */
 .wr-trip { background: linear-gradient(150deg, #16224a, #0d1428); border: 1px solid #3a4d8f;
@@ -351,6 +398,48 @@
 /* Beschädigtes Geschütz (nach einer verlorenen Angriffswelle) */
 .wr-slot-dmg { border-color: #7a4040; background: #1e1218; }
 .wr-slot-dmg .wr-slot-art { filter: grayscale(.75) brightness(.7); }
+
+/* ── 🏙️ Kolonie-Bauplätze + Akkordeon (26l) ─────────────────────────────── */
+.wr-col-item { border-bottom: 1px solid #1a2344; }
+.wr-col-item:last-child { border-bottom: 0; }
+/* Die Zeile ist jetzt ein Button — Grid-Layout wie vorher, plus Pfeil-Spalte. */
+.wr-col-row { display: grid; grid-template-columns: 14px 1fr auto; gap: 4px 8px;
+  align-items: center; width: 100%; padding: 7px 0; background: none; border: 0;
+  color: #c3cfee; font-family: inherit; font-size: .78rem; text-align: left; cursor: pointer; }
+.wr-col-row:hover { color: #dce6ff; }
+.wr-col-row .wr-sub { grid-column: 2 / -1; }
+.wr-col-caret { color: #5b7fd4; font-size: .7rem; }
+.wr-col-open .wr-col-caret { color: #7ad48a; }
+.wr-col-body { padding: 4px 0 10px; }
+
+.wr-pslots { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+.wr-pslot { background: #101733; border: 1px solid #24305a; border-radius: 8px; padding: 8px 10px; }
+.wr-pslot-full { display: grid; grid-template-columns: 44px 1fr; gap: 8px; align-items: start; }
+.wr-pslot-art { position: relative; width: 44px; height: 44px; cursor: zoom-in;
+  display: flex; align-items: center; justify-content: center; }
+.wr-pslot-art img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.wr-pslot-fb { font-size: 1.4rem; display: none; }
+.wr-art-fail .wr-pslot-fb { display: inline-flex; }
+.wr-pslot-txt { font-size: .78rem; color: #dce6ff; }
+.wr-pslot-txt .wr-sub { display: block; }
+.wr-pslot-act { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.wr-pslot-empty .wr-slot-opts { display: flex; flex-direction: column; gap: 5px; margin-top: 5px; }
+
+/* ⬆️ Umrüsten auf einen stärkeren Geschütztyp (26k, Layout repariert 2026-07-29)
+   ⚠️ Der Knopf trägt VIER gestapelte Zeilen. Deshalb `align-items: stretch` +
+   `text-align: center`: das geerbte `align-items: center` aus .wr-btn schrumpft jede
+   Zeile auf ihre Inhaltsbreite, wodurch die Zeilen unterschiedlich breit werden und
+   bei Umbruch ineinanderlaufen. `white-space: normal` ist nötig, weil lange Namen
+   („Resonanz-Geschütz") sonst den Bauplatz auseinanderziehen. */
+.wr-slot-conv { display: flex; flex-direction: column; gap: 4px; margin-top: 6px;
+  padding-top: 6px; border-top: 1px dashed #24305a; }
+.wr-btn-conv { background: #101733; border-color: #3a4d8f; width: 100%;
+  align-items: stretch; text-align: center; white-space: normal; gap: 1px;
+  padding: 7px 10px; }
+.wr-conv-name { font-weight: 600; font-size: .76rem; color: #dce6ff; }
+.wr-conv-line { font-size: .64rem; font-weight: 400; color: #a8b6dc; line-height: 1.35; }
+/* Rein inline, KEIN Kasten — siehe Kommentar an wrConvBtnHtml() in weltraum.js. */
+.wr-conv-save { font-size: .64rem; font-weight: 400; color: #7ad48a; line-height: 1.35; }
 .wr-slot-dmg .wr-slot-atk { display: flex; flex-direction: column; line-height: 1.3; }
 
 /* ── Gegner-Portraits (assets/space/foe_*.png) ────────────────────────────── */
@@ -554,8 +643,18 @@
 .wr-refine-sum .wr-btn-go { width: auto; flex: 1 1 160px; }
 .wr-refine-run, .wr-refine-done { padding: 6px 0; }
 .wr-refine-done .wr-btn-go { margin-top: 8px; }
-.wr-refine-ic { width: 30px; height: 30px; vertical-align: middle; margin-right: 6px;
-  border-radius: 5px; }
+/* Raffinerie-Portrait als Zoom-Ziel (JP 2026-07-29). Ersetzt das frühere .wr-refine-ic,
+   ein 30-px-Bildchen im Kartentitel — zu klein, um etwas zu erkennen, und nicht klickbar. */
+.wr-refine-head { display: flex; align-items: flex-start; gap: 12px; }
+.wr-refine-head > .wr-refine-body { flex: 1 1 auto; min-width: 0; }
+.wr-refine-head > p { margin: 0; }
+.wr-refine-art { position: relative; flex: 0 0 auto; width: 64px; height: 64px; cursor: zoom-in;
+  display: flex; align-items: center; justify-content: center; }
+.wr-refine-art img { width: 100%; height: 100%; object-fit: contain; display: block;
+  border-radius: 8px; }
+.wr-refine-fb { font-size: 1.9rem; display: none; }
+.wr-art-fail .wr-refine-fb { display: inline-flex; }
+@media (max-width: 420px) { .wr-refine-art { width: 48px; height: 48px; } }
 
 /* 🛡️ Feature ④ — Kolonie-Ausbau, Planeten-Geschütze, Quadranten-Station (26h) */
 .wr-pdef { margin-top: 10px; padding: 10px; border-radius: 9px;
