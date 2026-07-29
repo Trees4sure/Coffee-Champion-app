@@ -93,6 +93,10 @@ const ACHIEVEMENTS = [
   { id: 'space_colony3',   icon: '🏙️', name: 'Metropole',          desc: 'Eine Kolonie auf Stufe 3 ausgebaut',                   condition: null, coinReward: 300 },
   { id: 'space_fortress',  icon: '🛡️', name: 'Festungswelt',       desc: 'Planeten-Geschütze auf Stufe 3 gebracht',              condition: null, coinReward: 400 },
   { id: 'space_station',   icon: '📡', name: 'Quadranten-Kommando', desc: 'Eine Quadranten-Station errichtet',                    condition: null, coinReward: 600 },
+  // 🏰 Geschütz-Ausbau (26k) — der Hafen kann die Flotte ersetzen
+  { id: 'space_bastion',   icon: '🏰', name: 'Feste Bastion',      desc: 'Raumhafen-Feuerkraft von 5.000 erreicht',              condition: null, coinReward: 500 },
+  // 🛩️ Trägerschiff (26m) — Eintritt in Ring 2/3 mit kleinen Jägern
+  { id: 'space_carrier',   icon: '🛩️', name: 'Trägerverband',      desc: 'Ein Trägerschiff in der Werft fertiggestellt',         condition: null, coinReward: 350 },
 ];
 
 // 🚀 Vergabe nach einer eingelösten Weltraum-Rückkehr. Nach dem Muster von _cafeGrantAch:
@@ -122,12 +126,27 @@ async function checkSpaceAchievements(member, res) {
       grant.space_defend_big = true;
     }
     if (!ex.space_helper && res.helped) grant.space_helper = true;
-    // 🛡️ Feature ④ (26h): `res.action` kommt AUSSCHLIESSLICH aus build_planet_defense —
-    // die Hafen-Aktionen (port_upgrade/turret_build am Hafen) laufen über wrDefense und
-    // rufen diese Funktion nicht auf, können hier also nicht durchschlagen.
-    if (!ex.space_colony3  && res.action === 'colony_upgrade' && res.level >= 3) grant.space_colony3  = true;
-    if (!ex.space_fortress && res.action === 'turret_build'   && res.level >= 3) grant.space_fortress = true;
-    if (!ex.space_station  && res.action === 'station_build')                    grant.space_station  = true;
+    // 🛡️ Feature ④ (26h): `res.action` kam bis 26k AUSSCHLIESSLICH aus build_planet_defense.
+    // ⚠️ SEIT 26k NICHT MEHR: wrDefense ruft diese Funktion jetzt ebenfalls auf (für die
+    // Bastion unten), und build_space_defense liefert für den HAFEN dieselbe Aktion
+    // 'turret_build' mit einem 'level'. Ohne die `!res.harbor`-Bedingung bekäme man
+    // „Festungswelt" (= Planeten-Geschütze Stufe 3) für ein Hafen-Geschütz Stufe 3.
+    // `harbor` setzt ausschliesslich wrDefense.
+    if (!ex.space_colony3  && !res.harbor && res.action === 'colony_upgrade' && res.level >= 3) grant.space_colony3  = true;
+    if (!ex.space_fortress && !res.harbor && res.action === 'turret_build'   && res.level >= 3) grant.space_fortress = true;
+    if (!ex.space_station  && !res.harbor && res.action === 'station_build')                    grant.space_station  = true;
+    // 🏰 26k: Feuerkraft des eigenen Raumhafens. turretPower liefert build_space_defense
+    // bei jeder Aktion mit — der Wert ist bereits server-gerechnet (ohne Tech-Faktor).
+    if (!ex.space_bastion && res.harbor && (parseFloat(res.turretPower) || 0) >= 5000) {
+      grant.space_bastion = true;
+    }
+    // 🛩️ 26m: erster Träger aus der Werft. `builtShips` setzt AUSSCHLIESSLICH wrClaimBuild
+    // (Liste [{ship, count}] aus claim_space_build) — ein eigener Feldname, damit diese
+    // Prüfung nicht an `res.action`/`res.intent` hängt und nirgends sonst mitfeuert.
+    if (!ex.space_carrier && Array.isArray(res.builtShips)
+        && res.builtShips.some(g => g && g.ship === 'traeger')) {
+      grant.space_carrier = true;
+    }
 
     const keys = Object.keys(grant);
     if (!keys.length) return;

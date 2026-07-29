@@ -342,13 +342,24 @@ const CHAT_ART = {
   berger:  ['ship_berger', '♻️'],
   grossjaeger: ['ship_grossjaeger', '🛩️'],
   mutterschiff: ['ship_mutterschiff', '🛸'],
+  traeger: ['ship_traeger', '🛩️'],
   // kreuzer/bomber: Name+Bild getauscht (JP 2026-07-22, s. SPACE_SHIPS) — Keys bleiben
   fregatte:['ship_fregatte', '🛡️'], kreuzer:['ship_bomber', '💣'],
   bomber:  ['ship_kreuzer', '🚨'],   schlachtschiff:['ship_schlachtschiff', '⚔️'],
   dunkle_roestung: ['ship_dunkle_roestung', '🌑'],
   erz:     ['res_erz', '🪨'],      kristall:['res_kristall', '💎'],
-  railgun: ['turret_railgun', '🔩'], laser:     ['turret_laser', '⚡'],
-  plasma:  ['turret_plasma', '🔥'],  singularity:['turret_singularity', '🌀'],
+  // Ring-Rohstoffe (26c) — fehlten hier, dadurch stand in der Beute-Meldung ein
+  // Ersatzsymbol statt des Bildes (JP 2026-07-29).
+  plasmoid:['res_plasmoid', '🟣'], quantum: ['res_quantum', '🌀'],
+  // ⚠️ Geschütze zeigen die FORSCHUNGS-Renders aus assets/weltraum/ (JP 2026-07-29) —
+  // die space/turret_*-Charge sah bei allen vier gleich aus. Der Ordner wird unten aus
+  // dem ART-Namen abgeleitet (`wt…` → weltraum), NICHT aus dem Schlüssel.
+  railgun: ['wt1_railgun', '🔩'],       laser:      ['wt2_koffein_laser', '⚡'],
+  plasma:  ['wt3_plasma_kanone', '🔥'], singularity:['wt5_singularitaet', '🌀'],
+  // ⚠️ 26k-Nachtrag: die zwei neuen Geschütze fehlten hier. `resonanz` fällt NICHT in
+  // den `res_`-Rückfall unten (der verlangt den Unterstrich), also stand in der
+  // Umrüst-Meldung ein generisches 🚀 statt des Geschütz-Bildes.
+  resonanz:['wt6_resonanz_geschuetz', '💜'], quantenlanze:['wt7_quanten_lanze', '🌠'],
   hafen:   ['base_1', '🛰️'],
 };
 function _chatArt(escaped) {
@@ -367,7 +378,11 @@ function _chatArt(escaped) {
              || (isWt ? [key, '🔬']
                       : (/^(ship_|base_|turret_|res_|ic_|foe_)/.test(key) ? [key, '🔬'] : [null, '🚀']));
       if (!a[0]) return `<span class="chat-art-fb">${a[1]}</span>`;
-      const folder = isWt ? 'weltraum' : 'space';
+      // ⚠️ Der Ordner folgt dem ART-Namen, nicht dem Schlüssel. Vorher hing er an `isWt`
+      // (= Schlüssel beginnt mit wt…) — sobald ein CHAT_ART-Eintrag wie `railgun` auf ein
+      // `wt*`-Bild zeigt (JP 2026-07-29: Geschütze nutzen die Forschungs-Renders), hätte
+      // das in assets/space/ gesucht und ein leeres Kästchen ergeben.
+      const folder = /^wt\d/.test(a[0]) ? 'weltraum' : 'space';
       return `<img class="chat-art" src="assets/${folder}/${a[0]}.png" alt="" onerror="this.remove()"`
            + `><span class="chat-art-fb">${a[1]}</span>`;
     });

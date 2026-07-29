@@ -44,6 +44,15 @@ const SPACE_SHIPS = [
     needs:'wt_frachtmodule', desc:'Gründet eine Kolonie — bleibt am Zielplaneten' },
   { key:'fregatte', buildMin:40, art:'ship_fregatte', icon:'🛡️', name:'Fregatte', atk:28, mine:0, cc:1800, erz:55, kristall:0,
     needs:'wt_frachtmodule', desc:'Leichter Begleitschutz — Schild senkt die Verluste des ganzen Verbands' },
+  // 🛩️ Trägerschiff (JP 2026-07-29): der Grund, warum es kleine Jäger weiterhin gibt.
+  // ⚠️ Spiegel: _space_ship_cost/_stats/_role/_build_min in migration_2026-07-26m.
+  // ⚠️ KEIN Plasmoid im Preis, obwohl der Plan 30 🟣 vorsah — _space_ship_cost liefert nur
+  // (cc, erz, kristall); eine vierte Spalte hätte den ganzen Warenkorb-Pfad mitgerissen
+  // (42P13). Steht so auch im Kopf der Migration.
+  // Die Kapazität gehört in den desc-Text: es gibt bewusst KEIN What's-New-Popup (JP),
+  // also muss die Regel dort stehen, wo man das Schiff kauft.
+  { key:'traeger', buildMin:150, art:'ship_traeger', icon:'🛩️', name:'Trägerschiff', atk:40, mine:0, cc:18000, erz:500, kristall:180,
+    needs:'wt_frachtmodule', desc:'Nimmt 20 Jäger auf: nur so kommen kleine Jäger nach Ring 2/3. Schützt sie mit seinem Schild und gibt +5 % Kampfkraft auf den ganzen Verband (max. +15 %)' },
   // ⚠️ JP 2026-07-22: Bomber ↔ Kreuzer haben NAME/BILD/ICON getauscht — der Kreuzer
   // ist optisch größer und soll daher das stärkere, teurere Schiff sein. Die KEYS,
   // Werte und Rollen (SPACE_ROLES) bleiben unverändert: Keys stecken serverseitig in
@@ -75,13 +84,20 @@ const SPACE_SHIP_BY_KEY = SPACE_SHIPS.reduce((m, s) => (m[s.key] = s, m), {});
 // `live:false` = Effekt ist serverseitig NOCH NICHT eingehängt. Solche Techniken
 // sind bewusst NICHT kaufbar — lieber sichtbar „in Vorbereitung" als 25.000 CC für
 // nichts. Ast A ist verdrahtet (21l), B/C/D folgen.
+// ⚠️ UMBAU 2026-07-29 (JP): „Du kannst doch die Dinge aus Plasmoid-Technik und
+// Quanten-Technik einfach in die bestehenden Rubriken einsortieren als komplett
+// durchmischt dort einzufügen?" — die früheren Äste 🟣 E und 🌀 F sind AUFGELÖST; ihre
+// 25 Techniken stehen jetzt thematisch in A–D. Das passte ohnehin besser, weil ihre
+// `requires` schon immer in A–D zeigten (wt_e1 → wt_b3, wt_e7 → wt_c4, wt_e13 → wt_d5 …).
+// Die SCHLÜSSEL bleiben `wt_e*`/`wt_f*` — sie stecken in `members.space.tech` und in
+// _space_tech_def. Nur `ast` und `stufe` ändern sich, und die sind REIN ANZEIGE:
+// buy_space_tech prüft ausschliesslich Kosten und `requires`, liest weder ast noch stufe.
+// Deshalb braucht dieser Umbau KEINE Migration.
 const SPACE_TECH_ASTE = [
   { key:'a', icon:'🚀', name:'Antrieb & Hülle',        art:'base_werft_2',        live:true  },
   { key:'b', icon:'🛡️', name:'Bewaffnung',             art:'turret_plasma',       live:true  },
   { key:'c', icon:'⛏️', name:'Schürftechnik',          art:'base_erzraffinerie',  live:true  },
   { key:'d', icon:'🏭', name:'Raffinerie & Logistik',  art:'base_kristallreactor', live:true  },
-  { key:'e', icon:'🟣', name:'Plasmoid-Technik',       art:'res_plasmoid',        live:true  },
-  { key:'f', icon:'🌀', name:'Quanten-Technik',        art:'res_quantum',         live:true  },
 ];
 const SPACE_TECH = [
   // Ast A — verdrahtet
@@ -111,35 +127,57 @@ const SPACE_TECH = [
   { key:'wt_d5', ast:'d', stufe:5, name:'Sternenbörse',       cc:39000, erz:640, kristall:240, requires:'wt_d4', wirkung:'Wrack-Ausbeute +30 %',    art:'wt5_sternenboerse',   live:true },
   // ── Fortgeschrittene Forschung (26d), Kosten teils in 🟣/🌀. LIVE: wt_e7/wt_f5 (Abbau-Gates)
   //    + wt_f9 (Transmuter-Sink). Die übrigen 22 sind sichtbare Roadmap (live:false). ──
-  // 🟣 Ast E — Plasmoid-Technik (Ring-2-Stufe)
-  { key:'wt_e1',  ast:'e', stufe:1,  name:'Plasmoid-Torpedo',        cc:22000, erz:300, kristall:60,  plasmoid:20, quantum:0, requires:'wt_b3', wirkung:'Schiffs-Angriff +12 % gegen schwere Ziele', art:'wt6_plasmoid_torpedo',  live:true  },
-  { key:'wt_e2',  ast:'e', stufe:2,  name:'Resonanz-Geschütz',       cc:26000, erz:360, kristall:90,  plasmoid:30, quantum:0, requires:'wt_b5', wirkung:'Neues Geschütz atk 200 (hebt Cap)',          art:'wt6_resonanz_geschuetz', live:true  },
-  { key:'wt_e3',  ast:'e', stufe:3,  name:'Schwarmraketen',          cc:20000, erz:280, kristall:50,  plasmoid:20, quantum:0, requires:'wt_b2', wirkung:'+20 % gegen Schwärme / leichte Gegner',      art:'wt6_schwarmraketen',    live:true  },
-  { key:'wt_e4',  ast:'e', stufe:4,  name:'Plasmoid-Triebwerk',      cc:24000, erz:320, kristall:80,  plasmoid:30, quantum:0, requires:'wt_a5', wirkung:'Flugzeit −20 %',                            art:'wt6_plasmoid_triebwerk', live:true  },
-  { key:'wt_e5',  ast:'e', stufe:5,  name:'Trägheitsdämpfer',        cc:20000, erz:260, kristall:60,  plasmoid:20, quantum:0, requires:'wt_d2', wirkung:'Verlust-Rückbergung +25 %',                 art:'wt6_traegheitsdaempfer', live:true  },
-  { key:'wt_e6',  ast:'e', stufe:6,  name:'Deep-Space-Sensorik',     cc:18000, erz:240, kristall:50,  plasmoid:15, quantum:0, requires:'wt_a3', wirkung:'Gegnerstärke sichtbar ohne Sonde',          art:'wt6_deepspace_sensor',  live:true  },
-  { key:'wt_e7',  ast:'e', stufe:7,  name:'Plasmoid-Kollektor',      cc:20000, erz:300, kristall:80,  plasmoid:0,  quantum:0, requires:'wt_c4', wirkung:'Schaltet 🟣 Plasmoiden-Abbau frei',        art:'wt6_plasmoid_kollektor', live:true  },
-  { key:'wt_e8',  ast:'e', stufe:8,  name:'Wrack-Tiefenscanner',     cc:22000, erz:300, kristall:70,  plasmoid:25, quantum:0, requires:'wt_c2', wirkung:'+30 % Wrack-Ausbeute',                      art:'wt6_wrack_scanner',     live:true  },
-  { key:'wt_e9',  ast:'e', stufe:9,  name:'Auto-Ernte-Protokoll',    cc:28000, erz:400, kristall:120, plasmoid:40, quantum:0, requires:'wt_c5', wirkung:'Kolonien ernten selbsttätig',               art:'wt6_auto_ernte',        live:true  },
-  { key:'wt_e10', ast:'e', stufe:10, name:'Planetar-Schildgenerator',cc:26000, erz:380, kristall:100, plasmoid:40, quantum:0, requires:'wt_b4', wirkung:'Schaltet Planeten-Geschütze frei',          art:'wt6_planetar_schild',   live:true  },
-  { key:'wt_e11', ast:'e', stufe:11, name:'Selbstreparatur-Nanobots',cc:24000, erz:340, kristall:90,  plasmoid:35, quantum:0, requires:'wt_e10',wirkung:'Geschütz-Ausfallzeit −50 %',                art:'wt6_nanobots',          live:true  },
-  { key:'wt_e12', ast:'e', stufe:12, name:'Frühwarn-Netz',           cc:22000, erz:300, kristall:80,  plasmoid:30, quantum:0, requires:'wt_e6', wirkung:'Rückfall-Frist +2 Tage + Wellen-Vorwarnung',art:'wt6_fruehwarnnetz',     live:true  },
-  { key:'wt_e13', ast:'e', stufe:13, name:'Plasma-Raffinerie',       cc:30000, erz:500, kristall:150, plasmoid:50, quantum:0, requires:'wt_d5', wirkung:'Höchste Raffinerie-Stufe',                   art:'wt6_plasma_raffinerie', live:true  },
-  { key:'wt_e14', ast:'e', stufe:14, name:'Orbital-Fabrik',          cc:26000, erz:400, kristall:110, plasmoid:40, quantum:0, requires:'wt_a4', wirkung:'Bauzeit −25 %',                             art:'wt6_orbital_fabrik',    live:true  },
-  { key:'wt_e15', ast:'e', stufe:15, name:'Handelskolonie',          cc:28000, erz:420, kristall:120, plasmoid:45, quantum:0, requires:'wt_d4', wirkung:'Kolonien geben zusätzlich CC/Tag',          art:'wt6_handelskolonie',    live:true  },
-  // 🌀 Ast F — Quanten-Technik (Ring-3-Stufe)
-  { key:'wt_f1',  ast:'f', stufe:1,  name:'Quanten-Lanze',           cc:40000, erz:500, kristall:180, plasmoid:60, quantum:30, requires:'wt_e2', wirkung:'Neues Geschütz atk 320',                    art:'wt7_quanten_lanze',     live:true  },
-  { key:'wt_f2',  ast:'f', stufe:2,  name:'Antimaterie-Sprengkopf',  cc:45000, erz:550, kristall:200, plasmoid:70, quantum:40, requires:'wt_f1', wirkung:'Erstschlag −15 % Gegnerstärke',             art:'wt7_antimaterie_kopf',  live:true  },
-  { key:'wt_f3',  ast:'f', stufe:3,  name:'Sprungtor-Netzwerk',      cc:38000, erz:480, kristall:160, plasmoid:50, quantum:25, requires:'wt_e4', wirkung:'Multi-Flotten-Strafe +15 → +8 min',         art:'wt7_sprungtor',         live:true  },
-  { key:'wt_f4',  ast:'f', stufe:4,  name:'Faltraum-Anker',          cc:42000, erz:520, kristall:180, plasmoid:60, quantum:35, requires:'wt_f3', wirkung:'1×/Tag sofortiger Flotten-Rückruf',         art:'wt7_faltraum_anker',    live:true  },
-  { key:'wt_f5',  ast:'f', stufe:5,  name:'Quantenschaum-Extraktor', cc:30000, erz:400, kristall:120, plasmoid:60, quantum:0,  requires:'wt_e7', wirkung:'Schaltet 🌀 Quantenschaum-Abbau frei',      art:'wt7_quantum_extraktor', live:true  },
-  { key:'wt_f6',  ast:'f', stufe:6,  name:'Resonanz-Bohrung',        cc:40000, erz:500, kristall:170, plasmoid:50, quantum:40, requires:'wt_f5', wirkung:'Abbau Ring 2/3 +25 %',                      art:'wt7_resonanz_bohrung',  live:true  },
-  { key:'wt_f7',  ast:'f', stufe:7,  name:'Quadranten-Kommandostation',cc:48000,erz:600, kristall:220, plasmoid:80, quantum:50, requires:'wt_e10',wirkung:'Schaltet Quadranten-Station frei',          art:'wt7_quadranten_station',live:true  },
-  { key:'wt_f8',  ast:'f', stufe:8,  name:'Terraforming-Kern',       cc:44000, erz:560, kristall:200, plasmoid:70, quantum:45, requires:'wt_c5', wirkung:'Kolonie-Ertrag +50 %',                      art:'wt7_terraforming_kern', live:true  },
-  { key:'wt_f9',  ast:'f', stufe:9,  name:'Transmuter',              cc:40000, erz:0,   kristall:0,   plasmoid:40, quantum:30, requires:'wt_f5', wirkung:'Wandelt 🟣/🌀 in CC (🟣 60 · 🌀 150 CC)',   art:'wt7_transmuter',        live:true  },
-  { key:'wt_f10', ast:'f', stufe:10, name:'Xeno-Diplomatie',         cc:46000, erz:580, kristall:210, plasmoid:75, quantum:50, requires:'wt_f7', wirkung:'Hinterhalt −20 %, gelegentl. Gratis-Rohstoffe',art:'wt7_xeno_diplomatie',  live:true  },
+  // 🟣 Ehemaliger Ast E („Plasmoid-Technik") — seit 2026-07-29 nach Thema in A–D
+  // einsortiert (JP). Die Schlüssel bleiben `wt_e*`, weil sie in Spielerdaten stehen;
+  // `ast`/`stufe` je Zeile sagen jetzt, wo die Technik im Baum erscheint.
+  { key:'wt_e1',  ast:'b', stufe:7,  name:'Plasmoid-Torpedo',        cc:22000, erz:300, kristall:60,  plasmoid:20, quantum:0, requires:'wt_b3', wirkung:'Schiffs-Angriff +12 % gegen schwere Ziele', art:'wt6_plasmoid_torpedo',  live:true  },
+  { key:'wt_e2',  ast:'b', stufe:8,  name:'Resonanz-Geschütz',       cc:26000, erz:360, kristall:90,  plasmoid:30, quantum:0, requires:'wt_b5', wirkung:'Neues Geschütz atk 200 (hebt Cap)',          art:'wt6_resonanz_geschuetz', live:true  },
+  { key:'wt_e3',  ast:'b', stufe:6,  name:'Schwarmraketen',          cc:20000, erz:280, kristall:50,  plasmoid:20, quantum:0, requires:'wt_b2', wirkung:'+20 % gegen Schwärme / leichte Gegner',      art:'wt6_schwarmraketen',    live:true  },
+  { key:'wt_e4',  ast:'a', stufe:6,  name:'Plasmoid-Triebwerk',      cc:24000, erz:320, kristall:80,  plasmoid:30, quantum:0, requires:'wt_a5', wirkung:'Flugzeit −20 %',                            art:'wt6_plasmoid_triebwerk', live:true  },
+  { key:'wt_e5',  ast:'d', stufe:6,  name:'Trägheitsdämpfer',        cc:20000, erz:260, kristall:60,  plasmoid:20, quantum:0, requires:'wt_d2', wirkung:'Verlust-Rückbergung +25 %',                 art:'wt6_traegheitsdaempfer', live:true  },
+  // ⚠️ WIRKUNGSTEXT KORRIGIERT 2026-07-29 (JP: „ist das nicht echt unwichtig, weil Sonden
+  // so günstig sind... oder ich verstehe es nicht"). Der Text war schlicht FALSCH und
+  // verkaufte die Technik viel zu billig: `wrRevealed()` gibt mit wt_e6 für JEDEN
+  // Quadranten true zurück — die Technik hebt den Nebel der GANZEN Galaxie dauerhaft,
+  // nicht nur die Gegnerstärke eines Planeten. Eine Sonde deckt einen Quadranten pro
+  // Flug auf; diese Technik alle, für immer. Der Effekt war immer schon so verdrahtet.
+  { key:'wt_e6',  ast:'a', stufe:8,  name:'Deep-Space-Sensorik',     cc:18000, erz:240, kristall:50,  plasmoid:15, quantum:0, requires:'wt_a3', wirkung:'Deckt die GANZE Galaxie auf — kein Sonden-Flug mehr nötig', art:'wt6_deepspace_sensor',  live:true  },
+  { key:'wt_e7',  ast:'c', stufe:7,  name:'Plasmoid-Kollektor',      cc:20000, erz:300, kristall:80,  plasmoid:0,  quantum:0, requires:'wt_c4', wirkung:'Schaltet 🟣 Plasmoiden-Abbau frei',        art:'wt6_plasmoid_kollektor', live:true  },
+  { key:'wt_e8',  ast:'c', stufe:6,  name:'Wrack-Tiefenscanner',     cc:22000, erz:300, kristall:70,  plasmoid:25, quantum:0, requires:'wt_c2', wirkung:'+30 % Wrack-Ausbeute',                      art:'wt6_wrack_scanner',     live:true  },
+  { key:'wt_e9',  ast:'c', stufe:10,  name:'Auto-Ernte-Protokoll',    cc:28000, erz:400, kristall:120, plasmoid:40, quantum:0, requires:'wt_c5', wirkung:'Kolonien ernten selbsttätig',               art:'wt6_auto_ernte',        live:true  },
+  { key:'wt_e10', ast:'b', stufe:11, name:'Planetar-Schildgenerator',cc:26000, erz:380, kristall:100, plasmoid:40, quantum:0, requires:'wt_b4', wirkung:'Schaltet Planeten-Geschütze frei',          art:'wt6_planetar_schild',   live:true  },
+  { key:'wt_e11', ast:'b', stufe:12, name:'Selbstreparatur-Nanobots',cc:24000, erz:340, kristall:90,  plasmoid:35, quantum:0, requires:'wt_e10',wirkung:'Geschütz-Ausfallzeit −50 %',                art:'wt6_nanobots',          live:true  },
+  { key:'wt_e12', ast:'b', stufe:13, name:'Frühwarn-Netz',           cc:22000, erz:300, kristall:80,  plasmoid:30, quantum:0, requires:'wt_e6', wirkung:'Rückfall-Frist +2 Tage + Wellen-Vorwarnung',art:'wt6_fruehwarnnetz',     live:true  },
+  { key:'wt_e13', ast:'d', stufe:8, name:'Plasma-Raffinerie',       cc:30000, erz:500, kristall:150, plasmoid:50, quantum:0, requires:'wt_d5', wirkung:'Höchste Raffinerie-Stufe',                   art:'wt6_plasma_raffinerie', live:true  },
+  { key:'wt_e14', ast:'a', stufe:7, name:'Orbital-Fabrik',          cc:26000, erz:400, kristall:110, plasmoid:40, quantum:0, requires:'wt_a4', wirkung:'Bauzeit −25 %',                             art:'wt6_orbital_fabrik',    live:true  },
+  { key:'wt_e15', ast:'d', stufe:7, name:'Handelskolonie',          cc:28000, erz:420, kristall:120, plasmoid:45, quantum:0, requires:'wt_d4', wirkung:'Kolonien geben zusätzlich CC/Tag',          art:'wt6_handelskolonie',    live:true  },
+  // 🌀 Ehemaliger Ast F („Quanten-Technik") — ebenfalls in A–D einsortiert.
+  // ⚠️ Anzeigename 2026-07-29 von „Quanten-Lanze" auf „Quanten-Geschütz" geändert (JP).
+  // Schlüssel `wt_f1` und Bildname bleiben — beide stecken in Spielerdaten bzw. Assets.
+  { key:'wt_f1',  ast:'b', stufe:9,  name:'Quanten-Geschütz',        cc:40000, erz:500, kristall:180, plasmoid:60, quantum:30, requires:'wt_e2', wirkung:'Neues Geschütz atk 320',                    art:'wt7_quanten_lanze',     live:true  },
+  { key:'wt_f2',  ast:'b', stufe:10,  name:'Antimaterie-Sprengkopf',  cc:45000, erz:550, kristall:200, plasmoid:70, quantum:40, requires:'wt_f1', wirkung:'Erstschlag −15 % Gegnerstärke',             art:'wt7_antimaterie_kopf',  live:true  },
+  { key:'wt_f3',  ast:'a', stufe:9,  name:'Sprungtor-Netzwerk',      cc:38000, erz:480, kristall:160, plasmoid:50, quantum:25, requires:'wt_e4', wirkung:'Multi-Flotten-Strafe +15 → +8 min',         art:'wt7_sprungtor',         live:true  },
+  { key:'wt_f4',  ast:'a', stufe:10,  name:'Faltraum-Anker',          cc:42000, erz:520, kristall:180, plasmoid:60, quantum:35, requires:'wt_f3', wirkung:'1×/Tag sofortiger Flotten-Rückruf',         art:'wt7_faltraum_anker',    live:true  },
+  { key:'wt_f5',  ast:'c', stufe:8,  name:'Quantenschaum-Extraktor', cc:30000, erz:400, kristall:120, plasmoid:60, quantum:0,  requires:'wt_e7', wirkung:'Schaltet 🌀 Quantenschaum-Abbau frei',      art:'wt7_quantum_extraktor', live:true  },
+  { key:'wt_f6',  ast:'c', stufe:9,  name:'Resonanz-Bohrung',        cc:40000, erz:500, kristall:170, plasmoid:50, quantum:40, requires:'wt_f5', wirkung:'Abbau Ring 2/3 +25 %',                      art:'wt7_resonanz_bohrung',  live:true  },
+  { key:'wt_f7',  ast:'b', stufe:14,  name:'Quadranten-Kommandostation',cc:48000,erz:600, kristall:220, plasmoid:80, quantum:50, requires:'wt_e10',wirkung:'Schaltet Quadranten-Station frei',          art:'wt7_quadranten_station',live:true  },
+  { key:'wt_f8',  ast:'c', stufe:11,  name:'Terraforming-Kern',       cc:44000, erz:560, kristall:200, plasmoid:70, quantum:45, requires:'wt_c5', wirkung:'Kolonie-Ertrag +50 %',                      art:'wt7_terraforming_kern', live:true  },
+  { key:'wt_f9',  ast:'d', stufe:9,  name:'Transmuter',              cc:40000, erz:0,   kristall:0,   plasmoid:40, quantum:30, requires:'wt_f5', wirkung:'Wandelt 🟣/🌀 in CC (🟣 60 · 🌀 150 CC)',   art:'wt7_transmuter',        live:true  },
+  { key:'wt_f10', ast:'d', stufe:10, name:'Xeno-Diplomatie',         cc:46000, erz:580, kristall:210, plasmoid:75, quantum:50, requires:'wt_f7', wirkung:'Hinterhalt −20 %, gelegentl. Gratis-Rohstoffe',art:'wt7_xeno_diplomatie',  live:true  },
 ];
 const SPACE_TECH_BY_KEY = SPACE_TECH.reduce((m, t) => (m[t.key] = t, m), {});
+
+// Menschenlesbarer Verweis auf eine Forschung: „🌀 Quanten-Technik · Stufe 7".
+// ⚠️ In SICHTBAREN Texten nie den nackten Schlüssel zeigen (JP 2026-07-29: „solche wt*-Namen
+// kommen noch öfter vor — was fehlt da?"). Es fehlte nichts, der Schlüssel stand absichtlich
+// da — er liest sich nur wie ein vergessener Platzhalter. In Kommentaren bleibt er stehen.
+function wrTechRef(key) {
+  const t = SPACE_TECH_BY_KEY[key];
+  if (!t) return '';
+  const a = SPACE_TECH_ASTE.find(x => x.key === t.ast);
+  return `${a ? a.icon + ' ' + a.name : 'Forschung'} · Stufe ${t.stufe}`;
+}
+function wrTechName(key) { return (SPACE_TECH_BY_KEY[key] || {}).name || ''; }
 
 function wrTech(m)            { return (m && m.space && m.space.tech) || {}; }
 function wrHasTech(m, key)    { return !!wrTech(m)[key]; }
@@ -196,6 +234,9 @@ const SPACE_ROLES = {
   kutter:          { cls:'light', shield:0.00, vsLight:0,         vsHeavy:0,         vsStruct:0,   order:40 },
   berger:          { cls:'light', shield:0.00, vsLight:0,         vsHeavy:0,         vsStruct:0,   order:50 },
   ernter:          { cls:'light', shield:0.00, vsLight:0,         vsHeavy:0,         vsStruct:0,   order:60 },
+  // 🛩️ Träger (26m): schwere Klasse, hoher Schild — er soll die Jäger in seinem Bauch
+  // schützen. order 65 = fällt VOR den Kreuzern, aber nach allen leichten Schiffen.
+  traeger:         { cls:'heavy', shield:0.30, vsLight: WR_MALUS, vsHeavy:0.3,       vsStruct:0,   order:65 },
   kreuzer:         { cls:'heavy', shield:0.05, vsLight: WR_MALUS, vsHeavy: WR_BONUS, vsStruct:0,   order:70 },
   bomber:          { cls:'heavy', shield:0.10, vsLight: WR_BONUS, vsHeavy: WR_BONUS, vsStruct:1.5, order:80 },
   schlachtschiff:  { cls:'heavy', shield:0.20, vsLight: WR_BONUS, vsHeavy: WR_BONUS, vsStruct:0.8, order:90 },
@@ -275,7 +316,10 @@ function wrEffPower(fleet, sLight, sHeavy, sStruct) {
   // 🛸 Flaggschiff-Bonus — Spiegel von _space_flagship_bonus (26j). Sitzt bewusst hier,
   // weil _space_eff_power ihn serverseitig ebenfalls einschließt: so stimmen Vorschau
   // (wrBattlePreview) und Abrechnung überein.
-  return sum * wrFlagshipBonus(fleet);
+  // 🛩️ 26m: der Trägerbonus kommt MULTIPLIKATIV dazu, genau wie in der SQL
+  // (`… * _space_flagship_bonus(p_fleet) * _space_carrier_bonus(p_fleet)`).
+  // Zusammen also max. 1,30 × 1,15 = +49,5 %.
+  return sum * wrFlagshipBonus(fleet) * wrCarrierBonus(fleet);
 }
 // ⚠️ Spiegel von _space_flagship_bonus/_space_flagship_parts/_space_flagship_cost
 // in migration_2026-07-26j_mutterschiff.sql. Bei Balance-Änderungen BEIDE Seiten.
@@ -292,13 +336,82 @@ function wrFlagshipBonus(fleet) {
   const n = parseInt((fleet || {}).mutterschiff, 10) || 0;
   return Math.min(WR_FLAG_CAP, 1 + WR_FLAG_PER * Math.max(0, n));
 }
+// ── 🟣🌀 Ring-Beute (Spiegel von migration_2026-07-26o) ──────────────────────
+// ⚠️ CLIENT-SYNC-PFLICHT: claim_space_arrival (Kampfbeute), _space_salvage (Bergung im
+// Kampf) und harvest_space (Bergungsroute). Bei Balance-Änderungen BEIDE Seiten.
+// JP 2026-07-29: „ab Ring 2 auch Plasmoid ... bei Ring 3 auch Quantenschaum ... Aber so,
+// dass man genug bekommen kann!" — bewusst OHNE Abbau-Tech-Gate: es ist Kriegsbeute,
+// kein Abbau.
+const WR_RING_LOOT = {
+  plaRing: 2,             // ab diesem Ring fällt 🟣 an
+  quaRing: 3,             // ab diesem Ring zusätzlich 🌀
+  plaPerStar: 8,   plaPerFoe: 0.02,   // Kampfbeute: richness × 8 + Wächter × 0,02
+  quaPerStar: 4,   quaPerFoe: 0.01,
+  salPla: 0.06,    salQua: 0.03,      // Kampfbergung: Anteil der Wrackstärke
+  wreckPla: 0.12,  wreckQua: 0.06,    // Bergungsroute: Anteil der Bergungsmenge
+};
+// Ring-Beute eines gewonnenen Kampfes — Spiegel der beiden IF-Blöcke in
+// claim_space_arrival PLUS des Ring-Anteils aus _space_salvage.
+function wrRingLoot(ring, richness, foeStrength, bergerFaktor) {
+  const R = WR_RING_LOOT;
+  const r = parseInt(ring, 10) || 0;
+  const st = parseInt(richness, 10) || 0;
+  const fo = parseFloat(foeStrength) || 0;
+  const f = 0.5 * (parseFloat(bergerFaktor) || 1);   // wie im Kampf: 0,5 × Berger-Bonus
+  let pla = 0, qua = 0;
+  if (r >= R.plaRing) {
+    pla = Math.round(st * R.plaPerStar + fo * R.plaPerFoe) + Math.round(fo * R.salPla * f);
+  }
+  if (r >= R.quaRing) {
+    qua = Math.round(st * R.quaPerStar + fo * R.quaPerFoe) + Math.round(fo * R.salQua * f);
+  }
+  return { pla, qua };
+}
+
+// ── 🛩️ Trägerschiff (Spiegel von migration_2026-07-26m) ─────────────────────
+// ⚠️ CLIENT-SYNC-PFLICHT: _space_carrier_bonus / _space_carrier_seats / das Ring-Gate in
+// start_space_trip. Weicht eine Zahl ab, verspricht der Picker etwas anderes als der
+// Server rechnet — oder er lässt einen in den Serverfehler laufen.
+const WR_CARRIER_SEATS = 20;    // Jäger je Träger
+const WR_CARRIER_PER   = 0.05;  // +5 % Kampfkraft je Träger
+const WR_CARRIER_CAP   = 1.15;  // Deckel +15 % (3 Träger)
+const WR_CARRIER_RING  = 2;     // ab diesem Ring greift das Gate
+function wrCarrierBonus(fleet) {
+  const n = parseInt((fleet || {}).traeger, 10) || 0;
+  return Math.min(WR_CARRIER_CAP, 1 + WR_CARRIER_PER * Math.max(0, n));
+}
+// Wie viele Jäger sitzen geschützt an Bord? Nie mehr, als überhaupt mitfliegen.
+function wrCarrierSeats(fleet) {
+  const j = parseInt((fleet || {}).jaeger,  10) || 0;
+  const t = parseInt((fleet || {}).traeger, 10) || 0;
+  return Math.min(j, WR_CARRIER_SEATS * Math.max(0, t));
+}
+// Fehlen dem Verband Träger für seine kleinen Jäger? Liefert die Zahlen, die der Picker
+// UND der Fehlertext brauchen. `ring` 0/1 → nie ein Problem.
+function wrCarrierGap(fleet, ring) {
+  const j = parseInt((fleet || {}).jaeger,  10) || 0;
+  const t = parseInt((fleet || {}).traeger, 10) || 0;
+  const cap = WR_CARRIER_SEATS * t;
+  const need = Math.ceil(j / WR_CARRIER_SEATS);
+  return { blocked: (ring || 0) >= WR_CARRIER_RING && j > cap,
+           jaeger: j, carrier: t, capacity: cap, need, missing: Math.max(0, need - t) };
+}
 function wrFleetShield(fleet) {
   let w = 0, sh = 0;
+  // 🛩️ 26m: die an Bord genommenen Jäger zählen mit dem Schild des TRÄGERS (0,30)
+  // statt mit ihrem eigenen (0,00). Spiegel von _space_fleet_shield: dort wird die
+  // Jäger-Zeile um `seats × atk` gekürzt und per UNION ALL mit dem Träger-Schild
+  // wieder eingehängt. Das Gesamtgewicht bleibt dadurch identisch.
+  const seats  = wrCarrierSeats(fleet);
+  const jAtk   = SPACE_SHIP_BY_KEY.jaeger?.atk || 0;
+  const tShield = (SPACE_ROLES.traeger && SPACE_ROLES.traeger.shield) || 0;
   for (const [k, n] of Object.entries(fleet || {})) {
     const s = SPACE_SHIP_BY_KEY[k]; if (!s) continue;
-    const p = (parseInt(n, 10) || 0) * (s.atk || 0);
+    let p = (parseInt(n, 10) || 0) * (s.atk || 0);
+    if (k === 'jaeger') p -= seats * jAtk;    // der geschützte Anteil kommt unten dazu
     w += p; sh += p * ((SPACE_ROLES[k] && SPACE_ROLES[k].shield) || 0);
   }
+  w += seats * jAtk; sh += seats * jAtk * tShield;
   return Math.min(0.4, w > 0 ? sh / w : 0);
 }
 // Effektive Gegnerstärke gegen den eigenen Mix — spiegelbildlich.
@@ -338,17 +451,70 @@ const SPACE_PORT = [
   { level: 2, slots: 4, cc: 5000,  erz: 60,  kristall: 0  },
   { level: 3, slots: 6, cc: 15000, erz: 200, kristall: 50 },
 ];
+// ⚠️ Spiegel von _space_turret_base in migration_2026-07-26k. `needs` = Forschung, die
+// den Typ freischaltet (26k) — der Neubau ist ohne sie gesperrt, ein BESTEHENDES Geschütz
+// bleibt aber nutz- und aufrüstbar. Bei Balance-Änderungen IMMER beide Seiten.
+// ⚠️ BILDER (JP 2026-07-29): die Geschütze zeigen die FORSCHUNGS-Renders aus
+// `assets/weltraum/`, nicht mehr die `space/turret_*`-Charge. Grund: wir erforschen
+// Railgun/Koffein-Laser/Plasma-Kanone/Singularität mit eigenen, sehr unterschiedlichen
+// Bildern — die space-Charge vom 21.07. sieht dagegen bei allen vier gleich aus (dieselbe
+// braune Standard-Kanone), im Browser wirkte der ganze Ausbau dadurch wie ein Fehler.
+// Deshalb trägt jeder Typ jetzt seinen eigenen `folder`; gerendert wird zentral über
+// wrTurretImg(), nicht mehr an fünf Stellen mit fest verdrahtetem `assets/space/`.
 const SPACE_TURRETS = [
-  { key:'railgun',     art:'turret_railgun',     icon:'🔩', name:'Railgun',       atk:15,  cc:800,  erz:10,  kristall:0,  minPort:1,
+  { key:'railgun',     art:'wt1_railgun',        folder:'weltraum', icon:'🔩', name:'Railgun',       atk:20,  cc:800,   erz:10,  kristall:0,   plasmoid:0,  minPort:1, needs:null,
     desc:'Solides Standardgeschütz — billig und sofort verfügbar' },
-  { key:'laser',       art:'turret_laser',       icon:'⚡', name:'Laserbatterie', atk:30,  cc:1600, erz:25,  kristall:0,  minPort:1,
+  { key:'laser',       art:'wt2_koffein_laser',  folder:'weltraum', icon:'⚡', name:'Laserbatterie', atk:45,  cc:1600,  erz:25,  kristall:0,   plasmoid:0,  minPort:1, needs:'wt_b2',
     desc:'Doppelte Feuerkraft, immer noch ohne Kristall' },
-  { key:'plasma',      art:'turret_plasma',      icon:'🔥', name:'Plasmawerfer',  atk:60,  cc:3200, erz:50,  kristall:10, minPort:2,
+  { key:'plasma',      art:'wt3_plasma_kanone',  folder:'weltraum', icon:'🔥', name:'Plasmawerfer',  atk:85,  cc:3200,  erz:50,  kristall:10,  plasmoid:0,  minPort:2, needs:'wt_b3',
     desc:'Braucht einen ausgebauten Hafen und Koffeinkristall' },
-  { key:'singularity', art:'turret_singularity', icon:'🌀', name:'Singularität',  atk:120, cc:6400, erz:100, kristall:30, minPort:3,
-    desc:'Die schwerste Verteidigung — nur am Vollausbau' },
+  { key:'singularity', art:'wt5_singularitaet',  folder:'weltraum', icon:'🌀', name:'Singularität',  atk:130, cc:6400,  erz:100, kristall:30,  plasmoid:0,  minPort:3, needs:'wt_b5',
+    desc:'Schwere Standardverteidigung — nur am Vollausbau' },
+  // NEU (26k): die beiden Geschütze, die der Forschungsbaum längst versprach —
+  // wt_e2 „Neues Geschütz atk 200", wt_f1 „Neues Geschütz atk 320".
+  { key:'resonanz',     art:'wt6_resonanz_geschuetz', folder:'weltraum', icon:'💜', name:'Resonanz-Geschütz', atk:200, cc:14000, erz:180, kristall:60,  plasmoid:15, minPort:3, needs:'wt_e2',
+    desc:'Plasmoid-Resonanz zerreisst Rümpfe auf Distanz — die erste echte Festungswaffe' },
+  // ⚠️ UMBENANNT 2026-07-29 (JP): hieß „Quanten-Lanze" und zeigte einen schlanken Speer.
+  // „Lanze ist lächerlich in diesem Zusammenhang, sind ja keine Amazonen, die hier
+  // kämpfen" — es ist eine Festungswaffe, also ein GESCHÜTZ. Der SCHLÜSSEL bleibt
+  // `quantenlanze` (er steckt server- und spielerseitig in `base.turrets`; ein
+  // Key-Wechsel hätte bestehende Bauplätze still entwertet — dieselbe Regel wie beim
+  // Kreuzer/Bomber-Namenstausch vom 22.07.). Nur der Anzeigename wechselt.
+  // Das Bild `wt7_quanten_lanze.png` wird durch ein Geschütz-Render ersetzt
+  // (Prompt: plans/PROMPT_quanten_geschuetz.md) — es dient Forschung UND Bauplatz.
+  { key:'quantenlanze', art:'wt7_quanten_lanze', folder:'weltraum', icon:'🌠', name:'Quanten-Geschütz',  atk:320, cc:26000, erz:300, kristall:110, plasmoid:40, minPort:3, needs:'wt_f1',
+    desc:'Gebündelter Quantenschaum: die stärkste Verteidigung, die gebaut werden kann' },
 ];
 const SPACE_TURRET_BY_KEY = SPACE_TURRETS.reduce((m, t) => (m[t.key] = t, m), {});
+// Ordner eines Geschütz-Bildes. Fällt auf 'space' zurück, damit ein neuer Typ ohne
+// `folder` nicht ins Leere zeigt.
+function wrTurretFolder(t) { return (t && t.folder) || 'space'; }
+// ⬆️ Umrüst-Knopf — EIN Bauplan für Hafen und Kolonie (JP-Meldung 2026-07-29:
+// „Fehler in der Darstellung", Screenshots in reference/).
+// ⚠️ URSACHE des Fehlers, damit er nicht zurückkommt: der Rabatt stand in einem
+// `<span class="wr-ok">`. `.wr-ok` ist aber ein BLOCK-Kasten für Statusmeldungen —
+// mit Rahmen, 8/10 px Polsterung und `margin-bottom:10px`. In einem `.wr-btn`
+// (`display:inline-flex; flex-direction:column; align-items:center`) hat dieser Kasten
+// die Zeilen darüber und darunter überlappt: Name durchgestrichen, Preis doppelt.
+// MERKE: Meldungs-Klassen (`wr-ok`, `wr-warn`, `wr-bad` als Kasten) NIE in einen Button
+// verschachteln — dort gehören reine Inline-Spans hin.
+// Jede Angabe steht jetzt in ihrer eigenen Zeile, damit auch lange Namen wie
+// „Resonanz-Geschütz" nichts verschieben.
+function wrConvBtnHtml(val, attr, ziel, preis, bezahlbar, preisTxt) {
+  return `<button class="wr-btn wr-btn-sm wr-btn-conv" ${attr}="${val}" ${bezahlbar ? '' : 'disabled'}>
+    <span class="wr-conv-name">⬆️ ${_wrEsc(ziel.name)}</span>
+    <span class="wr-conv-line">${preisTxt}</span>
+    ${preis.rebate > 0 ? `<span class="wr-conv-save">−${wrFmt(preis.rebate)} CC angerechnet</span>` : ''}
+    <span class="wr-conv-line">→ 🛡️ ${wrFmt(preis.atk)} · zurück auf Stufe 1</span>
+  </button>`;
+}
+// Das <img>-Tag eines Geschützes — EINE Stelle für alle fünf Render-Orte (belegter und
+// freier Bauplatz, jeweils Hafen und Kolonie, plus Lightbox).
+function wrTurretImg(t) {
+  if (!t) return '';
+  return `<img src="assets/${wrTurretFolder(t)}/${t.art}.png" alt=""
+    onerror="this.parentNode.classList.add('wr-art-fail');this.remove()">`;
+}
 // Feuerkraft ×1 / ×1.6 / ×2.4 · Kosten des Ausbauschritts ×1 / ×1 / ×2 (Spiegel der SQL)
 const WR_TURRET_ATK_MULT  = [1, 1, 1.6, 2.4];
 const WR_TURRET_COST_MULT = [1, 1, 1,   2  ];
@@ -371,10 +537,20 @@ const SPACE_YARD = [
 // ⚠️ Spiegel von _space_wave_strength/_space_wave_tier in
 //    migration_2026-07-21c_weltraum_wellen.sql. Bei Balance-Änderungen BEIDE Seiten.
 // Die Welle skaliert mit dem Besitz (JP): wer expandiert, wird interessant.
-const WR_WAVE_BASE = 40, WR_WAVE_PER_PLANET = 20, WR_WAVE_PER_COLONY = 35;
+// 26k: kräftig angehoben, weil die Geschütze mit den neuen Typen bis ~10 000 reichen —
+// mit den alten Werten (40/20/35) wäre jede Welle ab Mittelbau bedeutungslos gewesen.
+// 15 Planeten + 8 Kolonien: 620 → 1 455.
+const WR_WAVE_BASE = 60, WR_WAVE_PER_PLANET = 45, WR_WAVE_PER_COLONY = 90;
+// Klassen-Mix der Angriffswellen — Spiegel von _space_wave_shares (21m, TEXT-Fassung).
+// Braucht die Wellen-Vorschau, um dieselbe Rollenrechnung wie resolve_space_wave zu machen.
+const WR_WAVE_SHARES = {
+  schwarm:      { light: 0.85, heavy: 0.15 },
+  kreuzer:      { light: 0.40, heavy: 0.60 },
+  mutterschiff: { light: 0.20, heavy: 0.80 },
+};
 const WR_WAVE_TIERS = [
-  { key:'mutterschiff', min:300, art:'foe_mutterschiff', icon:'🛰️', name:'Mutterschiff-Angriff' },
-  { key:'kreuzer',      min:150, art:'foe_kreuzer_feind', icon:'🚨', name:'Angriffskreuzer' },
+  { key:'mutterschiff', min:900, art:'foe_mutterschiff', icon:'🛰️', name:'Mutterschiff-Angriff' },
+  { key:'kreuzer',      min:400, art:'foe_kreuzer_feind', icon:'🚨', name:'Angriffskreuzer' },
   { key:'schwarm',      min:0,   art:'foe_schwarm',       icon:'🦟', name:'Schwarm-Angriff' },
 ];
 function wrWaveStrength(planets, colonies) {
@@ -477,6 +653,18 @@ let _wrClaiming = false;
 let _wrSelFleet = null;   // { shipKey: anzahl } — vom Spieler zusammengestellter Verband
 let _wrSelFor   = null;   // Planet/Quadrant, für den _wrSelFleet gilt (Wechsel → neu vorbelegen)
 let _wrSelPort  = null;   // Schiffszahl im Hafen beim letzten Abgleich (Übergang leer→voll)
+// Höchstzahl gleichzeitiger Verbände — Spiegel von _space_trips()/start_space_trip (26b).
+const WR_MAX_TRIPS = 5;
+// 📋 Flotten-Vorlage, die auf ihre Anwendung wartet. Eine per Klick geladene Vorlage darf
+// von wrSyncFleetSel NICHT sofort wieder mit der Vorbelegung überschrieben werden — und
+// der Picker existiert nur, solange ein Ziel gewählt ist. Deshalb parkt die Vorlage hier,
+// bis der Picker das nächste Mal rendert (Vorlage laden → Ziel wählen funktioniert damit
+// in beliebiger Reihenfolge).
+let _wrTplPending = null;
+let _wrTplName    = '';   // Eingabefeld „Auswahl merken" (überlebt das Neurendern)
+// 🏙️ Welche Kolonie ist im Raumhafen-Tab aufgeklappt? (26l — immer höchstens eine,
+// sonst wäre die Liste bei vielen Kolonien genauso lang wie vorher.)
+let _wrColOpen    = null;
 
 // Werft-Käufe werden gesammelt und als EINE Chat-Zeile gepostet. Wer zehn Jäger
 // hintereinander baut, soll den Chat nicht zehnmal fluten (Muster `_krSession`
@@ -504,7 +692,10 @@ function wrKristall(m)  { return Math.floor(parseFloat(wrSpace(m).kristall) || 0
 // SPIEGELT _space_res_ok() (SQL 26c) + die Abbau-Faktoren aus claim_space_arrival.
 const WR_RES_META = {
   erz:      { icon: '🪨', name: 'Erz',              art: 'res_erz',      mine: 1,   loot: 45, color: '#c89a5a' },
-  kristall: { icon: '💎', name: 'Koffeinkristall',  art: 'res_kristall', mine: 0.5, loot: 22, color: '#b98fe0' },
+  // ⚠️ Kristall war #b98fe0 (violett) und lag damit nur 22 Helligkeitsstufen neben dem
+  // Plasmoid — auf der Sternkarte praktisch nicht zu unterscheiden (JP 2026-07-29).
+  // Jetzt Eisblau, passend zum 💎. Die Legende in weltraum.css (.wr-dot-kri) MUSS mit.
+  kristall: { icon: '💎', name: 'Koffeinkristall',  art: 'res_kristall', mine: 0.5, loot: 22, color: '#7fd4ff' },
   plasmoid: { icon: '🟣', name: 'Plasmoiden-Staub', art: 'res_plasmoid', mine: 0.3, loot: 10, color: '#a24bd8' },
   quantum:  { icon: '🌀', name: 'Quantenschaum',    art: 'res_quantum',  mine: 0.2, loot: 5,  color: '#5fe0c0' },
 };
@@ -617,6 +808,26 @@ function wrDur(min) {
   const h = Math.floor(m / 60), r = m % 60;
   return r ? `${h} Std ${r} Min` : `${h} Std`;
 }
+// Zeitpunkt in der Zukunft benennen („Fr, 01.08., 14:10"). Eine reine Restdauer reicht
+// bei mehrtägigen Läufen nicht — JP wollte wissen, WANN etwas fertig ist, nicht nur „in
+// 3,3 Tagen". Über ~6 Tage hinaus verliert der Wochentag seinen Nutzen, dann nur Datum.
+function wrWhen(ts) {
+  const d = new Date(ts);
+  if (!Number.isFinite(d.getTime())) return '';
+  const weit = (ts - Date.now()) > 6 * 86400000;
+  try {
+    return d.toLocaleString('de-DE', weit
+      ? { day: '2-digit', month: '2-digit', year: '2-digit' }
+      : { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  } catch (e) { return d.toLocaleString(); }
+}
+// Tageszahl menschenlesbar: „3,3 Tage" / „18 Std" / „40 Min".
+function wrDays(days) {
+  const d = Math.max(0, days || 0);
+  if (d >= 1) return `${d.toFixed(1).replace('.', ',')} Tage`;
+  const h = d * 24;
+  return h >= 1 ? `${Math.round(h)} Std` : `${Math.max(1, Math.round(h * 60))} Min`;
+}
 
 // ── Bild-Cache für den Canvas ────────────────────────────────────────────────
 // Im HTML genügt `<img onerror>` als Emoji-Rückfall — auf dem Canvas geht das nicht,
@@ -655,7 +866,7 @@ function wrDrawImg(ctx, name, x, y, box) {
 // dort wird kein HTML gerendert (dafür gäbe es die [[s:key]]-Token).
 const WR_IC = { atk:'⚔️', def:'🛡️', mine:'🔨', time:'⏱️', erz:'🪨', kri:'💎',
   pla:'🟣', qua:'🌀',
-  fleet:'🚀', travel:'✈️', colony:'🪐', yard:'🏗️', salvage:'♻️', wreck:'💀',
+  fleet:'✈️', travel:'✈️', colony:'🪐', yard:'🏗️', salvage:'♻️', wreck:'💀',
   help:'🤝', yield:'📥', port:'🛰️' };
 // Beliebiges Asset in Icon-Größe — für Dinge, die kein ic_*-Symbol haben, aber ein
 // Portrait (Raumhafen, Werft). Gleiche Hülle wie wrIc, damit das CSS greift.
@@ -695,8 +906,17 @@ function wrIc(key) {
             : key === 'kri'  ? 'res_kristall'
             : key === 'pla'  ? 'res_plasmoid'      // Ring-2-Rohstoff (JP 2026-07-27)
             : key === 'qua'  ? 'res_quantum'       // Ring-3-Rohstoff
-            : key === 'yard' ? 'base_werft_1'
+            // JP 2026-07-29: `base_werft` (das stufenneutrale Blatt) statt `base_werft_1`.
+            // Inhaltlich identisch (byte-gleich), aber richtig: ein allgemeines Icon soll
+            // nicht die Stufe-1-Variante sein — die Stufenbilder base_werft_1..3 gehören
+            // ins Werft-Panel und in die Lightbox, wo die Stufe auch gemeint ist.
+            : key === 'yard' ? 'base_werft'
             : key === 'port' ? 'base_1'
+            // JP 2026-07-29: „Flotte" zeigt ic_travel statt ic_fleet — das flache
+            // Reise-Symbol ist bei 16 px besser erkennbar. (Zwischenstand war kurz das
+            // Große-Jäger-Render; verworfen, weil ein 3D-Render in Icon-Größe matscht —
+            // genau die Regel, die oben an wrIcArt steht.)
+            : key === 'fleet' ? 'ic_travel'
             : 'ic_' + key;
   const fb = WR_IC[key] || '•';
   // ⚠️ Der Emoji-Rückfall hängt NICHT mehr am CSS-Nachbarselektor `img + .wr-ic-fb`.
@@ -932,6 +1152,9 @@ async function wrLoadWaves(schedule) {
 let _wrTab = 'karte';
 const WR_TABS = [
   { key:'karte', icon:'🌌', name:'Karte' },
+  // 🛩️ Flotten (JP 2026-07-29): Verbände, Dauerernte und Bergung lagen vorher verstreut —
+  // die Reise-Karten über ALLEN Tabs, die Routen im Raumhafen. Jetzt an einem Ort.
+  { key:'flotten', icon:'🛩️', name:'Flotten' },
   { key:'hafen', icon:'🛰️', name:'Raumhafen' },
   { key:'werft', icon:'🏗️', name:'Werft' },
   { key:'tech',  icon:'🔬', name:'Forschung' },
@@ -962,7 +1185,7 @@ function wrRender() {
       </div>
       ${wrWaveHtml(m)}
       ${wrHelpCallsHtml(m)}
-      ${trips.map(t => wrTripHtml(m, t)).join('')}
+      ${wrTripStripHtml(m, trips)}
       <div class="wr-map-card"${_wrTab === 'karte' ? '' : ' hidden'}>
         <div class="wr-card-title">🌌 Sternkarte <span class="wr-sub">— geteilt mit deinem Kaffee-Clan</span></div>
         <div class="wr-canvas-wrap">
@@ -977,6 +1200,8 @@ function wrRender() {
           <span><i class="wr-dot wr-dot-fog"></i> Nebel</span>
           <span><i class="wr-dot wr-dot-erz"></i> 🪨 Erz</span>
           <span><i class="wr-dot wr-dot-kri"></i> 💎 Kristall</span>
+          <span><i class="wr-dot wr-dot-pla"></i> 🟣 Plasmoid</span>
+          <span><i class="wr-dot wr-dot-qua"></i> 🌀 Quantenschaum</span>
           <span><i class="wr-dot wr-dot-clear"></i> befreit</span>
           <span><i class="wr-dot wr-dot-colony"></i> Kolonie (Spielerfarbe · Ringe = Stufe)</span>
           <span>🛡️ Geschütze · 📡 Station</span>
@@ -984,12 +1209,12 @@ function wrRender() {
         </div>
       </div>
       <div id="wr-detail"${_wrTab === 'karte' ? '' : ' hidden'}>${wrDetailHtml(m)}</div>
+      <div${_wrTab === 'flotten' ? '' : ' hidden'}>${wrFlottenHtml(m, trips)}</div>
       <div${_wrTab === 'hafen' ? '' : ' hidden'}>
         ${wrHafenHtml(m)}
         ${WR_RES_NOTE}
         ${wrRaffinerieHtml(m)}
         ${wrColoniesHtml(m)}
-        ${wrRoutesHtml(m)}
       </div>
       <div${_wrTab === 'werft' ? '' : ' hidden'}>${wrWerftHtml(m)}</div>
       <div${_wrTab === 'tech'  ? '' : ' hidden'}>${wrTechHtml(m)}</div>
@@ -1362,6 +1587,113 @@ function wrTripHtml(m, trip) {
     </div>`;
 }
 
+// Kompakte Dauer-Leiste über den Tabs. Die vollen Reise-Karten sind in den 🛩️-Tab
+// gewandert (JP 2026-07-29), aber eine fällige Rückkehr darf NICHT hinter einem Tab
+// verschwinden — genau deshalb standen sie ursprünglich überall. Kompromiss: eine Zeile
+// je Verband mit Countdown, Klick springt in den Flotten-Tab.
+function wrTripStripHtml(m, trips) {
+  if (!trips || !trips.length) return '';
+  const now = Date.now();
+  const rows = trips.map(t => {
+    const ret    = Date.parse(t.returnAt);
+    const back   = now >= ret;
+    const target = (_wrGalaxy?.planets || []).find(p => p.id === t.planetId);
+    const info   = SPACE_INTENTS[t.intent] || { icon: '🚀', name: t.intent };
+    return `
+      <button type="button" class="wr-ts-row${back ? ' wr-ts-done' : ''}" data-wr-tab="flotten"
+        title="Im Flotten-Tab ansehen">
+        <span class="wr-ts-ic">${info.icon}</span>
+        <span class="wr-ts-txt">${_wrEsc(target?.name || info.name)}</span>
+        <span class="wr-ts-eta">${back
+          ? '📥 zurück'
+          : `<span data-wr-eta="${t.id}">${wrCountdown(ret - now)}</span>`}</span>
+      </button>`;
+  }).join('');
+  return `<div class="wr-tripstrip">${rows}</div>`;
+}
+
+// ── 🛩️ Flotten-Tab ──────────────────────────────────────────────────────────
+function wrFlottenHtml(m, trips) {
+  const list = trips || wrTrips(m);
+  const verbaende = list.length
+    ? list.map(t => wrTripHtml(m, t)).join('')
+    : `<div class="wr-sub" style="padding:6px 0">Kein Verband unterwegs — wähle auf der
+         🌌 Sternkarte ein Ziel und stelle deine Flotte zusammen.</div>`;
+  return `
+    <div class="wr-card">
+      <div class="wr-card-title">🛩️ Verbände unterwegs
+        <span class="wr-sub">${list.length} von ${WR_MAX_TRIPS} · jeder weitere startet mit
+          ${wrFleetGap(m)} Min Vorlauf</span></div>
+      ${verbaende}
+    </div>
+    ${wrFleetTemplatesHtml(m)}
+    ${wrHomeDetailHtml(m)}
+    ${wrRoutesHtml(m)}`;
+}
+
+// ── 📋 Flotten-Vorlagen (Backlog §8 „Flottenkommando") ──────────────────────
+// Benannte Zusammenstellungen, die per Klick in die Auswahl geladen werden.
+// Ablage in map_data.wrFleets über die bestehende save_map_data-RPC — kein Schema-Change
+// und im Gegensatz zu localStorage gerätübergreifend (Muster map_data.revier/todayLog).
+const WR_TPL_MAX = 8;
+function wrTemplates(m) {
+  const a = m?.map_data?.wrFleets;
+  return Array.isArray(a) ? a.filter(t => t && typeof t === 'object' && t.ships) : [];
+}
+// Wie viele Schiffe der Vorlage sind gerade wirklich da? Eine Vorlage soll nie blockieren —
+// sie lädt, was vorhanden ist, sagt aber vorher ehrlich, wie vollständig sie ist.
+function wrTplAvail(m, tpl) {
+  const ships = wrHomeShips(m);
+  let want = 0, have = 0;
+  for (const [k, n] of Object.entries(tpl.ships || {})) {
+    const w = parseInt(n, 10) || 0;
+    if (w <= 0) continue;
+    want += w;
+    have += Math.min(w, parseInt(ships[k], 10) || 0);
+  }
+  return { want, have, full: want > 0 && have >= want };
+}
+function wrFleetTemplatesHtml(m) {
+  const tpls = wrTemplates(m);
+  const sel  = _wrSelFleet || {};
+  const selN = SPACE_SHIPS.reduce((a, s) => a + (parseInt(sel[s.key], 10) || 0), 0);
+  const rows = tpls.map(t => {
+    const av = wrTplAvail(m, t);
+    const shipTxt = Object.entries(t.ships || {})
+      .filter(([, n]) => n > 0)
+      .map(([k, n]) => `${wrShipArt(k)} ${n}`).join(' · ') || '—';
+    return `
+      <div class="wr-tpl${av.full ? '' : ' wr-tpl-part'}">
+        <button type="button" class="wr-tpl-load" data-wr-tplload="${_wrEsc(t.id)}"
+          title="In die Flottenauswahl laden">
+          <span class="wr-tpl-name">${_wrEsc(t.name || 'Vorlage')}</span>
+          <span class="wr-tpl-ships">${shipTxt}</span>
+          <span class="wr-tpl-av${av.full ? ' wr-ok' : ' wr-bad'}">${av.full
+            ? `✓ ${av.want} Schiffe bereit`
+            : `${av.have} von ${av.want} verfügbar`}</span>
+        </button>
+        <button type="button" class="wr-btn wr-btn-sm wr-tpl-del" data-wr-tpldel="${_wrEsc(t.id)}"
+          title="Vorlage löschen">🗑️</button>
+      </div>`;
+  }).join('');
+  return `
+    <div class="wr-card">
+      <div class="wr-card-title">📋 Flottenkommando
+        <span class="wr-sub">— gespeicherte Zusammenstellungen, ${tpls.length} von ${WR_TPL_MAX}</span></div>
+      ${tpls.length ? `<div class="wr-tpl-list">${rows}</div>`
+        : `<div class="wr-sub" style="padding:4px 0">Noch keine Vorlage. Stell auf der 🌌 Sternkarte
+             einen Verband zusammen und sichere ihn hier — dann lädst du ihn künftig mit einem Klick.</div>`}
+      <div class="wr-tpl-new">
+        <input type="text" id="wr-tpl-name" class="wr-tpl-input" maxlength="24"
+          placeholder="Name, z. B. Sturmverband" value="${_wrEsc(_wrTplName)}">
+        <button class="wr-btn wr-btn-sm" id="wr-tpl-save" ${(selN < 1 || tpls.length >= WR_TPL_MAX) ? 'disabled' : ''}
+          >➕ Auswahl merken${selN > 0 ? ` <span class="wr-btn-sub">${selN} Schiffe</span>` : ''}</button>
+      </div>
+      ${selN < 1 ? '<div class="wr-sub">Die aktuelle Auswahl ist leer — es gibt nichts zu merken.</div>' : ''}
+      ${tpls.length >= WR_TPL_MAX ? `<div class="wr-warn">Höchstens ${WR_TPL_MAX} Vorlagen. Lösch erst eine.</div>` : ''}
+    </div>`;
+}
+
 // ── Flottenverband zusammenstellen ──────────────────────────────────────────
 // Vorher flog bei „Angreifen" stur die GESAMTE Heimatflotte mit — inklusive Röstkometen
 // und Sonden, die im Kampf mit derselben Quote verheizt wurden wie die Jäger. Jetzt stellt
@@ -1387,7 +1719,13 @@ function wrSyncFleetSel(m) {
   // danach neu und würde die Auswahl sofort wieder auffüllen.
   const returned = _wrSelPort === 0 && inPort > 0;
   _wrSelPort = inPort;
-  if (key !== _wrSelFor || returned) {
+  if (_wrTplPending) {
+    // 📋 Eine geladene Vorlage schlägt jede Vorbelegung — sonst wäre sie beim ersten
+    // Zielwechsel wieder weg. Sie gilt genau einmal; danach zählt wieder die Auswahl.
+    _wrSelFor    = key;
+    _wrSelFleet  = Object.assign({}, _wrTplPending);
+    _wrTplPending = null;
+  } else if (key !== _wrSelFor || returned) {
     _wrSelFor   = key;
     _wrSelFleet = Object.assign({}, wrFleetFor(wrDefaultIntent(m), m));
   }
@@ -1476,8 +1814,100 @@ function wrFleetPickerHtml(m) {
               + `Kanonenfutter — Verluste treffen kleine Schiffe zuerst. Für den Angriff besser draußen lassen.</span>`
             : '';
         })()}
+        ${(() => {
+          // 🛩️ RING-GATE (26m). Es gibt bewusst KEIN What's-New-Popup (JP-Entscheidung,
+          // Plan §11) — diese Zeile IST die Erklärung der neuen Regel. Sie muss deshalb
+          // vollständig sein: was fehlt, wie viele Träger es braucht, und dass große
+          // Jäger nicht betroffen sind. Der Server lehnt sonst mit jaeger_need_carrier ab.
+          const ring = _wrSel?.planet?.ring ?? _wrSel?.q?.ring ?? 0;
+          const g = wrCarrierGap(wrSyncFleetSel(m), ring);
+          if (!g.blocked) {
+            // Positiv-Rückmeldung, wenn Jäger tatsächlich an Bord sitzen — sonst merkt
+            // niemand, dass der Träger gerade etwas tut.
+            const seats = wrCarrierSeats(wrSyncFleetSel(m));
+            return seats > 0
+              ? `<span class="wr-good" style="flex-basis:100%">🛩️ ${wrFmt(seats)} Jäger an Bord `
+                + `— sie fliegen geschützt mit (Schild des Trägers statt eigenem).</span>`
+              : '';
+          }
+          return `<span class="wr-bad" style="flex-basis:100%">🛩️ <strong>Ring ${ring} nicht erreichbar:</strong> `
+               + `${wrFmt(g.jaeger)} kleine Jäger, aber nur Platz für ${wrFmt(g.capacity)}. `
+               + `Je ${WR_CARRIER_SEATS} Jäger braucht es ein Trägerschiff — `
+               + `${g.missing === 1 ? 'es fehlt <strong>1 Träger</strong>' : `es fehlen <strong>${wrFmt(g.missing)} Träger</strong>`}. `
+               + `(Große Jäger fliegen überall hin.)</span>`;
+        })()}
       </div>
     </div>`;
+}
+
+// ── Vorlagen speichern / laden / löschen ────────────────────────────────────
+// ⚠️ Schreiben läuft über DB.updateMapData (save_map_data-RPC), NIE per direktem
+// .update() — das hatte beim Karten-Feature 401er wegen RLS gegeben. Und: immer den
+// FRISCHEN map_data-Stand als Basis nehmen, sonst überschreibt ein Vorlagen-Save
+// nebenbei den Tages-Log (Last-Write-Wins auf dem Blob, die Tagesbilanz-Lehre).
+async function wrTplPersist(list) {
+  const m = _wrMember;
+  if (!m) return false;
+  const md = Object.assign({}, m.map_data || {}, { wrFleets: list });
+  try {
+    await DB.updateMapData(m.id, md);
+    m.map_data = md;
+    if (typeof currentUserData !== 'undefined' && currentUserData) currentUserData.map_data = md;
+    return true;
+  } catch (e) {
+    wrToast('Vorlage konnte nicht gespeichert werden: ' + e.message, 'error');
+    return false;
+  }
+}
+
+async function wrTplSave() {
+  const m = _wrMember;
+  const sel = {};
+  let n = 0;
+  for (const s of SPACE_SHIPS) {
+    const c = parseInt(_wrSelFleet?.[s.key], 10) || 0;
+    if (c > 0) { sel[s.key] = c; n += c; }
+  }
+  if (n < 1) { wrToast('Stell zuerst auf der Sternkarte einen Verband zusammen.', 'error'); return; }
+  const list = wrTemplates(m);
+  if (list.length >= WR_TPL_MAX) { wrToast(`Höchstens ${WR_TPL_MAX} Vorlagen.`, 'error'); return; }
+  const input = document.getElementById('wr-tpl-name');
+  const name  = String((input && input.value) || _wrTplName || '').trim().slice(0, 24)
+             || `Verband ${list.length + 1}`;
+  const tpl = { id: 'f' + Date.now().toString(36), name, ships: sel };
+  if (!(await wrTplPersist(list.concat([tpl])))) return;
+  _wrTplName = '';
+  wrToast(`📋 „${name}" gespeichert — ${n} Schiffe.`, 'success');
+  wrRender();
+}
+
+function wrTplLoad(id) {
+  const tpl = wrTemplates(_wrMember).find(t => t.id === id);
+  if (!tpl) return;
+  _wrTplPending = Object.assign({}, tpl.ships);
+  const av = wrTplAvail(_wrMember, tpl);
+  // Auf der Karte greift die Vorlage sofort; ohne gewähltes Ziel wartet sie.
+  if (_wrSel) {
+    _wrSelFor = null;              // erzwingt die Übernahme im nächsten wrSyncFleetSel
+    wrSetTab('karte');
+    wrRender();
+  } else {
+    wrSetTab('karte');
+    wrRender();
+  }
+  wrToast(av.full
+    ? `📋 „${tpl.name}" geladen — ${av.want} Schiffe. Wähle ein Ziel.`
+    : `📋 „${tpl.name}" geladen — nur ${av.have} von ${av.want} Schiffen im Hafen.`,
+    av.full ? 'success' : 'info');
+}
+
+async function wrTplDelete(id) {
+  const list = wrTemplates(_wrMember);
+  const tpl  = list.find(t => t.id === id);
+  if (!tpl) return;
+  if (!(await wrTplPersist(list.filter(t => t.id !== id)))) return;
+  wrToast(`🗑️ „${tpl.name}" gelöscht.`, 'info');
+  wrRender();
 }
 
 // Schnellauswahl-Presets
@@ -1544,7 +1974,7 @@ function wrHomeDetailHtml(m) {
         ? `<div class="wr-fl-list">${rows}</div>`
         : '<div class="wr-warn">Noch kein Schiff gebaut — schau in der Werft weiter unten.</div>'}
       ${nTrips
-        ? `<div class="wr-ok">✈️ ${nTrips === 1 ? 'Ein Verband ist' : nTrips + ' Verbände sind'} unterwegs (max. 5 gleichzeitig) — Details oben in den Reise-Karten.</div>`
+        ? `<div class="wr-ok">✈️ ${nTrips === 1 ? 'Ein Verband ist' : nTrips + ' Verbände sind'} unterwegs (max. ${WR_MAX_TRIPS} gleichzeitig) — Details bei den Verbänden.</div>`
         : '<div class="wr-sub">Wähle einen Quadranten auf der Sternkarte, um eine Flotte auszusenden.</div>'}
     </div>`;
 }
@@ -1690,21 +2120,25 @@ async function wrBuyTech(key) {
 // Stufe = höchste besessene Ast-d-Forschung. WR_REFINE SPIEGELT _space_refine_def()
 // (SQL 26a) — bei Änderung BEIDE Seiten + scratchpad/test_raffinerie.js. Kurse liegen
 // über dem Clan-Handelsboden (25/60). Zeitbasiert, Auto-Claim beim Tab-Öffnen.
+// 26o: 🟣 ab Stufe 3, 🌀 ab Stufe 4 verwertbar (JP 2026-07-29: „Leveln und dann kann man
+// das auch verwerten, falls man es mal über hat"). capPla/capQua = 0 heisst gesperrt —
+// die Sperre braucht keinen Sonderfall, LEAST klemmt server- wie clientseitig auf 0.
 const WR_REFINE = [
   null,
-  { capErz: 40,  capKri: 15,  hours: 6, rErz: 32, rKri: 80  },
-  { capErz: 80,  capKri: 30,  hours: 5, rErz: 34, rKri: 84  },
-  { capErz: 140, capKri: 55,  hours: 4, rErz: 36, rKri: 88  },
-  { capErz: 240, capKri: 100, hours: 3, rErz: 38, rKri: 92  },
-  { capErz: 400, capKri: 160, hours: 2, rErz: 42, rKri: 100 },
-  { capErz: 600, capKri: 260, hours: 1.5, rErz: 46, rKri: 110 },   // Stufe 6: wt_e13 Plasma-Raffinerie
+  { capErz: 40,  capKri: 15,  hours: 6,   rErz: 32, rKri: 80,  capPla: 0,  capQua: 0,  ratePla: 0,   rateQua: 0   },
+  { capErz: 80,  capKri: 30,  hours: 5,   rErz: 34, rKri: 84,  capPla: 0,  capQua: 0,  ratePla: 0,   rateQua: 0   },
+  { capErz: 140, capKri: 55,  hours: 4,   rErz: 36, rKri: 88,  capPla: 20, capQua: 0,  ratePla: 150, rateQua: 0   },
+  { capErz: 240, capKri: 100, hours: 3,   rErz: 38, rKri: 92,  capPla: 35, capQua: 12, ratePla: 170, rateQua: 280 },
+  { capErz: 400, capKri: 160, hours: 2,   rErz: 42, rKri: 100, capPla: 50, capQua: 25, ratePla: 190, rateQua: 340 },
+  // Stufe 6: wt_e13 Plasma-Raffinerie
+  { capErz: 600, capKri: 260, hours: 1.5, rErz: 46, rKri: 110, capPla: 80, capQua: 40, ratePla: 210, rateQua: 400 },
 ];
 function wrRefineTier(m) {
   if (wrHasTech(m, 'wt_e13')) return 6;
   for (let i = 5; i >= 1; i--) if (wrHasTech(m, 'wt_d' + i)) return i;
   return 0;
 }
-let _wrRefErz = 0, _wrRefKri = 0;
+let _wrRefErz = 0, _wrRefKri = 0, _wrRefPla = 0, _wrRefQua = 0;
 function wrRefineRemaining(readyAt) {
   const t = new Date(readyAt).getTime() - Date.now();
   if (!(t > 0)) return 'fertig';
@@ -1712,12 +2146,43 @@ function wrRefineRemaining(readyAt) {
   return h > 0 ? `${h} h ${min} min` : `${min} min`;
 }
 
+// Portrait als Zoom-Ziel statt des kleinen Icons im Titel (JP 2026-07-29: „das Raffinerie
+// Bild soll zoombar sein und das html icon raus"). Gleiches Muster wie Raumhafen/Station:
+// eigenes Klick-Ziel, damit kein verschachtelter Button entsteht.
+function wrRefineArt() {
+  return `<span class="wr-refine-art wr-ship-zoom" data-wr-rinfo="1" title="Groß ansehen">`
+       + `<img src="assets/space/base_raffinerie.png" alt=""`
+       + ` onerror="this.parentNode.classList.add('wr-art-fail');this.remove()">`
+       + `<span class="wr-refine-fb">🏭</span><span class="wr-zoom-hint">🔍</span></span>`;
+}
+function wrRefineLightbox() {
+  const m = _wrMember;
+  const tier = wrRefineTier(m);
+  const def = WR_REFINE[Math.max(1, tier)];
+  wrArtLightbox('base_raffinerie', '🏭', 'Raffinerie',
+    'Erz und Koffeinkristall werden im Batch zu CoffeeCoins veredelt: beladen, warten, abholen. '
+  + 'Jede Ausbaustufe im Ast 🏭 Raffinerie & Logistik erhöht Chargengröße, Tempo und Kurs.', [
+    ['🔬 Stufe', tier < 1 ? 'nicht erforscht' : `${tier} von 6`],
+    [`${wrIc('time')} Laufzeit`, tier < 1 ? '—' : `${def.hours} h je Charge`],
+    ['💰 Kurs', tier < 1 ? '—' : `${def.rErz} CC/🪨 · ${def.rKri} CC/💎`],
+    ['📦 Charge max', tier < 1 ? '—' : `${wrFmt(def.capErz)} 🪨 / ${wrFmt(def.capKri)} 💎`],
+    // 26o: die Ring-Rohstoffe als eigene Zeile — sonst fällt gar nicht auf, dass eine
+    // höhere Stufe sie freischaltet.
+    ['🟣🌀 Ring-Rohstoffe', tier < 1 ? '—'
+      : [def.ratePla ? `${def.ratePla} CC/🟣 (max ${wrFmt(def.capPla)})` : '🟣 ab Stufe 3',
+         def.rateQua ? `${def.rateQua} CC/🌀 (max ${wrFmt(def.capQua)})` : '🌀 ab Stufe 4'].join(' · ')],
+  ]);
+}
+
 function wrRaffinerieHtml(m) {
   const tier = wrRefineTier(m);
   if (tier < 1) {
     return `<div class="wr-card wr-refine">
-      <div class="wr-card-title"><img class="wr-refine-ic" src="assets/space/base_raffinerie.png" alt="" onerror="this.remove()">🏭 Raffinerie <span class="wr-sub">— Rohstoffe zu CC veredeln</span></div>
-      <p class="wr-sub" style="padding:6px 0">🔒 Erforsche zuerst <strong>Raffinerie</strong> (Forschung → Ast 🏭 Raffinerie &amp; Logistik). Jede weitere Ausbaustufe erhöht Menge, Tempo und Kurs.</p>
+      <div class="wr-card-title">🏭 Raffinerie <span class="wr-sub">— Rohstoffe zu CC veredeln</span></div>
+      <div class="wr-refine-head">
+        ${wrRefineArt()}
+        <p class="wr-sub">🔒 Erforsche zuerst <strong>Raffinerie</strong> (Forschung → Ast 🏭 Raffinerie &amp; Logistik). Jede weitere Ausbaustufe erhöht Menge, Tempo und Kurs.</p>
+      </div>
     </div>`;
   }
   const def = WR_REFINE[tier];
@@ -1725,22 +2190,34 @@ function wrRaffinerieHtml(m) {
   let body;
   if (r && Object.keys(r).length) {
     const ready = new Date(r.readyAt).getTime() <= Date.now();
+    // 26o: die Charge kann jetzt vier Rohstoffe enthalten. Nur zeigen, was drin ist —
+    // „0 🟣" in jeder Charge wäre Rauschen.
+    const inhalt = [`${wrFmt(r.erz)} 🪨`, `${wrFmt(r.kristall)} 💎`]
+      .concat((r.plasmoid || 0) > 0 ? [`${wrFmt(r.plasmoid)} 🟣`] : [])
+      .concat((r.quantum  || 0) > 0 ? [`${wrFmt(r.quantum)} 🌀`]  : []).join(' · ');
     body = ready
       ? `<div class="wr-refine-done">
-           <div class="wr-ok">✅ Charge fertig — <strong>${wrFmt(r.cc)} CC</strong> aus ${wrFmt(r.erz)} 🪨 · ${wrFmt(r.kristall)} 💎</div>
+           <div class="wr-ok">✅ Charge fertig — <strong>${wrFmt(r.cc)} CC</strong> aus ${inhalt}</div>
            <button class="wr-btn wr-btn-go" id="wr-refine-claim">CC abholen</button>
          </div>`
       : `<div class="wr-refine-run">
            <div>⚙️ Läuft — <strong>${wrFmt(r.cc)} CC</strong> in <strong>${wrRefineRemaining(r.readyAt)}</strong></div>
-           <div class="wr-sub">verarbeitet ${wrFmt(r.erz)} 🪨 · ${wrFmt(r.kristall)} 💎</div>
+           <div class="wr-sub">verarbeitet ${inhalt}</div>
          </div>`;
   } else {
     const maxE = Math.min(def.capErz, wrErz(m));
     const maxK = Math.min(def.capKri, wrKristall(m));
+    // 26o: bei gesperrter Stufe ist capPla/capQua = 0 → maxP/maxQ = 0 → die Auswahl kann
+    // gar nicht hochgezählt werden. Genau dieselbe Klemmung rechnet refine_start.
+    const maxP = Math.min(def.capPla || 0, wrPlasmoid(m));
+    const maxQ = Math.min(def.capQua || 0, wrQuantum(m));
     _wrRefErz = Math.max(0, Math.min(_wrRefErz, maxE));
     _wrRefKri = Math.max(0, Math.min(_wrRefKri, maxK));
-    const cc = Math.round(_wrRefErz * def.rErz + _wrRefKri * def.rKri);
-    const canStart = (_wrRefErz + _wrRefKri) > 0;
+    _wrRefPla = Math.max(0, Math.min(_wrRefPla, maxP));
+    _wrRefQua = Math.max(0, Math.min(_wrRefQua, maxQ));
+    const cc = Math.round(_wrRefErz * def.rErz + _wrRefKri * def.rKri
+                        + _wrRefPla * (def.ratePla || 0) + _wrRefQua * (def.rateQua || 0));
+    const canStart = (_wrRefErz + _wrRefKri + _wrRefPla + _wrRefQua) > 0;
     body = `
       <div class="wr-refine-row">
         <span>🪨 Erz <strong>${wrFmt(_wrRefErz)}</strong> <span class="wr-sub">/ ${wrFmt(maxE)}</span></span>
@@ -1758,27 +2235,50 @@ function wrRaffinerieHtml(m) {
           <button class="wr-btn wr-btn-sm" data-wr-refadj="kri:max" ${_wrRefKri >= maxK ? 'disabled' : ''}>Max</button>
         </span>
       </div>
+      ${(() => {
+        // 🟣🌀 26o: Ring-Rohstoffe verwerten. Die Zeile erscheint erst, wenn die Stufe sie
+        // freigibt (capPla/capQua > 0) — vorher steht stattdessen EIN Hinweis, ab welcher
+        // Stufe es losgeht. Ohne den Hinweis wäre nicht erkennbar, dass es das Feature gibt.
+        const gesperrt = [];
+        if (def.capPla <= 0) gesperrt.push('🟣 ab Stufe 3');
+        if (def.capQua <= 0) gesperrt.push('🌀 ab Stufe 4');
+        const zeile = (ic, name, val, max, key, step) => `
+          <div class="wr-refine-row">
+            <span>${ic} ${name} <strong>${wrFmt(val)}</strong> <span class="wr-sub">/ ${wrFmt(max)}</span></span>
+            <span class="wr-refine-adj">
+              <button class="wr-btn wr-btn-sm" data-wr-refadj="${key}:-${step}" ${val <= 0 ? 'disabled' : ''}>−${step}</button>
+              <button class="wr-btn wr-btn-sm" data-wr-refadj="${key}:${step}" ${val >= max ? 'disabled' : ''}>+${step}</button>
+              <button class="wr-btn wr-btn-sm" data-wr-refadj="${key}:max" ${val >= max ? 'disabled' : ''}>Max</button>
+            </span>
+          </div>`;
+        return (def.capPla > 0 ? zeile('🟣', 'Plasmoid', _wrRefPla, maxP, 'pla', 5) : '')
+             + (def.capQua > 0 ? zeile('🌀', 'Quantenschaum', _wrRefQua, maxQ, 'qua', 2) : '')
+             + (gesperrt.length ? `<p class="wr-sub" style="margin:2px 0 0">🔒 Ring-Rohstoffe verwerten: ${gesperrt.join(' · ')} (Ast 🏭 weiter ausbauen)</p>` : '');
+      })()}
       <div class="wr-refine-sum">
         <span>Ertrag: <strong>${wrFmt(cc)} CC</strong> in ${def.hours} h</span>
         <button class="wr-btn wr-btn-go" id="wr-refine-start" ${canStart ? '' : 'disabled'}>Verarbeiten starten</button>
       </div>
-      <p class="wr-sub" style="margin:4px 0 0">Stufe ${tier} · Kurs ${def.rErz} CC/🪨 · ${def.rKri} CC/💎 · max ${wrFmt(def.capErz)} 🪨 / ${wrFmt(def.capKri)} 💎 je Charge</p>`;
+      <p class="wr-sub" style="margin:4px 0 0">Stufe ${tier} · Kurs ${def.rErz} CC/🪨 · ${def.rKri} CC/💎${
+        def.ratePla ? ` · ${def.ratePla} CC/🟣` : ''}${def.rateQua ? ` · ${def.rateQua} CC/🌀` : ''
+        } · max ${wrFmt(def.capErz)} 🪨 / ${wrFmt(def.capKri)} 💎${
+        def.capPla ? ` / ${wrFmt(def.capPla)} 🟣` : ''}${def.capQua ? ` / ${wrFmt(def.capQua)} 🌀` : ''} je Charge</p>`;
   }
   return `<div class="wr-card wr-refine">
-    <div class="wr-card-title"><img class="wr-refine-ic" src="assets/space/base_raffinerie.png" alt="" onerror="this.remove()">🏭 Raffinerie <span class="wr-sub">— Rohstoffe zu CC (Stufe ${tier})</span></div>
-    ${body}
+    <div class="wr-card-title">🏭 Raffinerie <span class="wr-sub">— Rohstoffe zu CC (Stufe ${tier})</span></div>
+    <div class="wr-refine-head">${wrRefineArt()}<div class="wr-refine-body">${body}</div></div>
   </div>`;
 }
 
 async function wrRefineStart() {
   if (_wrBusy) return;
-  if ((_wrRefErz + _wrRefKri) <= 0) return;
+  if ((_wrRefErz + _wrRefKri + _wrRefPla + _wrRefQua) <= 0) return;
   _wrBusy = true;
   try {
-    const res = await DB.refineStart(_wrMember.id, _wrRefErz, _wrRefKri);
+    const res = await DB.refineStart(_wrMember.id, _wrRefErz, _wrRefKri, _wrRefPla, _wrRefQua);
     if (!res || res.error) { wrToast(wrErrText(res?.error), 'error'); return; }
     if (res.space) wrApplySpace(res.space);
-    _wrRefErz = 0; _wrRefKri = 0;
+    _wrRefErz = 0; _wrRefKri = 0; _wrRefPla = 0; _wrRefQua = 0;
     wrToast(`🏭 Verarbeitung gestartet — ${wrFmt(res.cc)} CC in ${res.hours} h.`, 'success');
     wrRender();
   } catch (e) {
@@ -1841,6 +2341,9 @@ function wrDetailHtml(m) {
     const nAway    = wrTrips(m).length;
     const busy     = nAway >= 5;
     const min = q.ring * SPACE_MIN_PER_RING;
+    // 🛩️ 26m: das Ring-Gate gilt für JEDEN Start, auch für die Aufklärung — wer der
+    // Sonde Jäger als Geleit mitgibt, läuft sonst hier in den Serverfehler.
+    const gate = wrCarrierGap(sel, q.ring);
     return `
       <div class="wr-detail">
         <div class="wr-card-title">🌫️ Unerforschter Quadrant <span class="wr-sub">${_wrEsc(q.key)} · Ring ${q.ring}</span></div>
@@ -1857,7 +2360,7 @@ function wrDetailHtml(m) {
         ${busy
           ? '<div class="wr-warn">Maximal 5 Flotten gleichzeitig unterwegs — warte, bis eine zurückkehrt.</div>'
           : (canScout && sonden < 1 ? '<div class="wr-warn">Für die Aufklärung muss mindestens eine 🛰️ Bohnen-Sonde im Verband sein.</div>' : '')}
-        <button class="wr-btn wr-btn-go" data-wr-send="scout" ${(!canScout || sonden < 1 || busy) ? 'disabled' : ''}>
+        <button class="wr-btn wr-btn-go" data-wr-send="scout" ${(!canScout || sonden < 1 || busy || gate.blocked) ? 'disabled' : ''}>
           🛰️ Verband entsenden</button>
       </div>`;
   }
@@ -1888,6 +2391,10 @@ function wrDetailHtml(m) {
   // Seit 21j laufen Rollen mit: wrBattlePreview spiegelt claim_space_arrival exakt.
   const bp      = wrBattlePreview(sel, p);
   const lossPct = cleared ? 0 : bp.loss;
+  // 🛩️ 26m Ring-Gate: sperrt ALLE drei Aktionen (Angriff, Abbau, Kolonisieren) — sie
+  // laufen alle über start_space_trip, und die Prüfung sitzt dort vor dem Treibstoff.
+  // Die Begründung steht im Picker (wrFleetPickerHtml), damit sie am Regler klebt.
+  const gate    = wrCarrierGap(sel, p.ring);
 
   return `
     <div class="wr-detail">
@@ -1931,11 +2438,11 @@ function wrDetailHtml(m) {
             ((Hafen + Planeten-Deckung) × Tech-Faktor), sonst verspricht die Vorschau zu wenig. */''}
       ${busy ? '' : wrAmbushHint(p.ring, power, wrTurretPower(m) + wrPlanetCover(p, m) * wrTechTurret(m))}
       <div class="wr-actions">
-        ${!cleared ? `<button class="wr-btn wr-btn-go" data-wr-send="attack" ${(busy || jaeger < 1) ? 'disabled' : ''}>
+        ${!cleared ? `<button class="wr-btn wr-btn-go" data-wr-send="attack" ${(busy || jaeger < 1 || gate.blocked) ? 'disabled' : ''}>
             ⚔️ Angreifen <span class="wr-btn-sub">⚔️ ${wrFmt(power)} Kampfkraft</span></button>` : ''}
-        ${cleared ? `<button class="wr-btn" data-wr-send="harvest" ${(busy || ernter < 1) ? 'disabled' : ''}>
+        ${cleared ? `<button class="wr-btn" data-wr-send="harvest" ${(busy || ernter < 1 || gate.blocked) ? 'disabled' : ''}>
             ${wrIc("mine")} Abbauen <span class="wr-btn-sub">${resGated ? '🔒 Abbau-Tech fehlt' : `≈ ${wrFmt(Math.round(ernter * p.richness * resMeta.mine))} ${resIcon}`}</span></button>` : ''}
-        ${cleared && !colon ? `<button class="wr-btn" data-wr-send="colonize" ${(busy || kolo < 1) ? 'disabled' : ''}>
+        ${cleared && !colon ? `<button class="wr-btn" data-wr-send="colonize" ${(busy || kolo < 1 || gate.blocked) ? 'disabled' : ''}>
             🛸 Kolonisieren <span class="wr-btn-sub">Schiff bleibt dort · dauerhaft ~${wrFmt(Math.round(p.richness * 3 * resMeta.mine))} ${resIcon}/Tag</span></button>` : ''}
       </div>
       ${cleared ? wrPlanetDefHtml(m, p) : ''}
@@ -1966,13 +2473,21 @@ function wrStationArt() {
 }
 // Zoom auf einen Forschungs-Ast (JP 2026-07-27: „und man soll es auch zoomen können").
 // Zeigt das Ast-Portrait groß plus den Fortschritt in diesem Ast.
+// ⚠️ Nur noch vier Äste (JP 2026-07-29, s. SPACE_TECH_ASTE): die früheren 🟣/🌀-Äste sind
+// aufgelöst, ihre Techniken stehen hinten in A–D. Die Beschreibungen sagen das jetzt auch —
+// sonst wirkt es wie ein Zufall, dass ab der Mitte plötzlich 🟣/🌀 im Preis stehen.
 const WR_AST_DESC = {
-  a: 'Antrieb und Rumpf: kürzere Flugzeiten, schnellere und günstigere Werft.',
-  b: 'Bewaffnung: Feuerkraft der Geschütze, Kampfkraft der Flotte, weniger Verluste und Hinterhalte.',
-  c: 'Schürftechnik: mehr Ausbeute beim Abbau, ergiebigere Dauerernte, sparsamerer Treibstoff.',
-  d: 'Raffinerie und Logistik: billigere Rohstoffkosten, bessere Bergung, längere Ertrags-Ansammlung.',
-  e: 'Plasmoid-Technik (Ring 2): Waffen, Antriebe und Anlagen auf Basis des violetten Plasmoiden-Staubs.',
-  f: 'Quanten-Technik (Ring 3): die Endstufe — Quantenschaum treibt Lanzen, Sprungtore und den Transmuter.',
+  a: 'Antrieb und Rumpf: kürzere Flugzeiten, schnellere und günstigere Werft. '
+   + 'Ab der Mitte des Astes kommen Plasmoid- und Quanten-Antriebe dazu — Sprungtore, '
+   + 'Faltraum-Anker und die Sensorik der ganzen Galaxie.',
+  b: 'Bewaffnung: Feuerkraft der Geschütze, Kampfkraft der Flotte, weniger Verluste und Hinterhalte. '
+   + 'Oben im Ast stehen die schweren Geschütze aus 🟣 Plasmoid und 🌀 Quantenschaum sowie '
+   + 'die Planeten-Verteidigung.',
+  c: 'Schürftechnik: mehr Ausbeute beim Abbau, ergiebigere Dauerernte, sparsamerer Treibstoff. '
+   + 'Hier liegen auch die beiden Schlüssel-Techniken, die 🟣 Plasmoiden- und '
+   + '🌀 Quantenschaum-Abbau überhaupt erst freischalten.',
+  d: 'Raffinerie und Logistik: billigere Rohstoffkosten, bessere Bergung, längere Ertrags-Ansammlung. '
+   + 'Weiter oben verwertet die Raffinerie auch 🟣 und 🌀, und der Transmuter macht Ring-Rohstoffe zu CC.',
 };
 function wrAstLightbox(key) {
   const a = SPACE_TECH_ASTE.find(x => x.key === key);
@@ -1990,11 +2505,82 @@ function wrStationLightbox() {
     'Ein ausgebauter Geschütz-Planet wird zum Kommandoposten des ganzen Quadranten. '
   + 'Die Station hält alle befreiten Planeten im selben Quadranten dauerhaft in Clan-Hand — '
   + 'auch die deiner Mitspieler — und deckt anfliegende Verbände mit halber Feuerkraft.', [
-    ['🔬 Freischaltung', 'Quadranten-Kommandostation (wt_f7)'],
+    ['🔬 Freischaltung', `${_wrEsc(wrTechName('wt_f7'))}<br><span class="wr-sub">${_wrEsc(wrTechRef('wt_f7'))}</span>`],
     ['🛡️ Voraussetzung', 'Planeten-Geschütze Stufe 3'],
     ['💰 Kosten', `${wrFmt(c.cc)} CC · ${c.erz} 🪨 · ${c.kristall} 💎 · ${c.plasmoid} 🟣 · ${c.quantum} 🌀`],
     ['📡 Reichweite', 'ganzer Quadrant, eine Station je Quadrant'],
   ]);
+}
+
+// 🏙️ Die drei Geschütz-Bauplätze einer Kolonie (26l). Bewusst dasselbe Muster wie
+// wrHafenHtml — JP: „genau gleich wie der Raumhafen soll man ihn ausbauen können".
+// Unterschiede: nur 3 Slots, Preise ×1,5, und `minPort` gilt NICHT (eine Kolonie hat
+// keinen Hafenausbau — die einzige Schranke ist die Forschung).
+function wrPlanetSlotsHtml(m, p) {
+  const tur   = wrPlanetTurrets(p);
+  const coins = parseFloat(m?.coins) || 0;
+  const canPay = (c) => c && coins >= c.cc && wrErz(m) >= c.erz
+                     && wrKristall(m) >= c.kristall && wrPlasmoid(m) >= (c.plasmoid || 0);
+  const priceTxt = (c) => [`${wrFmt(c.cc)} CC`]
+    .concat(c.erz ? [`${c.erz} 🪨`] : []).concat(c.kristall ? [`${c.kristall} 💎`] : [])
+    .concat(c.plasmoid ? [`${c.plasmoid} 🟣`] : []).join(' · ');
+
+  let out = '';
+  for (let i = 0; i < WR_PLANET_SLOTS; i++) {
+    const key = 'g' + i;
+    const cur = tur[key];
+    if (cur && typeof cur === 'object' && SPACE_TURRET_BY_KEY[cur.type]) {
+      const t   = SPACE_TURRET_BY_KEY[cur.type];
+      const clv = Math.max(1, Math.min(WR_TURRET_MAX, parseInt(cur.level, 10) || 1));
+      const st  = wrPturretStats(cur.type, clv);
+      const up  = clv < WR_TURRET_MAX ? wrPturretStats(cur.type, clv + 1) : null;
+      const ziele = SPACE_TURRETS.filter(z => z.atk > t.atk && wrTurretUnlocked(m, z.key));
+      out += `
+        <div class="wr-pslot wr-pslot-full">
+          <span class="wr-pslot-art wr-ship-zoom" data-wr-tinfo="${t.key}" title="Groß ansehen">
+            ${wrTurretImg(t)}
+              <span class="wr-pslot-fb">${t.icon}</span></span>
+          <span class="wr-pslot-txt"><strong>${_wrEsc(t.name)}</strong>
+            <span class="wr-sub">Stufe ${clv} · 🛡️ ${wrFmt(st.atk)}</span></span>
+          <span class="wr-pslot-act">
+            ${up ? `<button class="wr-btn wr-btn-sm" data-wr-pturret="${p.id}:turret_upgrade:${key}:"
+                      ${canPay(up) ? '' : 'disabled'}>Aufrüsten
+                      <span class="wr-btn-sub">${priceTxt(up)} → 🛡️ ${wrFmt(up.atk)}</span></button>`
+                 : '<span class="wr-slot-max">✅ Vollausbau</span>'}
+            ${ziele.map(z => {
+              const pr = wrPturretConvertPrice(t.key, clv, z.key);
+              return wrConvBtnHtml(`${p.id}:turret_convert:${key}:${z.key}`, 'data-wr-pturret',
+                                   z, pr, canPay(pr), priceTxt(pr));
+            }).join('')}
+          </span>
+        </div>`;
+    } else {
+      const opts = SPACE_TURRETS.map(t => {
+        const st   = wrPturretStats(t.key, 1);
+        const frei = wrTurretUnlocked(m, t.key);
+        return `
+          <div class="wr-slot-opt${frei ? '' : ' wr-slot-opt-lock'}">
+            <span class="wr-slot-opt-art wr-ship-zoom" data-wr-tinfo="${t.key}" title="Groß ansehen">
+              ${wrTurretImg(t)}
+                <span class="wr-slot-opt-fb">${t.icon}</span><span class="wr-zoom-hint">🔍</span></span>
+            <span class="wr-slot-opt-txt">
+              <span class="wr-slot-opt-n">${_wrEsc(t.name)}</span>
+              <span class="wr-slot-opt-a">🛡️ ${wrFmt(st.atk)}</span>
+              <span class="wr-slot-opt-p">${frei ? priceTxt(st)
+                : `🔒 Forschung „${_wrEsc(wrTechName(t.needs))}"`}</span>
+            </span>
+            <button class="wr-btn wr-btn-sm" data-wr-pturret="${p.id}:turret_build:${key}:${t.key}"
+              ${(frei && canPay(st)) ? '' : 'disabled'}>Bauen</button>
+          </div>`;
+      }).join('');
+      out += `
+        <div class="wr-pslot wr-pslot-empty">
+          <div class="wr-slot-name">⬚ Freier Bauplatz ${i + 1}</div>
+          <div class="wr-slot-opts">${opts}</div>
+        </div>`;
+    }
+  }
+  return `<div class="wr-pslots">${out}</div>`;
 }
 
 // ── 🛡️ Feature ④: Kolonie & Verteidigung im Planeten-Detail (26h) ───────────
@@ -2015,7 +2601,10 @@ function wrPlanetDefHtml(m, p) {
   const clv  = wrColonyLevel(p);
   const dlv  = wrDefLevel(p);
   const cUp  = clv < 3 ? WR_COLONY_UP[clv + 1] : null;
-  const dUp  = dlv < 3 ? WR_PDEF[dlv + 1] : null;
+  // ⚠️ `dUp` (nächste Pauschalstufe aus WR_PDEF) ist mit 26l ERSATZLOS ENTFALLEN —
+  // die Geschütze sitzen jetzt auf einzelnen Bauplätzen (wrPlanetSlotsHtml).
+  // `dlv` bleibt: es ist die Zahl der belegten Bauplätze und entscheidet weiterhin
+  // über die Stations-Voraussetzung („3 von 3 belegt").
   const hasE10 = wrHasTech(m, 'wt_e10');
   const hasF7  = wrHasTech(m, 'wt_f7');
   const stationHere = wrIsStation(p);
@@ -2046,15 +2635,13 @@ function wrPlanetDefHtml(m, p) {
       </div>
 
       <div class="wr-pdef-row">
-        <div class="wr-pdef-lbl">🛡️ Planeten-Geschütze <span class="wr-sub">Stufe ${dlv} von 3</span></div>
+        <div class="wr-pdef-lbl">🛡️ Geschütz-Bauplätze
+          <span class="wr-sub">${dlv} von ${WR_PLANET_SLOTS} belegt · Preise ×${String(WR_PTURRET_MULT).replace('.', ',')} (Transport)</span></div>
         <div class="wr-pdef-val">${dlv ? `🛡️ ${wrFmt(wrPlanetDef(p))}` : '—'}</div>
         ${!hasE10
-          ? `<div class="wr-warn">🔒 Braucht die Forschung ${wrIc('pla')} <strong>Planetar-Schildgenerator</strong> (wt_e10).</div>`
-          : dUp
-            ? `<button class="wr-btn wr-btn-sm" data-wr-pbuild="${p.id}:turret_build" ${canPay(dUp) ? '' : 'disabled'}
-                 >${dlv ? `Auf Stufe ${dUp.level} ausbauen` : 'Geschütz installieren'}
-                 <span class="wr-btn-sub">${priceTxt(dUp)} → 🛡️ ${wrFmt(dUp.atk)}</span></button>`
-            : '<div class="wr-slot-max">✅ Vollausbau</div>'}
+          ? `<div class="wr-warn">🔒 Braucht die Forschung ${wrIc('pla')} <strong>${_wrEsc(wrTechName('wt_e10'))}</strong>
+               <span class="wr-sub">(${_wrEsc(wrTechRef('wt_e10'))})</span>.</div>`
+          : wrPlanetSlotsHtml(m, p)}
       </div>
 
       ${stationHere
@@ -2069,7 +2656,8 @@ function wrPlanetDefHtml(m, p) {
              ${stationQ
                ? `<div class="wr-sub">In diesem Quadranten steht bereits eine Station (${_wrEsc(stationQ.name)}).</div>`
                : !hasF7
-                 ? `<div class="wr-warn">🔒 Braucht die Forschung ${wrIc('qua')} <strong>Quadranten-Kommandostation</strong> (wt_f7).</div>`
+                 ? `<div class="wr-warn">🔒 Braucht die Forschung ${wrIc('qua')} <strong>${_wrEsc(wrTechName('wt_f7'))}</strong>
+                      <span class="wr-sub">(${_wrEsc(wrTechRef('wt_f7'))})</span>.</div>`
                  : dlv < 3
                    ? '<div class="wr-warn">🔒 Erst die Planeten-Geschütze auf Stufe 3 ausbauen.</div>'
                    : `<button class="wr-btn wr-btn-sm" data-wr-pbuild="${p.id}:station_build" ${canPay(WR_STATION) ? '' : 'disabled'}
@@ -2102,25 +2690,59 @@ function wrColoniesHtml(m) {
   let pending = 0, rows = '';
   for (const id of keys) {
     const c = cols[id] || {};
-    const days = Math.min(14, Math.max(0, (Date.now() - Date.parse(c.lastHarvest || 0)) / 86400000));
-    // ⚠️ Reihenfolge exakt wie in harvest_space: erst den Betrag runden, DANN halbieren und
-    // erneut runden. In einem Rutsch gerechnet weicht die Vorschau um 1 ab (Test 7).
-    const base = Math.round(days * (c.richness || 1) * 3 * (c.level || 1));
-    const amt  = (c.type === 'erz') ? base : Math.round(base * 0.5);
-    pending += amt;
+    const days = Math.min(wrTechCapDays(m), Math.max(0, (Date.now() - Date.parse(c.lastHarvest || 0)) / 86400000));
+    // ⚠️ Reihenfolge exakt wie in harvest_space: erst den Betrag runden, DANN den
+    // Typfaktor anwenden und erneut runden. In einem Rutsch gerechnet weicht die
+    // Vorschau um 1 ab (Test 7).
+    // Zwei Abweichungen von der SQL, die hier lange unbemerkt drinsteckten und am
+    // 29.07. behoben wurden: der Tech-Faktor (_space_tech_colony) fehlte ganz, und
+    // 🟣/🌀-Kolonien wurden wie Kristall mit 0,5 gerechnet statt mit 0,3/0,2.
+    const typ  = c.type || 'erz';
+    const base = Math.round(days * (c.richness || 1) * 3 * (c.level || 1) * wrTechColony(m));
+    const fak  = { erz: 1, kristall: 0.5, plasmoid: 0.3, quantum: 0.2 }[typ] ?? 1;
+    const amt  = wrResMinable(m, typ) ? (fak === 1 ? base : Math.round(base * fak)) : 0;
+    // 26n: Ring-Kolonien werfen zusätzlich Erz und Kristall ab — ohne Abbau-Gate.
+    const side = (typ === 'plasmoid' || typ === 'quantum')
+      ? { erz: Math.round(base * 0.5), kri: Math.round(base * 0.5 * 0.25) } : null;
+    pending += amt + (side ? side.erz + side.kri : 0);
     // 26h: Geschütz-/Stationsstand kommt aus der Planetenzeile (die Kolonie-JSON kennt ihn nicht)
     const pl = wrPlanetById(id);
-    rows += `<div class="wr-col-row">
-      <span>${c.type === 'erz' ? '🪨' : '💎'} ${_wrEsc(c.name || 'Kolonie')}</span>
-      <span class="wr-sub">Stufe ${c.level || 1} · ${'★'.repeat(c.richness || 1)}${
-        wrDefLevel(pl) ? ` · 🛡️ ${wrFmt(wrPlanetDef(pl))}` : ''}${wrIsStation(pl) ? ' · 📡' : ''}</span>
-      <strong>+${wrFmt(amt)}</strong></div>`;
+    const meta = wrResMeta(typ);
+    // 26l: aufklappbar (JP: „die aufgeführten klickt man an, sie erweitern sich und zeigen
+    // dann die Informationen, nicht dass man zu viel scrollen muss"). Immer nur EINE offen.
+    const offen = _wrColOpen === id;
+    // 📊 Zusammenfassung je Kolonie (JP 2026-07-29: „dort werden alle aufgeführt mit den
+    // stats zusammengefasst (Abbau/Tag, Level, Stärke usw)"). Der fette Wert rechts war
+    // der ANGESAMMELTE Ertrag — ohne Bezugsgrösse nicht deutbar. Jetzt steht die Rate
+    // je Tag daneben; sie ist dieselbe Formel mit days = 1.
+    const tagBase = Math.round((c.richness || 1) * 3 * (c.level || 1) * wrTechColony(m));
+    const tagAmt  = wrResMinable(m, typ) ? (fak === 1 ? tagBase : Math.round(tagBase * fak)) : 0;
+    const tagSide = (typ === 'plasmoid' || typ === 'quantum')
+      ? { erz: Math.round(tagBase * 0.5), kri: Math.round(tagBase * 0.5 * 0.25) } : null;
+    const proTag = [tagAmt > 0 ? `${wrFmt(tagAmt)} ${meta.icon}` : '']
+      .concat(tagSide ? [`${wrFmt(tagSide.erz)} 🪨`, `${wrFmt(tagSide.kri)} 💎`] : [])
+      .filter(Boolean).join(' · ');
+    rows += `
+      <div class="wr-col-item${offen ? ' wr-col-open' : ''}">
+        <button type="button" class="wr-col-row" data-wr-coltoggle="${_wrEsc(id)}">
+          <span class="wr-col-caret">${offen ? '▾' : '▸'}</span>
+          <span>${meta.icon} ${_wrEsc(c.name || 'Kolonie')}
+            <span class="wr-sub">Ring ${pl ? pl.ring : '?'}${pl ? ` · ${_wrEsc(pl.quadrant)}` : ''}</span></span>
+          <span class="wr-sub">Stufe ${c.level || 1} · ${'★'.repeat(c.richness || 1)}${
+            wrDefLevel(pl) ? ` · 🛡️ ${wrFmt(wrPlanetDef(pl))}` : ' · 🛡️ —'}${wrIsStation(pl) ? ' · 📡' : ''}
+            <span class="wr-col-day">${proTag ? `📥 ${proTag} /Tag` : ''}${
+              (!wrResMinable(m, typ) && tagAmt === 0) ? ` 🔒 ${meta.icon} braucht die Abbau-Technik` : ''}</span></span>
+          <strong>+${wrFmt(amt + (side ? side.erz + side.kri : 0))}</strong>
+        </button>
+        ${offen && pl ? `<div class="wr-col-body">${wrPlanetDefHtml(m, pl)}</div>` : ''}
+        ${offen && !pl ? '<div class="wr-col-body"><div class="wr-sub">Planetendaten noch nicht geladen.</div></div>' : ''}
+      </div>`;
   }
   return `
     <div class="wr-card">
       <div class="wr-card-title">${wrIc("colony")} Kolonien <span class="wr-sub">Ertrag sammelt sich max. 14 Tage an</span></div>
       ${rows}
-      <button class="wr-btn wr-btn-go" id="wr-harvest" ${pending < 1 ? 'disabled' : ''}>
+      <button class="wr-btn wr-btn-go" data-wr-harvest="1" ${pending < 1 ? 'disabled' : ''}>
         ${wrIc("yield")} Ertrag einsammeln${pending > 0 ? ` (${wrFmt(pending)})` : ''}</button>
     </div>`;
 }
@@ -2135,7 +2757,13 @@ function wrWaveHtml(m) {
   const due = now >= arrive;
   const tier = wrWaveTier(w.strength);
   const turret = wrTurretPower(m);
-  const fleet  = wrFleetPower(wrHomeShips(m));
+  // ⚠️ MIRROR-FIX (26m): hier stand `wrFleetPower(...)` — die ROHE Summe. resolve_space_wave
+  // rechnet aber `_space_eff_power(home, wLight, wHeavy, 0) * _space_tech_fleet(space)`.
+  // Dadurch fehlten in der Anzeige seit 21j die Rollen-Modifikatoren, seit 26j der
+  // Flaggschiff-Bonus und der Tech-Faktor — und mit 26m auch der Trägerbonus, obwohl
+  // „+5 % auf die gesamte Flotte" genau hier sichtbar werden muss. Jetzt exakter Spiegel.
+  const wSh    = WR_WAVE_SHARES[tier.key] || WR_WAVE_SHARES.schwarm;
+  const fleet  = Math.round(wrEffPower(wrHomeShips(m), wSh.light, wSh.heavy, 0) * wrTechFleet(m));
   const help   = _wrHelp.filter(h => h.wave_id === w.id && !h.returned)
                         .reduce((a, h) => a + (parseFloat(h.power) || 0), 0);
   // 26h: die Planeten-Geschütze der eigenen Kolonien schießen zur Hälfte mit
@@ -2172,6 +2800,12 @@ function wrWaveHtml(m) {
       </div>
       <div class="wr-sub wr-wave-note">Eine Niederlage kostet dich <strong>keine</strong> Kolonien —
         aber ein Viertel deiner Rohstoffe, und Geschütze fallen für 12 h aus.</div>
+      ${/* 26k-Regelanpassung ohne Ankündigungs-Popup (JP, Plan §11): die Wellen wachsen
+            seit dem Geschütz-Ausbau deutlich schneller. Ohne diesen Satz wirkt der
+            Sprung wie ein Fehler — er muss also hier stehen, wo die Stärke steht. */''}
+      <div class="wr-sub wr-wave-note">🛡️ Angriffswellen wachsen mit deinem Besitz — seit dem
+        Geschütz-Ausbau schneller (je Planet und Kolonie). Dafür reichen die neuen
+        Geschütztypen weit höher: ein Vollausbau trägt die Verteidigung allein.</div>
       ${due
         ? '<button class="wr-btn wr-btn-go" id="wr-wave-resolve">🛡️ Angriff abwehren</button>'
         : (w.helpOpen
@@ -2233,9 +2867,12 @@ function wrHafenHtml(m) {
   const tur   = wrTurrets(m);
   const power = wrTurretPower(m);
   const coins = parseFloat(m?.coins) || 0;
-  const canPay = (c) => coins >= c.cc && wrErz(m) >= c.erz && wrKristall(m) >= c.kristall;
+  // 26k: Plasmoid ist die vierte Kostenart (Resonanz-Geschütz, Quanten-Geschütz).
+  const canPay = (c) => coins >= c.cc && wrErz(m) >= c.erz && wrKristall(m) >= c.kristall
+                     && wrPlasmoid(m) >= (c.plasmoid || 0);
   const priceTxt = (c) => [`${wrFmt(c.cc)} CC`]
-    .concat(c.erz ? [`${c.erz} 🪨`] : []).concat(c.kristall ? [`${c.kristall} 💎`] : []).join(' · ');
+    .concat(c.erz ? [`${c.erz} 🪨`] : []).concat(c.kristall ? [`${c.kristall} 💎`] : [])
+    .concat(c.plasmoid ? [`${c.plasmoid} 🟣`] : []).join(' · ');
 
   let slots = '';
   for (let i = 0; i < def.slots; i++) {
@@ -2250,8 +2887,8 @@ function wrHafenHtml(m) {
       slots += `
         <div class="wr-slot wr-slot-full${dmg ? ' wr-slot-dmg' : ''}">
           <div class="wr-slot-art" data-wr-tinfo="${t.key}" title="Groß ansehen">
-            <img src="assets/space/${t.art}.png" alt="" onerror="this.parentNode.classList.add('wr-art-fail');this.remove()"
-              ><span class="wr-slot-fb">${t.icon}</span></div>
+            ${wrTurretImg(t)}
+              <span class="wr-slot-fb">${t.icon}</span></div>
           <div class="wr-slot-name">${_wrEsc(t.name)} <span class="wr-sub">Stufe ${clv}</span></div>
           <div class="wr-slot-atk">${dmg
             ? `<span class="wr-bad">⚠️ beschädigt</span><span class="wr-sub">wieder einsatzbereit in ${wrCountdown(Date.parse(cur.dmg) - Date.now())}</span>`
@@ -2260,6 +2897,19 @@ function wrHafenHtml(m) {
             ? `<button class="wr-btn wr-btn-sm" data-wr-tup="${key}" ${canPay(up) ? '' : 'disabled'}
                  >Aufrüsten <span class="wr-btn-sub">${priceTxt(up)} → 🛡️ ${wrFmt(up.atk)}</span></button>`
             : '<div class="wr-slot-max">✅ Vollausbau</div>'}
+          ${(() => {
+            // ⬆️ Umrüsten (26k, JP: „indem man seine Geschütze updaten kann für Geld").
+            // Nur stärkere, freigeschaltete Typen; die Stufe fällt dabei auf 1 zurück —
+            // das steht im Knopf, sonst wirkt der Verlust wie ein Fehler.
+            if (dmg) return '';
+            const ziele = SPACE_TURRETS.filter(z => z.atk > t.atk && lv >= z.minPort
+                                                 && wrTurretUnlocked(m, z.key));
+            if (!ziele.length) return '';
+            return `<div class="wr-slot-conv">${ziele.map(z => {
+              const p = wrConvertPrice(t.key, clv, z.key);
+              return wrConvBtnHtml(`${key}:${z.key}`, 'data-wr-tconv', z, p, canPay(p), priceTxt(p));
+            }).join('')}</div>`;
+          })()}
         </div>`;
     } else {
       // Leerer Slot: die baubaren Typen anbieten (nach Hafenstufe gefiltert).
@@ -2268,17 +2918,23 @@ function wrHafenHtml(m) {
       // mit eigenem Zoom-Ziel links und dem Bauen-Button rechts (Muster wie in der Werft).
       let opts = '';
       for (const t of SPACE_TURRETS) {
-        const st = wrTurretStats(t.key, 1);
-        const ok = lv >= t.minPort;
+        const st    = wrTurretStats(t.key, 1);
+        const port  = lv >= t.minPort;
+        const tech  = wrTurretUnlocked(m, t.key);
+        const ok    = port && tech;
+        // Zwei Sperrgründe, getrennt benannt — „🔒 gesperrt" allein sagt nicht, was fehlt.
+        const grund = !port ? `🔒 ab Hafen-Stufe ${t.minPort}`
+                    : !tech ? `🔒 Forschung „${_wrEsc(wrTechName(t.needs))}" (${_wrEsc(wrTechRef(t.needs))})`
+                    : priceTxt(st);
         opts += `
           <div class="wr-slot-opt${ok ? '' : ' wr-slot-opt-lock'}">
             <span class="wr-slot-opt-art wr-ship-zoom" data-wr-tinfo="${t.key}" title="Groß ansehen">
-              <img src="assets/space/${t.art}.png" alt="" onerror="this.parentNode.classList.add('wr-art-fail');this.remove()"
-                ><span class="wr-slot-opt-fb">${t.icon}</span><span class="wr-zoom-hint">🔍</span></span>
+              ${wrTurretImg(t)}
+                <span class="wr-slot-opt-fb">${t.icon}</span><span class="wr-zoom-hint">🔍</span></span>
             <span class="wr-slot-opt-txt">
               <span class="wr-slot-opt-n">${_wrEsc(t.name)}</span>
               <span class="wr-slot-opt-a">🛡️ ${wrFmt(st.atk)}</span>
-              <span class="wr-slot-opt-p">${ok ? priceTxt(st) : `🔒 ab Hafen-Stufe ${t.minPort}`}</span>
+              <span class="wr-slot-opt-p">${grund}</span>
             </span>
             <button class="wr-btn wr-btn-sm" data-wr-tbuild="${key}:${t.key}"
               ${(ok && canPay(st)) ? '' : 'disabled'}>Bauen</button>
@@ -2412,20 +3068,59 @@ function wrRoutesHtml(m) {
       pendErz += pd.erz; pendKri += pd.kri;
       amtTxt = `+${wrFmt(pd.erz)} ${wrIc('erz')} · +${wrFmt(pd.kri)} ${wrIc('kri')}`;
     } else {
+      const meta = wrResMeta(r.type);
       if (r.type === 'erz') pendErz += pd.amount; else pendKri += pd.amount;
-      amtTxt = `+${wrFmt(pd.amount)} ${r.type === 'erz' ? wrIc('erz') : wrIc('kri')}`;
+      pendErz += pd.sideErz || 0;
+      pendKri += pd.sideKri || 0;
+      // ⚠️ wrIc kennt nur erz/kri — für 🟣/🌀 das Emoji aus WR_RES_META nehmen,
+      // sonst stünde auf einer Plasmoid-Route fälschlich das Kristall-Bild.
+      const ic = r.type === 'erz' ? wrIc('erz') : r.type === 'kristall' ? wrIc('kri')
+               : r.type === 'plasmoid' ? wrIc('pla') : r.type === 'quantum' ? wrIc('qua') : meta.icon;
+      amtTxt = `+${wrFmt(pd.amount)} ${ic}`
+             + ((pd.sideErz || pd.sideKri)
+                 ? `<span class="wr-sub">+${wrFmt(pd.sideErz)} ${wrIc('erz')} · +${wrFmt(pd.sideKri)} ${wrIc('kri')}</span>`
+                 : '');
     }
     const sub = wreck
       ? `${cnt}× Bergungsschiff · ${wrFmt(wrWreckRate(cnt))}/Tag · noch `
         + `${wrFmt(planet ? wrWreckLeft(planet) : 0)} im Feld`
       : `${cnt}× Röstkomet · ${'★'.repeat(Math.max(1, Math.min(5, r.richness || 1)))}`
         + ` · ${wrFmt(wrRouteRate(r.type, r.richness, cnt))}/Tag`;
+
+    // ⬇️ JP 2026-07-29: „Bei den Bergungs-Trupps fehlt es noch an Information, wie lange
+    // noch abgebaut wird und wann erwarteter Rückflug ist."
+    let hinweis = '';
+    if (wreck) {
+      const rate = wrWreckRate(cnt);
+      // Der bereits aufgelaufene, noch nicht eingesammelte Ertrag zählt schon gegen das Feld —
+      // sonst rechnet die Prognose einen Vorrat mit, der faktisch vergeben ist.
+      const rest = Math.max(0, (planet ? wrWreckLeft(planet) : 0) - pd.amount);
+      if (rest <= 0) {
+        hinweis = `<span class="wr-route-eta wr-ok">✅ Feld abgetragen — die ${cnt} Bergungsschiffe
+          kehren beim nächsten Einsammeln heim.</span>`;
+      } else if (rate > 0) {
+        const days = rest / rate;
+        hinweis = `<span class="wr-route-eta">⏳ Feld leer in <strong>${wrDays(days)}</strong>
+          <span class="wr-sub">(${wrWhen(Date.now() + days * 86400000)}) → dann fliegen die
+          ${cnt} Bergungsschiffe zurück</span></span>`;
+      }
+    } else if (cnt > 0) {
+      // Rohstoff-Routen laufen unbefristet — begrenzt ist nur der Treibstoff.
+      const reachOne = Math.floor(stock / wrRouteFuel(cnt));
+      if (Number.isFinite(reachOne)) {
+        hinweis = `<span class="wr-route-eta">${wrIc('kri')} Treibstoff für
+          <strong>${reachOne > 99 ? '99+' : reachOne} Tage</strong>
+          <span class="wr-sub">— danach pausiert die Route</span></span>`;
+      }
+    }
+
     rows += `
       <div class="wr-route">
         <span class="wr-fl-art">${wrShipArt(wreck ? 'berger' : 'ernter', 'wr-mini wr-mini-md')}</span>
         <span class="wr-route-txt">
           <strong>${wreck ? '♻️ ' : ''}${_wrEsc(r.name || 'Planet')}</strong>
           <span class="wr-sub">${sub} · ${wrFmt(wrRouteFuel(cnt))} ${wrIc('kri')}/Tag Treibstoff</span>
+          ${hinweis}
         </span>
         <span class="wr-route-amt">${amtTxt}</span>
       </div>`;
@@ -2435,8 +3130,11 @@ function wrRoutesHtml(m) {
   const pending = pendErz + pendKri;
   return `
     <div class="wr-card">
-      <div class="wr-card-title">🛰️ Dauerernte & Bergung
+      <div class="wr-card-title">🛰️ Dauerernte &amp; Bergung
         <span class="wr-sub">— stationierte Schiffe verteidigen den Hafen NICHT mit</span></div>
+      <div class="wr-sub" style="padding-bottom:4px">Ein Wrackfeld ist <strong>endlich und
+        geteilt</strong> — ein Mitspieler kann schneller abbauen, dann ist es früher leer als
+        prognostiziert.</div>
       ${rows}
       <div class="wr-facts">
         <span>Treibstoff: <strong>${wrFmt(perDayFuel)} ${wrIc('kri')}/Tag</strong></span>
@@ -2446,7 +3144,7 @@ function wrRoutesHtml(m) {
         ? `<div class="wr-warn">💎 Der Kristall reicht nicht für den ganzen Zeitraum — die Routen
              pausieren, bis wieder Treibstoff da ist. Schiffe gehen dabei nicht verloren.</div>`
         : ''}
-      <button class="wr-btn wr-btn-go" id="wr-harvest" ${pending < 1 ? 'disabled' : ''}>
+      <button class="wr-btn wr-btn-go" data-wr-harvest="1" ${pending < 1 ? 'disabled' : ''}>
         ${wrIc("yield")} Ertrag einsammeln${pending > 0 ? ` (${wrFmt(pending)})` : ''}</button>
     </div>`;
 }
@@ -2721,14 +3419,25 @@ function wrRoutePending(r, planet) {
     const want = Math.round(days * wrWreckRate(cnt));
     const left = planet ? wrWreckLeft(planet) : want;
     const got  = Math.min(want, left);
+    // 26o: Wrackfelder in Ring 2/3 geben zusätzlich 🟣/🌀 her — Spiegel des Ring-Blocks
+    // in harvest_space. Der Ring kommt vom Planeten, NICHT vom Rohstofftyp: JP wollte
+    // „entweder aufgrund des Planetentyps ... oder entsprechend des Rings".
+    const wrRing = parseInt(planet?.ring, 10) || 0;
+    const R = WR_RING_LOOT;
     return { days, mode:'wreck', amount: got,
              erz: Math.round(got * WR_WRECK_ERZ), kri: Math.round(got * WR_WRECK_KRI),
+             pla: wrRing >= R.plaRing ? Math.round(got * R.wreckPla) : 0,
+             qua: wrRing >= R.quaRing ? Math.round(got * R.wreckQua) : 0,
              fuel: Math.round(days * wrRouteFuel(cnt) * (want > 0 ? got / want : 0)) };
   }
+  // 26n: Ring-Routen liefern zusätzlich Erz/Kristall (50 % / 25 % der Routenmenge).
+  const amount = Math.round(days * wrRouteRate(r.type, r.richness, cnt));
+  const ring   = (r.type === 'plasmoid' || r.type === 'quantum');
   return {
-    days, mode:'res',
-    amount: Math.round(days * wrRouteRate(r.type, r.richness, cnt)),
-    fuel:   Math.round(days * wrRouteFuel(cnt)),
+    days, mode:'res', amount,
+    sideErz: ring ? Math.round(amount * 0.5)  : 0,
+    sideKri: ring ? Math.round(amount * 0.25) : 0,
+    fuel:    Math.round(days * wrRouteFuel(cnt)),
   };
 }
 function wrPlanetById(id) {
@@ -2797,7 +3506,25 @@ function wrTurretStats(type, level) {
     cc:       Math.round(t.cc       * WR_TURRET_COST_MULT[lv]),
     erz:      Math.round(t.erz      * WR_TURRET_COST_MULT[lv]),
     kristall: Math.round(t.kristall * WR_TURRET_COST_MULT[lv]),
+    plasmoid: Math.round((t.plasmoid || 0) * WR_TURRET_COST_MULT[lv]),
   };
+}
+// Forschungs-Gate (26k) — Spiegel von _space_turret_ok. Betrifft NUR Neubau und
+// Umrüsten; ein bereits gebautes Geschütz bleibt ohne die Tech nutz- und aufrüstbar.
+function wrTurretUnlocked(m, type) {
+  const t = SPACE_TURRET_BY_KEY[type];
+  if (!t) return false;
+  return !t.needs || wrHasTech(m, t.needs);
+}
+// Umrüstpreis: Neubaupreis des Zieltyps minus 50 % des Zeitwerts des alten Geschützes.
+// Spiegel der Rechnung in build_space_defense/turret_convert.
+function wrConvertPrice(fromType, fromLevel, toType) {
+  const to  = wrTurretStats(toType, 1);
+  const old = wrTurretStats(fromType, fromLevel);
+  if (!to) return null;
+  const rebate = Math.round((old?.cc || 0) * 0.5);
+  return { cc: Math.max(0, to.cc - rebate), rebate,
+           erz: to.erz, kristall: to.kristall, plasmoid: to.plasmoid, atk: to.atk };
 }
 // Ein von einer Angriffswelle beschädigtes Geschütz trägt bis `dmg` nichts bei (P2).
 // ⚠️ Ein unlesbarer Zeitstempel darf es NICHT dauerhaft ausschalten — gleiche Absicherung
@@ -2827,11 +3554,39 @@ function wrTurretPowerRaw(m) {
 // _space_station_cost in migration_2026-07-26h_planeten_verteidigung.sql. Bei
 // Balance-Änderungen BEIDE Seiten anfassen (Regel wie SPACE_SHIPS ↔ _space_ship_stats).
 // Index = Stufe, Feld 0 bleibt leer — dann ist WR_PDEF[lv] direkt lesbar.
+// ⚠️ SEIT 26l NUR NOCH HISTORIE: Planeten haben keine Pauschalstufe mehr, sondern drei
+// echte Bauplätze mit derselben Geschütz-Tabelle wie der Hafen. Die Tabelle bleibt für
+// den Vergleich stehen (Bestandsplaneten wurden auf 72/208/416 migriert).
 const WR_PDEF = [ null,
   { level: 1, atk:  60, cc:  6000, erz: 120, kristall:  30, plasmoid:  0 },
   { level: 2, atk: 150, cc: 14000, erz: 260, kristall:  80, plasmoid: 10 },
   { level: 3, atk: 320, cc: 26000, erz: 450, kristall: 160, plasmoid: 25 },
 ];
+// 🏙️ Kolonie-Bauplätze (26l) — Spiegel von _space_planet_slots/_space_pturret_mult.
+const WR_PLANET_SLOTS = 3;
+const WR_PTURRET_MULT = 1.5;   // Kolonie-Aufschlag auf alle Geschützkosten
+function wrPturretStats(type, level) {
+  const s = wrTurretStats(type, level);
+  if (!s) return null;
+  return { atk: s.atk,
+           cc:       Math.round(s.cc       * WR_PTURRET_MULT),
+           erz:      Math.round(s.erz      * WR_PTURRET_MULT),
+           kristall: Math.round(s.kristall * WR_PTURRET_MULT),
+           plasmoid: Math.round(s.plasmoid * WR_PTURRET_MULT) };
+}
+function wrPturretConvertPrice(fromType, fromLevel, toType) {
+  const to  = wrPturretStats(toType, 1);
+  const old = wrPturretStats(fromType, fromLevel);
+  if (!to) return null;
+  const rebate = Math.round((old?.cc || 0) * 0.5);
+  return { cc: Math.max(0, to.cc - rebate), rebate,
+           erz: to.erz, kristall: to.kristall, plasmoid: to.plasmoid, atk: to.atk };
+}
+// Belegte Bauplätze eines Planeten. Bestandsplaneten ohne `turrets` (vor 26l) liefern {}.
+function wrPlanetTurrets(p) {
+  const t = p && p.turrets;
+  return (t && typeof t === 'object') ? t : {};
+}
 const WR_COLONY_UP = [ null, null,
   { level: 2, cc:  9000, erz: 180, kristall:  45, plasmoid:  0 },
   { level: 3, cc: 20000, erz: 380, kristall: 120, plasmoid: 15 },
@@ -2861,8 +3616,17 @@ function wrPlanetDefTotal(m) {
     .filter(p => p.colonized_by && p.colonized_by === m?.id)
     .reduce((a, p) => a + wrPlanetDef(p), 0);
 }
-// Anteil, mit dem die Planeten-Geschütze eine Angriffswelle abwehren (Server: × 0.5).
-function wrPlanetWaveDef(m) { return Math.round(wrPlanetDefTotal(m) * wrTechTurret(m) * 0.5); }
+// Anteil, mit dem die Planeten-Geschütze eine Angriffswelle abwehren (Server: × 0.5),
+// 26l zusätzlich **gedeckelt auf die Feuerkraft des eigenen Hafens**. Ohne den Deckel
+// hätten drei Bauplätze je Kolonie × acht Kolonien jede Welle dauerhaft entwertet —
+// Kolonien sollen die Heimatverteidigung verdoppeln können, nicht ersetzen.
+// ⚠️ Spiegel von resolve_space_wave (`v_pdef := LEAST(v_pdef, v_turret)`).
+function wrPlanetWaveDef(m) {
+  const roh = wrPlanetDefTotal(m) * wrTechTurret(m) * 0.5;
+  return Math.round(Math.min(roh, wrTurretPower(m)));
+}
+// Ungedeckelter Rohwert — nur für die Anzeige („davon angerechnet: …").
+function wrPlanetWaveDefRaw(m) { return Math.round(wrPlanetDefTotal(m) * wrTechTurret(m) * 0.5); }
 function wrFallbackDays(m)  { return wrHasTech(m, 'wt_e12') ? WR_FALLBACK_E12 : WR_FALLBACK_DAYS; }
 
 // Ist der Planet gegen Rückeroberung geschützt? Spiegel der Bedingungen in
@@ -3347,6 +4111,7 @@ function wrBindEvents() {
     if (techInfo) { wrTechLightbox(techInfo.dataset.wrTechinfo); return; }
     if (e.target.closest('[data-wr-pinfo]')) { wrPortLightbox(); return; }
     if (e.target.closest('[data-wr-sinfo]')) { wrStationLightbox(); return; }
+    if (e.target.closest('[data-wr-rinfo]')) { wrRefineLightbox(); return; }
     const astInfo = e.target.closest('[data-wr-astinfo]');
     if (astInfo) { wrAstLightbox(astInfo.dataset.wrAstinfo); return; }
     if (e.target.closest('[data-wr-winfo]')) { wrWerftLightbox(); return; }
@@ -3369,6 +4134,12 @@ function wrBindEvents() {
     }
     const tu = e.target.closest('[data-wr-tup]');
     if (tu && !tu.disabled) { await wrDefense('turret_upgrade', tu.dataset.wrTup, null); return; }
+    // ⬆️ Umrüsten (26k). Wert ist 'slot:zieltyp' — beide sind schlüsselartig, kein Doppelpunkt drin.
+    const tc = e.target.closest('[data-wr-tconv]');
+    if (tc && !tc.disabled) {
+      const [slot, type] = tc.dataset.wrTconv.split(':');
+      await wrDefense('turret_convert', slot, type); return;
+    }
 
     // 🛡️ Planeten-Verteidigung (26h) — Wert ist 'planetId:action'; die UUID enthält
     // keine Doppelpunkte, ein einfaches split reicht hier (anders als bei den Routen).
@@ -3376,6 +4147,20 @@ function wrBindEvents() {
     if (pb && !pb.disabled) {
       const [pid, action] = pb.dataset.wrPbuild.split(':');
       await wrPlanetBuild(pid, action); return;
+    }
+    // 🏙️ Kolonie-Bauplätze (26l) — Wert ist 'planetId:action:slot:type'. Der Typ darf
+    // leer sein (Aufrüsten), deshalb feste 4 Felder statt einer Längenprüfung.
+    const pt = e.target.closest('[data-wr-pturret]');
+    if (pt && !pt.disabled) {
+      const [pid, action, slot, type] = pt.dataset.wrPturret.split(':');
+      await wrPlanetBuild(pid, action, slot, type || null); return;
+    }
+    // 🏙️ Kolonie im Raumhafen auf-/zuklappen (26l)
+    const ct = e.target.closest('[data-wr-coltoggle]');
+    if (ct) {
+      const id = ct.dataset.wrColtoggle;
+      _wrColOpen = (_wrColOpen === id) ? null : id;
+      wrRender(); return;
     }
 
     // 🤝 Clan-Handel v2 (Gesuche + Schiffshandel)
@@ -3445,13 +4230,20 @@ function wrBindEvents() {
     const rfa = e.target.closest('[data-wr-refadj]');
     if (rfa && !rfa.disabled) {
       const [k, d] = rfa.dataset.wrRefadj.split(':');
-      const def = WR_REFINE[wrRefineTier(_wrMember)] || { capErz: 0, capKri: 0 };
-      if (k === 'erz') {
-        const maxE = Math.min(def.capErz, wrErz(_wrMember));
-        _wrRefErz = d === 'max' ? maxE : Math.max(0, Math.min(maxE, _wrRefErz + parseInt(d, 10)));
-      } else {
-        const maxK = Math.min(def.capKri, wrKristall(_wrMember));
-        _wrRefKri = d === 'max' ? maxK : Math.max(0, Math.min(maxK, _wrRefKri + parseInt(d, 10)));
+      // 26o: vier Rohstoffe statt zwei — als Tabelle, damit der vierte Zweig nicht wieder
+      // als `else` mitläuft (vorher war „alles ausser erz" = Kristall).
+      const def = WR_REFINE[wrRefineTier(_wrMember)]
+               || { capErz: 0, capKri: 0, capPla: 0, capQua: 0 };
+      const SLOT = {
+        erz: { cap: def.capErz,      have: wrErz(_wrMember),      get: () => _wrRefErz, set: (v) => { _wrRefErz = v; } },
+        kri: { cap: def.capKri,      have: wrKristall(_wrMember), get: () => _wrRefKri, set: (v) => { _wrRefKri = v; } },
+        pla: { cap: def.capPla || 0, have: wrPlasmoid(_wrMember), get: () => _wrRefPla, set: (v) => { _wrRefPla = v; } },
+        qua: { cap: def.capQua || 0, have: wrQuantum(_wrMember),  get: () => _wrRefQua, set: (v) => { _wrRefQua = v; } },
+      };
+      const s = SLOT[k];
+      if (s) {
+        const max = Math.min(s.cap, s.have);
+        s.set(d === 'max' ? max : Math.max(0, Math.min(max, s.get() + parseInt(d, 10))));
       }
       wrRender(); return;
     }
@@ -3461,8 +4253,22 @@ function wrBindEvents() {
     const recallBtn = e.target.closest('[data-wr-recall]');
     if (recallBtn) { await wrRecall(recallBtn.dataset.wrRecall); return; }
     if (e.target.closest('[data-wr-claim]')) { await wrTryClaim(false); return; }
-    if (e.target.closest('#wr-harvest')) { await wrHarvest(); return; }
+    if (e.target.closest('[data-wr-harvest]')) { await wrHarvest(); return; }
+
+    // 📋 Flottenkommando. Löschen VOR Laden prüfen — der 🗑️-Knopf liegt neben der
+    // Lade-Fläche, ein umgekehrter Test würde beim Löschen die Vorlage laden.
+    const tplDel = e.target.closest('[data-wr-tpldel]');
+    if (tplDel) { await wrTplDelete(tplDel.dataset.wrTpldel); return; }
+    const tplLoad = e.target.closest('[data-wr-tplload]');
+    if (tplLoad) { wrTplLoad(tplLoad.dataset.wrTplload); return; }
+    if (e.target.closest('#wr-tpl-save')) { await wrTplSave(); return; }
   };
+
+  // Der Vorlagen-Name muss das Neurendern überleben (jeder wrRender baut das DOM neu auf);
+  // deshalb bei jeder Eingabe in die Modulvariable spiegeln — dasselbe Muster wie die
+  // Raffinerie-Regler. Ohne das wäre das Feld nach dem ersten Tastendruck wieder leer.
+  const tplName = document.getElementById('wr-tpl-name');
+  if (tplName) tplName.oninput = () => { _wrTplName = tplName.value; };
 }
 
 // ── Aktionen ─────────────────────────────────────────────────────────────────
@@ -3599,6 +4405,13 @@ async function wrClaimBuild(silent) {
     if (res.built && Array.isArray(res.got) && res.got.length) {
       const txt = res.got.map(g => `${wrFmt(g.count)}× ${SPACE_SHIP_BY_KEY[g.ship]?.name || g.ship}`);
       wrToast(`🚀 Fertiggestellt: ${txt.join(' · ')}`, 'success');
+      // 🛩️ Trägerverband (26m). Eigener Feldname `builtShips`, damit die Prüfung dort
+      // nicht versehentlich an den Reise-/Aktions-Feldern hängt. Regel 3: nie blockierend.
+      try {
+        if (typeof checkSpaceAchievements === 'function') {
+          await checkSpaceAchievements(_wrMember, { builtShips: res.got, space: res.space });
+        }
+      } catch (e) { /* non-critical */ }
     }
     if (!silent) wrRender();
     return true;
@@ -3802,6 +4615,15 @@ async function wrDefense(action, slot, type) {
       wrToast(`🛰️ Raumhafen auf Stufe ${res.level} ausgebaut`, 'success');
       wrChat(`[[s:hafen]] ${_wrEsc(name)} hat den Raumhafen auf Stufe ${res.level} ausgebaut `
            + `(${wrFmt(res.cc)} CC) — jetzt ${wrPortDef(res.level).slots} Bauslots.`);
+    } else if (action === 'turret_convert') {
+      // 26k: eigener Zweig — „aufgerüstet" wäre hier irreführend, es ist ein Typwechsel.
+      const t = SPACE_TURRET_BY_KEY[res.type] || {};
+      const f = SPACE_TURRET_BY_KEY[res.from] || {};
+      wrToast(`${t.icon || '🛡️'} Umgerüstet auf ${t.name || 'Geschütz'} `
+            + `(${wrFmt(res.cc)} CC${res.rebate > 0 ? `, ${wrFmt(res.rebate)} CC angerechnet` : ''})`, 'success');
+      wrChat(`[[s:${res.type}]] ${_wrEsc(name)} hat am Raumhafen `
+           + `${_wrEsc(f.name || 'ein Geschütz')} auf ${_wrEsc(t.name || 'ein neues Geschütz')} umgerüstet `
+           + `— Feuerkraft jetzt 🛡️ ${wrFmt(res.turretPower)}.`);
     } else {
       const t = SPACE_TURRET_BY_KEY[res.type] || {};
       const verb = action === 'turret_build' ? 'gebaut' : `auf Stufe ${res.level} aufgerüstet`;
@@ -3809,6 +4631,18 @@ async function wrDefense(action, slot, type) {
       wrChat(`[[s:${res.type}]] ${_wrEsc(name)} hat am Raumhafen ${_wrEsc(t.name || 'ein Geschütz')} ${verb} `
            + `— Feuerkraft jetzt 🛡️ ${wrFmt(res.turretPower)}.`);
     }
+    // ⚠️ KEIN Tages-Log-Eintrag hier — das erledigt bereits DB.buildSpaceDefense
+    // (db.js, aggKey 'space_defense'). Ein zweiter Eintrag an dieser Stelle würde die
+    // Ausgabe doppelt buchen. Regel 1 ist damit über die db.js-Seite erfüllt.
+    //
+    // 🏰 Bastion-Achievement (26k). `harbor:true` ist PFLICHT — build_space_defense und
+    // build_planet_defense liefern beide `action:'turret_build'`; ohne die Kennzeichnung
+    // gäbe es „Festungswelt" (Planet) für ein Hafen-Geschütz. Regel 3: nie blockierend.
+    try {
+      if (typeof checkSpaceAchievements === 'function') {
+        await checkSpaceAchievements(_wrMember, Object.assign({}, res, { harbor: true }));
+      }
+    } catch (e) { /* non-critical */ }
     wrRender();
   } catch (e) {
     wrToast('Bau fehlgeschlagen: ' + e.message, 'error');
@@ -3850,11 +4684,14 @@ async function wrBuildMutterschiff() {
 
 // 🛡️ Feature ④ (26h): Kolonie ausbauen / Geschütz bauen / Quadranten-Station.
 // Kosten rechnet der SERVER (build_planet_defense) — der Client schickt nur die Aktion.
-async function wrPlanetBuild(planetId, action) {
+// 26l: slot/type kamen dazu (Kolonie hat drei Bauplätze). Die alten Aufrufer
+// (colony_upgrade, station_build) rufen weiterhin mit zwei Argumenten auf — die RPC
+// hat für beide Parameter DEFAULT NULL.
+async function wrPlanetBuild(planetId, action, slot, type) {
   if (_wrBusy) return;
   _wrBusy = true;
   try {
-    const res = await DB.buildPlanetDefense(_wrMember.id, planetId, action);
+    const res = await DB.buildPlanetDefense(_wrMember.id, planetId, action, slot, type);
     if (!res || res.error) { wrToast(wrErrText(res?.error), 'error'); return; }
     if (res.space) wrApplySpace(res.space);
     if (typeof res.coins_left === 'number') wrApplyCoins(res.coins_left);
@@ -3870,9 +4707,16 @@ async function wrPlanetBuild(planetId, action) {
       wrChat(`📡 ${_wrEsc(name)} hat bei ${_wrEsc(pl)} eine <strong>Quadranten-Station</strong> errichtet — `
            + `alle befreiten Planeten in ${_wrEsc(res.quadrant || '')} sind jetzt vor Rückeroberung geschützt.`);
     } else {
-      wrToast(`🛡️ Planeten-Geschütz Stufe ${res.level} auf ${pl}`, 'success');
-      wrChat(`🛡️ ${_wrEsc(name)} hat ${_wrEsc(pl)} mit Planeten-Geschützen der Stufe ${res.level} `
-           + `gesichert (${wrFmt(res.cc)} CC) — 🛡️ ${wrFmt(res.defense)} Feuerkraft.`);
+      // 26l: Kolonie-Geschütze sind jetzt einzelne Waffen auf Bauplätzen, nicht mehr
+      // eine Pauschalstufe — die Meldung nennt deshalb den Typ statt „Stufe N".
+      const t = SPACE_TURRET_BY_KEY[res.type] || {};
+      const f = SPACE_TURRET_BY_KEY[res.from] || {};
+      const verb = action === 'turret_convert' ? `umgerüstet (${f.name || '?'} → ${t.name || '?'})`
+                 : action === 'turret_upgrade' ? 'aufgerüstet' : 'gebaut';
+      wrToast(`${t.icon || '🛡️'} ${t.name || 'Geschütz'} auf ${pl} ${verb}`, 'success');
+      wrChat(`[[s:${res.type}]] ${_wrEsc(name)} hat auf der Kolonie ${_wrEsc(pl)} `
+           + `${_wrEsc(t.name || 'ein Geschütz')} ${_wrEsc(verb)} (${wrFmt(res.cc)} CC) — `
+           + `🛡️ ${wrFmt(res.defense)} Feuerkraft, ${res.slots || 0} von ${WR_PLANET_SLOTS} Bauplätzen belegt.`);
     }
     try { if (typeof checkSpaceAchievements === 'function') await checkSpaceAchievements(_wrMember, res); } catch (e) {}
     // Die Planetenzeile hat sich geändert (Stufe/Geschütz/Station) → Galaxie neu holen,
@@ -3974,6 +4818,11 @@ function wrChatReport(r, name) {
         if (r.cc > 0)       b.push(`${wrFmt(r.cc)} CC`);
         if (r.erz > 0)      b.push(`${wrFmt(r.erz)} ${wrArtTok('erz')} Erz`);
         if (r.kristall > 0) b.push(`${wrFmt(r.kristall)} ${wrArtTok('kristall')} Kristall`);
+        // 26c liefert die Ring-Rohstoffe mit — sie fehlten nur in der Meldung (JP 2026-07-29).
+        // ⚠️ `plasmoid`/`quantum` mussten dafür in CHAT_ART (app.js) ergänzt werden, sonst
+        // steht statt des Bildes ein neutrales Ersatzsymbol im Chat.
+        if (r.plasmoid > 0) b.push(`${wrFmt(r.plasmoid)} ${wrArtTok('plasmoid')} Plasmoiden-Staub`);
+        if (r.quantum > 0)  b.push(`${wrFmt(r.quantum)} ${wrArtTok('quantum')} Quantenschaum`);
         const beute = b.length ? ` Beute: ${b.join(' · ')}.` : '';
         wrChat(`⚔️ ${who} hat die Wächter von ${_wrEsc(r.planet)} besiegt — Planet befreit!${loss}${beute}${kap}`, name);
       } else {
@@ -4077,12 +4926,17 @@ function wrTurretLightbox(type) {
   const t = SPACE_TURRET_BY_KEY[type];
   if (!t) return;
   const s = [1, 2, 3].map(lv => wrTurretStats(t.key, lv));
+  const frei = wrTurretUnlocked(_wrMember, t.key);
   wrArtLightbox(t.art, t.icon, t.name, t.desc, [
     [`${wrIc("def")} Feuerkraft`, `${s[0].atk} / ${s[1].atk} / ${s[2].atk}`],
     [`${wrIc("yard")} Hafen ab`, `Stufe ${t.minPort}`],
-    ['💰 Neubau', `${wrFmt(t.cc)} CC`],
+    ['💰 Neubau', `${wrFmt(t.cc)} CC${t.plasmoid ? ` · ${t.plasmoid} 🟣` : ''}`],
     ['⬆️ Ausbau', `${wrFmt(s[1].cc)} / ${wrFmt(s[2].cc)} CC`],
-  ]);
+    // 26k: die Freischaltung gehört sichtbar dazu — sonst rätselt man, warum „Bauen" fehlt.
+    ['🔬 Forschung', t.needs ? `${frei ? '✓ ' : '🔒 '}${_wrEsc(wrTechName(t.needs))}` : '— frei verfügbar'],
+  // ⚠️ Der Ordner MUSS mit: die Geschütz-Bilder liegen seit JPs Meldung vom 29.07.
+  // alle in assets/weltraum/ (die Forschungs-Renders).
+  ], wrTurretFolder(t));
 }
 
 // 🔬 Zoom für Forschungselemente (JP 2026-07-26): großes Bild + Wirkung/Kosten/Status.
@@ -4351,10 +5205,21 @@ function wrReport(r) {
       <span class="wr-sub">— geborgen und in die Heimatflotte übernommen</span></span></div>`);
   }
 
-  const beute = [];
-  if (r.cc > 0)       beute.push(`${wrFmt(r.cc)} CC`);
-  if (r.erz > 0)      beute.push(`${wrFmt(r.erz)} 🪨 Erz`);
-  if (r.kristall > 0) beute.push(`${wrFmt(r.kristall)} 💎 Kristall`);
+  // 🟣/🌀 fehlten hier (JP 2026-07-29: „bei dem Sieg werden nur erbeutetes CC, Erz und Kristall
+  // angegeben"). Der Server liefert sie seit 26c längst mit — es war reine Anzeige-Lücke.
+  // ⚠️ ZWEI Fassungen: `beute` mit echten Icons fürs Overlay, `beuteTxt` mit Emoji für den
+  // Toast-Rückfall unten. Eine wrIc()-Bildhülle im Toast käme als leerer Kreis heraus.
+  const beute = [], beuteTxt = [];
+  const push = (n, ic, emoji, name) => {
+    if (!(n > 0)) return;
+    beute.push(`${wrFmt(n)} ${ic} ${name}`);
+    beuteTxt.push(`${wrFmt(n)} ${emoji} ${name}`);
+  };
+  if (r.cc > 0) { beute.push(`${wrFmt(r.cc)} CC`); beuteTxt.push(`${wrFmt(r.cc)} CC`); }
+  push(r.erz,      wrIc('erz'), '🪨', 'Erz');
+  push(r.kristall, wrIc('kri'), '💎', 'Kristall');
+  push(r.plasmoid, wrIc('pla'), '🟣', 'Plasmoiden-Staub');
+  push(r.quantum,  wrIc('qua'), '🌀', 'Quantenschaum');
   if (beute.length) lines.push(`<div class="wr-good">Beute: ${beute.join(' · ')}</div>`);
   if (r.bergerBonus > 1) {
     lines.push(`<div class="wr-sub">♻️ Bergungsschiffe haben die Ausbeute um `
@@ -4389,7 +5254,7 @@ function wrReport(r) {
     });
     document.body.appendChild(ov);
   } catch (e) {
-    wrToast(`🚀 Flotte zurück${beute.length ? ' — Beute: ' + beute.join(' · ') : ''}`, 'success');
+    wrToast(`🚀 Flotte zurück${beuteTxt.length ? ' — Beute: ' + beuteTxt.join(' · ') : ''}`, 'success');
   }
 }
 
@@ -4404,8 +5269,10 @@ function wrStartLoop() {
     let due = false;
     for (const t of trips) {
       const rem = Date.parse(t.returnAt) - Date.now();
-      const eta = document.querySelector(`[data-wr-eta="${t.id}"]`);
-      if (eta) eta.textContent = wrCountdown(rem);
+      // Reise-Karte UND kompakte Leiste tragen dasselbe Attribut -> querySelectorAll.
+      for (const eta of document.querySelectorAll(`[data-wr-eta="${t.id}"]`)) {
+        eta.textContent = wrCountdown(rem);
+      }
       if (rem <= 0) due = true;
     }
     wrDrawMap();
@@ -4550,13 +5417,27 @@ function wrErrText(err) {
     not_your_colony:       'Nur auf deinen eigenen Kolonien möglich.',
     colony_max:            'Diese Kolonie ist bereits voll ausgebaut (Stufe 3).',
     defense_max:           'Die Planeten-Geschütze sind bereits auf Stufe 3.',
-    need_tech_e10:         'Erforsche zuerst 🟣 Planetar-Schildgenerator (wt_e10).',
-    need_tech_f7:          'Erforsche zuerst 🌀 Quadranten-Kommandostation (wt_f7).',
+    // ⚠️ Reiner Text (Toast) — hier KEINE wrIc()-Icons, die Hülle würde als Markup sichtbar.
+    // Kein führendes Emoji: wrTechRef bringt das Ast-Icon bereits mit (sonst steht es doppelt).
+    need_tech_e10:         `Erforsche zuerst „${wrTechName('wt_e10')}" — ${wrTechRef('wt_e10')}.`,
+    need_tech_f7:          `Erforsche zuerst „${wrTechName('wt_f7')}" — ${wrTechRef('wt_f7')}.`,
     need_defense_3:        'Erst Planeten-Geschütze auf Stufe 3 ausbauen.',
     station_exists:        'Hier steht bereits eine Quadranten-Station.',
     quadrant_has_station:  'In diesem Quadranten steht schon eine Station.',
     // 🛸 Mutterschiff (26j)
     missing_parts:         'Es fehlen Rümpfe für das Mutterschiff.',
+    // 🛩️ Ring-Gate (26m). Der Picker warnt schon VOR dem Absenden und sperrt den Knopf —
+    // dieser Text greift nur noch bei einem veralteten Client oder einem Direktaufruf.
+    jaeger_need_carrier:   'Kleine Jäger schaffen den Sprung nach Ring 2/3 nicht aus eigener Kraft — '
+                         + `je ${WR_CARRIER_SEATS} Jäger braucht es ein 🛩️ Trägerschiff im Verband. `
+                         + '(Große Jäger fliegen überall hin.)',
+    // 🛡️ Geschütz-Ausbau (26k)
+    turret_locked:         'Dieses Geschütz musst du zuerst erforschen (Ast 🛡️ Bewaffnung bzw. 🟣/🌀).',
+    turret_not_better:     'Umrüsten geht nur auf ein STÄRKERES Geschütz.',
+    same_turret:           'Dieses Geschütz steht dort bereits.',
+    turret_damaged:        'Ein beschädigtes Geschütz lässt sich nicht umrüsten — warte die Reparatur ab.',
+    port_too_small:        'Dafür ist der Raumhafen noch zu klein — erst ausbauen.',
+    yard_max:              'Die Werft ist bereits voll ausgebaut (Stufe 3).',
   };
   return map[err] || ('Fehler: ' + (err || 'unbekannt'));
 }

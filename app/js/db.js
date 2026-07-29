@@ -2556,8 +2556,15 @@ const DB = (() => {
         p_slot: slot || null, p_type: type || null });
       if (error) return { error: error.message };
       if (data && data.ok && (data.cc || 0) > 0) {
+        // 26k: 'turret_convert' und 'yard_upgrade' brauchen eigene Beschriftungen —
+        // sonst stünde im Tages-Log „Geschütz aufgerüstet" für einen Typwechsel bzw.
+        // für den Werft-Ausbau (der seit 21d über dieselbe RPC läuft).
         const label = action === 'port_upgrade'
           ? `🛰️ Raumhafen-Ausbau (Stufe ${data.level})`
+          : action === 'yard_upgrade'
+          ? `🏗️ Werft-Ausbau (Stufe ${data.level})`
+          : action === 'turret_convert'
+          ? `🛡️ Geschütz umgerüstet: ${data.from} → ${data.type}`
           : `🛡️ Geschütz ${action === 'turret_build' ? 'gebaut' : 'aufgerüstet'}: ${data.type} (St. ${data.level})`;
         try {
           await appendTodayLogFresh(memberId, [{
@@ -2898,17 +2905,24 @@ const DB = (() => {
   // Wie buildSpaceDefense schickt der Client KEINE Kosten mit — build_planet_defense
   // rechnet sie selbst; der Log-Betrag kommt aus der Antwort zurück (echte Abbuchung,
   // Muster aus dem Werft-Preisfix Teil 16).
-  async function buildPlanetDefense(memberId, planetId, action) {
+  // 26l: Signatur um p_slot/p_type erweitert (Kolonie hat jetzt 3 Bauplätze statt einer
+  // Pauschalstufe). Aufruf mit BENANNTEN Parametern — die alte 3-Argument-Fassung wurde
+  // in der Migration gedroppt, sonst wäre der Aufruf mehrdeutig.
+  async function buildPlanetDefense(memberId, planetId, action, slot, type) {
     try {
       const { data, error } = await _sb.rpc('build_planet_defense', {
-        p_member_id: memberId, p_planet_id: planetId, p_action: action });
+        p_member_id: memberId, p_planet_id: planetId, p_action: action,
+        p_slot: slot || null, p_type: type || null });
       if (error) return { error: error.message };
       if (data && data.ok && (data.cc || 0) > 0) {
         const label = action === 'colony_upgrade'
           ? `🏙️ Kolonie ausgebaut: ${data.planet || 'Planet'} (Stufe ${data.level})`
           : action === 'station_build'
             ? `📡 Quadranten-Station errichtet: ${data.planet || 'Planet'}`
-            : `🛡️ Planeten-Geschütz: ${data.planet || 'Planet'} (Stufe ${data.level})`;
+            : action === 'turret_convert'
+              ? `🛡️ Kolonie-Geschütz umgerüstet: ${data.planet || 'Planet'} (${data.from} → ${data.type})`
+              : `🛡️ Kolonie-Geschütz ${action === 'turret_build' ? 'gebaut' : 'aufgerüstet'}: `
+                + `${data.planet || 'Planet'} (${data.type})`;
         try {
           await appendTodayLogFresh(memberId, [{
             label, amount: -data.cc, cat: 'weltraum',
@@ -2952,11 +2966,16 @@ const DB = (() => {
 
   // 🏭 Raffinerie (26a): Erz+Kristall → CC im Batch. refine_start legt eine Charge
   // ein, refine_claim schreibt die fertige CC gut (wie die Beute-Gutschrift).
-  async function refineStart(memberId, erz, kri) {
+  // 26o: dazu 🟣 Plasmoid (ab Stufe 3) und 🌀 Quantenschaum (ab Stufe 4).
+  // ⚠️ Die RPC hat jetzt SECHS Parameter; die alte 4-Argument-Fassung wurde in 26o
+  // gedroppt (sonst mehrdeutig). Ein alter Client bekäme hier einen RPC-Fehler —
+  // deshalb müssen 26o und dieses db.js zusammen hochgeladen werden.
+  async function refineStart(memberId, erz, kri, pla, qua) {
     try {
       if (!_groupId) return { error: 'no_group' };
       const { data, error } = await _sb.rpc('refine_start', {
-        p_member_id: memberId, p_group_id: _groupId, p_erz: erz || 0, p_kri: kri || 0 });
+        p_member_id: memberId, p_group_id: _groupId, p_erz: erz || 0, p_kri: kri || 0,
+        p_pla: pla || 0, p_qua: qua || 0 });
       if (error) return { error: error.message };
       return data || {};
     } catch (e) { return { error: e.message }; }
