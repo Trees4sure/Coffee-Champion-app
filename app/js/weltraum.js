@@ -2184,18 +2184,25 @@ function wrTechHtml(m) {
           poor:   '<span class="wr-tech-poor">Mittel reichen nicht</span>',
           buy:    `<button class="wr-btn wr-btn-sm" data-wr-tech="${t.key}">Erforschen</button>`,
         }[st] || '';
+        // 📐 Aufbau (JP 2026-07-30: „Die Forschung ist sehr gequetscht … schreibe ihn doch
+        // darüber oder darunter und den Beschreibungstext auf die komplette Breite,
+        // darunter die Kosten, dann Abstand und diese Texte"):
+        //   Zeile 1: Bild + Name
+        //   Zeile 2: Wirkung  — über die GANZE Breite
+        //   Zeile 3: Kosten
+        //   Zeile 4: Zustand/Knopf, mit Abstand darüber
+        // Vorher stand der Zustand als dritte Flex-Spalte RECHTS und nahm der Beschreibung
+        // in einer ~230-px-Spalte den halben Platz weg.
         return `<div class="wr-tech-node wr-tech-${st}">
             <span class="wr-fl-art wr-ship-zoom" data-wr-techinfo="${t.key}" title="Groß ansehen"><img src="assets/weltraum/${t.art}.png" alt=""
               onerror="this.parentNode.classList.add('wr-art-fail');this.remove()"
               ><span class="wr-fl-fb">${a.icon}</span><span class="wr-zoom-hint">🔍</span></span>
-            <span class="wr-tech-txt">
-              <strong>${_wrEsc(t.name)}</strong>
-              <span class="wr-sub">${wrIcText(t.wirkung)}</span>
-              <span class="wr-sub">${wrFmt(t.cc)} CC${t.erz ? ` · ${wrFmt(t.erz)} ${wrIc('erz')}` : ''}${
-                t.kristall ? ` · ${wrFmt(t.kristall)} ${wrIc('kri')}` : ''}${
-                t.plasmoid ? ` · ${wrFmt(t.plasmoid)} ${wrIc('pla')}` : ''}${
-                t.quantum ? ` · ${wrFmt(t.quantum)} ${wrIc('qua')}` : ''}</span>
-            </span>
+            <strong class="wr-tech-name">${_wrEsc(t.name)}</strong>
+            <span class="wr-tech-desc wr-sub">${wrIcText(t.wirkung)}</span>
+            <span class="wr-tech-cost wr-sub">${wrFmt(t.cc)} CC${t.erz ? ` · ${wrFmt(t.erz)} ${wrIc('erz')}` : ''}${
+              t.kristall ? ` · ${wrFmt(t.kristall)} ${wrIc('kri')}` : ''}${
+              t.plasmoid ? ` · ${wrFmt(t.plasmoid)} ${wrIc('pla')}` : ''}${
+              t.quantum ? ` · ${wrFmt(t.quantum)} ${wrIc('qua')}` : ''}</span>
             <span class="wr-tech-act">${aktion}</span>
           </div>`;
       }).join('');
@@ -3727,7 +3734,22 @@ function wrRouteModeHtml(m, p, mode) {
       <span class="wr-sub">— ${wrFmt(left)} Einheiten liegen hier</span></div>
       <div class="wr-sub">Dafür brauchst du ${wrIc("salvage")} Bergungsschiffe aus der Werft.</div></div>`;
   }
-  const sel  = Math.max(0, Math.min(cur + free, parseInt(_wrRouteSel?.[rkey], 10) ?? cur));
+  // ⚠️ HIER LAG DER EIGENTLICHE FEHLER (JP 2026-07-30: „reagiert weiterhin nicht"):
+  //     parseInt(_wrRouteSel?.[rkey], 10) ?? cur
+  // `??` fängt nur null/undefined — `parseInt(undefined, 10)` liefert aber **NaN**, und
+  // NaN ist keins von beidem. Solange für diesen Planeten noch nichts vorgewählt war,
+  // stand deshalb `sel = NaN`:
+  //   • die Anzahl zeigte „NaN“,
+  //   • beide Stepper-Knöpfe waren aktiv (jeder Vergleich mit NaN ist false),
+  //   • und der Bestätigungsknopf trug `data-wr-routeset="<id>:NaN:wreck"` — der Klick
+  //     lief damit ins Leere, es passierte sichtbar NICHTS.
+  // Der Klick auf + hat also immer funktioniert und `_wrRouteSel` korrekt hochgezählt
+  // (der Handler rechnet ohne parseInt); nur die ANZEIGE war von Anfang an kaputt.
+  // ⚠️ MERKE: `parseInt(...) ?? fallback` ist immer falsch — `??` rettet nicht vor NaN.
+  // Richtig ist `Number.isFinite()` (oder `|| fallback`, wenn 0 kein gültiger Wert ist —
+  // hier ist 0 gültig: „Route auflösen").
+  const wunsch = parseInt(_wrRouteSel?.[rkey], 10);
+  const sel  = Math.max(0, Math.min(cur + free, Number.isFinite(wunsch) ? wunsch : cur));
   const fuel = wrRouteFuel(sel);
   const sd   = SPACE_SHIP_BY_KEY[ship];
 
