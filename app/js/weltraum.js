@@ -1251,9 +1251,15 @@ const WR_TABS = [
   { key:'karte', icon:'🌌', name:'Karte' },
   // 🛩️ Flotten (JP 2026-07-29): Verbände, Dauerernte und Bergung lagen vorher verstreut —
   // die Reise-Karten über ALLEN Tabs, die Routen im Raumhafen. Jetzt an einem Ort.
-  { key:'flotten', icon:'🛩️', name:'Flotten' },
-  { key:'hafen', icon:'🛰️', name:'Raumhafen' },
-  { key:'werft', icon:'🏗️', name:'Werft' },
+  // 🖼️ ECHTE BILDER statt Emoji (JP 2026-07-30): „das Flugzeug bei Flotten ist komisch und
+  // der Satellit für Raumhafen auch." Das Emoji bleibt als `icon` stehen — es ist der
+  // Rückfall, wenn das Bild fehlt (`wr-art-fail`-Muster wie überall sonst).
+  { key:'flotten', icon:'🛩️', art:'ic_travel', name:'Flotten' },
+  { key:'hafen', icon:'🛰️', art:'base_3', name:'Raumhafen' },
+  // ⚠️ Bewusst `base_werft_3` (Vollausbau-Render) und NICHT das stufenabhängige Bild:
+  // ein Tab-Symbol, das sich beim Werft-Ausbau ändert, wirkt wie ein Fehler — man sucht
+  // den Tab an seinem Aussehen. Der Stufen-Render steht im Panel und in der Lightbox.
+  { key:'werft', icon:'🏗️', art:'base_werft_3', name:'Werft' },
   { key:'tech',  icon:'🔬', name:'Forschung' },
   { key:'handel', icon:'🤝', name:'Handel' },
   { key:'log',   icon:'📜', name:'Protokoll' },
@@ -1261,7 +1267,15 @@ const WR_TABS = [
 function wrTabsHtml() {
   return `<div class="wr-tabs">${WR_TABS.map(t =>
     `<button class="wr-tab${_wrTab === t.key ? ' active' : ''}" data-wr-tab="${t.key}"
-      >${t.icon} <span class="wr-tab-l">${t.name}</span></button>`).join('')}</div>`;
+      >${t.art
+          // ⚠️ Der Rückfall gehört an den ELTERN-Knoten (`wr-art-fail` auf dem <span>),
+          // nicht an das <img> selbst — sonst bliebe der Tab ohne jedes Symbol, wenn ein
+          // Bild fehlt. Gleiches Muster wie wrTurretImg/wr-slot-art.
+          ? `<span class="wr-tab-art"><img src="assets/space/${t.art}.png" alt=""
+               onerror="this.parentNode.classList.add('wr-art-fail');this.remove()"
+             ><span class="wr-tab-fb">${t.icon}</span></span>`
+          : t.icon
+        } <span class="wr-tab-l">${t.name}</span></button>`).join('')}</div>`;
 }
 function wrSetTab(key) {
   if (!WR_TABS.some(t => t.key === key) || _wrTab === key) return;
@@ -2710,6 +2724,84 @@ function wrPlanetSlotsHtml(m, p) {
 // ── 🛡️ Feature ④: Kolonie & Verteidigung im Planeten-Detail (26h) ───────────
 // Erscheint NUR auf eigenen Kolonien. Die Kosten hier sind reine Anzeige —
 // gerechnet und abgebucht wird in build_planet_defense (server-autoritativ).
+// ── ⚡ Kraftwerk-Panel einer Kolonie (26p) ────────────────────────────────────
+// Bewusst kompakter als das Hafen-Panel (wrPowerHtml): eine Kolonie hat einen Generator
+// und drei Bauplätze, kein Ausbau-Leiter-Drumherum. Die Werte sind dieselben Formeln.
+function wrColonyPowerHtml(m, p, canPay, priceTxt) {
+  const dem = wrColonyDemand(p), sup = wrColonySupply(p), fac = wrColonyFactor(p);
+  const gen = wrPlanetPower(p), def = wrPlanetGenDef(p);
+  const pid = p.id;
+  let body;
+  if (gen && def) {
+    const glv = wrPlanetGenLevel(p);
+    const st  = wrPgenStats(def.key, glv);
+    const up  = glv < WR_POWER_MAX ? wrPgenStats(def.key, glv + 1) : null;
+    const zie = SPACE_POWER.filter(g => g.out[1] > def.out[1] && wrPowerUnlocked(m, g.key));
+    body = `
+      <div class="wr-gen wr-gen-full">
+        <div class="wr-gen-art" data-wr-geninfo="${def.key}" title="Groß ansehen">
+          <img src="assets/${def.folder}/${def.art}.png" alt=""
+            onerror="this.parentNode.classList.add('wr-art-fail');this.remove()"
+          ><span class="wr-gen-fb">${def.icon}</span><span class="wr-zoom-hint">🔍</span></div>
+        <div class="wr-gen-info">
+          <div class="wr-gen-name">${_wrEsc(def.name)} <span class="wr-sub">Stufe ${glv}</span></div>
+          <div class="wr-gen-out">⚡ ${wrFmt(st.output)}
+            <span class="wr-sub">+ ${wrFmt(wrColonyLevel(p) * WR_COLONY_PER_LEVEL)} aus der Kolonie-Stufe</span></div>
+          ${up
+            ? `<button class="wr-btn wr-btn-sm" data-wr-pturret="${pid}:power_upgrade::"
+                 ${canPay(up) ? '' : 'disabled'}>Auf Stufe ${glv + 1} ausbauen
+                 <span class="wr-btn-sub">${priceTxt(up)} → ⚡ ${wrFmt(up.output)}</span></button>`
+            : '<div class="wr-slot-max">✅ Vollausbau</div>'}
+          ${zie.length ? `<div class="wr-slot-conv">${zie.map(g => {
+            const pr = wrPgenConvertPrice(p, g.key);
+            return `<button class="wr-btn wr-btn-sm wr-btn-conv"
+                      data-wr-pturret="${pid}:power_convert::${g.key}" ${canPay(pr) ? '' : 'disabled'}>
+              <span class="wr-conv-name">⬆️ ${_wrEsc(g.name)}</span>
+              <span class="wr-conv-line">${priceTxt(pr)}</span>
+              ${pr.rebate > 0 ? `<span class="wr-conv-save">−${wrFmt(pr.rebate)} CC angerechnet</span>` : ''}
+              <span class="wr-conv-line">→ ⚡ ${wrFmt(pr.output)} · zurück auf Stufe 1</span>
+            </button>`;
+          }).join('')}</div>` : ''}
+        </div>
+      </div>`;
+  } else {
+    body = `<div class="wr-gen-opts">${SPACE_POWER.map(g => {
+      const st   = wrPgenStats(g.key, 1);
+      const frei = wrPowerUnlocked(m, g.key);
+      const txt  = frei ? priceTxt(st)
+                        : `🔒 Forschung „${_wrEsc(wrTechName(g.needs))}" (${_wrEsc(wrTechRef(g.needs))})`;
+      return `
+        <div class="wr-slot-opt${frei ? '' : ' wr-slot-opt-lock'}">
+          <span class="wr-slot-opt-art wr-ship-zoom" data-wr-geninfo="${g.key}" title="Groß ansehen">
+            <img src="assets/${g.folder}/${g.art}.png" alt=""
+              onerror="this.parentNode.classList.add('wr-art-fail');this.remove()"
+            ><span class="wr-slot-opt-fb">${g.icon}</span><span class="wr-zoom-hint">🔍</span></span>
+          <span class="wr-slot-opt-txt">
+            <span class="wr-slot-opt-n">${_wrEsc(g.name)}</span>
+            <span class="wr-slot-opt-a">⚡ ${wrFmt(g.out[1])} / ${wrFmt(g.out[2])} / ${wrFmt(g.out[3])}</span>
+            <span class="wr-slot-opt-p">${txt}</span>
+          </span>
+          <button class="wr-btn wr-btn-sm" data-wr-pturret="${pid}:power_build::${g.key}"
+            ${(frei && canPay(st)) ? '' : 'disabled'}>Bauen</button>
+        </div>`;
+    }).join('')}</div>`;
+  }
+  return `
+    <div class="wr-pdef-row wr-pdef-power">
+      <div class="wr-pdef-lbl">⚡ Energieversorgung
+        <span class="wr-sub">Grundversorgung ${wrFmt(wrColonyLevel(p) * WR_COLONY_PER_LEVEL)} aus Kolonie-Stufe ${wrColonyLevel(p)} · Preise ×${String(WR_PTURRET_MULT).replace('.', ',')}</span></div>
+      <div class="wr-pdef-val ${fac < 1 ? 'wr-bad' : ''}">${wrFmt(dem)} / ${wrFmt(sup)}</div>
+      <div class="wr-nrg-bar ${dem > sup ? 'wr-nrg-short' : ''}">
+        <div class="wr-nrg-fill" style="width:${sup > 0 ? Math.min(100, Math.round(dem / sup * 100)) : 100}%"></div>
+      </div>
+      ${fac < 1
+        ? `<div class="wr-bad">⚡ Unterversorgt — die Geschütze dieser Kolonie feuern mit
+             ${Math.round(fac * 100)} % (es fehlen ${wrFmt(dem - sup)} Energie).</div>`
+        : `<div class="wr-sub">Versorgt. Noch ${wrFmt(Math.max(0, sup - dem))} Energie frei.</div>`}
+      ${body}
+    </div>`;
+}
+
 function wrPlanetDefHtml(m, p) {
   if (!p || p.colonized_by !== m?.id) return '';
   const coins = parseFloat(m?.coins) || 0;
@@ -2767,6 +2859,12 @@ function wrPlanetDefHtml(m, p) {
                <span class="wr-sub">(${_wrEsc(wrTechRef('wt_e10'))})</span>.</div>`
           : wrPlanetSlotsHtml(m, p)}
       </div>
+
+      ${/* ⚡ Kolonie-Kraftwerk (26p, JP 2026-07-30: „Die Kolonien brauchen ebenfalls
+            Energie-Generatoren!"). Steht DIREKT unter den Bauplätzen — dort entsteht der
+            Bedarf. Nur zeigen, wenn die Geschütze überhaupt freigeschaltet sind, sonst
+            erklärt das Panel eine Mechanik zu etwas, das es noch nicht gibt. */''}
+      ${hasE10 ? wrColonyPowerHtml(m, p, canPay, priceTxt) : ''}
 
       ${stationHere
         ? `<div class="wr-station-done">
@@ -2858,7 +2956,25 @@ function wrColoniesHtml(m) {
               (!wrResMinable(m, typ) && tagAmt === 0) ? ` 🔒 ${meta.icon} braucht die Abbau-Technik` : ''}</span></span>
           <strong>+${wrFmt(amt + (side ? side.erz + side.kri : 0))}</strong>
         </button>
-        ${offen && pl ? `<div class="wr-col-body">${wrPlanetDefHtml(m, pl)}</div>` : ''}
+        ${/* 🏙️ VOLLSTÄNDIGE Steuerung im Akkordeon (JP 2026-07-30: „Ich wollte doch, dass
+              man die Kolonien unter Raumhafen ebenfalls ansteuern kann anstatt nur über
+              den Klick in die Karte!").
+              BEFUND: das Akkordeon gab es seit 26l, es zeigte aber NUR wrPlanetDefHtml
+              (Ausbau + Geschütze + Station). Der Karten-Klick rendert DREI Panels — es
+              fehlten die Routen (Dauerernte/Bergung) und die Rückfall-Warnung. Genau die
+              braucht man zum „Ansteuern", also war die Karte weiter Pflicht.
+              MERKE: Wenn zwei Orte denselben Gegenstand zeigen, die Panel-LISTE
+              vergleichen, nicht nur prüfen, ob „etwas" da ist. */''}
+        ${offen && pl ? `<div class="wr-col-body">
+            ${wrFallbackHtml(pl, m)}
+            ${wrPlanetDefHtml(m, pl)}
+            ${wrRoutePanelHtml(m, pl)}
+            ${/* Für alles Flottenbezogene (Angriff, Verstärkung, Kolonieschiff) bleibt die
+                  Karte der richtige Ort — der Verband-Picker gehört an die Flugbahn.
+                  Dieser Knopf springt dorthin, statt den Picker zu duplizieren. */''}
+            <button class="wr-btn wr-btn-sm" data-wr-colmap="${_wrEsc(id)}"
+              >🌌 Auf der Sternkarte zeigen</button>
+          </div>` : ''}
         ${offen && !pl ? '<div class="wr-col-body"><div class="wr-sub">Planetendaten noch nicht geladen.</div></div>' : ''}
       </div>`;
   }
@@ -3927,13 +4043,73 @@ function wrPlanetTurrets(p) {
   const t = p && p.turrets;
   return (t && typeof t === 'object') ? t : {};
 }
+
+// ── ⚡ Kolonie-Kraftwerke (26p, JP 2026-07-30) ────────────────────────────────
+// ⚠️ CLIENT-SYNC-PFLICHT: Spiegel von _space_colony_supply / _space_pgen_def /
+// _space_colony_power_factor / _space_planet_power_nrg.
+// Die Kolonie rechnet mit ihrer EIGENEN Versorgung — ein gemeinsamer Topf mit dem
+// Raumhafen wäre falsch (Kolonien liegen Ringe entfernt) und hätte den Hafen mitgerissen.
+// Grundversorgung = Kolonie-Stufe × 10 (10/20/30): der Ausbau bekommt damit einen zweiten
+// Sinn neben dem Ertrag.
+const WR_COLONY_PER_LEVEL = 10;
+function wrPlanetPower(p)   { const g = p && p.power; return (g && typeof g === 'object' && g.type) ? g : null; }
+function wrPlanetGenDef(p)  { const g = wrPlanetPower(p); return g ? SPACE_POWER_BY_KEY[g.type] || null : null; }
+function wrPlanetGenLevel(p) {
+  return Math.max(1, Math.min(WR_POWER_MAX, parseInt(wrPlanetPower(p)?.level, 10) || 1));
+}
+// Kolonie-Generator: gleiche Ausgabe, Preis ×1,5 (wie alle Kolonie-Bauten, 26l).
+function wrPgenStats(type, level) {
+  const s = wrPowerStats(type, level);
+  if (!s) return null;
+  return { output: s.output,
+           cc:       Math.round(s.cc       * WR_PTURRET_MULT),
+           erz:      Math.round(s.erz      * WR_PTURRET_MULT),
+           kristall: Math.round(s.kristall * WR_PTURRET_MULT),
+           plasmoid: Math.round(s.plasmoid * WR_PTURRET_MULT),
+           quantum:  Math.round(s.quantum  * WR_PTURRET_MULT) };
+}
+function wrPgenConvertPrice(p, toType) {
+  const to = wrPgenStats(toType, 1);
+  if (!to) return null;
+  const cur = wrPlanetPower(p);
+  const old = cur ? wrPgenStats(cur.type, wrPlanetGenLevel(p)) : null;
+  const rebate = Math.round((old?.cc || 0) * 0.5);
+  return { cc: Math.max(0, to.cc - rebate), rebate, output: to.output,
+           erz: to.erz, kristall: to.kristall, plasmoid: to.plasmoid, quantum: to.quantum };
+}
+function wrColonySupply(p) {
+  let sup = wrColonyLevel(p) * WR_COLONY_PER_LEVEL;
+  const g = wrPlanetPower(p);
+  if (g) sup += wrPgenStats(g.type, wrPlanetGenLevel(p))?.output || 0;
+  return sup;
+}
+// Bedarf aller einsatzbereiten Kolonie-Geschütze — dieselbe dmg-Regel wie am Hafen.
+function wrColonyDemand(p) {
+  let sum = 0;
+  for (const slot of Object.values(wrPlanetTurrets(p))) {
+    if (!slot || typeof slot !== 'object') continue;
+    if (wrTurretDamaged(slot)) continue;
+    sum += wrTurretEnergy(slot.type, slot.level);
+  }
+  return Math.round(sum);
+}
+function wrColonyFactor(p) {
+  const dem = wrColonyDemand(p);
+  if (dem <= 0) return 1;
+  return Math.min(1, Math.max(WR_POWER_FLOOR, wrColonySupply(p) / Math.max(1, dem)));
+}
 const WR_COLONY_UP = [ null, null,
   { level: 2, cc:  9000, erz: 180, kristall:  45, plasmoid:  0 },
   { level: 3, cc: 20000, erz: 380, kristall: 120, plasmoid: 15 },
 ];
 const WR_STATION = { cc: 30000, erz: 500, kristall: 200, plasmoid: 60, quantum: 30 };
 // Rückfall-Frist ungeschützter Planeten — Spiegel von _space_fallback_days.
-const WR_FALLBACK_DAYS = 5, WR_FALLBACK_E12 = 7;
+// ⚠️ 5 → 3 Tage (JP 2026-07-30, migration_2026-07-26q): „es muss die Rückeroberung
+// schneller gehen … da sonst bei komplettem Clan alles frei ist. Nach nur 1 Woche habe ich
+// den ersten Ring vollständig erobert und nur noch Wracks sind da."
+// Die Frist war gegen einen EINZELNEN Spieler bemessen, muss aber gegen den ganzen Klan
+// wirken — alle teilen dieselbe Galaxie. wt_e12 gibt weiterhin +2 Tage (3 → 5).
+const WR_FALLBACK_DAYS = 3, WR_FALLBACK_E12 = 5;
 
 function wrDefLevel(p)    { return Math.max(0, Math.min(3, parseInt(p?.def_level, 10) || 0)); }
 function wrPlanetDef(p)   { return Math.max(0, parseInt(p?.planet_defense, 10) || 0); }
@@ -4521,6 +4697,14 @@ function wrBindEvents() {
       await wrPlanetBuild(pid, action, slot, type || null); return;
     }
     // 🏙️ Kolonie im Raumhafen auf-/zuklappen (26l)
+    // 🌌 Von der Kolonie-Liste zur Sternkarte springen (JP 2026-07-30). Wählt den Planeten
+    // aus UND wechselt den Tab — wrSetTab rendert selbst, deshalb danach kein wrRender().
+    const cm = e.target.closest('[data-wr-colmap]');
+    if (cm) {
+      const pl = wrPlanetById(cm.dataset.wrColmap);
+      if (pl) { _wrSel = { planet: pl }; wrSetTab('karte'); }
+      return;
+    }
     const ct = e.target.closest('[data-wr-coltoggle]');
     if (ct) {
       const id = ct.dataset.wrColtoggle;
@@ -5083,7 +5267,24 @@ async function wrPlanetBuild(planetId, action, slot, type) {
 
     const name = _wrMember?.name || 'Jemand';
     const pl   = res.planet || 'Planet';
-    if (action === 'colony_upgrade') {
+    if (action === 'power_build' || action === 'power_upgrade' || action === 'power_convert') {
+      // ⚡ 26p: eigener Zweig. Die interessante Zahl ist die Versorgungslage der Kolonie,
+      // nicht die Feuerkraft — die Meldung nennt beides, weil der Bau sie hebt.
+      const g   = SPACE_POWER_BY_KEY[res.type] || {};
+      const f   = SPACE_POWER_BY_KEY[res.from] || {};
+      const nrg = res.energy || {};
+      const pct = Math.round((parseFloat(nrg.factor) || 1) * 100);
+      const verb = action === 'power_build'   ? 'gebaut'
+                 : action === 'power_convert' ? `ersetzt (vorher ${f.name || 'Generator'})`
+                 : `auf Stufe ${res.level} ausgebaut`;
+      wrToast(`${g.icon || '⚡'} ${g.name || 'Generator'} auf ${pl} ${verb} — `
+            + `⚡ ${wrFmt(nrg.supply)} / ${wrFmt(nrg.demand)}${pct < 100 ? ` (${pct} %)` : ''}`, 'success');
+      // ⚠️ ART-Name, nicht der Generator-Key: `kristall`/`plasmoid` stehen in CHAT_ART
+      // längst als ROHSTOFFE (dieselbe Falle wie am Hafen).
+      wrChat(`[[s:${g.art || 'gen_kristall'}]] ${_wrEsc(name)} hat auf ${_wrEsc(pl)} den `
+           + `${_wrEsc(g.name || 'Energie-Generator')} ${verb} — Geschütze jetzt `
+           + `🛡️ ${wrFmt(res.defense)}${pct < 100 ? ` (noch ${pct} % Versorgung)` : ''}.`);
+    } else if (action === 'colony_upgrade') {
       wrToast(`🏙️ ${pl} auf Kolonie-Stufe ${res.level} ausgebaut`, 'success');
       wrChat(`🏙️ ${_wrEsc(name)} hat die Kolonie ${_wrEsc(pl)} auf Stufe ${res.level} `
            + `ausgebaut (${wrFmt(res.cc)} CC) — mehr Ertrag pro Tag.`);
@@ -5759,6 +5960,18 @@ function wrApplyCoins(coins) {
   if (typeof coins !== 'number') return;
   if (_wrMember) _wrMember.coins = coins;
   try { if (typeof currentUserData !== 'undefined' && currentUserData) currentUserData.coins = coins; } catch (e) {}
+  // 💰 FIX 2026-07-30 (JP: „die Abgeflossenen CC werden erst sichtbar, wenn ich komplett
+  // das Thema Wechsel, z.B. auf Profil gehe").
+  // URSACHE: diese Funktion schrieb den neuen Stand nur in die DATENOBJEKTE. Die Kopfzeile
+  // ist ein eigener DOM-Knoten, der nur beim Rendern einer View neu geschrieben wird —
+  // wrRender() zeichnet aber nur den 🚀-Tab, nicht den Header. Jeder Kauf im Weltraum
+  // (Schiffe, Geschütze, Forschung, Generatoren, Handel) lief hier durch und liess oben
+  // die alte Zahl stehen.
+  // MERKE: Wer `coins` ändert, MUSS _updateHeaderCoins mitrufen — das Datenobjekt allein
+  // ist nicht die Anzeige. Regel 3: nie blockierend, der Kauf ist längst gebucht.
+  try {
+    if (typeof _updateHeaderCoins === 'function') _updateHeaderCoins({ coins });
+  } catch (e) { /* non-critical */ }
 }
 function wrToast(msg, kind) {
   if (typeof showToast === 'function') { try { showToast(msg, kind || 'info'); return; } catch (e) {} }

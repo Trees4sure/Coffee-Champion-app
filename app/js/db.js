@@ -2963,7 +2963,17 @@ const DB = (() => {
         p_slot: slot || null, p_type: type || null });
       if (error) return { error: error.message };
       if (data && data.ok && (data.cc || 0) > 0) {
-        const label = action === 'colony_upgrade'
+        // ⚡ 26p: Kolonie-Kraftwerk läuft über dieselbe RPC, ist aber keine Verteidigung —
+        // eigener aggKey 'space_colony_power' (gleiche Trennung wie 'space_power' am Hafen),
+        // damit sich Kraftwerk und Geschütze im Tages-Log nicht zu einer Zeile addieren.
+        const isCPower = action === 'power_build' || action === 'power_upgrade'
+                      || action === 'power_convert';
+        const label = isCPower
+          ? (action === 'power_convert'
+              ? `⚡ Kolonie-Kraftwerk umgerüstet: ${data.planet || 'Planet'} (${data.from} → ${data.type})`
+              : `⚡ Kolonie-Kraftwerk ${action === 'power_build' ? 'gebaut' : 'ausgebaut'}: `
+                + `${data.planet || 'Planet'} (${data.type}, St. ${data.level})`)
+          : action === 'colony_upgrade'
           ? `🏙️ Kolonie ausgebaut: ${data.planet || 'Planet'} (Stufe ${data.level})`
           : action === 'station_build'
             ? `📡 Quadranten-Station errichtet: ${data.planet || 'Planet'}`
@@ -2974,8 +2984,10 @@ const DB = (() => {
         try {
           await appendTodayLogFresh(memberId, [{
             label, amount: -data.cc, cat: 'weltraum',
-            detail: 'Kolonie-Ausbau & Verteidigung', invest: true,
-            aggKey: 'space_planet_defense' }]);
+            detail: isCPower ? `Kolonie-Energieversorgung — ⚡ ${data.output} Ausgabe`
+                             : 'Kolonie-Ausbau & Verteidigung',
+            invest: true,
+            aggKey: isCPower ? 'space_colony_power' : 'space_planet_defense' }]);
         } catch (e) {}
       }
       return data || {};

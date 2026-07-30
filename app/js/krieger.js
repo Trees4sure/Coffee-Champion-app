@@ -675,6 +675,28 @@ const KRIEGER_ENEMIES = [
   { tier:'t1',   name:'Schaum-Gesindel', flavor:['🫧 Milchschaum-Wicht','👹 Bohnen-Goblin','🟤 Kaffeesatz-Schleim'], abilities:['aufschaeumen','bohnenwurf','zaeh'], hp:60,  atk:11, def:2,  ccMin:20,  ccMax:35,  ep:25,  minLevel:1,  maxDist:28 },
   { tier:'t2',   name:'Mahlwerk-Bande',  flavor:['⚙️ Mahlwerk-Golem','👻 Filterpapier-Geist','🔨 Tamper-Troll'],      abilities:['stampfer','durchsichtig','verdichtung'], hp:110, atk:16, def:7,  ccMin:45,  ccMax:75,  ep:55,  minLevel:4,  maxDist:46 },
   { tier:'t3',   name:'Röster-Horde',    flavor:['🔥 Röstkammer-Zwerg','🕷️ Säure-Spinne','🐍 Crema-Hydra'],          abilities:['roestfeuer','aetzend','regeneration'], hp:200, atk:25, def:13, ccMin:90,  ccMax:140, ep:100, minLevel:9,  maxDist:60 },
+  // ── 🔥 DER ASCHEGÜRTEL (2026-07-30) ────────────────────────────────────────
+  // ⚠️ REIHENFOLGE IST FUNKTION, NICHT KOSMETIK: kriegerZoneTier() läuft dieses Array
+  // von oben nach unten und nimmt den ERSTEN Eintrag mit `dist <= maxDist`. Die neuen
+  // Tiers MÜSSEN deshalb VOR t4 stehen (t4 hat maxDist 90 und würde sonst alles
+  // abfangen). Ergebnis der Zonen-Obergrenzen:
+  //   dist ≤ 60 → unverändert t3 oder tiefer   ·   61–64 → t5   ·   65–69 → t6   ·   70+ → t7
+  // t4 ist damit für kein erreichbares Feld mehr die Obergrenze — es taucht aber weiter
+  // auf, weil kriegerTierForDistance() alle Tiers UNTER der Zone mit einmischt
+  // (in einer t5-Zone: t5 ~37 % · t4 ~25 % · t3/t2/t1 je ~12 %). Bestandsspieler finden
+  // draussen also weiterhin kämpfbare Gegner, auch unter Stufe 42.
+  //
+  // ⚠️ GEMESSENE WELTGRENZE: die erreichbare Karte endet bei Distanz **72** (150×150,
+  // Start 75,75, Labyrinth-Flood-Fill lässt nur 10–12 % der Felder übrig). Ein Ring
+  // „ab 80" wäre tote Inhalte gewesen. Darum liegt der Gürtel bei 56–72.
+  //
+  // Werte: Basis hier, Level-Zuschlag kommt oben drauf (atk +lv/4, def +lv/5, hp +lv×2).
+  // Auf Spielerstufe 100 also t5 720/83/54 · t6 980/103/66 · t7 1350/129/82 — gegen
+  // 480 Spieler-HP. Fähigkeiten sind bewusst BESTEHENDE Schlüssel: nur die sind in
+  // dungeon_fight implementiert, ein neuer Name wäre eine wirkungslose Fähigkeit.
+  { tier:'t5',   name:'Aschebrut',       flavor:['🌑 Aschekriecher','🔥 Glutbalg','🗻 Schlackekolossus'],           abilities:['aetzend','roestfeuer','bitterkern'],       hp:520,  atk:58,  def:34, ccMin:420,  ccMax:640,  ep:460,  minLevel:42, maxDist:64 },
+  { tier:'t6',   name:'Glutkelch-Garde', flavor:['⚱️ Glutkelch-Wache','👁️ Schattenröster','⛓️ Kesselfürst'],        abilities:['verdichtung','geistform','adrenalinschub'], hp:780,  atk:78,  def:46, ccMin:700,  ccMax:1050, ep:720,  minLevel:58, maxDist:69 },
+  { tier:'t7',   name:'Obsidian-Orden',  flavor:['🕳️ Obsidian-Novize','⚔️ Obsidian-Klinge','🐲 Obsidian-Großmeister'], abilities:['regeneration','stampfer','flammenatem'], hp:1150, atk:104, def:62, ccMin:1200, ccMax:1800, ep:1100, minLevel:75, maxDist:9999 },
   { tier:'t4',   name:'Koffein-Elite',   flavor:['⚡ Koffein-Berserker','👻 Espresso-Geist','🗿 Robusta-Titan'],      abilities:['adrenalinschub','geistform','bitterkern'], hp:340, atk:36, def:20, ccMin:170, ccMax:260, ep:170, minLevel:16, maxDist:90 },
   { tier:'boss', name:'Der Espresso-Drache', flavor:['🐉 Der Espresso-Drache'], abilities:['flammenatem'], hp:650, atk:50, def:28, ccMin:350, ccMax:550, ep:350, minLevel:55, maxDist:9999 },
 ];
@@ -700,6 +722,16 @@ function kriegerFlavorMod(tier, idx) {
 // Werte skalierten den Gegner weit über die eigene Ausrüstung. Enger + niedriger, damit
 // Gegner nahe am eigenen Level bleiben. MUSS zu _krieger_enemy_level_band in SQL passen.
 const KRIEGER_ENEMY_LEVEL_BANDS = { t1:[1,6], t2:[3,11], t3:[9,17], t4:[16,27], boss:[60,60],
+  // 🔥 Aschegürtel (2026-07-30): WEITE Bänder mit Absicht — hier gilt NICHT die
+  // Zufallslogik unten, sondern KRIEGER_SCALING_TIERS (Level = Spielerlevel + Offset).
+  // ⚠️ Ohne diese Sonderbehandlung würde `lo + rng()*(hi-lo+1)` einen Gegner bis Stufe
+  // 999 würfeln. Die Bänder sind nur die Server-Klammer, nicht die Verteilung.
+  t5:[42,999], t6:[58,999], t7:[75,999],
+  // Zitadellen: feste Leiter je Grad (die SQL clampt darauf). Bewusst NICHT mitwachsend —
+  // eine Zitadelle wird einmal erobert und respawnt nie; ein mitwachsendes Ziel könnte
+  // man nie endgültig schlagen.
+  zit1_mauer:[45,60],  zit1_herr:[45,60],   zit2_mauer:[65,85],  zit2_herr:[65,85],
+  zit3_mauer:[90,115], zit3_herr:[90,115],  zit4_mauer:[120,150], zit4_herr:[120,150],
   // Spezialisten/Burgen (2026-07-21): FESTE Level statt Band — sie stehen an festen Orten,
   // ein gewürfeltes Level wäre hier nur Rauschen. Muss zu _krieger_enemy_level_band in
   // migration_2026-07-21_krieger_burgen.sql passen (Server clampt darauf).
@@ -710,9 +742,28 @@ const KRIEGER_ENEMY_LEVEL_BANDS = { t1:[1,6], t2:[3,11], t3:[9,17], t4:[16,27], 
 
 // Deterministisches Gegner-Level für ein Feld (eigener Salt 3131, NICHT von anderen
 // _tileRng-Salts belegt). Boss = fest 60.
+// 🔥 MITWACHSENDE GEGNER (Aschegürtel, JP-Entscheidung 2026-07-30: „Ring + mitwachsende
+// Gegner", ohne Deckel). Offset auf das SPIELERLEVEL — negativ = etwas leichter als man
+// selbst, positiv = ebenbürtig bis fordernd.
+// Damit wird der Gürtel nie wieder zu leicht, auch nicht auf Stufe 300.
+// Der Sinn: JP war auf Stufe 100 gegen Gegner mit festem Level 16–27 unterwegs. Ein
+// fester Wert veraltet zwangsläufig; ein Offset nicht.
+const KRIEGER_SCALING_TIERS = { t5: -6, t6: -2, t7: +3 };
 function kriegerEnemyLevel(tx, ty, tier, worldSeed, playerLevel) {
   const band = KRIEGER_ENEMY_LEVEL_BANDS[tier] || [0, 0];
   let lo = band[0], hi = band[1];
+  // ⚠️ MUSS VOR der Zufallslogik stehen: die Bänder der neuen Tiers reichen bis 999,
+  // ein `rng()` darüber würfelte Gegner jenseits jeder Spielbarkeit.
+  const off = KRIEGER_SCALING_TIERS[tier];
+  if (off !== undefined) {
+    // ±2 Jitter, deterministisch pro Feld (gleicher Salt wie unten — dasselbe Feld
+    // liefert immer dieselbe Stufe, kein Reroll durch Neuladen).
+    const j = (typeof _tileRng === 'function')
+      ? Math.floor(_tileRng(tx, ty, 3131, worldSeed)() * 5) - 2 : 0;
+    // Auf das Band klemmen: `lo` ist das min_level des Tiers (der Server clampt ebenso,
+    // ein manipulierter Client kann die Gegner also nicht herunterrechnen).
+    return Math.max(lo, Math.min(hi, (playerLevel || lo) + off + j));
+  }
   // Ab Spieler-Stufe 20 keine trivialen Level-1-Gegner mehr (User-Wunsch 2026-07-15): der
   // Level-Boden steigt mit dem Spieler (L20→4, L26→10, …), bleibt aber IM Tier-Band (min hi),
   // damit der Server-Clamp (_krieger_enemy_level_band) den Wert nicht wieder senkt → kein SQL.
@@ -870,7 +921,12 @@ function kriegerZoneTier(dist) {
 // Deterministisch pro Feld (eigener Salt 5253, kollidiert mit keinem anderen _tileRng-Salt),
 // damit Explore, Peek/Scouting und der Kampf-Prompt exakt denselben Tier würfeln. Ohne
 // Koordinaten/Seed (alte Aufrufe) Fallback auf die reine Zonen-Obergrenze (unverändertes Verhalten).
-const KRIEGER_TIER_ORDER = ['t1', 't2', 't3', 't4'];
+// ⚠️ Reihenfolge = Stärke-Reihenfolge. Sie steuert die Durchmischung: der Zonen-Tier
+// bekommt Gewicht 3, der direkt darunter 2, alle tieferen je 1. Die drei Aschegürtel-Tiers
+// gehören ans ENDE (stärkste), sonst würden sie als „schwächere Beimischung" auch in den
+// Anfängerzonen auftauchen — die min_level-Prüfung würde den Kampf dann serverseitig
+// ablehnen und der Spieler stünde vor einem unkämpfbaren Feld.
+const KRIEGER_TIER_ORDER = ['t1', 't2', 't3', 't4', 't5', 't6', 't7'];
 function kriegerTierForDistance(dist, tx, ty, worldSeed) {
   const zone = kriegerZoneTier(dist);
   const maxIdx = KRIEGER_TIER_ORDER.indexOf(zone);
