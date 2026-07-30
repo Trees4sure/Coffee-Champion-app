@@ -2053,13 +2053,23 @@ function _kriegerRenderPotions(member, state, body) {
     const sellUnit = (typeof kriegerPotionSellValue === 'function')
       ? kriegerPotionSellValue(p) : Math.floor(p.cost * 0.5);
     const bulk = Math.max(0, have - KRIEGER_POTION_KEEP);
-    const sellHtml = have > 0 ? `
-      <div style="display:flex;gap:4px;margin-top:4px">
-        <button class="cc-build-btn krieger-potion-sell" data-potion="${p.key}" data-count="1"
-          style="flex:1;font-size:10px">Verkaufen · +${sellUnit} 🫘</button>
-        ${bulk > 0 ? `<button class="cc-build-btn krieger-potion-sell" data-potion="${p.key}" data-count="${bulk}"
-          style="flex:1;font-size:10px">${bulk}× · +${sellUnit * bulk} 🫘</button>` : ''}
-      </div>` : '';
+    // ⚠️ DARSTELLUNGS-FIX 2026-07-30 (JP-Screenshot `reference/Fehlerdarstellung_trank.PNG`):
+    // die zwei Knöpfe standen als `display:flex` NEBENEINANDER mit je `flex:1`. In der
+    // schmalen Shop-Grid-Karte reichte die Breite nicht — die Beschriftung brach MITTEN im
+    // Label um („4×" / „+48"), das 🫘 rutschte in eine eigene Zeile, und weil nur der
+    // rechte Knopf umbrach, wurden die beiden unterschiedlich hoch.
+    // Jetzt UNTEREINANDER, volle Breite (wie der Kaufen-Knopf darüber) + `white-space:nowrap`,
+    // damit ein langes Label lieber gestaucht wird als umgebrochen.
+    // MERKE: In `.krieger-shop-grid`-Karten haben ZWEI Knöpfe nebeneinander nie genug Platz —
+    // dieselbe Klasse Fehler wie beim zerschossenen Umrüst-Knopf im Weltraum (26k).
+    const sellBtn = (n, label) => `<button class="cc-build-btn krieger-potion-sell"
+        data-potion="${p.key}" data-count="${n}"
+        style="width:100%;font-size:10px;white-space:nowrap;margin-top:4px"
+      >${label}</button>`;
+    const sellHtml = have > 0
+      ? sellBtn(1, `Verkaufen · +${sellUnit} 🫘`)
+        + (bulk > 0 ? sellBtn(bulk, `Alle ${bulk} · +${sellUnit * bulk} 🫘`) : '')
+      : '';
     return `<div class="krieger-item-card${have > 0 ? ' owned' : ''}">
       <div style="font-size:20px">${p.icon}</div>
       <div style="font-size:11px;font-weight:700">${_esc2(p.name)}${have > 0 ? ` <span style="color:#FAC775">×${have}</span>` : ''}</div>
