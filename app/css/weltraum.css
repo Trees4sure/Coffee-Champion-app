@@ -705,6 +705,15 @@
 /* Button/Hinweis rutschen unter beide Spalten — sonst wird es auf dem Handy zu eng */
 .wr-pdef-row > .wr-btn, .wr-pdef-row > .wr-warn, .wr-pdef-row > .wr-sub,
 .wr-pdef-row > .wr-slot-max { grid-column: 1 / -1; margin-top: 4px; }
+/* ⚡ 26p-Energie-Panel: Balken, Meldung und Generator-Block sind DIREKTE Kinder derselben
+   Grid-Zeile und müssen ebenfalls über beide Spalten. Ohne das paart die Auto-Platzierung
+   sie zu zweit pro Zeile, der lange „Unterversorgt"-Satz bläht die auto-Spalte auf und die
+   Bau-Optionen daneben werden zusammengequetscht (JP 2026-07-30: „sehr gestaucht, zu
+   schmal" — verschwand nach dem Bau nur, weil die Meldung dann auf .wr-sub wechselte).
+   ⚠️ Hier .wr-nrg-msg statt .wr-bad: .wr-pdef-val trägt bei Unterversorgung ebenfalls
+   .wr-bad und muss in Spalte 2 bleiben. */
+.wr-pdef-row > .wr-nrg-bar, .wr-pdef-row > .wr-nrg-msg,
+.wr-pdef-row > .wr-gen-opts, .wr-pdef-row > .wr-gen { grid-column: 1 / -1; }
 .wr-pdef .wr-ok { margin-top: 8px; }
 .wr-pdef > .wr-sub { margin-top: 8px; }
 /* Legenden-Punkte für die neuen Kartenmarkierungen */
