@@ -1790,6 +1790,43 @@ const DB = (() => {
     return { ...newDD, _costPaid: cost };
   }
 
+  // 🧪💰 Trank VERKAUFEN (JP 2026-07-30: „über 30 Tränke jeweils … dass man Tränke
+  // verkaufen kann wäre gut"). Spiegelbild von buyKriegerPotion: add_coins statt
+  // spend_coins, Bestand −1.
+  //
+  // ⚠️ Rückkaufwert ist der halbe GRUNDPREIS, bewusst NICHT der halbe gezahlte Preis:
+  // mit dem Handel-Set kauft man 15 % billiger. Ein Rückkauf über 50 % des Grundpreises
+  // wäre bei diesem Set eine Geldmaschine (kaufen 21, verkaufen 12 wäre noch harmlos —
+  // aber jeder künftige Rabatt über 50 % würde die Schleife öffnen). Der Grundpreis ist
+  // die stabile Bezugsgröße.
+  //
+  // ⚠️ `potionsSpent` wird NICHT verringert — es ist die kumulative AUSGABE (Transparenz
+  // im Fortschritt-Tab). Erlöse laufen über das eigene Feld `potionsEarned`, sonst
+  // stimmte hinterher keine der beiden Zahlen.
+  async function sellKriegerPotion(memberId, potion, currentDungeonData, count) {
+    if (!potion || !potion.key) throw new Error('Unbekannter Trank');
+    const have = Math.max(0, (currentDungeonData?.potions || {})[potion.key] || 0);
+    const n = Math.max(1, Math.min(have, parseInt(count, 10) || 1));
+    if (have < 1) throw new Error('Diesen Trank hast du nicht');
+    // ⚠️ typeof-Wächter wie bei kriegerDiscountedCost: db.js darf nicht von der
+    // Ladereihenfolge abhängen. Der Rückfall 0.5 ist derselbe Wert wie in krieger.js.
+    const pct = (typeof KRIEGER_POTION_SELL_PCT === 'number') ? KRIEGER_POTION_SELL_PCT : 0.5;
+    const unit = Math.floor((potion.cost || 0) * pct);
+    const gain = unit * n;
+    // Erst den Bestand sichern, dann gutschreiben: schlägt add_coins fehl, ist nichts weg.
+    const potions = { ...(currentDungeonData?.potions || {}) };
+    potions[potion.key] = have - n;
+    if (potions[potion.key] <= 0) delete potions[potion.key];
+    const potionsEarned = (currentDungeonData?.potionsEarned || 0) + gain;
+    const newDD = { ...currentDungeonData, potions, potionsEarned };
+    await saveDungeonData(memberId, newDD);
+    const { data: newCoins, error } = await _sb.rpc('add_coins',
+      { p_member_id: memberId, p_amount: gain });
+    if (error) throw new Error(error.message);
+    return { ...newDD, _gain: gain, _unit: unit, _count: n,
+             _coins: (newCoins === null || newCoins === undefined) ? null : newCoins };
+  }
+
   // Kauf eines Krieger-Items: atomarer Coin-Abzug (bestehende spend_coins-RPC) +
   // Besitz in dungeon_data eintragen. Gleiches Muster wie purchaseResearchItem.
   async function buyKriegerItem(memberId, item, currentDungeonData) {
@@ -2559,17 +2596,28 @@ const DB = (() => {
         // 26k: 'turret_convert' und 'yard_upgrade' brauchen eigene Beschriftungen —
         // sonst stünde im Tages-Log „Geschütz aufgerüstet" für einen Typwechsel bzw.
         // für den Werft-Ausbau (der seit 21d über dieselbe RPC läuft).
+        // ⚡ 26p: die drei power_*-Aktionen laufen über dieselbe RPC, sind aber keine
+        // Verteidigung — eigener aggKey 'space_power', damit sich Kraftwerk und Geschütze
+        // im Tages-Log nicht zu einer Zeile addieren.
+        const isPower = action === 'power_build' || action === 'power_upgrade'
+                     || action === 'power_convert';
         const label = action === 'port_upgrade'
           ? `🛰️ Raumhafen-Ausbau (Stufe ${data.level})`
           : action === 'yard_upgrade'
           ? `🏗️ Werft-Ausbau (Stufe ${data.level})`
+          : action === 'power_convert'
+          ? `⚡ Kraftwerk umgerüstet: ${data.from} → ${data.type}`
+          : isPower
+          ? `⚡ Energie-Generator ${action === 'power_build' ? 'gebaut' : 'ausgebaut'}: ${data.type} (St. ${data.level})`
           : action === 'turret_convert'
           ? `🛡️ Geschütz umgerüstet: ${data.from} → ${data.type}`
           : `🛡️ Geschütz ${action === 'turret_build' ? 'gebaut' : 'aufgerüstet'}: ${data.type} (St. ${data.level})`;
         try {
           await appendTodayLogFresh(memberId, [{
             label, amount: -data.cc, cat: 'weltraum',
-            detail: 'Verteidigung am Raumhafen', invest: true, aggKey: 'space_defense' }]);
+            detail: isPower ? `Energieversorgung — ⚡ ${data.output} Ausgabe`
+                            : 'Verteidigung am Raumhafen',
+            invest: true, aggKey: isPower ? 'space_power' : 'space_defense' }]);
         } catch (e) {}
       }
       return data || {};
@@ -3003,7 +3051,7 @@ const DB = (() => {
     applyDailyLevy, checkWeeklyChallenge,
     purchaseResearchItem, saveCosmetics, buyCiqPerk, applyCiqAttack, fetchMemberMapData,
     updateMapData, addCoins, appendTodayLog, appendTodayLogFresh, dayStats, claimPassive, recordSalarySnapshot, recordSalarySnapshotsAll,
-    saveDungeonData, dungeonFight, buyKriegerItem, repairArmor, buyKriegerPotion, buyKriegerCompanion, buyKriegerMount,
+    saveDungeonData, dungeonFight, buyKriegerItem, repairArmor, buyKriegerPotion, sellKriegerPotion, buyKriegerCompanion, buyKriegerMount,
     payBaristaBartGroup, addPenaltyToTreasury, payEigeneTasseGroup,
     claimLoginBonus, claimDailyTask,
     investInCountry, investPassive, withdrawPassive, fetchCountryStandings, fetchAllWorldInvestments,

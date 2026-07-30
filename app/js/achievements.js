@@ -97,6 +97,8 @@ const ACHIEVEMENTS = [
   { id: 'space_bastion',   icon: '🏰', name: 'Feste Bastion',      desc: 'Raumhafen-Feuerkraft von 5.000 erreicht',              condition: null, coinReward: 500 },
   // 🛩️ Trägerschiff (26m) — Eintritt in Ring 2/3 mit kleinen Jägern
   { id: 'space_carrier',   icon: '🛩️', name: 'Trägerverband',      desc: 'Ein Trägerschiff in der Werft fertiggestellt',         condition: null, coinReward: 350 },
+  // ⚡ Energie-System (26p) — das Kraftwerk, das einen Geschütz-Vollausbau trägt
+  { id: 'space_power',     icon: '⚡', name: 'Netzbetreiber',       desc: 'Einen Quantenschaum-Reaktor am Raumhafen gebaut',      condition: null, coinReward: 400 },
 ];
 
 // 🚀 Vergabe nach einer eingelösten Weltraum-Rückkehr. Nach dem Muster von _cafeGrantAch:
@@ -146,6 +148,14 @@ async function checkSpaceAchievements(member, res) {
     if (!ex.space_carrier && Array.isArray(res.builtShips)
         && res.builtShips.some(g => g && g.ship === 'traeger')) {
       grant.space_carrier = true;
+    }
+    // ⚡ 26p: Quantenschaum-Reaktor. Beide Wege zählen — neu gebaut ODER von einem
+    // kleineren Kraftwerk umgerüstet; wer über den Plasmoid-Reaktor kommt, hat dieselbe
+    // Leistung erbracht. `harbor:true` setzt ausschliesslich wrDefense; die Aktionsnamen
+    // sind ohnehin eindeutig (kein turret_*), das Flag ist nur Gürtel und Hosenträger.
+    if (!ex.space_power && res.harbor && res.type === 'quanten'
+        && (res.action === 'power_build' || res.action === 'power_convert')) {
+      grant.space_power = true;
     }
 
     const keys = Object.keys(grant);

@@ -2047,16 +2047,31 @@ function _kriegerRenderPotions(member, state, body) {
     const effCost = (typeof kriegerDiscountedCost === 'function') ? kriegerDiscountedCost(p.cost, dd) : p.cost;
     const canBuy = state.memberCoins >= effCost;
     const priceTxt = effCost < p.cost ? `⚖️ <s>${p.cost}</s> ${effCost}` : `${p.cost}`;
+    // 💰 Verkaufen (JP 2026-07-30). Der „alle bis auf 5"-Knopf ist der eigentliche Punkt:
+    // JP hatte über 30 Stück je Sorte — 25 Einzelklicks wären keine Lösung. Die
+    // Sicherheitsreserve von 5 verhindert, dass man sich versehentlich leer verkauft.
+    const sellUnit = (typeof kriegerPotionSellValue === 'function')
+      ? kriegerPotionSellValue(p) : Math.floor(p.cost * 0.5);
+    const bulk = Math.max(0, have - KRIEGER_POTION_KEEP);
+    const sellHtml = have > 0 ? `
+      <div style="display:flex;gap:4px;margin-top:4px">
+        <button class="cc-build-btn krieger-potion-sell" data-potion="${p.key}" data-count="1"
+          style="flex:1;font-size:10px">Verkaufen · +${sellUnit} 🫘</button>
+        ${bulk > 0 ? `<button class="cc-build-btn krieger-potion-sell" data-potion="${p.key}" data-count="${bulk}"
+          style="flex:1;font-size:10px">${bulk}× · +${sellUnit * bulk} 🫘</button>` : ''}
+      </div>` : '';
     return `<div class="krieger-item-card${have > 0 ? ' owned' : ''}">
       <div style="font-size:20px">${p.icon}</div>
       <div style="font-size:11px;font-weight:700">${_esc2(p.name)}${have > 0 ? ` <span style="color:#FAC775">×${have}</span>` : ''}</div>
       <div style="font-size:11px;color:var(--muted);margin:3px 0">${_esc2(p.desc)}</div>
       <div style="margin-top:5px"><button class="cc-build-btn krieger-potion-buy" data-potion="${p.key}"${canBuy ? '' : ' disabled'}>Kaufen · ${priceTxt} 🫘</button></div>
+      ${sellHtml}
     </div>`;
   }).join('');
 
   body.innerHTML = `
-    <p style="font-size:12px;color:var(--muted);text-align:center;margin:2px 0 10px">Max. 1 Trank pro Kampf — vor dem „Kämpfen" auswählbar. Auch als seltener Dungeon-Fund.</p>
+    <p style="font-size:12px;color:var(--muted);text-align:center;margin:2px 0 10px">Max. 1 Trank pro Kampf — vor dem „Kämpfen" auswählbar. Auch als seltener Dungeon-Fund.<br>
+      Überschuss lässt sich für ${Math.round((typeof KRIEGER_POTION_SELL_PCT === 'number' ? KRIEGER_POTION_SELL_PCT : 0.5) * 100)} % des Grundpreises verkaufen — der Sammelknopf behält ${KRIEGER_POTION_KEEP} Stück zurück.</p>
     <div class="krieger-shop-grid">${cards}</div>
   `;
 
@@ -2081,6 +2096,40 @@ function _kriegerRenderPotions(member, state, body) {
         try { _krSessionAddPotionBuy(member.name, potion.key, paid); } catch (e) { /* non-critical */ }
         _kriegerRenderPotions(member, state, body);
       } catch (e) { showToast(e.message || 'Kauf fehlgeschlagen', 'error'); btn.disabled = false; }
+    };
+  });
+
+  // 💰 Verkaufen — dasselbe Muster wie der Kauf, nur mit umgekehrtem Vorzeichen.
+  // ⚠️ `btn.onclick =` (NICHT addEventListener mit {once:true}): der Container hat
+  // mehrere klickbare Kinder, und {once:true} entfernte den Listener schon nach dem
+  // ersten Klick auf irgendeines davon (Sprüche-Kauf-Bug vom 2026-06-13).
+  body.querySelectorAll('.krieger-potion-sell').forEach(btn => {
+    btn.onclick = async () => {
+      const potion = (typeof kriegerPotionByKey === 'function') ? kriegerPotionByKey(btn.dataset.potion) : null;
+      if (!potion) return;
+      const n = parseInt(btn.dataset.count, 10) || 1;
+      btn.disabled = true;
+      try {
+        const newDD = await DB.sellKriegerPotion(member.id, potion, state.dd, n);
+        state.dd = newDD;
+        const gain = newDD._gain || 0;
+        // Der Server liefert den neuen Stand mit — ihn bevorzugen, damit die Anzeige nicht
+        // driftet, wenn parallel etwas anderes gebucht wurde (Lehre aus dem Gehalt-Clobber).
+        state.memberCoins = (typeof newDD._coins === 'number') ? newDD._coins
+                                                               : state.memberCoins + gain;
+        currentUserData = { ...(currentUserData || {}), coins: state.memberCoins, dungeon_data: state.dd };
+        _updateHeaderCoins({ coins: state.memberCoins });
+        // Einnahme im Tages-Log (Regel 1). Bewusst KEIN `kapital:true` — es ist ein
+        // Rückkauf von Verbrauchsgütern, kein Vermögensumbau.
+        try {
+          const mdLog = await DB.appendTodayLogFresh(member.id, [{
+            label: `🧪 Trank verkauft: ${potion.name}${newDD._count > 1 ? ` ×${newDD._count}` : ''}`,
+            amount: gain, detail: 'Kaffee-Krieger-Einnahme', aggKey: 'krieger_potion_sell' }]);
+          if (mdLog) { currentUserData = { ...(currentUserData || {}), map_data: mdLog }; member.map_data = mdLog; }
+        } catch (e) { /* non-critical */ }
+        showToast(`💰 ${newDD._count}× ${potion.name} verkauft — +${gain} 🫘`, 'success');
+        _kriegerRenderPotions(member, state, body);
+      } catch (e) { showToast(e.message || 'Verkauf fehlgeschlagen', 'error'); btn.disabled = false; }
     };
   });
 }

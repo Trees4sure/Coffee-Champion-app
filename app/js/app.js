@@ -374,15 +374,20 @@ function _chatArt(escaped) {
       // sonst müsste CHAT_ART jede einzelne Technik kennen.
       // Forschungs-Icons (wt1_… bis wt7_…) liegen in assets/weltraum/, alle anderen in assets/space/.
       const isWt = /^wt\d/.test(key);
+      // ⚡ 26p: `gen_` (Energie-Generatoren) gehört dazu. weltraum.js schickt bewusst den
+      // ART-Namen statt des Generator-Schlüssels — `kristall`/`plasmoid` stehen in
+      // CHAT_ART schon als Rohstoffe und hätten das falsche Bild geliefert.
       const a = CHAT_ART[key]
              || (isWt ? [key, '🔬']
-                      : (/^(ship_|base_|turret_|res_|ic_|foe_)/.test(key) ? [key, '🔬'] : [null, '🚀']));
+                      : (/^(ship_|base_|turret_|res_|ic_|foe_|gen_)/.test(key) ? [key, '🔬'] : [null, '🚀']));
       if (!a[0]) return `<span class="chat-art-fb">${a[1]}</span>`;
       // ⚠️ Der Ordner folgt dem ART-Namen, nicht dem Schlüssel. Vorher hing er an `isWt`
       // (= Schlüssel beginnt mit wt…) — sobald ein CHAT_ART-Eintrag wie `railgun` auf ein
       // `wt*`-Bild zeigt (JP 2026-07-29: Geschütze nutzen die Forschungs-Renders), hätte
       // das in assets/space/ gesucht und ein leeres Kästchen ergeben.
-      const folder = /^wt\d/.test(a[0]) ? 'weltraum' : 'space';
+      // ⚡ 26p: die Generator-Renders (`gen_*`) liegen ebenfalls in assets/weltraum/ —
+      // ohne sie hier wäre der Pfad assets/space/gen_kristall.png und das Bild leer.
+      const folder = /^(wt\d|gen_)/.test(a[0]) ? 'weltraum' : 'space';
       return `<img class="chat-art" src="assets/${folder}/${a[0]}.png" alt="" onerror="this.remove()"`
            + `><span class="chat-art-fb">${a[1]}</span>`;
     });

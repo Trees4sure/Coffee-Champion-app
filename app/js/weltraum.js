@@ -135,13 +135,22 @@ const SPACE_TECH = [
   { key:'wt_e3',  ast:'b', stufe:6,  name:'Schwarmraketen',          cc:20000, erz:280, kristall:50,  plasmoid:20, quantum:0, requires:'wt_b2', wirkung:'+20 % gegen Schwärme / leichte Gegner',      art:'wt6_schwarmraketen',    live:true  },
   { key:'wt_e4',  ast:'a', stufe:6,  name:'Plasmoid-Triebwerk',      cc:24000, erz:320, kristall:80,  plasmoid:30, quantum:0, requires:'wt_a5', wirkung:'Flugzeit −20 %',                            art:'wt6_plasmoid_triebwerk', live:true  },
   { key:'wt_e5',  ast:'d', stufe:6,  name:'Trägheitsdämpfer',        cc:20000, erz:260, kristall:60,  plasmoid:20, quantum:0, requires:'wt_d2', wirkung:'Verlust-Rückbergung +25 %',                 art:'wt6_traegheitsdaempfer', live:true  },
-  // ⚠️ WIRKUNGSTEXT KORRIGIERT 2026-07-29 (JP: „ist das nicht echt unwichtig, weil Sonden
-  // so günstig sind... oder ich verstehe es nicht"). Der Text war schlicht FALSCH und
-  // verkaufte die Technik viel zu billig: `wrRevealed()` gibt mit wt_e6 für JEDEN
-  // Quadranten true zurück — die Technik hebt den Nebel der GANZEN Galaxie dauerhaft,
-  // nicht nur die Gegnerstärke eines Planeten. Eine Sonde deckt einen Quadranten pro
-  // Flug auf; diese Technik alle, für immer. Der Effekt war immer schon so verdrahtet.
-  { key:'wt_e6',  ast:'a', stufe:8,  name:'Deep-Space-Sensorik',     cc:18000, erz:240, kristall:50,  plasmoid:15, quantum:0, requires:'wt_a3', wirkung:'Deckt die GANZE Galaxie auf — kein Sonden-Flug mehr nötig', art:'wt6_deepspace_sensor',  live:true  },
+  // ⚠️ EFFEKT NEU GESTALTET 2026-07-30 (JP: „Ich habe die Funktion freigeschaltet, dass
+  // ich alle Quadranten sehen kann ohne Sonde - das finde ich doof - Alles sichtbar ist
+  // OP. Kannst du das Rückgängig machen und diese Forschung anders gestalten?").
+  //
+  // Geschichte dieser einen Technik, damit sie nicht ein drittes Mal kippt:
+  //   • ursprünglich versprach der Text „Gegnerstärke sichtbar ohne Sonde" — mild.
+  //   • verdrahtet war aber immer `wrRevealed() || wt_e6`, also die GANZE Galaxie.
+  //   • 2026-07-29 wurde deshalb der TEXT an den Effekt angepasst (statt umgekehrt).
+  //   • 2026-07-30 ist klar: der Effekt war das Problem, nicht der Text. Zurückgebaut.
+  //
+  // Jetzt: 📡 Nahbereichs-Ortung (wrSensed/wrSensorIntel). Geortet wird nur, was ohnehin
+  // als nächstes aufklärbar ist — Summen statt Einzelplaneten, und die Sonde bleibt
+  // Pflicht. Information statt Zugang. Preis bewusst UNVERÄNDERT (18 000 CC): die Technik
+  // ist damit nicht mehr allmächtig, aber der blinde Sondenflug war die eigentliche
+  // Schwäche der Erkundung, und die behebt sie vollständig.
+  { key:'wt_e6',  ast:'a', stufe:8,  name:'Deep-Space-Sensorik',     cc:18000, erz:240, kristall:50,  plasmoid:15, quantum:0, requires:'wt_a3', wirkung:'📡 Ortet angrenzende Nebel-Quadranten: Planetenzahl, Wächterstärke, Wracks und Ring-Rohstoffe — die Sonde bleibt nötig', art:'wt6_deepspace_sensor',  live:true  },
   { key:'wt_e7',  ast:'c', stufe:7,  name:'Plasmoid-Kollektor',      cc:20000, erz:300, kristall:80,  plasmoid:0,  quantum:0, requires:'wt_c4', wirkung:'Schaltet 🟣 Plasmoiden-Abbau frei',        art:'wt6_plasmoid_kollektor', live:true  },
   { key:'wt_e8',  ast:'c', stufe:6,  name:'Wrack-Tiefenscanner',     cc:22000, erz:300, kristall:70,  plasmoid:25, quantum:0, requires:'wt_c2', wirkung:'+30 % Wrack-Ausbeute',                      art:'wt6_wrack_scanner',     live:true  },
   { key:'wt_e9',  ast:'c', stufe:10,  name:'Auto-Ernte-Protokoll',    cc:28000, erz:400, kristall:120, plasmoid:40, quantum:0, requires:'wt_c5', wirkung:'Kolonien ernten selbsttätig',               art:'wt6_auto_ernte',        live:true  },
@@ -462,17 +471,17 @@ const SPACE_PORT = [
 // Deshalb trägt jeder Typ jetzt seinen eigenen `folder`; gerendert wird zentral über
 // wrTurretImg(), nicht mehr an fünf Stellen mit fest verdrahtetem `assets/space/`.
 const SPACE_TURRETS = [
-  { key:'railgun',     art:'wt1_railgun',        folder:'weltraum', icon:'🔩', name:'Railgun',       atk:20,  cc:800,   erz:10,  kristall:0,   plasmoid:0,  minPort:1, needs:null,
+  { key:'railgun',     art:'wt1_railgun',        folder:'weltraum', icon:'🔩', name:'Railgun',       atk:20,  cc:800,   erz:10,  kristall:0,   plasmoid:0, quantum:0,  minPort:1, needs:null,
     desc:'Solides Standardgeschütz — billig und sofort verfügbar' },
-  { key:'laser',       art:'wt2_koffein_laser',  folder:'weltraum', icon:'⚡', name:'Laserbatterie', atk:45,  cc:1600,  erz:25,  kristall:0,   plasmoid:0,  minPort:1, needs:'wt_b2',
+  { key:'laser',       art:'wt2_koffein_laser',  folder:'weltraum', icon:'⚡', name:'Laserbatterie', atk:45,  cc:1600,  erz:25,  kristall:0,   plasmoid:0, quantum:0,  minPort:1, needs:'wt_b2',
     desc:'Doppelte Feuerkraft, immer noch ohne Kristall' },
-  { key:'plasma',      art:'wt3_plasma_kanone',  folder:'weltraum', icon:'🔥', name:'Plasmawerfer',  atk:85,  cc:3200,  erz:50,  kristall:10,  plasmoid:0,  minPort:2, needs:'wt_b3',
+  { key:'plasma',      art:'wt3_plasma_kanone',  folder:'weltraum', icon:'🔥', name:'Plasmawerfer',  atk:85,  cc:3200,  erz:50,  kristall:10,  plasmoid:0, quantum:0,  minPort:2, needs:'wt_b3',
     desc:'Braucht einen ausgebauten Hafen und Koffeinkristall' },
-  { key:'singularity', art:'wt5_singularitaet',  folder:'weltraum', icon:'🌀', name:'Singularität',  atk:130, cc:6400,  erz:100, kristall:30,  plasmoid:0,  minPort:3, needs:'wt_b5',
+  { key:'singularity', art:'wt5_singularitaet',  folder:'weltraum', icon:'🌀', name:'Singularität',  atk:130, cc:6400,  erz:100, kristall:30,  plasmoid:0, quantum:0,  minPort:3, needs:'wt_b5',
     desc:'Schwere Standardverteidigung — nur am Vollausbau' },
   // NEU (26k): die beiden Geschütze, die der Forschungsbaum längst versprach —
   // wt_e2 „Neues Geschütz atk 200", wt_f1 „Neues Geschütz atk 320".
-  { key:'resonanz',     art:'wt6_resonanz_geschuetz', folder:'weltraum', icon:'💜', name:'Resonanz-Geschütz', atk:200, cc:14000, erz:180, kristall:60,  plasmoid:15, minPort:3, needs:'wt_e2',
+  { key:'resonanz',     art:'wt6_resonanz_geschuetz', folder:'weltraum', icon:'💜', name:'Resonanz-Geschütz', atk:200, cc:14000, erz:180, kristall:60,  plasmoid:15, quantum:0, minPort:3, needs:'wt_e2',
     desc:'Plasmoid-Resonanz zerreisst Rümpfe auf Distanz — die erste echte Festungswaffe' },
   // ⚠️ UMBENANNT 2026-07-29 (JP): hieß „Quanten-Lanze" und zeigte einen schlanken Speer.
   // „Lanze ist lächerlich in diesem Zusammenhang, sind ja keine Amazonen, die hier
@@ -482,7 +491,9 @@ const SPACE_TURRETS = [
   // Kreuzer/Bomber-Namenstausch vom 22.07.). Nur der Anzeigename wechselt.
   // Das Bild `wt7_quanten_lanze.png` wird durch ein Geschütz-Render ersetzt
   // (Prompt: plans/PROMPT_quanten_geschuetz.md) — es dient Forschung UND Bauplatz.
-  { key:'quantenlanze', art:'wt7_quanten_lanze', folder:'weltraum', icon:'🌠', name:'Quanten-Geschütz',  atk:320, cc:26000, erz:300, kristall:110, plasmoid:40, minPort:3, needs:'wt_f1',
+  // 🌀 NEU 26p: das Quanten-Geschütz kostet zusätzlich 30 Quantenschaum (JP 2026-07-30:
+  // „ja geschütz soll kosten"). Alle anderen Typen haben quantum 0.
+  { key:'quantenlanze', art:'wt7_quanten_lanze', folder:'weltraum', icon:'🌠', name:'Quanten-Geschütz',  atk:320, cc:26000, erz:300, kristall:110, plasmoid:40, quantum:30, minPort:3, needs:'wt_f1',
     desc:'Gebündelter Quantenschaum: die stärkste Verteidigung, die gebaut werden kann' },
 ];
 const SPACE_TURRET_BY_KEY = SPACE_TURRETS.reduce((m, t) => (m[t.key] = t, m), {});
@@ -519,6 +530,51 @@ function wrTurretImg(t) {
 const WR_TURRET_ATK_MULT  = [1, 1, 1.6, 2.4];
 const WR_TURRET_COST_MULT = [1, 1, 1,   2  ];
 const WR_TURRET_MAX = 3;
+
+// ── ⚡ Energie-System (26p) ───────────────────────────────────────────────────
+// ⚠️ CLIENT-SYNC-PFLICHT: Spiegel von _space_turret_energy / _space_power_base /
+// _space_power_def / _space_power_supply / _space_turret_demand / _space_power_factor in
+// migration_2026-07-26p_energie.sql. Bei Balance-Änderungen IMMER beide Seiten.
+//
+// JP 2026-07-30: „Je mehr Geschütze, desto mehr Energie muss die Raumstation bekommen …
+// holt das OP der Geschützflut etwas runter! Wenn zu wenig Energie vorhanden ist, dann
+// werden die Geschützfähigkeiten reduziert."
+//
+// Energiebedarf je Geschütz auf Stufe 1. Der Stufenfaktor ist derselbe wie bei der
+// Feuerkraft (WR_TURRET_ATK_MULT) — Energie ist Unterhalt und skaliert mit der Wirkung,
+// nicht mit dem Kaufpreis.
+const WR_TURRET_ENERGY = {
+  railgun: 2, laser: 4, plasma: 8, singularity: 14, resonanz: 26, quantenlanze: 40,
+};
+// Grundversorgung des Hafens OHNE Generator: 10 + Stufe × 10 → 20 / 30 / 40.
+// Ein voller Railgun-Ausbau (29) läuft damit ab Hafenstufe 2 ohne Kraftwerk — wer klein
+// spielt, merkt von der Mechanik nichts. Absicht.
+const WR_POWER_BASE_SUPPLY = 10, WR_POWER_PER_LEVEL = 10;
+// Untergrenze des Faktors. Unterversorgung soll wehtun, aber niemanden wehrlos machen:
+// sonst ruiniert sich ein Spieler durch einen Bau unwiederbringlich — genau dann, wenn er
+// investiert hat. Heilbar ist der Zustand jederzeit durch einen Generator-Ausbau.
+const WR_POWER_FLOOR = 0.35;
+// Generatoren. `out` = Ausgabe je Stufe (Index 1..3, Feld 0 bleibt leer). Die Kurve ist
+// bewusst flacher als bei den Geschützen: der Sprung liegt im TYP, nicht in der Stufe —
+// sonst liesse sich der Quanten-Generator über Stufen umgehen.
+// Die Gates sind die ROHSTOFF-Freischaltungen: wer den Brennstoff nicht abbauen kann,
+// soll das Kraftwerk nicht betreiben.
+const SPACE_POWER = [
+  { key:'kristall', art:'gen_kristall', folder:'weltraum', icon:'☕', name:'Koffein-Kristall-Reaktor',
+    out:[0, 90, 140, 200], cc:6000,  erz:120, kristall:40,  plasmoid:0,  quantum:0,  needs:null,
+    desc:'Ein Meiler aus geschichteten Koffeinkristallen — der Einstieg in die eigene Stromversorgung' },
+  { key:'plasmoid', art:'gen_plasmoid', folder:'weltraum', icon:'🟣', name:'Plasmoid-Reaktor',
+    out:[0, 280, 380, 500], cc:18000, erz:300, kristall:120, plasmoid:30, quantum:0,  needs:'wt_e7',
+    desc:'Gebändigte Plasmoiden liefern ein Vielfaches — braucht den Plasmoiden-Abbau' },
+  { key:'quanten',  art:'gen_quanten',  folder:'weltraum', icon:'🌀', name:'Quantenschaum-Reaktor',
+    out:[0, 640, 820, 1000], cc:34000, erz:500, kristall:200, plasmoid:60, quantum:30, needs:'wt_f5',
+    desc:'Das einzige Kraftwerk, das einen Vollausbau mit Quanten-Geschützen tragen kann' },
+];
+const SPACE_POWER_BY_KEY = SPACE_POWER.reduce((m, g) => (m[g.key] = g, m), {});
+// Kostenfaktor je Stufe ×1 / ×1,8 / ×3 auf ALLE Rohstoffe — steiler als bei den
+// Geschützen: ein Kraftwerk soll sich nicht nebenbei durchstufen lassen.
+const WR_POWER_COST_MULT = [1, 1, 1.8, 3];
+const WR_POWER_MAX = 3;
 
 // ── Werft-Stufen ─────────────────────────────────────────────────────────────
 // ⚠️ Spiegel von _space_yard_stats in migration_2026-07-21d_weltraum_werft.sql.
@@ -1003,7 +1059,48 @@ function wrHexCenter(qx, qy, size) {
 // Der Heimatquadrant ist immer bekannt (dort steht der Raumhafen).
 // E6 Deep-Space-Sensorik (26g): der Besitzer sieht die ganze Karte ohne Aufklärung
 // (persönlich — der Klan-Reveal via Sonde bleibt davon unberührt).
-function wrRevealed(qkey) { return qkey === '0,0' || !!(_wrGalaxy?.revealed || {})[qkey] || wrHasTech(_wrMember, 'wt_e6'); }
+// ⚠️ RÜCKBAU 2026-07-30 (JP): hier stand `|| wrHasTech(_wrMember, 'wt_e6')` — die
+// Deep-Space-Sensorik hob damit den Nebel der GANZEN Galaxie dauerhaft.
+// JP: „das finde ich doof — Alles sichtbar ist OP."
+// Und er hat recht: eine einzige Technik entwertete die Bohnen-Sonde, den Schiffstyp,
+// die Aufklärungs-Reise und die ganze Ring-für-Ring-Erkundung auf einen Schlag.
+// `revealed` kommt jetzt wieder AUSSCHLIESSLICH aus dem Klan-Fortschritt (space_clan.revealed,
+// gesetzt von claim_space_arrival nach einem Sonden-Flug) — Stand vor 26e.
+// Die Technik hat einen neuen, milderen Effekt: wrSensed() (Nahbereichs-Ortung).
+function wrRevealed(qkey) { return qkey === '0,0' || !!(_wrGalaxy?.revealed || {})[qkey]; }
+
+// ── 📡 Nahbereichs-Ortung (wt_e6, neu gestaltet 2026-07-30) ──────────────────
+// Der Ersatz für „deckt alles auf". Geortet wird NUR, was ohnehin als nächstes dran ist:
+// ein Quadrant, der an einen erkundeten grenzt (= genau die, die `wrScoutable` erlaubt).
+//
+// Was die Ortung liefert: Planetenzahl, Gesamt-Wächterstärke, Wrackfelder, Ring-Rohstoffe.
+// Was sie NICHT liefert: die einzelnen Planeten, ihre Namen, und keinerlei Reise dorthin.
+// Der Nebel bleibt, der Sonden-Flug bleibt Pflicht.
+//
+// Warum das trotzdem 18 000 CC wert ist: die Sondenwahl war vorher BLIND. Man schickte
+// eine Sonde ins Ungewisse und sah erst nach der Flugzeit, ob sich der Quadrant lohnt.
+// Jetzt zielt man — Information statt Zugang. Das ist der Unterschied zwischen einem
+// Sensor und einem Cheat.
+function wrSensed(q) {
+  return !!q && !wrRevealed(q.key) && wrHasTech(_wrMember, 'wt_e6') && wrScoutable(q);
+}
+// Aggregat-Aufklärung eines georteten Quadranten. Bewusst nur Summen — Einzelplaneten
+// bleiben hinter dem Nebel.
+// ⚠️ Die Planetenliste des Klans enthält ohnehin ALLE Quadranten (fetchGalaxy lädt
+// `space_planets` ungefiltert); der Nebel war immer nur eine Anzeige-Schicht. Diese
+// Funktion macht daraus also keine neue Information verfügbar, sie zeigt nur einen Teil
+// dessen, was der Client längst hat — kontrolliert und an die Technik gebunden.
+function wrSensorIntel(q) {
+  const pls = wrPlanetsOf(q.key);
+  if (!pls.length) return null;
+  let str = 0, frei = 0, wreck = 0, ring = 0;
+  for (const p of pls) {
+    if (p.cleared_by) frei++; else str += parseFloat(p.enemy_strength) || 0;
+    if (wrWreckLeft(p) > 0) wreck++;
+    if (p.resource_type === 'plasmoid' || p.resource_type === 'quantum') ring++;
+  }
+  return { planets: pls.length, strength: Math.round(str), cleared: frei, wreck, ring };
+}
 // F3 Sprungtor-Netzwerk: Multi-Flotten-Strafe je bereits unterwegs befindlicher Flotte.
 function wrFleetGap(m) { return wrHasTech(m, 'wt_f3') ? 8 : 15; }
 
@@ -1969,6 +2066,13 @@ function wrHomeDetailHtml(m) {
         ${out > 0 ? `<span>${wrIc("travel")} Unterwegs: <strong>${wrFmt(out)}</strong></span>` : ''}
         <span>${wrIc("atk")} Kampfkraft: <strong>${wrFmt(wrFleetPower(ships))}</strong></span>
         <span>${wrIc("def")} Geschütze: <strong>${wrFmt(wrTurretPower(m))}</strong></span>
+        ${/* ⚡ 26p (Regel 1): Die Geschütz-Zahl links ist gedrosselt. Sie hier ohne die
+              Ursache zu zeigen wäre eine Statistik-Lücke — dieselbe Klasse Fehler wie die
+              perCup-Anzeigelücke in der Welt-Statistik. Nur bei Unterversorgung, damit die
+              Zeile nicht dauerhaft Platz kostet. */''}
+        ${wrPowerFactor(m) < 1
+          ? `<span class="wr-bad">⚡ Energie: <strong>${Math.round(wrPowerFactor(m) * 100)} %</strong></span>`
+          : ''}
       </div>
       ${rows
         ? `<div class="wr-fl-list">${rows}</div>`
@@ -2344,12 +2448,27 @@ function wrDetailHtml(m) {
     // 🛩️ 26m: das Ring-Gate gilt für JEDEN Start, auch für die Aufklärung — wer der
     // Sonde Jäger als Geleit mitgibt, läuft sonst hier in den Serverfehler.
     const gate = wrCarrierGap(sel, q.ring);
+    // 📡 Nahbereichs-Ortung (wt_e6, neu gestaltet 2026-07-30). Vorher stand hier die
+    // pauschale Behauptung „Hinter dem Nebel liegen 8 Planeten" — die stimmte nicht
+    // einmal zuverlässig. Mit der Technik stehen jetzt die echten Summen da.
+    const sensed = wrSensed(q);
+    const intel  = sensed ? wrSensorIntel(q) : null;
     return `
       <div class="wr-detail">
-        <div class="wr-card-title">🌫️ Unerforschter Quadrant <span class="wr-sub">${_wrEsc(q.key)} · Ring ${q.ring}</span></div>
-        <p class="wr-p">Hinter dem Nebel liegen 8 Planeten. Schick eine 🛰️ Bohnen-Sonde, um den Quadranten
-           für den <strong>gesamten Klan</strong> aufzudecken. Gib ihr Geleitschutz mit — draußen ist
-           nicht jeder Nebel leer.</p>
+        <div class="wr-card-title">${sensed ? '📡 Georteter' : '🌫️ Unerforschter'} Quadrant
+          <span class="wr-sub">${_wrEsc(q.key)} · Ring ${q.ring}</span></div>
+        ${intel
+          ? `<p class="wr-p">Die 📡 Deep-Space-Sensorik hat den Quadranten angepeilt: <strong>${intel.planets} Planeten</strong>${intel.cleared ? `, davon ${intel.cleared} bereits befreit` : ''}.
+               Welche das sind, zeigt erst die Sonde — schick eine 🛰️ Bohnen-Sonde, um ihn
+               für den <strong>gesamten Klan</strong> aufzudecken.</p>
+             <div class="wr-facts">
+               <span>📡 Wächter gesamt: <strong>${wrFmt(intel.strength)}</strong></span>
+               ${intel.ring  > 0 ? `<span>Ring-Rohstoffe: <strong>${intel.ring}×</strong> ${wrIc('pla')}/${wrIc('qua')}</span>` : ''}
+               ${intel.wreck > 0 ? `<span>${wrIc('salvage')} Wrackfelder: <strong>${intel.wreck}</strong></span>` : ''}
+             </div>`
+          : `<p class="wr-p">Hinter dem Nebel liegen unbekannte Planeten. Schick eine 🛰️ Bohnen-Sonde, um den Quadranten
+               für den <strong>gesamten Klan</strong> aufzudecken. Gib ihr Geleitschutz mit — draußen ist
+               nicht jeder Nebel leer.${wrHasTech(m, 'wt_e6') ? '' : `<br><span class="wr-sub">📡 Die Forschung „${_wrEsc(wrTechName('wt_e6'))}" ortet angrenzende Quadranten vorab — dann fliegt die Sonde nicht mehr blind.</span>`}</p>`}
         <div class="wr-facts">
           <span>Flugzeit: ${wrTravelHtml(min)} je Strecke${nAway > 0 ? ` <span class="wr-sub">+${wrFleetGap(m) * nAway} min (${nAway} unterwegs)</span>` : ''}</span>
           <span>Sonden im Hafen: <strong>${wrShipCount(m, 'sonde')}</strong></span>
@@ -2519,11 +2638,16 @@ function wrStationLightbox() {
 function wrPlanetSlotsHtml(m, p) {
   const tur   = wrPlanetTurrets(p);
   const coins = parseFloat(m?.coins) || 0;
+  // 🌀 26p: Quantenschaum ist die fünfte Kostenart — auf der Kolonie ×1,5 (45 für das
+  // Quanten-Geschütz). Ohne die Prüfung stünde „Bauen" offen und der Server lehnte mit
+  // 'insufficient_quantum' ab.
   const canPay = (c) => c && coins >= c.cc && wrErz(m) >= c.erz
-                     && wrKristall(m) >= c.kristall && wrPlasmoid(m) >= (c.plasmoid || 0);
+                     && wrKristall(m) >= c.kristall && wrPlasmoid(m) >= (c.plasmoid || 0)
+                     && wrQuantum(m) >= (c.quantum || 0);
   const priceTxt = (c) => [`${wrFmt(c.cc)} CC`]
     .concat(c.erz ? [`${c.erz} 🪨`] : []).concat(c.kristall ? [`${c.kristall} 💎`] : [])
-    .concat(c.plasmoid ? [`${c.plasmoid} 🟣`] : []).join(' · ');
+    .concat(c.plasmoid ? [`${c.plasmoid} ${wrIc('pla')}`] : [])
+    .concat(c.quantum ? [`${c.quantum} ${wrIc('qua')}`] : []).join(' · ');
 
   let out = '';
   for (let i = 0; i < WR_PLANET_SLOTS; i++) {
@@ -2791,6 +2915,16 @@ function wrWaveHtml(m) {
         ${pdef > 0 ? `<span>🛡️ Planeten-Geschütze: <strong>${wrFmt(pdef)}</strong></span>` : ''}
         <span>Σ Verteidigung: <strong>${wrFmt(def)}</strong></span>
       </div>
+      ${/* ⚡ 26p: Hier MUSS die Unterversorgung stehen. Die Geschütz-Zahl oben ist bereits
+            gedrosselt — ohne diese Zeile sucht man die fehlenden Punkte bei der Flotte,
+            obwohl ein Generator-Ausbau sie zurückholt. Die Zeile ist der Unterschied
+            zwischen „Verteidigung hält" und „Verteidigung hält nicht". */''}
+      ${wrPowerFactor(m) < 1
+        ? `<div class="wr-bad">⚡ Unterversorgt — deine Geschütze feuern mit
+             ${Math.round(wrPowerFactor(m) * 100)} % (${wrFmt(wrPowerDemand(m))} /
+             ${wrFmt(wrPowerSupply(m))} Energie). Voll versorgt wären es
+             ${wrFmt(Math.round(wrTurretPower(m) / Math.max(0.01, wrPowerFactor(m))))}.</div>`
+        : ''}
       ${wrHasTech(m, 'wt_e12')
         ? '<div class="wr-sub">📡 Frühwarn-Netz aktiv — du bekommst 30 Minuten mehr Vorlauf.</div>' : ''}
       <div class="${ok ? 'wr-good' : 'wr-bad'}">
@@ -2860,6 +2994,102 @@ function wrMemberName(id) {
 // Die Geschütze wirken SOFORT (JP-Entscheidung Variante b): sie senken die Verluste aus
 // Hinterhalten auf dem Rückweg. Ob ein Verband durchkommt, entscheidet dagegen allein
 // seine eigene Kampfkraft — Geschütze stehen zu Hause.
+// ── ⚡ Energie-Panel im Raumhafen (26p) ──────────────────────────────────────
+// Pflicht-Anzeige: es gibt bewusst KEIN What's-New-Popup (JP), also muss die neue
+// Mechanik an der Stelle erklärt sein, an der sie wirkt. Drei Dinge müssen sichtbar
+// sein: Bedarf gegen Versorgung, was Unterversorgung konkret kostet, und wie man sie
+// behebt.
+function wrPowerHtml(m, canPay, priceTxt) {
+  const dem = wrPowerDemand(m), sup = wrPowerSupply(m), fac = wrPowerFactor(m);
+  const gen = wrPowerGen(m), def = wrPowerGenDef(m);
+  const glv = wrPowerGenLevel(m);
+  const lv  = wrBaseLevel(m);
+  // Balkenbreite: der Bedarf im Verhältnis zur Versorgung, gedeckelt bei 100 %.
+  const pct = sup > 0 ? Math.min(100, Math.round(dem / sup * 100)) : 100;
+
+  // Der bestehende Generator: Ausbau bis Stufe 3, danach Umrüsten auf den nächsten Typ.
+  let genHtml;
+  if (gen && def) {
+    const st  = wrPowerStats(def.key, glv);
+    const up  = glv < WR_POWER_MAX ? wrPowerStats(def.key, glv + 1) : null;
+    const zie = SPACE_POWER.filter(g => g.out[1] > def.out[1] && wrPowerUnlocked(m, g.key));
+    genHtml = `
+      <div class="wr-gen wr-gen-full">
+        <div class="wr-gen-art" data-wr-geninfo="${def.key}" title="Groß ansehen">
+          <img src="assets/${def.folder}/${def.art}.png" alt=""
+            onerror="this.parentNode.classList.add('wr-art-fail');this.remove()"
+          ><span class="wr-gen-fb">${def.icon}</span><span class="wr-zoom-hint">🔍</span></div>
+        <div class="wr-gen-info">
+          <div class="wr-gen-name">${_wrEsc(def.name)} <span class="wr-sub">Stufe ${glv}</span></div>
+          <div class="wr-gen-out">⚡ ${wrFmt(st.output)} Ausgabe
+            <span class="wr-sub">+ ${wrFmt(WR_POWER_BASE_SUPPLY + lv * WR_POWER_PER_LEVEL)} Grundversorgung des Hafens</span></div>
+          ${up
+            ? `<button class="wr-btn wr-btn-sm" id="wr-power-up" ${canPay(up) ? '' : 'disabled'}
+                 >Auf Stufe ${glv + 1} ausbauen
+                 <span class="wr-btn-sub">${priceTxt(up)} → ⚡ ${wrFmt(up.output)}</span></button>`
+            : '<div class="wr-slot-max">✅ Vollausbau erreicht</div>'}
+          ${zie.length ? `<div class="wr-slot-conv">${zie.map(g => {
+            const p = wrPowerConvertPrice(m, g.key);
+            // Gleicher Bauplan wie beim Geschütz-Umrüsten (26k) — vier gestapelte
+            // Zeilen. ⚠️ Meldungs-Klassen NIE in den Button verschachteln.
+            return `<button class="wr-btn wr-btn-sm wr-btn-conv" data-wr-genconv="${g.key}"
+                      ${canPay(p) ? '' : 'disabled'}>
+              <span class="wr-conv-name">⬆️ ${_wrEsc(g.name)}</span>
+              <span class="wr-conv-line">${priceTxt(p)}</span>
+              ${p.rebate > 0 ? `<span class="wr-conv-save">−${wrFmt(p.rebate)} CC angerechnet</span>` : ''}
+              <span class="wr-conv-line">→ ⚡ ${wrFmt(p.output)} · zurück auf Stufe 1</span>
+            </button>`;
+          }).join('')}</div>` : ''}
+        </div>
+      </div>`;
+  } else {
+    // Noch kein Kraftwerk: alle drei Typen anbieten, gesperrte mit dem GRUND.
+    genHtml = `<div class="wr-gen-opts">${SPACE_POWER.map(g => {
+      const st   = wrPowerStats(g.key, 1);
+      const frei = wrPowerUnlocked(m, g.key);
+      const txt  = frei ? priceTxt(st)
+                        : `🔒 Forschung „${_wrEsc(wrTechName(g.needs))}" (${_wrEsc(wrTechRef(g.needs))})`;
+      return `
+        <div class="wr-slot-opt${frei ? '' : ' wr-slot-opt-lock'}">
+          <span class="wr-slot-opt-art wr-ship-zoom" data-wr-geninfo="${g.key}" title="Groß ansehen">
+            <img src="assets/${g.folder}/${g.art}.png" alt=""
+              onerror="this.parentNode.classList.add('wr-art-fail');this.remove()"
+            ><span class="wr-slot-opt-fb">${g.icon}</span><span class="wr-zoom-hint">🔍</span></span>
+          <span class="wr-slot-opt-txt">
+            <span class="wr-slot-opt-n">${_wrEsc(g.name)}</span>
+            <span class="wr-slot-opt-a">⚡ ${wrFmt(g.out[1])} / ${wrFmt(g.out[2])} / ${wrFmt(g.out[3])}</span>
+            <span class="wr-slot-opt-p">${txt}</span>
+          </span>
+          <button class="wr-btn wr-btn-sm" data-wr-genbuild="${g.key}"
+            ${(frei && canPay(st)) ? '' : 'disabled'}>Bauen</button>
+        </div>`;
+    }).join('')}</div>`;
+  }
+
+  return `
+    <div class="wr-card wr-card-power">
+      <div class="wr-card-title">⚡ Energieversorgung
+        <span class="wr-sub">— Geschütze brauchen Strom</span></div>
+      <div class="wr-nrg-bar ${dem > sup ? 'wr-nrg-short' : ''}">
+        <div class="wr-nrg-fill" style="width:${pct}%"></div>
+      </div>
+      <div class="wr-facts">
+        <span>Bedarf: <strong>${wrFmt(dem)}</strong></span>
+        <span>Versorgung: <strong>${wrFmt(sup)}</strong></span>
+        <span>Wirkung: <strong class="${fac < 1 ? 'wr-bad' : 'wr-good'}">${Math.round(fac * 100)} %</strong></span>
+      </div>
+      ${fac < 1
+        ? `<div class="wr-bad">⚡ Unterversorgt — deine Geschütze feuern mit
+             ${Math.round(fac * 100)} % (es fehlen ${wrFmt(dem - sup)} Energie).
+             <span class="wr-sub">Ein Generator-Ausbau behebt das sofort.</span></div>`
+        : `<div class="wr-sub">Alles versorgt. Noch ${wrFmt(Math.max(0, sup - dem))} Energie frei —
+             so viel kannst du zubauen, bevor die Feuerkraft sinkt.</div>`}
+      ${genHtml}
+      <div class="wr-sub">Die Wirkung sinkt nie unter ${Math.round(WR_POWER_FLOOR * 100)} %:
+        ein Fehlkauf kann dich schwächen, aber nie wehrlos machen.</div>
+    </div>`;
+}
+
 function wrHafenHtml(m) {
   const lv    = wrBaseLevel(m);
   const def   = wrPortDef(lv);
@@ -2867,12 +3097,18 @@ function wrHafenHtml(m) {
   const tur   = wrTurrets(m);
   const power = wrTurretPower(m);
   const coins = parseFloat(m?.coins) || 0;
-  // 26k: Plasmoid ist die vierte Kostenart (Resonanz-Geschütz, Quanten-Geschütz).
+  // 26k: Plasmoid ist die vierte Kostenart · 26p: Quantenschaum die fünfte.
   const canPay = (c) => coins >= c.cc && wrErz(m) >= c.erz && wrKristall(m) >= c.kristall
-                     && wrPlasmoid(m) >= (c.plasmoid || 0);
+                     && wrPlasmoid(m) >= (c.plasmoid || 0) && wrQuantum(m) >= (c.quantum || 0);
   const priceTxt = (c) => [`${wrFmt(c.cc)} CC`]
     .concat(c.erz ? [`${c.erz} 🪨`] : []).concat(c.kristall ? [`${c.kristall} 💎`] : [])
-    .concat(c.plasmoid ? [`${c.plasmoid} 🟣`] : []).join(' · ');
+    .concat(c.plasmoid ? [`${c.plasmoid} ${wrIc('pla')}`] : [])
+    .concat(c.quantum ? [`${c.quantum} ${wrIc('qua')}`] : []).join(' · ');
+
+  // ⚡ Energie (26p) — einmal oben gerechnet, damit Panel, Bauplätze und die
+  // Bau-Vorschau garantiert DIESELBE Momentaufnahme zeigen.
+  const eDem = wrPowerDemand(m), eSup = wrPowerSupply(m), eFac = wrPowerFactor(m);
+  const eShort = eDem > eSup;
 
   let slots = '';
   for (let i = 0; i < def.slots; i++) {
@@ -2892,7 +3128,11 @@ function wrHafenHtml(m) {
           <div class="wr-slot-name">${_wrEsc(t.name)} <span class="wr-sub">Stufe ${clv}</span></div>
           <div class="wr-slot-atk">${dmg
             ? `<span class="wr-bad">⚠️ beschädigt</span><span class="wr-sub">wieder einsatzbereit in ${wrCountdown(Date.parse(cur.dmg) - Date.now())}</span>`
-            : `🛡️ ${wrFmt(st.atk)}`}</div>
+            : `🛡️ ${wrFmt(st.atk)}${eFac < 1 ? ` <span class="wr-bad">→ ${wrFmt(Math.round(st.atk * eFac))}</span>` : ''}`}</div>
+          ${/* ⚡ 26p: Jeder Bauplatz zeigt seinen Bedarf — sonst ist nicht rechenbar,
+                was ein weiteres Geschütz kostet. Ein beschädigtes zieht keine Energie. */''}
+          <div class="wr-slot-nrg">⚡ ${dmg ? '<span class="wr-sub">0 (beschädigt)</span>'
+            : wrFmt(Math.round(wrTurretEnergy(cur.type, clv)))}</div>
           ${up
             ? `<button class="wr-btn wr-btn-sm" data-wr-tup="${key}" ${canPay(up) ? '' : 'disabled'}
                  >Aufrüsten <span class="wr-btn-sub">${priceTxt(up)} → 🛡️ ${wrFmt(up.atk)}</span></button>`
@@ -2933,8 +3173,17 @@ function wrHafenHtml(m) {
                 <span class="wr-slot-opt-fb">${t.icon}</span><span class="wr-zoom-hint">🔍</span></span>
             <span class="wr-slot-opt-txt">
               <span class="wr-slot-opt-n">${_wrEsc(t.name)}</span>
-              <span class="wr-slot-opt-a">🛡️ ${wrFmt(st.atk)}</span>
+              <span class="wr-slot-opt-a">🛡️ ${wrFmt(st.atk)} · ⚡ ${wrFmt(Math.round(wrTurretEnergy(t.key, 1)))}</span>
               <span class="wr-slot-opt-p">${grund}</span>
+              ${/* ⚡ 26p: WARNEN, BEVOR der Bau die Versorgung reisst (Plan §4). Ohne
+                    diese Zeile sähe der Spieler erst nach dem Kauf, dass alle seine
+                    Geschütze schwächer feuern — die schlimmste Variante. */''}
+              ${(() => {
+                const nach = eDem + Math.round(wrTurretEnergy(t.key, 1));
+                if (!ok || nach <= eSup) return '';
+                return `<span class="wr-slot-opt-nrg wr-bad">⚡ Danach ${wrFmt(nach)} / ${wrFmt(eSup)}
+                  — alle Geschütze feuern mit ${Math.round(Math.max(WR_POWER_FLOOR, eSup / nach) * 100)} %</span>`;
+              })()}
             </span>
             <button class="wr-btn wr-btn-sm" data-wr-tbuild="${key}:${t.key}"
               ${(ok && canPay(st)) ? '' : 'disabled'}>Bauen</button>
@@ -2958,6 +3207,13 @@ function wrHafenHtml(m) {
             ><span class="wr-hafen-fb">🛰️</span><span class="wr-zoom-hint">🔍</span></div>
         <div class="wr-hafen-info">
           <div class="wr-hafen-power">${wrIc("def")} Feuerkraft <strong>${wrFmt(power)}</strong></div>
+          ${/* ⚡ 26p: Die Feuerkraft daneben IST bereits gedrosselt. Ohne diesen Hinweis
+                wirkt der gesunkene Wert wie ein Fehler — der Spieler sucht ihn bei den
+                Geschützen, nicht beim Strom. */''}
+          ${eShort
+            ? `<div class="wr-bad">⚡ Unterversorgt: ${wrFmt(eDem)} / ${wrFmt(eSup)} —
+                 die Feuerkraft oben ist bereits auf ${Math.round(eFac * 100)} % gedrosselt.</div>`
+            : `<div class="wr-sub">⚡ Energie ${wrFmt(eDem)} / ${wrFmt(eSup)} — versorgt.</div>`}
           <div class="wr-sub">Deckungsfeuer beim Anflug und bei Angriffswellen. Jeder Spieler
             hat einen eigenen Hafen — alle starten aber aus demselben Quadranten.</div>
           ${next
@@ -2981,7 +3237,10 @@ function wrHafenHtml(m) {
           </div>`).join('')}
       </div>
       <div class="wr-slots">${slots}</div>
-    </div>`;
+    </div>
+    ${/* ⚡ Das Energie-Panel steht bewusst DIREKT unter den Bauplätzen: dort entsteht der
+          Bedarf, dort wird die Entscheidung getroffen. */''}
+    ${wrPowerHtml(m, canPay, priceTxt)}`;
 }
 
 // Einstell-Panel im Planeten-Detail (nur auf befreiten Planeten)
@@ -3507,7 +3766,17 @@ function wrTurretStats(type, level) {
     erz:      Math.round(t.erz      * WR_TURRET_COST_MULT[lv]),
     kristall: Math.round(t.kristall * WR_TURRET_COST_MULT[lv]),
     plasmoid: Math.round((t.plasmoid || 0) * WR_TURRET_COST_MULT[lv]),
+    // 🌀 NEU 26p — nur das Quanten-Geschütz hat einen Wert, alle anderen 0.
+    quantum:  Math.round((t.quantum  || 0) * WR_TURRET_COST_MULT[lv]),
   };
+}
+// ⚡ Energiebedarf eines Geschützes auf Stufe 1..3 (Spiegel von _space_turret_energy
+// samt Stufenfaktor). UNGERUNDET — die SQL rundet erst die Summe, nicht die Summanden.
+function wrTurretEnergy(type, level) {
+  const e = WR_TURRET_ENERGY[type];
+  if (!e) return 0;
+  const lv = Math.max(1, Math.min(WR_TURRET_MAX, level || 1));
+  return e * WR_TURRET_ATK_MULT[lv];
 }
 // Forschungs-Gate (26k) — Spiegel von _space_turret_ok. Betrifft NUR Neubau und
 // Umrüsten; ein bereits gebautes Geschütz bleibt ohne die Tech nutz- und aufrüstbar.
@@ -3524,7 +3793,8 @@ function wrConvertPrice(fromType, fromLevel, toType) {
   if (!to) return null;
   const rebate = Math.round((old?.cc || 0) * 0.5);
   return { cc: Math.max(0, to.cc - rebate), rebate,
-           erz: to.erz, kristall: to.kristall, plasmoid: to.plasmoid, atk: to.atk };
+           erz: to.erz, kristall: to.kristall, plasmoid: to.plasmoid,
+           quantum: to.quantum, atk: to.atk };
 }
 // Ein von einer Angriffswelle beschädigtes Geschütz trägt bis `dmg` nichts bei (P2).
 // ⚠️ Ein unlesbarer Zeitstempel darf es NICHT dauerhaft ausschalten — gleiche Absicherung
@@ -3536,8 +3806,75 @@ function wrTurretDamaged(slot) {
   return Number.isFinite(until) && until > Date.now();
 }
 
+// ── ⚡ Energie: Versorgung, Bedarf, Faktor (26p) ─────────────────────────────
+// Spiegel von _space_power_supply / _space_turret_demand / _space_power_factor.
+// ⚠️ Der Generator lebt in base.power = { type, level } — NICHT in space.power.
+function wrPowerGen(m)    { return wrSpace(m).base?.power || null; }
+function wrPowerGenDef(m) { const g = wrPowerGen(m); return g ? SPACE_POWER_BY_KEY[g.type] || null : null; }
+function wrPowerGenLevel(m) {
+  return Math.max(1, Math.min(WR_POWER_MAX, parseInt(wrPowerGen(m)?.level, 10) || 1));
+}
+// Ausgabe und Kosten eines Generators auf einer Stufe (Spiegel von _space_power_def).
+function wrPowerStats(type, level) {
+  const g = SPACE_POWER_BY_KEY[type];
+  if (!g) return null;
+  const lv = Math.max(1, Math.min(WR_POWER_MAX, level || 1));
+  const cm = WR_POWER_COST_MULT[lv];
+  return {
+    output:   g.out[lv],
+    cc:       Math.round(g.cc       * cm),
+    erz:      Math.round(g.erz      * cm),
+    kristall: Math.round(g.kristall * cm),
+    plasmoid: Math.round(g.plasmoid * cm),
+    quantum:  Math.round(g.quantum  * cm),
+  };
+}
+function wrPowerUnlocked(m, type) {
+  const g = SPACE_POWER_BY_KEY[type];
+  if (!g) return false;
+  return !g.needs || wrHasTech(m, g.needs);
+}
+function wrPowerConvertPrice(m, toType) {
+  const to = wrPowerStats(toType, 1);
+  if (!to) return null;
+  const cur = wrPowerGen(m);
+  const old = cur ? wrPowerStats(cur.type, wrPowerGenLevel(m)) : null;
+  const rebate = Math.round((old?.cc || 0) * 0.5);
+  return { cc: Math.max(0, to.cc - rebate), rebate, output: to.output,
+           erz: to.erz, kristall: to.kristall, plasmoid: to.plasmoid, quantum: to.quantum };
+}
+function wrPowerSupply(m) {
+  const lv = wrBaseLevel(m);
+  let sup = WR_POWER_BASE_SUPPLY + lv * WR_POWER_PER_LEVEL;
+  const g = wrPowerGen(m);
+  if (g) sup += wrPowerStats(g.type, wrPowerGenLevel(m))?.output || 0;
+  return sup;
+}
+// ⚠️ BESCHÄDIGTE GESCHÜTZE ZIEHEN KEINE ENERGIE — dieselbe dmg-Prüfung wie in
+// wrTurretPowerRaw. Sonst würde eine verlorene Angriffswelle doppelt bestrafen: die
+// intakten Geschütze müssten sich den Strom mit Wracks teilen, die gar nicht feuern.
+// Sichtbare Folge: der Bedarf sinkt für die 12 h Reparaturzeit. Gewollt, kein Anzeigefehler.
+function wrPowerDemand(m) {
+  let sum = 0;
+  for (const slot of Object.values(wrTurrets(m))) {
+    if (!slot || typeof slot !== 'object') continue;
+    if (wrTurretDamaged(slot)) continue;
+    sum += wrTurretEnergy(slot.type, slot.level);
+  }
+  return Math.round(sum);
+}
+function wrPowerFactor(m) {
+  const dem = wrPowerDemand(m);
+  if (dem <= 0) return 1;                       // ohne Geschütze kein Bedarf, keine Strafe
+  return Math.min(1, Math.max(WR_POWER_FLOOR, wrPowerSupply(m) / Math.max(1, dem)));
+}
+
 // Gesamte Feuerkraft des eigenen Hafens (Spiegel von _space_turret_power)
 // B1/B5 wirken auf die ANZEIGE genauso wie serverseitig am Aufrufort (21n).
+// ⚠️ 26p: der Energie-Faktor gehört in wrTurretPowerRaw und NICHT in wrTurretPower —
+// serverseitig steckt er ebenfalls IN _space_turret_power, also vor dem Tech-Faktor.
+// Stünde er hier aussen, wäre die Rundung eine andere (round(sum × f) × tech statt
+// round(sum × f × tech)) und die Anzeige driftete um ein paar Punkte von der SQL weg.
 function wrTurretPower(m) { return wrTurretPowerRaw(m) * wrTechTurret(m); }
 function wrTurretPowerRaw(m) {
   let sum = 0;
@@ -3546,7 +3883,7 @@ function wrTurretPowerRaw(m) {
     if (wrTurretDamaged(slot)) continue;
     sum += wrTurretStats(slot.type, slot.level)?.atk || 0;
   }
-  return sum;
+  return Math.round(sum * wrPowerFactor(m));
 }
 
 // ── 🛡️ Feature ④: Kolonie-Ausbau · Planeten-Geschütze · Quadranten-Station (26h) ──
@@ -3572,7 +3909,9 @@ function wrPturretStats(type, level) {
            cc:       Math.round(s.cc       * WR_PTURRET_MULT),
            erz:      Math.round(s.erz      * WR_PTURRET_MULT),
            kristall: Math.round(s.kristall * WR_PTURRET_MULT),
-           plasmoid: Math.round(s.plasmoid * WR_PTURRET_MULT) };
+           plasmoid: Math.round(s.plasmoid * WR_PTURRET_MULT),
+           // 🌀 26p: der Kolonie-Aufschlag gilt auch für Quantenschaum → 30 × 1,5 = 45.
+           quantum:  Math.round(s.quantum  * WR_PTURRET_MULT) };
 }
 function wrPturretConvertPrice(fromType, fromLevel, toType) {
   const to  = wrPturretStats(toType, 1);
@@ -3580,7 +3919,8 @@ function wrPturretConvertPrice(fromType, fromLevel, toType) {
   if (!to) return null;
   const rebate = Math.round((old?.cc || 0) * 0.5);
   return { cc: Math.max(0, to.cc - rebate), rebate,
-           erz: to.erz, kristall: to.kristall, plasmoid: to.plasmoid, atk: to.atk };
+           erz: to.erz, kristall: to.kristall, plasmoid: to.plasmoid,
+           quantum: to.quantum, atk: to.atk };
 }
 // Belegte Bauplätze eines Planeten. Bestandsplaneten ohne `turrets` (vor 26l) liefern {}.
 function wrPlanetTurrets(p) {
@@ -3876,10 +4216,26 @@ function wrDrawMap() {
       g.addColorStop(1, 'rgba(130,120,190,0)');
       ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, size * 0.85, 0, Math.PI * 2); ctx.fill();
       ctx.font = '22px system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText('🌫️', x, y - 4);
+      // 📡 Geortete Quadranten (wt_e6) tragen ein Sensor-Symbol statt der leeren Schwade —
+      // der Nebel bleibt, aber er ist nicht mehr blind.
+      const sensed = wrSensed(q);
+      ctx.fillText(sensed ? '📡' : '🌫️', x, y - 4);
       ctx.font = '10px system-ui';
       ctx.fillStyle = wrScoutable(q) ? '#9fd1ff' : 'rgba(200,200,220,.4)';
       ctx.fillText(wrScoutable(q) ? 'aufklärbar' : 'zu weit', x, y + 20);
+      // Zweite Zeile nur bei Ortung: Planetenzahl und Wächterstärke — genau die zwei
+      // Zahlen, nach denen man das Sondenziel wählt.
+      if (sensed) {
+        const it = wrSensorIntel(q);
+        if (it) {
+          ctx.font = '10px system-ui'; ctx.fillStyle = '#ffc94a';
+          ctx.fillText(`${it.planets} Pl · 🛡️ ${wrFmt(it.strength)}`, x, y + 33);
+          if (it.ring > 0 || it.wreck > 0) {
+            ctx.fillStyle = '#a88fe0';
+            ctx.fillText(`${it.ring ? `${it.ring}× 🟣/🌀 ` : ''}${it.wreck ? `${it.wreck}× ♻️` : ''}`.trim(), x, y + 45);
+          }
+        }
+      }
       continue;
     }
 
@@ -4107,6 +4463,8 @@ function wrBindEvents() {
     if (info) { wrShipLightbox(info.dataset.wrInfo); return; }
     const tinfo = e.target.closest('[data-wr-tinfo]');
     if (tinfo) { wrTurretLightbox(tinfo.dataset.wrTinfo); return; }
+    const geninfo = e.target.closest('[data-wr-geninfo]');
+    if (geninfo) { wrPowerLightbox(geninfo.dataset.wrGeninfo); return; }
     const techInfo = e.target.closest('[data-wr-techinfo]');
     if (techInfo) { wrTechLightbox(techInfo.dataset.wrTechinfo); return; }
     if (e.target.closest('[data-wr-pinfo]')) { wrPortLightbox(); return; }
@@ -4140,6 +4498,13 @@ function wrBindEvents() {
       const [slot, type] = tc.dataset.wrTconv.split(':');
       await wrDefense('turret_convert', slot, type); return;
     }
+    // ⚡ Energie-Generator (26p). Er hat KEINEN Bauplatz — slot bleibt null, die RPC
+    // prüft bei diesen drei Aktionen bewusst vor der Slot-Prüfung.
+    if (e.target.closest('#wr-power-up')) { await wrDefense('power_upgrade', null, null); return; }
+    const gb = e.target.closest('[data-wr-genbuild]');
+    if (gb && !gb.disabled) { await wrDefense('power_build', null, gb.dataset.wrGenbuild); return; }
+    const gc = e.target.closest('[data-wr-genconv]');
+    if (gc && !gc.disabled) { await wrDefense('power_convert', null, gc.dataset.wrGenconv); return; }
 
     // 🛡️ Planeten-Verteidigung (26h) — Wert ist 'planetId:action'; die UUID enthält
     // keine Doppelpunkte, ein einfaches split reicht hier (anders als bei den Routen).
@@ -4615,6 +4980,26 @@ async function wrDefense(action, slot, type) {
       wrToast(`🛰️ Raumhafen auf Stufe ${res.level} ausgebaut`, 'success');
       wrChat(`[[s:hafen]] ${_wrEsc(name)} hat den Raumhafen auf Stufe ${res.level} ausgebaut `
            + `(${wrFmt(res.cc)} CC) — jetzt ${wrPortDef(res.level).slots} Bauslots.`);
+    } else if (action === 'power_build' || action === 'power_upgrade' || action === 'power_convert') {
+      // ⚡ 26p: eigener Zweig. Die Geschütz-Texte passen hier nicht — und die
+      // interessante Zahl ist nicht die Feuerkraft, sondern was sich an der
+      // Versorgungslage geändert hat.
+      const g = SPACE_POWER_BY_KEY[res.type] || {};
+      const f = SPACE_POWER_BY_KEY[res.from] || {};
+      const nrg = res.energy || {};
+      const pct = Math.round((parseFloat(nrg.factor) || 1) * 100);
+      const verb = action === 'power_build'   ? 'gebaut'
+                 : action === 'power_convert' ? `ersetzt (vorher ${f.name || 'Generator'})`
+                 : `auf Stufe ${res.level} ausgebaut`;
+      wrToast(`${g.icon || '⚡'} ${g.name || 'Generator'} ${verb} — ⚡ ${wrFmt(res.output)}`, 'success');
+      // ⚠️ NAMENSFALLE: NICHT `[[s:${res.type}]]` — die Generator-Schlüssel heissen
+      // `kristall`/`plasmoid`/`quanten`, und `kristall`/`plasmoid` stehen in CHAT_ART
+      // längst als ROHSTOFFE (res_kristall/res_plasmoid). Der Chat hätte ein 💎 statt
+      // des Kraftwerks gezeigt. Deshalb direkt der ART-Name (`gen_*`), den app.js über
+      // das Präfix auflöst.
+      wrChat(`[[s:${g.art || 'gen_kristall'}]] ${_wrEsc(name)} hat den ${_wrEsc(g.name || 'Energie-Generator')} `
+           + `${verb} — Versorgung jetzt ⚡ ${wrFmt(nrg.supply)} bei ${wrFmt(nrg.demand)} Bedarf`
+           + `${pct < 100 ? ` (Geschütze bei ${pct} %)` : ''}.`);
     } else if (action === 'turret_convert') {
       // 26k: eigener Zweig — „aufgerüstet" wäre hier irreführend, es ist ein Typwechsel.
       const t = SPACE_TURRET_BY_KEY[res.type] || {};
@@ -4930,13 +5315,37 @@ function wrTurretLightbox(type) {
   wrArtLightbox(t.art, t.icon, t.name, t.desc, [
     [`${wrIc("def")} Feuerkraft`, `${s[0].atk} / ${s[1].atk} / ${s[2].atk}`],
     [`${wrIc("yard")} Hafen ab`, `Stufe ${t.minPort}`],
-    ['💰 Neubau', `${wrFmt(t.cc)} CC${t.plasmoid ? ` · ${t.plasmoid} 🟣` : ''}`],
+    ['💰 Neubau', `${wrFmt(t.cc)} CC${t.plasmoid ? ` · ${t.plasmoid} ${wrIc('pla')}` : ''}`
+                + `${t.quantum ? ` · ${t.quantum} ${wrIc('qua')}` : ''}`],
     ['⬆️ Ausbau', `${wrFmt(s[1].cc)} / ${wrFmt(s[2].cc)} CC`],
+    // ⚡ 26p: der Energiebedarf gehört sichtbar dazu — er ist der eigentliche Preis der
+    // starken Typen. Gerundet je Stufe, wie es der Bauplatz zeigt.
+    ['⚡ Energie', [1, 2, 3].map(lv => Math.round(wrTurretEnergy(t.key, lv))).join(' / ')],
     // 26k: die Freischaltung gehört sichtbar dazu — sonst rätselt man, warum „Bauen" fehlt.
     ['🔬 Forschung', t.needs ? `${frei ? '✓ ' : '🔒 '}${_wrEsc(wrTechName(t.needs))}` : '— frei verfügbar'],
   // ⚠️ Der Ordner MUSS mit: die Geschütz-Bilder liegen seit JPs Meldung vom 29.07.
   // alle in assets/weltraum/ (die Forschungs-Renders).
   ], wrTurretFolder(t));
+}
+
+// ⚡ Zoom für die Energie-Generatoren (26p). Gleiches Muster wie wrTurretLightbox.
+function wrPowerLightbox(key) {
+  const g = SPACE_POWER_BY_KEY[key];
+  if (!g) return;
+  const s = [1, 2, 3].map(lv => wrPowerStats(g.key, lv));
+  const frei = wrPowerUnlocked(_wrMember, g.key);
+  const kosten = (c) => [`${wrFmt(c.cc)} CC`]
+    .concat(c.erz ? [`${c.erz} 🪨`] : []).concat(c.kristall ? [`${c.kristall} 💎`] : [])
+    .concat(c.plasmoid ? [`${c.plasmoid} ${wrIc('pla')}`] : [])
+    .concat(c.quantum ? [`${c.quantum} ${wrIc('qua')}`] : []).join(' · ');
+  wrArtLightbox(g.art, g.icon, g.name, g.desc, [
+    ['⚡ Ausgabe', `${wrFmt(s[0].output)} / ${wrFmt(s[1].output)} / ${wrFmt(s[2].output)}`],
+    ['💰 Neubau', kosten(s[0])],
+    ['⬆️ Ausbau', `${wrFmt(s[1].cc)} / ${wrFmt(s[2].cc)} CC`],
+    // Das Gate ist bewusst die ROHSTOFF-Freischaltung: wer den Brennstoff nicht abbauen
+    // kann, soll das Kraftwerk nicht betreiben.
+    ['🔬 Forschung', g.needs ? `${frei ? '✓ ' : '🔒 '}${_wrEsc(wrTechName(g.needs))}` : '— frei verfügbar'],
+  ], g.folder);
 }
 
 // 🔬 Zoom für Forschungselemente (JP 2026-07-26): großes Bild + Wirkung/Kosten/Status.
@@ -4978,6 +5387,10 @@ function wrPortLightbox() {
   + 'Quadranten, aber jeder baut seinen eigenen Hafen aus.', [
     ['⬚ Bauslots', def.slots],
     [`${wrIc("def")} Feuerkraft`, wrFmt(wrTurretPower(m))],
+    // ⚡ 26p: Bedarf/Versorgung gehören in die Hafen-Übersicht — hier schaut man nach,
+    // warum die Feuerkraft darüber nicht zur Summe der Bauplätze passt.
+    ['⚡ Energie', `${wrFmt(wrPowerDemand(m))} / ${wrFmt(wrPowerSupply(m))}`
+                + `${wrPowerFactor(m) < 1 ? ` — ${Math.round(wrPowerFactor(m) * 100)} %` : ''}`],
     [`${wrIc("fleet")} Schiffe`, wrFmt(Object.values(wrHomeShips(m)).reduce((a, b) => a + (parseInt(b, 10) || 0), 0))],
     [`${wrIc("colony")} Kolonien`, wrFmt(Object.keys(wrColonies(m)).length)],
   ]);
@@ -5438,6 +5851,15 @@ function wrErrText(err) {
     turret_damaged:        'Ein beschädigtes Geschütz lässt sich nicht umrüsten — warte die Reparatur ab.',
     port_too_small:        'Dafür ist der Raumhafen noch zu klein — erst ausbauen.',
     yard_max:              'Die Werft ist bereits voll ausgebaut (Stufe 3).',
+    // ⚡ Energie-Generator (26p)
+    bad_power:             'Unbekannter Generator-Typ.',
+    power_empty:           'Du hast noch kein Kraftwerk — erst einen Generator bauen.',
+    power_exists:          'Es steht schon ein Generator. Baue ihn aus oder rüste ihn um.',
+    power_max:             'Dieser Generator ist bereits auf der höchsten Stufe.',
+    power_locked:          'Diesen Generator musst du zuerst freischalten — er braucht den '
+                         + 'passenden Rohstoff-Abbau (Plasmoid-Kollektor bzw. Quantenschaum-Extraktor).',
+    power_not_better:      'Umrüsten geht nur auf ein STÄRKERES Kraftwerk.',
+    same_power:            'Dieser Generator steht bereits.',
   };
   return map[err] || ('Fehler: ' + (err || 'unbekannt'));
 }

@@ -40,6 +40,22 @@ const KRIEGER_POTIONS = [
 function kriegerPotionByKey(key) { return KRIEGER_POTIONS.find(p => p.key === key) || null; }
 function kriegerPotionCount(dd, key) { return Math.max(0, (dd?.potions && dd.potions[key]) || 0); }
 
+// 💰 Rückkaufwert (JP 2026-07-30: „dass man Tränke verkaufen kann wäre gut" — er hatte
+// über 30 Stück je Sorte liegen, weil Tränke aus Dungeon-Funden schneller reinkommen als
+// man sie verbraucht: max. 1–2 pro Kampf).
+// 50 % ist bewusst deutlich unter dem Kaufpreis: Tränke sollen kein Sparbuch werden.
+// ⚠️ Immer auf den GRUNDPREIS anwenden, nie auf den gezahlten — mit dem Handel-Set kauft
+// man 15 % billiger, und ein Rückkauf über 50 % des Grundpreises wäre bei einem künftigen
+// Rabatt >50 % eine Geldmaschine. Spiegel von KRIEGER_POTION_SELL_PCT in db.js.
+const KRIEGER_POTION_SELL_PCT = 0.5;
+// Sicherheitsreserve des Sammel-Verkaufs: „alle bis auf 5". Ohne sie wäre ein Fehlklick
+// gleichbedeutend mit „Bestand weg" — und Tränke sind vor einem Burgkampf genau das,
+// worauf man sich verlässt.
+const KRIEGER_POTION_KEEP = 5;
+function kriegerPotionSellValue(potion) {
+  return Math.floor((potion?.cost || 0) * KRIEGER_POTION_SELL_PCT);
+}
+
 // Seltener Trank-Fund im Dungeon (analog KRIEGER_VOUCHER_FINDS) — bevorzugt günstige Tränke.
 const KRIEGER_POTION_FIND_CHANCE = 0.18;   // Anteil der Fund-Felder, die einen Trank statt CC geben
 const KRIEGER_POTION_FIND_POOL = ['espresso','latte','mokka','coldbrew','ristretto_doppio'];
@@ -1303,9 +1319,22 @@ function kriegerStepsAllowed(level, dd) {
   return base + (dd ? kriegerFeetBonus(dd) : 0) + (dd ? kriegerMountStepBonus(dd) : 0)
               + (dd ? kriegerExtraStepBonus(dd) : 0) + (dd ? kriegerSetStepBonus(dd) : 0);
 }
+// ⚠️ CLIENT-SYNC-PFLICHT: KRIEGER_LEVEL_MAX ist der Spiegel von `WHILE v_level < 999`
+// in dungeon_fight (migration_2026-07-30_krieger_levelcap.sql).
+//
+// Vorher stand hier eine fest verdrahtete 100 — dieselbe Zahl wie serverseitig. JP
+// 2026-07-30: „Problem wäre natürlich auch dass ab Level 100 kein Aufstieg mehr möglich
+// ist..." Genau so war es: jede EP darüber verfiel ersatzlos, und die Anzeige stand
+// dauerhaft auf „100 %". Ohne diese Anhebung ist jeder neue Endgame-Gegner wirkungslos —
+// EP ohne Stufenaufstieg sind wertlos.
+//
+// 999 statt „unbegrenzt": die XP-Kurve (50 + 40 × Stufe) ist immer positiv, die
+// Server-Schleife kann also nicht endlos laufen. Der Deckel schützt nur vor einem
+// manipulierten XP-Wert. Bis Stufe 999 wären ~20 Mio. EP nötig — faktisch kein Deckel.
+const KRIEGER_LEVEL_MAX = 999;
 function kriegerProgress(dd) {
   const level = dd?.level || 1, xp = dd?.xp || 0;
-  const need = level >= 100 ? 0 : kriegerXpForLevel(level);
+  const need = level >= KRIEGER_LEVEL_MAX ? 0 : kriegerXpForLevel(level);
   return { level, xp, need, pct: need ? Math.min(100, Math.round(xp / need * 100)) : 100 };
 }
 
