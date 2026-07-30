@@ -4971,9 +4971,19 @@ function wrCanvasClick(ev) {
 // Aktualisierung, die einen festen Container-Namen annimmt, ein stiller Fehler. Der
 // Rückfall auf den vollen Render ist hier richtig: auf der Karte bleibt es beim billigen
 // Teil-Redraw (Canvas bleibt stehen), überall sonst wird der ganze Tab neu gebaut.
+// ⚠️ ZWEITER ANLAUF (JP 2026-07-30: „reagiert weiterhin nicht"). Der erste Fix prüfte
+// `document.getElementById('wr-detail')` — und das schlägt IMMER an: wrRender() baut alle
+// Tab-Container in einem Rutsch und blendet die inaktiven nur mit `hidden` aus. Das
+// Element ist also auch auf dem Raumhafen-Tab da, nur unsichtbar; der Rückfall auf
+// wrRender() wurde nie erreicht und der Klick blieb wirkungslos wie zuvor.
+//
+// ⚠️ ÜBERTRAGBARE LEHRE: `hidden` heisst NICHT „nicht im DOM". Eine Existenzprüfung auf
+// ein bloss verstecktes Element ist immer wahr — die richtige Frage ist, welcher Tab
+// gerade AKTIV ist (`_wrTab`), nicht ob ein Container existiert.
 function wrRefreshDetail() {
   const d = document.getElementById('wr-detail');
-  if (d) { d.innerHTML = wrDetailHtml(_wrMember); return; }
+  // Nur auf der Sternkarte lohnt der billige Teil-Redraw (er lässt den Canvas stehen).
+  if (_wrTab === 'karte' && d) { d.innerHTML = wrDetailHtml(_wrMember); return; }
   wrRender();
 }
 
