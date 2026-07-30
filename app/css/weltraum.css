@@ -659,12 +659,23 @@
   border-radius: 10px; padding: 9px; }
 .wr-tech-ast-soon { opacity: .65; }
 .wr-tech-ast-head { font-size: .8rem; font-weight: 700; color: #dce6ff; margin-bottom: 7px; }
-.wr-tech-node { display: flex; align-items: center; gap: 8px; padding: 6px 4px;
+/* 📐 Forschungs-Knoten gestapelt statt dreispaltig (JP 2026-07-30: „sehr gequetscht").
+   Der Zustandstext („Mittel reichen nicht", „braucht Kern-Extraktor") stand als dritte
+   Flex-Spalte RECHTS und nahm der Beschreibung in einer ~230-px-Spalte den halben Platz.
+   Jetzt: Bild + Name in Zeile 1, Wirkung und Kosten über die GANZE Breite darunter,
+   der Zustand mit Abstand als eigene Zeile am Fuss.
+   ⚠️ Jedes Kind ausser Bild und Name MUSS `grid-column: 1 / -1` tragen — sonst paart die
+   Auto-Platzierung sie wieder zu zweit pro Zeile (dieselbe Falle wie bei .wr-pdef-row). */
+.wr-tech-node { display: grid; grid-template-columns: 34px 1fr; gap: 2px 8px;
+  align-items: center; padding: 8px 4px;
   border-top: 1px solid rgba(255,255,255,.06); }
 .wr-tech-node:first-of-type { border-top: 0; }
-.wr-tech-txt { display: flex; flex-direction: column; gap: 1px; flex: 1 1 auto; min-width: 0; }
-.wr-tech-txt strong { font-size: .78rem; color: #dce6ff; }
-.wr-tech-act { flex: 0 0 auto; font-size: .7rem; text-align: right; }
+.wr-tech-name { font-size: .78rem; color: #dce6ff; min-width: 0; }
+.wr-tech-desc, .wr-tech-cost, .wr-tech-act { grid-column: 1 / -1; }
+.wr-tech-desc { line-height: 1.35; }
+.wr-tech-cost { margin-top: 1px; }
+/* Der Abstand, den JP wollte — er trennt die Kosten von der Zustandszeile. */
+.wr-tech-act { margin-top: 7px; font-size: .7rem; justify-self: start; }
 .wr-tech-ok   { color: #7ad48a; font-weight: 700; }
 .wr-tech-soon { color: #7f8fbb; font-style: italic; }
 .wr-tech-lock { color: #8b9ac4; }
