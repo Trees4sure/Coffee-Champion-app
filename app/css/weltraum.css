@@ -412,6 +412,26 @@
 .wr-col-open .wr-col-caret { color: #7ad48a; }
 .wr-col-body { padding: 4px 0 10px; }
 
+/* ── 📂 Abschnitts-Akkordeon (26s-Nachtrag, JP 2026-07-30) ────────────────────
+   Eine Ebene ÜBER dem Kolonie-Akkordeon: klappt einen ganzen Karten-Abschnitt zu
+   (Geschütze, Kolonien, Ungeschützt, Wrackfelder, Abbau). Die Kopfzeile ersetzt den
+   .wr-card-title und trägt rechts die Zusammenfassung — sie muss zugeklappt lesbar
+   bleiben, sonst spart die Klappe nichts. Auf schmalen Geräten rutscht sie in eine
+   eigene Zeile, statt den Titel zu quetschen. */
+.wr-sec-head { display: grid; grid-template-columns: 14px 1fr auto; gap: 4px 10px;
+  align-items: baseline; width: 100%; padding: 0 0 8px; background: none; border: 0;
+  font-family: inherit; text-align: left; cursor: pointer; }
+.wr-sec-title { font-size: .92rem; font-weight: 600; color: #dce6ff; }
+.wr-sec-sum { font-size: .72rem; color: #8b9ac4; }
+.wr-sec-caret { color: #5b7fd4; font-size: .72rem; }
+.wr-sec-open > .wr-sec-head .wr-sec-caret { color: #7ad48a; }
+.wr-sec-head:hover .wr-sec-title { color: #fff; }
+.wr-sec-body { padding-top: 2px; }
+@media (max-width: 420px) {
+  .wr-sec-head { grid-template-columns: 14px 1fr; }
+  .wr-sec-sum { grid-column: 2 / -1; }
+}
+
 .wr-pslots { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
 .wr-pslot { background: #101733; border: 1px solid #24305a; border-radius: 8px; padding: 8px 10px; }
 .wr-pslot-full { display: grid; grid-template-columns: 44px 1fr; gap: 8px; align-items: start; }
