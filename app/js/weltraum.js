@@ -120,11 +120,18 @@ const SPACE_TECH = [
   { key:'wt_c4', ast:'c', stufe:4, name:'Schürfdrohnen',    cc:24000, erz:400, kristall:130,  requires:'wt_c3', wirkung:'Treibstoff −50 %',       art:'wt4_schuerfdrohnen', live:true },
   { key:'wt_c5', ast:'c', stufe:5, name:'Kern-Extraktor',   cc:39000, erz:640, kristall:240, requires:'wt_c4', wirkung:'Kolonie-Ertrag +50 %',   art:'wt5_kern_extraktor', live:true },
   // Ast D
-  { key:'wt_d1', ast:'d', stufe:1, name:'Raffinerie',         cc:4800,  erz:65,  kristall:0,   requires:null,   wirkung:'Rohstoffkosten −20 %',    art:'wt1_raffinerie',      live:true },
-  { key:'wt_d2', ast:'d', stufe:2, name:'Handelsdock',        cc:9000, erz:130,  kristall:25,  requires:'wt_d1', wirkung:'Kampf-Bergung +25 %',     art:'wt2_handelsdock',     live:true },
-  { key:'wt_d3', ast:'d', stufe:3, name:'Orbitallager',       cc:15000, erz:240, kristall:65,  requires:'wt_d2', wirkung:'Ansammlung 14 → 21 Tage', art:'wt3_lager',           live:true },
-  { key:'wt_d4', ast:'d', stufe:4, name:'Fern-Handelsroute',  cc:24000, erz:400, kristall:130,  requires:'wt_d3', wirkung:'Kolonien geben CC/Tag',   art:'wt4_handelsroute',    live:true },
-  { key:'wt_d5', ast:'d', stufe:5, name:'Sternenbörse',       cc:39000, erz:640, kristall:240, requires:'wt_d4', wirkung:'Wrack-Ausbeute +30 %',    art:'wt5_sternenboerse',   live:true },
+  // ⚠️ Die Raffinerie-STUFE ist ein unsichtbarer Nebeneffekt dieses Astes: wrRefineTier()
+  // nimmt schlicht die höchste besessene wt_d*-Technik (e13 = 6). In den Wirkungstexten
+  // stand das nirgends — man konnte im Baum nicht erkennen, welche Forschung die Raffinerie
+  // hebt (JP 2026-07-30: „Und die Raffinerie-Stufen sind nur über Forschung?"). Deshalb
+  // steht die Stufe jetzt VORNE, und die zwei Freischaltungen (🟣 ab St. 2, 🌀 ab St. 4)
+  // sind benannt. ⚠️ Wer WR_REFINE/_space_refine_def ändert, muss diese Texte mitziehen —
+  // test_26s_plasmoid.js prüft die Zuordnung Technik → Stufe gegen wrRefineTier.
+  { key:'wt_d1', ast:'d', stufe:1, name:'Raffinerie',         cc:4800,  erz:65,  kristall:0,   requires:null,   wirkung:'🏭 Raffinerie Stufe 1 · Rohstoffkosten −20 %',    art:'wt1_raffinerie',      live:true },
+  { key:'wt_d2', ast:'d', stufe:2, name:'Handelsdock',        cc:9000, erz:130,  kristall:25,  requires:'wt_d1', wirkung:'🏭 Raffinerie Stufe 2 — verwertet 🟣 · Kampf-Bergung +25 %',     art:'wt2_handelsdock',     live:true },
+  { key:'wt_d3', ast:'d', stufe:3, name:'Orbitallager',       cc:15000, erz:240, kristall:65,  requires:'wt_d2', wirkung:'🏭 Raffinerie Stufe 3 · Ansammlung 14 → 21 Tage', art:'wt3_lager',           live:true },
+  { key:'wt_d4', ast:'d', stufe:4, name:'Fern-Handelsroute',  cc:24000, erz:400, kristall:130,  requires:'wt_d3', wirkung:'🏭 Raffinerie Stufe 4 — verwertet 🌀 · Kolonien geben CC/Tag',   art:'wt4_handelsroute',    live:true },
+  { key:'wt_d5', ast:'d', stufe:5, name:'Sternenbörse',       cc:39000, erz:640, kristall:240, requires:'wt_d4', wirkung:'🏭 Raffinerie Stufe 5 · Wrack-Ausbeute +30 %',    art:'wt5_sternenboerse',   live:true },
   // ── Fortgeschrittene Forschung (26d), Kosten teils in 🟣/🌀. LIVE: wt_e7/wt_f5 (Abbau-Gates)
   //    + wt_f9 (Transmuter-Sink). Die übrigen 22 sind sichtbare Roadmap (live:false). ──
   // 🟣 Ehemaliger Ast E („Plasmoid-Technik") — seit 2026-07-29 nach Thema in A–D
@@ -157,7 +164,7 @@ const SPACE_TECH = [
   { key:'wt_e10', ast:'b', stufe:11, name:'Planetar-Schildgenerator',cc:26000, erz:380, kristall:100, plasmoid:40, quantum:0, requires:'wt_b4', wirkung:'Schaltet Planeten-Geschütze frei',          art:'wt6_planetar_schild',   live:true  },
   { key:'wt_e11', ast:'b', stufe:12, name:'Selbstreparatur-Nanobots',cc:24000, erz:340, kristall:90,  plasmoid:35, quantum:0, requires:'wt_e10',wirkung:'Geschütz-Ausfallzeit −50 %',                art:'wt6_nanobots',          live:true  },
   { key:'wt_e12', ast:'b', stufe:13, name:'Frühwarn-Netz',           cc:22000, erz:300, kristall:80,  plasmoid:30, quantum:0, requires:'wt_e6', wirkung:'Rückfall-Frist +2 Tage + Wellen-Vorwarnung',art:'wt6_fruehwarnnetz',     live:true  },
-  { key:'wt_e13', ast:'d', stufe:8, name:'Plasma-Raffinerie',       cc:30000, erz:500, kristall:150, plasmoid:50, quantum:0, requires:'wt_d5', wirkung:'Höchste Raffinerie-Stufe',                   art:'wt6_plasma_raffinerie', live:true  },
+  { key:'wt_e13', ast:'d', stufe:8, name:'Plasma-Raffinerie',       cc:30000, erz:500, kristall:150, plasmoid:50, quantum:0, requires:'wt_d5', wirkung:'🏭 Raffinerie Stufe 6 (höchste) — 180 🟣 / 70 🌀 je Charge',                   art:'wt6_plasma_raffinerie', live:true  },
   { key:'wt_e14', ast:'a', stufe:7, name:'Orbital-Fabrik',          cc:26000, erz:400, kristall:110, plasmoid:40, quantum:0, requires:'wt_a4', wirkung:'Bauzeit −25 %',                             art:'wt6_orbital_fabrik',    live:true  },
   { key:'wt_e15', ast:'d', stufe:7, name:'Handelskolonie',          cc:28000, erz:420, kristall:120, plasmoid:45, quantum:0, requires:'wt_d4', wirkung:'Kolonien geben zusätzlich CC/Tag',          art:'wt6_handelskolonie',    live:true  },
   // 🌀 Ehemaliger Ast F („Quanten-Technik") — ebenfalls in A–D einsortiert.
