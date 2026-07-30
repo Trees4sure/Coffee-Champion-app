@@ -331,6 +331,27 @@ const KRIEGER_ITEMS = [
   // Sonder-Logik in dungeon_fight (Waffen-Key-Prefix streitkolben/armbrust/wurfmesser/kriegsbogen) — die
   // Twist-Beschreibung ist reine UI-Vorschau, die Wirkung rechnet die RPC. Stats MÜSSEN mit
   // _krieger_item_stats() in migration_2026-07-08 übereinstimmen.
+  // ── 🔥 TIER 4: Aschegürtel-Waffen (2026-07-30) ─────────────────────────────
+  // JPs Belohnung ① — „neue Ausrüstungs-Stufe über allen bisherigen Sets".
+  //
+  // ⚠️ BEWUSST IN DEN BESTEHENDEN 8 KULTUREN, nicht als neunte Kultur:
+  //   • kriegerBestOwnedInSlot sortiert nach `tier` absteigend → Tier 4 wird automatisch
+  //     das beste Stück im Slot, ohne eine Zeile Sonderlogik.
+  //   • Die Set-Boni bleiben gültig: eine Tier-4-Waffe ist weiter Teil ihres Kultur-Sets.
+  //   • Eine neue Kultur hätte in KRIEGER_CULTURE_NAMES eingetragen werden müssen — und
+  //     kriegerLordGate/kriegerCitadelLordGate iterieren genau darüber. Der BURGHERR
+  //     hätte damit plötzlich auch das neue Set verlangt: eine stille Verschärfung des
+  //     Bestands-Endgames, die niemand bestellt hat.
+  // Stufe 60 / ~4 500 CC: erreichbar, sobald der Aschegürtel anfängt (t5 ab Stufe 42),
+  // aber deutlich über Tier 3 (Stufe 35 / ~780 CC).
+  { key:'schwert_mittelalter_t4',      slot:'weapon', culture:'mittelalter', tier:4, icon:'⚔️', name:'Aschekling-Zweihänder', cost:4600, minLevel:60, atk:52, def:4,  crit:0 },
+  { key:'degen_europa_t4',             slot:'weapon', culture:'europa',      tier:4, icon:'🤺', name:'Glutstahl-Degen',       cost:4700, minLevel:60, atk:46, def:0,  crit:14 },
+  { key:'saebel_orient_t4',            slot:'weapon', culture:'orient',      tier:4, icon:'🗡️', name:'Obsidian-Säbel',        cost:4800, minLevel:60, atk:48, def:0,  crit:12 },
+  { key:'keule_suedamerika_t4',        slot:'weapon', culture:'suedamerika', tier:4, icon:'🪓', name:'Sonnenstein-Keule',     cost:4600, minLevel:60, atk:54, def:0,  crit:0 },
+  { key:'bogen_steppe_t4',             slot:'weapon', culture:'steppe',      tier:4, icon:'🏹', name:'Steppenwind-Bogen',     cost:4700, minLevel:60, atk:50, def:0,  crit:8 },
+  { key:'waage_handel_t4',             slot:'weapon', culture:'handel',      tier:4, icon:'⚖️', name:'Kontor-Streitwaage',    cost:4500, minLevel:60, atk:44, def:8,  crit:4 },
+  { key:'entermesser_freibeuter_t4',   slot:'weapon', culture:'freibeuter',  tier:4, icon:'☠️', name:'Kaper-Entermesser',     cost:4700, minLevel:60, atk:51, def:0,  crit:10 },
+  { key:'armbrust_spaeher_t4',         slot:'weapon', culture:'spaeher',     tier:4, icon:'🔭', name:'Fernrohr-Armbrust',     cost:4800, minLevel:60, atk:47, def:0,  crit:16 },
   { key:'schwert_mittelalter_t3',      slot:'weapon', culture:'mittelalter', tier:3, icon:'⚔️', name:'Zweihänder',      cost:780, minLevel:35, atk:34, def:0,  crit:0 },
   { key:'streitkolben_mittelalter_t3', slot:'weapon', culture:'mittelalter', tier:3, icon:'🔨', name:'Streitkolben',    cost:760, minLevel:35, atk:26, def:2,  crit:0, mech:'streitkolben', mechDesc:'Ignoriert 50% der gegnerischen Verteidigung.' },
   { key:'degen_europa_t3',             slot:'weapon', culture:'europa',      tier:3, icon:'🤺', name:'Meisterdegen',     cost:800, minLevel:35, atk:28, def:0,  crit:10 },
@@ -416,7 +437,12 @@ const KRIEGER_ITEMS = [
   // prüft nur weapon+armor+talisman, dieser Slot kann also nie ein Set kapern).
   { key:'ramme_siege',     slot:'siege', culture:'belagerung', tier:1, icon:'🔨', name:'Sturmramme',   cost:900,  minLevel:25, atk:6,  def:0, crit:0, siege:1, mechDesc:'Bricht die Mauer der Nordfeste (Belagerungsstufe 1).' },
   { key:'katapult_siege',  slot:'siege', culture:'belagerung', tier:2, icon:'🎯', name:'Katapult',     cost:1800, minLevel:30, atk:12, def:0, crit:0, siege:2, mechDesc:'Belagerungsstufe 2 — öffnet zusätzlich die Ostwacht.' },
-  { key:'trebuchet_siege', slot:'siege', culture:'belagerung', tier:3, icon:'⚙️', name:'Trebuchet',    cost:3200, minLevel:35, atk:20, def:0, crit:0, siege:3, mechDesc:'Belagerungsstufe 3 — bricht jede Mauer, inklusive Zitadelle.' },
+  { key:'trebuchet_siege', slot:'siege', culture:'belagerung', tier:3, icon:'⚙️', name:'Trebuchet',    cost:3200, minLevel:35, atk:20, def:0, crit:0, siege:3, mechDesc:'Belagerungsstufe 3 — bricht die Mauern der 8 Burgen und die Bastionen der Zitadellen I–II.' },
+  // 🔥 BELAGERUNGSSTUFE 4 (2026-07-30) — der Schlüssel zu den Zitadellen 9–16.
+  // ⚠️ OHNE dieses Gerät sind Grad III und IV des Aschegürtels nicht öffenbar; das war der
+  // letzte echte Blocker der Leiter. `siege:4` ist der Wert, den kriegerCitadelGate prüft.
+  // Preis/Stufe bewusst deutlich über dem Trebuchet: es ist Endgame-Gerät, kein Zwischenschritt.
+  { key:'moerser_siege',   slot:'siege', culture:'belagerung', tier:4, icon:'🌋', name:'Aschemörser',  cost:12000, minLevel:70, atk:34, def:0, crit:0, siege:4, mechDesc:'Belagerungsstufe 4 — sprengt auch verglaste Asche. Öffnet die Zitadellen III–IV.' },
 ];
 
 // ── Begleiter (4. Slot, Etappe 3) ─────────────────────────────────────────────
@@ -706,6 +732,19 @@ const KRIEGER_ENEMIES = [
 // (zäh). Boss + fehlender Index → ×1.0. Skaliert HP/ATK/DEF (Anzeige) und serverseitig EP.
 function kriegerFlavorMod(tier, idx) {
   if (tier === 'boss' || idx == null) return 1;
+  // 🔥 ZITADELLEN (2026-07-30): Faktor 1, ihre Tabellenwerte GELTEN.
+  // ⚠️ BEFUND beim Bauen: Landmarken haben einelementige `flavor`-Arrays, also liefert
+  // kriegerEnemyFlavorIdx immer 0 — und idx 0 bedeutet unten 0,7. Spezialisten und Burgen
+  // werden dadurch seit dem 21.07. mit 70 % ihrer Tabellenwerte gekämpft.
+  // Das wird hier NICHT korrigiert: es ist live eingespielte Balance, und ein stiller
+  // Sprung auf 143 % wäre genau die Art Änderung, die niemand bestellt hat.
+  // Die Zitadellen bekommen aber eine saubere Ausnahme, damit die dokumentierten Werte
+  // (SQL und Client) auch die gekämpften sind — sonst wäre die ganze Eskalationsleiter
+  // um 30 % verschoben und der Migrations-Kopf gelogen.
+  // typeof-Wächter: die Tabelle steht weiter unten in der Datei. Zur AUFRUFZEIT ist sie
+  // längst initialisiert, aber ein Aufruf während der Skript-Auswertung wäre sonst ein
+  // ReferenceError (TDZ) — und der würde den ganzen Krieger-Tab lahmlegen.
+  if (typeof KRIEGER_CITADEL_STATS === 'object' && KRIEGER_CITADEL_STATS[tier]) return 1;
   if (idx === 0) return 0.7;
   if (idx === 2) return 1.4;
   return 1;
@@ -1132,6 +1171,146 @@ function kriegerGarrisonLayout(castleIdx, worldSeed) {
   });
 }
 
+// ══ 🔥 DIE 16 ZITADELLEN DES ASCHEGÜRTELS (2026-07-30) ═══════════════════════
+// JP: „deutlich mehr Zitadellen, als angegeben und jede Schwerer als die davor" —
+// plus „damit man auch trebuchet braucht".
+//
+// Zwei Kämpfe je Zitadelle: 🧱 Bastion (Belagerungs-Gate) → 👑 Zitadellenherr.
+// Bewusst KEIN Hex-Burghof wie bei den 8 Burgen: bei 16 Zielen wären das 300+ Kämpfe,
+// und die Eskalation soll aus der STÄRKE kommen, nicht aus der Wiederholung.
+//
+// ⚠️ VIER GRADE mit eigenen Basiswerten (Spiegel von _krieger_enemy_stats in
+// migration_2026-07-30b_krieger_ascheguertel.sql). Über den Level-Kanal allein wären
+// 16 Stufen nur ~20 % Unterschied (Lvl 45 → 150 = +210 hp / +26 atk) — keine Eskalation.
+//   Grad I  (1– 4): Belagerung 3 = TREBUCHET PFLICHT · Level 45– 60
+//   Grad II (5– 8): Belagerung 3                     · Level 65– 85
+//   Grad III(9–12): Belagerung 4 (neues Gerät)       · Level 90–115
+//   Grad IV(13–16): Belagerung 4                     · Level 120–150
+//
+// ⚠️ GEMESSENE WELTGRENZE: erreichbar ist nur bis Distanz 72 (150×150, Start 75,75,
+// Labyrinth lässt 10–12 % übrig). Ziel-Distanzen 56–71, in dieser Spanne platzieren sich
+// 16 Landmarken über 4 Welt-Seeds zuverlässig (16/16 gemessen).
+//
+// KETTE statt Siegel-Zahl: Zitadelle N verlangt, dass N−1 gefallen ist. Das erzwingt die
+// Reihenfolge leicht → schwer ohne eine zweite Währung, und „jede schwerer als die davor"
+// ist dadurch garantiert erlebbar statt nur rechnerisch wahr.
+const KRIEGER_CITADEL_GRADES = [
+  { grade:1, wall:'zit1_mauer', lord:'zit1_herr', siege:3, minLevel:42, lvlLo:45,  lvlHi:60  },
+  { grade:2, wall:'zit2_mauer', lord:'zit2_herr', siege:3, minLevel:58, lvlLo:65,  lvlHi:85  },
+  { grade:3, wall:'zit3_mauer', lord:'zit3_herr', siege:4, minLevel:75, lvlLo:90,  lvlHi:115 },
+  { grade:4, wall:'zit4_mauer', lord:'zit4_herr', siege:4, minLevel:95, lvlLo:120, lvlHi:150 },
+];
+// 16 Namen mit steigender Wucht — die Reihenfolge IST die Schwierigkeitsleiter.
+const KRIEGER_CITADELS = [
+  { key:'zit01', icon:'🕯️', name:'Aschewacht',        dist:56 },
+  { key:'zit02', icon:'🪨', name:'Schlackebastei',     dist:57 },
+  { key:'zit03', icon:'⚱️', name:'Urnenfeste',         dist:58 },
+  { key:'zit04', icon:'🔥', name:'Glutschanze',        dist:60 },
+  { key:'zit05', icon:'⛓️', name:'Kettenwall',         dist:61 },
+  { key:'zit06', icon:'🌑', name:'Schattenhorst',      dist:62 },
+  { key:'zit07', icon:'🕳️', name:'Schlundbastion',     dist:63 },
+  { key:'zit08', icon:'⚡', name:'Zornesturm',         dist:64 },
+  { key:'zit09', icon:'🗡️', name:'Klingenzitadelle',   dist:65 },
+  { key:'zit10', icon:'🐲', name:'Drachenhort',        dist:66 },
+  { key:'zit11', icon:'💀', name:'Knochenkrone',       dist:67 },
+  { key:'zit12', icon:'🌪️', name:'Sturmzitadelle',     dist:68 },
+  { key:'zit13', icon:'🕸️', name:'Nachtgespinst',      dist:69 },
+  { key:'zit14', icon:'🜂', name:'Ewige Röstglut',     dist:70 },
+  { key:'zit15', icon:'👁️', name:'Auge des Aschegürtels', dist:71 },
+  { key:'zit16', icon:'👑', name:'Obsidianthron',      dist:71 },
+];
+// ⚠️ CLIENT-SYNC-PFLICHT: exakter Spiegel der Zitadellen-Zeilen in _krieger_enemy_stats
+// (migration_2026-07-30b). Reine UI-Vorschau — gekämpft wird serverseitig.
+// `flavor` bleibt einelementig: bei festen Landmarken wäre eine Flavor-Auswahl nur
+// Rauschen (dieselbe Entscheidung wie bei Spezialisten/Burgen), und kriegerFlavorMod
+// liefert für idx 0 den Faktor 0,7 — deshalb wird beim Kampf bewusst idx=1 geschickt
+// (Faktor 1,0), sonst wären alle Zitadellen 30 % schwächer als die SQL-Werte.
+const KRIEGER_CITADEL_STATS = {
+  zit1_mauer: { tier:'zit1_mauer', icon:'🧱', name:'Aschebastion',      flavor:['🧱 Aschebastion'],      abilities:['verdichtung'],  hp:700,  atk:40,  def:110, ccMin:500,  ccMax:700,  ep:500,  minLevel:42 },
+  zit1_herr:  { tier:'zit1_herr',  icon:'👑', name:'Zitadellenherr',    flavor:['👑 Zitadellenherr'],    abilities:['adrenalinschub'], hp:900,  atk:70,  def:50,  ccMin:1500, ccMax:2200, ep:1400, minLevel:45 },
+  zit2_mauer: { tier:'zit2_mauer', icon:'🧱', name:'Glasmauer',         flavor:['🧱 Glasmauer'],         abilities:['verdichtung'],  hp:1000, atk:52,  def:140, ccMin:800,  ccMax:1100, ep:800,  minLevel:58 },
+  zit2_herr:  { tier:'zit2_herr',  icon:'👑', name:'Glutvogt',          flavor:['👑 Glutvogt'],          abilities:['roestfeuer'],   hp:1300, atk:88,  def:62,  ccMin:2600, ccMax:3800, ep:2300, minLevel:62 },
+  zit3_mauer: { tier:'zit3_mauer', icon:'🧱', name:'Obsidianwall',      flavor:['🧱 Obsidianwall'],      abilities:['bitterkern'],   hp:1400, atk:66,  def:175, ccMin:1300, ccMax:1800, ep:1300, minLevel:75 },
+  zit3_herr:  { tier:'zit3_herr',  icon:'👑', name:'Aschefürst',        flavor:['👑 Aschefürst'],        abilities:['regeneration'], hp:1800, atk:108, def:76,  ccMin:4200, ccMax:6000, ep:3600, minLevel:80 },
+  zit4_mauer: { tier:'zit4_mauer', icon:'🧱', name:'Thronwall',         flavor:['🧱 Thronwall'],         abilities:['bitterkern'],   hp:1900, atk:82,  def:215, ccMin:2000, ccMax:2800, ep:2000, minLevel:95 },
+  zit4_herr:  { tier:'zit4_herr',  icon:'👑', name:'Der Obsidianfürst', flavor:['👑 Der Obsidianfürst'], abilities:['flammenatem'],  hp:2400, atk:132, def:92,  ccMin:6500, ccMax:9500, ep:5500, minLevel:100 },
+};
+// ⚠️ Beim Kampf IMMER diesen Index schicken, nie 0 — siehe Kommentar oben (kriegerFlavorMod).
+const KRIEGER_CITADEL_FLAVOR_IDX = 1;
+
+// Grad einer Zitadelle aus ihrem Index (0-basiert): 4 je Grad.
+function kriegerCitadelGrade(idx) {
+  return KRIEGER_CITADEL_GRADES[Math.min(KRIEGER_CITADEL_GRADES.length - 1, Math.floor(idx / 4))];
+}
+function kriegerCitadelIdx(key) { return KRIEGER_CITADELS.findIndex(c => c.key === key); }
+// Level einer Zitadelle: linear über die 4 Stufen ihres Grades. Muss INNERHALB des
+// SQL-Bandes liegen (_krieger_enemy_level_band clampt), sonst senkt der Server den Wert.
+function kriegerCitadelLevel(idx) {
+  const g = kriegerCitadelGrade(idx);
+  const step = idx % 4;                       // 0..3 innerhalb des Grades
+  return Math.round(g.lvlLo + (g.lvlHi - g.lvlLo) * (step / 3));
+}
+// Fortschritt lebt in dd.citadels[key] = { wall: ts, lord: ts } — gleiches Muster wie
+// dd.castles, kein Schema-Change (dungeon_data ist JSONB).
+function kriegerCitadelState(dd, key) {
+  const c = dd?.citadels?.[key];
+  return { wall: c?.wall || 0, lord: c?.lord || 0 };
+}
+function kriegerCitadelTaken(dd, key) { return !!kriegerCitadelState(dd, key).lord; }
+function kriegerCitadelsTaken(dd) {
+  return KRIEGER_CITADELS.filter(c => kriegerCitadelTaken(dd, c.key)).length;
+}
+// Gate der Bastion: Stufe · Vorgänger-Zitadelle · Belagerungsstufe.
+// ⚠️ Reihenfolge der Prüfungen = Reihenfolge der Erklärungen. Zuerst das, was der Spieler
+// am ehesten selbst beheben kann (Stufe), zuletzt der Kauf (Belagerungsgerät) — sonst
+// schickt man ihn in den Shop, obwohl er ohnehin noch zu klein ist.
+function kriegerCitadelGate(dd, cit) {
+  const idx   = kriegerCitadelIdx(cit.key);
+  const g     = kriegerCitadelGrade(idx);
+  const level = dd?.level || 1;
+  if (level < g.minLevel) {
+    return { ok: false, reason: `🔒 ${cit.icon} ${cit.name} — erst ab Stufe ${g.minLevel} (du bist ${level}).` };
+  }
+  if (idx > 0) {
+    const prev = KRIEGER_CITADELS[idx - 1];
+    if (!kriegerCitadelTaken(dd, prev.key)) {
+      return { ok: false, reason: `⛓️ Der Aschegürtel fällt nur der Reihe nach.\n\n🔒 Nötig: `
+        + `${prev.icon} ${prev.name} erobern (Zitadelle ${idx} von ${KRIEGER_CITADELS.length}).` };
+    }
+  }
+  const siege = kriegerSiegeLevel(dd);
+  if (siege < g.siege) {
+    const need = KRIEGER_ITEMS.find(i => i.slot === KRIEGER_SIEGE_SLOT && i.siege === g.siege);
+    return { ok: false, reason: `🧱 Diese Mauer ist aus verglaster Asche — dein Gerät reicht nicht.\n\n`
+      + `🔒 Nötig: ${need ? need.icon + ' ' + need.name : 'Belagerungsstufe ' + g.siege} (Krieger-Shop).` };
+  }
+  return { ok: true };
+}
+// Gate des Zitadellenherrn: die Bastion muss gefallen sein. Ab Grad III zusätzlich das
+// volle Weltset wie beim Burgherrn — ab dort ist es Endgame-Ausrüstungsprüfung.
+function kriegerCitadelLordGate(dd, cit) {
+  const st = kriegerCitadelState(dd, cit.key);
+  if (!st.wall) {
+    return { ok: false, reason: `🧱 Erst die Bastion brechen — der Herr zeigt sich nicht durch die Mauer.` };
+  }
+  const g = kriegerCitadelGrade(kriegerCitadelIdx(cit.key));
+  if (g.grade >= 3) {
+    const owned = dd?.owned || {};
+    const missing = [];
+    for (const culture of Object.keys(KRIEGER_CULTURE_NAMES)) {
+      if (culture === 'belagerung') continue;
+      const need = ['weapon', 'armor', 'talisman'].some(slot =>
+        !KRIEGER_ITEMS.some(i => i.culture === culture && i.slot === slot && owned[i.key]));
+      if (need) missing.push(KRIEGER_CULTURE_NAMES[culture] || culture);
+    }
+    if (missing.length) {
+      return { ok: false, reason: `👑 Ab dem ${g.grade}. Grad empfängt dich nur, wer die ganze Welt `
+        + `gerüstet hat.\n\n🔒 Es fehlt noch Ausrüstung aus: ${missing.join(', ')}.` };
+    }
+  }
+  return { ok: true };
+}
+
 // ── Burg-Fortschritt (lebt in dd.castles[castleKey]) ─────────────────────────
 // { wall: ts, hex: { "q,r": ts }, lord: ts } — alles clientseitig in dungeon_data,
 // keine eigene Tabelle nötig (gleiches Muster wie defeatedAt/permaDead).
@@ -1155,6 +1334,10 @@ function kriegerGarrisonCleared(dd, castleKey, castleIdx, worldSeed) {
 function kriegerSpecialDef(tier) {
   if (tier === KRIEGER_CASTLE_WALL.tier) return KRIEGER_CASTLE_WALL;
   if (tier === KRIEGER_CASTLE_LORD.tier) return KRIEGER_CASTLE_LORD;
+  // 🔥 Zitadellen-Tiers (2026-07-30). Die Werte MÜSSEN mit _krieger_enemy_stats in
+  // migration_2026-07-30b übereinstimmen — hier nur die UI-Vorschau (wie bei allen anderen).
+  const z = KRIEGER_CITADEL_STATS[tier];
+  if (z) return z;
   return KRIEGER_SPECIALISTS.find(s => s.tier === tier)
       || KRIEGER_GARRISON.find(g => g.tier === tier)
       || null;
@@ -1273,6 +1456,16 @@ function kriegerSpecialSites(worldSeed) {
   KRIEGER_CASTLES.forEach((c, i) => {
     const p = pick(c.dist, 6262 + i);
     if (p) sites.push({ kind: 'castle', key: `${p.x},${p.y}`, x: p.x, y: p.y, def: c, idx: i });
+  });
+  // 🔥 Zitadellen ZULETZT (2026-07-30): Spezialisten und Burgen bekommen ihre Plätze
+  // zuerst, damit der Aschegürtel keinen Bestands-Landmark verdrängt. `pick` liefert null,
+  // wenn kein Feld mehr frei ist — dann fehlt die Zitadelle STILL. Gemessen: bei
+  // Ziel-Distanzen 56–71 platzieren sich alle 16 über vier Welt-Seeds (16/16).
+  // ⚠️ `plans/tests/test_zitadellen.js` prüft das nach; wer die Distanzen ändert, muss
+  // den Test erneut laufen lassen — sonst verschwindet Inhalt unbemerkt.
+  KRIEGER_CITADELS.forEach((c, i) => {
+    const p = pick(c.dist, 7373 + i);
+    if (p) sites.push({ kind: 'citadel', key: `${p.x},${p.y}`, x: p.x, y: p.y, def: c, idx: i });
   });
 
   _kriegerSiteCache = { seed: worldSeed, sites, map: new Map(sites.map(s => [s.key, s])) };
@@ -1888,15 +2081,29 @@ function kriegerRender(canvas, dd, worldSeed, vpX, vpY) {
         if (typeof kriegerCastleTaken === 'function' && kriegerCastleTaken(dd, site.def.key)) {
           icon = '🚩'; alpha = isFog ? 0.4 : 0.75;
         }
+      } else if (site.kind === 'citadel') {
+        // 🔥 Zitadellen (2026-07-30). Drei Zustände, damit man auf der Karte sieht, wo man
+        // stehengeblieben ist: unangetastet → eigenes Symbol · Bastion gefallen → 🧱 ·
+        // erobert → 🚩. Ohne diesen Zweig wären sie in den Spezialisten-Fall gelaufen und
+        // hätten dauerhaft das Grundsymbol getragen (kein Absturz, aber kein Fortschritt
+        // sichtbar — `site.def.gateCulture` ist bei Zitadellen undefined).
+        const cst = (typeof kriegerCitadelState === 'function')
+          ? kriegerCitadelState(dd, site.def.key) : { wall: 0, lord: 0 };
+        if (cst.lord)      { icon = '🚩'; alpha = isFog ? 0.4 : 0.75; }
+        else if (cst.wall) { icon = '🧱'; }
       } else if (typeof kriegerHasSeal === 'function' && kriegerHasSeal(dd, site.def.gateCulture)) {
         icon = '🔱'; alpha = isFog ? 0.4 : 0.7; // Siegel geholt → Spezialist erledigt
       }
       // Dezenter Sockel, damit die Landmarke sich vom Untergrund abhebt
       ctx.globalAlpha = isFog ? 0.25 : 0.4;
-      ctx.fillStyle = site.kind === 'castle' ? 'rgba(250,199,117,.5)' : 'rgba(180,220,255,.45)';
+      // 🔥 Zitadellen bekommen einen glutroten Sockel — sie sollen sich auf den ersten
+      // Blick von den goldenen Burgen und den blauen Spezialisten unterscheiden.
+      ctx.fillStyle = site.kind === 'castle'  ? 'rgba(250,199,117,.5)'
+                    : site.kind === 'citadel' ? 'rgba(255,120,70,.5)'
+                                              : 'rgba(180,220,255,.45)';
       ctx.fillRect(t.px + 1, t.py + 1, T - 2, T - 2);
       ctx.globalAlpha = alpha;
-      ctx.font = `${Math.floor(T * (site.kind === 'castle' ? 0.78 : 0.66))}px sans-serif`;
+      ctx.font = `${Math.floor(T * (site.kind === 'castle' || site.kind === 'citadel' ? 0.78 : 0.66))}px sans-serif`;
       ctx.fillText(icon, t.px + 1, t.py + T - 2);
       ctx.globalAlpha = 1.0;
     }

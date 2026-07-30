@@ -2907,12 +2907,57 @@ function wrFallbackHtml(p, m) {
 // ── Kolonien ─────────────────────────────────────────────────────────────────
 function wrColoniesHtml(m) {
   const cols = wrColonies(m);
-  const keys = Object.keys(cols);
-  if (!keys.length) return '';
+  // ⚠️ FIX 2026-07-30, ZWEITER ANLAUF (JP: „Die Kolonien sind immer noch nicht über
+  // Raumhafen anzusteuern").
+  //
+  // MEIN ERSTER FEHLER: ich habe die fehlenden PANELS ergänzt (Routen, Rückfall) und
+  // angenommen, damit sei die Liste vollständig. Sie war es nicht — die LISTE selbst war
+  // zu kurz. `wrColonies(m)` liefert nur `space.colonies`, also **kolonisierte** Planeten.
+  // BEFREIT ≠ KOLONISIERT: Kolonisieren braucht ein Kolonieschiff, Befreien nur einen
+  // Sieg. JP hat Ring 1 komplett BEFREIT — diese Planeten tragen die Dauerernte- und
+  // Bergungsrouten, tauchten hier aber überhaupt nicht auf. Für sie war die Sternkarte
+  // weiter der einzige Weg, genau wie er sagt.
+  //
+  // MERKE: Wenn ein Nutzer sagt „X ist nicht erreichbar", obwohl X gerendert wird, zuerst
+  // prüfen, ob die QUELLE der Liste dasselbe X meint wie er. Zweimal am selben Punkt
+  // vorbeigelaufen, weil ich „Kolonie" technisch gelesen habe und er es umgangssprachlich
+  // meinte (= „meine Planeten").
+  // ⚠️ DRITTER ANLAUF, und diesmal die Ursache statt des Symptoms (JP: „Die Kolonien
+  // werden weiterhin nicht aufgeführt. Die Planeten sind angegeben").
+  //
+  // BEFUND: `wrColonies(m)` liest `space.colonies` — einen JSON-SPIEGEL, den
+  // claim_space_arrival beim Kolonisieren schreibt. Die WAHRHEIT steht aber in
+  // `space_planets.colonized_by`. Läuft der Spiegel nach (verpasster Claim, alter
+  // Datensatz, Rückeroberung), fehlt die Kolonie in der Liste, obwohl der Planet sie ist.
+  // Genau dieselbe Zwei-Quellen-Falle wie bei colony_level in 26h („BEIDE Seiten").
+  //
+  // FIX: die LISTE kommt jetzt aus der Planetentabelle (autoritativ), der JSON-Spiegel
+  // nur noch für den ANGESAMMELTEN Ertrag (den kennt nur er). Fehlt der Spiegeleintrag,
+  // erscheint die Kolonie trotzdem — mit Ertrag 0 statt gar nicht.
+  const mine = (_wrGalaxy?.planets || []).filter(p => p.cleared_by === m?.id
+                                                   || p.colonized_by === m?.id);
+  const colIds = mine.filter(p => p.colonized_by === m?.id).map(p => p.id);
+  // Spiegel-Einträge ohne Planetenzeile (noch nicht geladen) trotzdem mitnehmen.
+  for (const id of Object.keys(cols)) if (!colIds.includes(id)) colIds.push(id);
+  const keys = colIds;
+  const rest = mine.filter(p => p.colonized_by !== m?.id);
+  if (!keys.length && !rest.length) return '';
   let pending = 0, rows = '';
   for (const id of keys) {
-    const c = cols[id] || {};
-    const days = Math.min(wrTechCapDays(m), Math.max(0, (Date.now() - Date.parse(c.lastHarvest || 0)) / 86400000));
+    const plRow = wrPlanetById(id);
+    // ⚠️ Spiegel-Lücken auffüllen (siehe Befund oben): fehlt der JSON-Eintrag, kommen
+    // Typ/Reichtum/Stufe aus der Planetenzeile. OHNE das wird `Date.parse(undefined)` zu
+    // NaN, damit `days` → NaN, `amt` → NaN und `pending` → NaN — der Ernte-Knopf zeigte
+    // dann „NaN" und liesse sich nie aktivieren. Ein fehlender Spiegel darf die ganze
+    // Karte nicht vergiften.
+    const c = Object.assign(
+      plRow ? { type: plRow.resource_type, richness: plRow.richness,
+                name: plRow.name, level: plRow.colony_level } : {},
+      cols[id] || {});
+    const lastH = Date.parse(c.lastHarvest || 0);
+    const days = Number.isFinite(lastH)
+      ? Math.min(wrTechCapDays(m), Math.max(0, (Date.now() - lastH) / 86400000))
+      : 0;   // kein Spiegel → noch kein angesammelter Ertrag bekannt
     // ⚠️ Reihenfolge exakt wie in harvest_space: erst den Betrag runden, DANN den
     // Typfaktor anwenden und erneut runden. In einem Rutsch gerechnet weicht die
     // Vorschau um 1 ab (Test 7).
@@ -2978,13 +3023,89 @@ function wrColoniesHtml(m) {
         ${offen && !pl ? '<div class="wr-col-body"><div class="wr-sub">Planetendaten noch nicht geladen.</div></div>' : ''}
       </div>`;
   }
+  // ── 🚩 Befreite Planeten OHNE Kolonie ──────────────────────────────────────
+  // Sie tragen Dauerernte- und Bergungsrouten und können zurückfallen — genau deshalb
+  // müssen sie von hier aus steuerbar sein. Kein Ertragszähler: ohne Kolonie sammelt
+  // sich nichts an, geerntet wird über die Routen.
+  // ── Gliederung (JP 2026-07-30): „unterteilt in Abbau, Kolonie, ungeschützt, Wrack
+  // (sortiert mit max oben)".
+  // Jeder Planet steht in GENAU EINEM Abschnitt — sonst sucht man denselben Eintrag an
+  // vier Stellen und weiss nie, welcher der aktuelle ist. Zuordnung nach Dringlichkeit:
+  //   ungeschützt zuerst (Rückfall droht, das ist zeitkritisch)
+  //   dann Wrack (endlicher Vorrat, lohnt sich abzuräumen)
+  //   dann Abbau (läuft von allein weiter)
+  // Kolonien haben ihren eigenen Abschnitt und können nicht ungeschützt sein.
+  const secRisk = [], secWreck = [], secMine = [];
+  for (const pl of rest) {
+    if (wrFallbackAt(pl, m)) secRisk.push(pl);
+    else if (wrWreckLeft(pl) > 0) secWreck.push(pl);
+    else secMine.push(pl);
+  }
+  // „Max oben" je Abschnitt: die Zahl, die in der Zeile fett steht.
+  secRisk.sort((a, b) => wrPlanetDef(b) - wrPlanetDef(a) || b.ring - a.ring);
+  secWreck.sort((a, b) => wrWreckLeft(b) - wrWreckLeft(a));
+  secMine.sort((a, b) => (b.richness || 0) - (a.richness || 0) || b.ring - a.ring);
+
+  const planetRow = (pl) => {
+    const id    = pl.id;
+    const offen = _wrColOpen === id;
+    const meta  = wrResMeta(pl.resource_type);
+    const wreck = wrWreckLeft(pl);
+    const risk  = wrFallbackAt(pl, m);
+    return `
+      <div class="wr-col-item${offen ? ' wr-col-open' : ''}">
+        <button type="button" class="wr-col-row" data-wr-coltoggle="${_wrEsc(id)}">
+          <span class="wr-col-caret">${offen ? '▾' : '▸'}</span>
+          <span>${meta.icon} ${_wrEsc(pl.name || 'Planet')}
+            <span class="wr-sub">Ring ${pl.ring} · ${_wrEsc(pl.quadrant)}</span></span>
+          <span class="wr-sub">${'★'.repeat(Math.max(1, pl.richness || 1))} ${_wrEsc(meta.name)}${
+            wrDefLevel(pl) ? ` · 🛡️ ${wrFmt(wrPlanetDef(pl))}` : ''}${wrIsStation(pl) ? ' · 📡' : ''}
+            <span class="wr-col-day">${wreck > 0 ? `${wrIc('salvage')} ${wrFmt(wreck)} Wrackteile` : ''}${
+              !wrResMinable(m, pl.resource_type) ? ` 🔒 ${meta.icon} braucht die Abbau-Technik` : ''}</span></span>
+          ${/* Der fette Wert rechts ist die SORTIERGRÖSSE des Abschnitts — sonst steht dort
+                eine Zahl, nach der die Liste gar nicht geordnet ist, und die Reihenfolge
+                wirkt willkürlich. */''}
+          <strong class="${risk ? 'wr-bad' : ''}">${risk
+            ? `⚠️ ${wrFmt(wrPlanetDef(pl))}`
+            : (wreck > 0 ? wrFmt(wreck) : '★'.repeat(Math.max(1, pl.richness || 1)))}</strong>
+        </button>
+        ${offen ? `<div class="wr-col-body">
+            ${wrFallbackHtml(pl, m)}
+            ${wrPlanetDefHtml(m, pl)}
+            ${wrRoutePanelHtml(m, pl)}
+            <button class="wr-btn wr-btn-sm" data-wr-colmap="${_wrEsc(id)}"
+              >🌌 Auf der Sternkarte zeigen</button>
+          </div>` : ''}
+      </div>`;
+  }
+
   return `
-    <div class="wr-card">
+    ${rows ? `<div class="wr-card">
       <div class="wr-card-title">${wrIc("colony")} Kolonien <span class="wr-sub">Ertrag sammelt sich max. 14 Tage an</span></div>
       ${rows}
       <button class="wr-btn wr-btn-go" data-wr-harvest="1" ${pending < 1 ? 'disabled' : ''}>
         ${wrIc("yield")} Ertrag einsammeln${pending > 0 ? ` (${wrFmt(pending)})` : ''}</button>
-    </div>`;
+    </div>` : ''}
+    ${secRisk.length ? `<div class="wr-card wr-card-call">
+      <div class="wr-card-title">⚠️ Ungeschützt
+        <span class="wr-sub">${secRisk.length} Planeten — Rückfall droht, stärkste zuerst</span></div>
+      ${secRisk.map(planetRow).join('')}
+      <div class="wr-sub">Ohne Kolonie, Geschütz oder Station im Quadranten fällt ein befreiter
+        Planet nach ${wrFallbackDays(m)} Tagen an die Wächter zurück. Ein einziges Geschütz genügt.</div>
+    </div>` : ''}
+    ${secWreck.length ? `<div class="wr-card">
+      <div class="wr-card-title">${wrIc('salvage')} Wrackfelder
+        <span class="wr-sub">${secWreck.length} Planeten — grösster Vorrat zuerst</span></div>
+      ${secWreck.map(planetRow).join('')}
+      <div class="wr-sub">Bergungsschiffe räumen die Felder ab; der Vorrat ist endlich.</div>
+    </div>` : ''}
+    ${secMine.length ? `<div class="wr-card">
+      <div class="wr-card-title">⛏️ Abbau
+        <span class="wr-sub">${secMine.length} befreite Planeten — reichste zuerst</span></div>
+      ${secMine.map(planetRow).join('')}
+      <div class="wr-sub">Röstkometen als Dauerernte-Route einstellen — oder ein Kolonieschiff
+        schicken, dann sammelt der Planet von allein.</div>
+    </div>` : ''}`;
 }
 
 // ── Angriffswelle auf den eigenen Hafen ─────────────────────────────────────

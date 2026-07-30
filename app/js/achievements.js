@@ -38,6 +38,12 @@ const ACHIEVEMENTS = [
   { id: 'krieger_level_100',   icon: '👑', name: 'Meister-Krieger',    desc: 'Krieger-Stufe 100 erreicht',         condition: null, coinReward: 150 },
   { id: 'krieger_boss_kill',   icon: '🐉', name: 'Drachentöter',       desc: 'Den Espresso-Drachen besiegt',       condition: null, coinReward: 80 },
   { id: 'krieger_set_complete',icon: '🎭', name: 'Kulturset komplett', desc: 'Ein vollständiges Ausrüstungs-Set ausgerüstet', condition: null, coinReward: 30 },
+  // 🔥 Aschegürtel (2026-07-30) — JPs Belohnung ③ „Prestige/Titel + Achievements".
+  // Die Leiter hat 16 Stufen; drei Marken reichen, sonst wird der Erfolgs-Tab zur Liste.
+  // Bewusst grosse Prämien: der letzte Kampf steht auf Gegnerstufe 150.
+  { id: 'krieger_zit_first',   icon: '🔥', name: 'Aschegänger',       desc: 'Erste Zitadelle des Aschegürtels erobert',       condition: null, coinReward: 300 },
+  { id: 'krieger_zit_half',    icon: '🌋', name: 'Belagerungsmeister',desc: 'Acht Zitadellen erobert — die halbe Leiter',     condition: null, coinReward: 800 },
+  { id: 'krieger_zit_all',     icon: '👑', name: 'Herr des Aschegürtels', desc: 'Alle 16 Zitadellen erobert',                condition: null, coinReward: 2500 },
   { id: 'krieger_talent_first',icon: '🌟', name: 'Talentiert',         desc: 'Erstes Krieger-Talent freigeschaltet',          condition: null, coinReward: 15 },
   { id: 'krieger_talent_full', icon: '👑', name: 'Talent-Meister',     desc: 'Alle 10 Krieger-Talente freigeschaltet',        condition: null, coinReward: 120 },
   { id: 'krieger_golden_bean', icon: '🫘', name: 'Goldene Kaffeebohne', desc: 'Die Legende der Goldenen Kaffeebohne vollendet', condition: null, coinReward: 250 },

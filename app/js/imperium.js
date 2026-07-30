@@ -2396,8 +2396,12 @@ async function _handleKriegerTap(tx, ty, member, state, seed, COLS, ROWS, MARGIN
   // anderen Feld auch (die Landmarke ist durch den Nebel nur als Ziel sichtbar).
   const _site = (typeof kriegerSiteAt === 'function') ? kriegerSiteAt(tx, ty, seed) : null;
   if (_site && explored) {
-    if (_site.kind === 'specialist') _showKriegerSpecialist(member, state, _site, seed, COLS, ROWS, MARGIN);
-    else                             _showKriegerCastle(member, state, _site, seed, COLS, ROWS, MARGIN);
+    if (_site.kind === 'specialist')   _showKriegerSpecialist(member, state, _site, seed, COLS, ROWS, MARGIN);
+    // 🔥 Zitadellen (2026-07-30) — eigener Zweig. ⚠️ VOR dem castle-Fallback: `else` hätte
+    // sie in _showKriegerCastle geschickt, das site.def.seals/site.idx erwartet und mit
+    // einer Zitadelle still Unsinn gerendert hätte (kein Fehler, nur ein leeres Panel).
+    else if (_site.kind === 'citadel') _showKriegerCitadel(member, state, _site, seed, COLS, ROWS, MARGIN);
+    else                               _showKriegerCastle(member, state, _site, seed, COLS, ROWS, MARGIN);
     return;
   }
 
@@ -2904,6 +2908,52 @@ function _showKriegerSpecialist(member, state, site, seed, COLS, ROWS, MARGIN) {
   _showKriegerFightPrompt(member, state, sp.tier, seed, COLS, ROWS, MARGIN, site.key);
 }
 
+// ── 🔥 Zitadelle des Aschegürtels (2026-07-30) ────────────────────────────────
+// Zwei Kämpfe: 🧱 Bastion → 👑 Zitadellenherr. Bewusst OHNE Hex-Burghof: bei 16 Zielen
+// wären das 300+ Kämpfe, und die Eskalation soll aus der Stärke kommen, nicht aus der
+// Wiederholung (die 8 Burgen bleiben das „grosse" Format).
+//
+// ⚠️ LEVEL: das Prompt rechnet die Gegnerstufe selbst über kriegerEnemyLevel(tx,ty,…),
+// also deterministisch pro Feld INNERHALB des Grad-Bandes (Grad I 45–60, II 65–85,
+// III 90–115, IV 120–150 — Spiegel von _krieger_enemy_level_band). Die Eskalation greift
+// damit auf Grad-Ebene statt exakt je Zitadelle. Bewusst so gelassen: kriegerCitadelLevel
+// hätte durch die ganze Prompt-Kette geschleift werden müssen, und das Band liefert
+// dieselbe Spanne. Wer es exakt braucht, muss eLevel durchreichen — nicht das Band engen,
+// sonst clampt der Server.
+function _showKriegerCitadel(member, state, site, seed, COLS, ROWS, MARGIN) {
+  const cit = site.def;
+  const idx = site.idx;
+  const g   = kriegerCitadelGrade(idx);
+  const st  = kriegerCitadelState(state.dd, cit.key);
+  const nr  = `Zitadelle ${idx + 1}/${KRIEGER_CITADELS.length} · Grad ${g.grade}`;
+
+  // Schon erobert — respawnt nie (wie die Burgen).
+  if (st.lord) {
+    _krShowGateBlock(`${cit.icon} ${cit.name}`,
+      `🚩 Erobert. Der Aschegürtel erinnert sich an dich.\n\n${nr} · `
+      + `${kriegerCitadelsTaken(state.dd)}/${KRIEGER_CITADELS.length} Zitadellen gefallen.`);
+    return;
+  }
+
+  // Phase 1: die Bastion steht noch.
+  if (!st.wall) {
+    const gate = kriegerCitadelGate(state.dd, cit);
+    if (!gate.ok) { _krShowGateBlock(`${cit.icon} ${cit.name}`, gate.reason + `\n\n${nr}`); return; }
+    const wd = KRIEGER_CITADEL_STATS[g.wall] || {};
+    _krSpecialCtx = { kind: 'cit_wall', citKey: cit.key, name: cit.name, icon: cit.icon,
+                      siteIdx: idx };
+    _showKriegerFightPrompt(member, state, g.wall, seed, COLS, ROWS, MARGIN, site.key);
+    return;
+  }
+
+  // Phase 2: die Mauer ist gefallen, der Herr wartet.
+  const lg = kriegerCitadelLordGate(state.dd, cit);
+  if (!lg.ok) { _krShowGateBlock(`${cit.icon} ${cit.name}`, lg.reason + `\n\n${nr}`); return; }
+  _krSpecialCtx = { kind: 'cit_lord', citKey: cit.key, name: cit.name, icon: cit.icon,
+                    siteIdx: idx };
+  _showKriegerFightPrompt(member, state, g.lord, seed, COLS, ROWS, MARGIN, site.key);
+}
+
 // ── Hex-Burghof ──────────────────────────────────────────────────────────────
 // Axiale Koordinaten (q,r) → Pixel, „pointy-top"-Waben.
 const KR_HEX_SIZE = 34;
@@ -3296,6 +3346,50 @@ async function _runKriegerFight(member, state, tier, seed, COLS, ROWS, MARGIN, k
         if (_sc.kind === 'lord')      { next.lord = Date.now(); showToast(`🚩 ${_sc.name} erobert!`, 'success'); }
         state.dd = { ...state.dd, castles: { ...(state.dd.castles || {}), [_sc.castleKey]: next } };
         dungeonDirty = true;
+      } else if (_sc.kind === 'cit_wall' || _sc.kind === 'cit_lord') {
+        // 🔥 Zitadellen-Fortschritt in dd.citadels[key] = { wall, lord } — gleiches Muster
+        // wie dd.castles, kein Schema-Change (dungeon_data ist JSONB).
+        const prev = kriegerCitadelState(state.dd, _sc.citKey);
+        const next = { wall: prev.wall, lord: prev.lord };
+        if (_sc.kind === 'cit_wall') {
+          next.wall = Date.now();
+          showToast('🧱 Die Bastion bricht — der Zitadellenherr zeigt sich!', 'success');
+        } else {
+          next.lord = Date.now();
+          const n = kriegerCitadelsTaken(state.dd) + 1;   // +1: state.dd ist noch der alte Stand
+          showToast(`🚩 ${_sc.name} erobert! (${n}/${KRIEGER_CITADELS.length})`, 'success');
+          // Chat nur beim Herrn — die Mauer ist ein Zwischenschritt, dafür braucht niemand
+          // eine Meldung im Gruppen-Chat.
+          // ⚠️ `_krChat` gibt es nicht — der Chat läuft im ganzen Projekt über
+          // DB.postMessage(text, autor). Beim ersten Schreiben erfunden und hier korrigiert;
+          // ein `typeof`-Wächter hätte den Fehler stumm verschluckt und die Meldung
+          // wäre nie erschienen (grün, aber wirkungslos).
+          try {
+            await DB.postMessage(
+              `${_sc.icon} ${member.name} hat ${_sc.name} erobert — `
+              + `${n}/${KRIEGER_CITADELS.length} Zitadellen des Aschegürtels gefallen.`,
+              member.name);
+          } catch (e) { /* non-critical: der Kampf darf daran nie kippen */ }
+          // 🏆 Prestige-Marken. ⚠️ `n` ist der Stand NACH diesem Sieg (state.dd trägt ihn
+          // noch nicht — es wird erst unten ersetzt); deshalb hier gegen `n` prüfen und
+          // nicht erneut kriegerCitadelsTaken() aufrufen, das läge um eins zurück.
+          try {
+            const ex = (typeof currentUserData !== 'undefined' && currentUserData?.achievements)
+                     || member.achievements || {};
+            const grant = {};
+            if (!ex.krieger_zit_first && n >= 1)  grant.krieger_zit_first = true;
+            if (!ex.krieger_zit_half  && n >= 8)  grant.krieger_zit_half  = true;
+            if (!ex.krieger_zit_all   && n >= KRIEGER_CITADELS.length) grant.krieger_zit_all = true;
+            if (Object.keys(grant).length) {
+              await DB.grantAchievements(member.id, grant);
+              if (typeof currentUserData !== 'undefined' && currentUserData) {
+                currentUserData = { ...currentUserData, achievements: { ...ex, ...grant } };
+              }
+            }
+          } catch (e) { /* non-critical (CLAUDE.md Regel 3) */ }
+        }
+        state.dd = { ...state.dd, citadels: { ...(state.dd.citadels || {}), [_sc.citKey]: next } };
+        dungeonDirty = true;
       }
     } catch (e) { /* non-critical: ein Buchungsfehler darf den Kampf nie kippen */ }
   }
@@ -3306,6 +3400,16 @@ async function _runKriegerFight(member, state, tier, seed, COLS, ROWS, MARGIN, k
 
   // Nach einem Burg-Kampf zurück in den Burghof (Hex neu zeichnen), damit der Fortschritt
   // sofort sichtbar ist — außer die Burg ist jetzt erobert, dann bleibt der Sieg stehen.
+  // 🔥 Nach dem Bastion-Sieg zurück ins Zitadellen-Panel: dann steht dort sofort der
+  // Zitadellenherr statt der gefallenen Mauer. Ohne das landet man auf der Karte und muss
+  // das Feld erneut antippen, ohne zu wissen, dass sich etwas geändert hat.
+  if (_sc && result.won && _sc.kind === 'cit_wall' && _sc.citKey) {
+    try {
+      const _cs = (typeof kriegerSpecialSites === 'function')
+        ? kriegerSpecialSites(seed).find(s => s.kind === 'citadel' && s.def.key === _sc.citKey) : null;
+      if (_cs) setTimeout(() => _showKriegerCitadel(member, state, _cs, seed, COLS, ROWS, MARGIN), 900);
+    } catch (e) { /* non-critical */ }
+  }
   if (_sc && result.won && (_sc.kind === 'wall' || _sc.kind === 'garrison') && _sc.castleKey) {
     try {
       const _site = (typeof kriegerSpecialSites === 'function')
