@@ -716,6 +716,33 @@
 .wr-pdef-row > .wr-gen-opts, .wr-pdef-row > .wr-gen { grid-column: 1 / -1; }
 .wr-pdef .wr-ok { margin-top: 8px; }
 .wr-pdef > .wr-sub { margin-top: 8px; }
+
+/* ⛽ 26s Reaktor-Tank. Sitzt IM .wr-gen-info (Hafen wie Kolonie), also einfache
+   Blockelemente — keine Grid-Spannen nötig. ⚠️ Die Meldungen darin tragen bewusst
+   .wr-nrg-msg: liegt der Tank einmal direkt in einer .wr-pdef-row, greift die Regel
+   oben und der Satz bläht die schmale auto-Spalte nicht auf (Lehre aus Teil 22). */
+.wr-fuel { margin: 8px 0 6px; padding: 7px 9px; border-radius: 8px;
+  background: #0d1430; border: 1px solid #24305a; }
+.wr-fuel-head { font-size: .74rem; color: #a8b6dc; }
+.wr-fuel-head strong { color: #dce6ff; }
+.wr-fuel-bar { height: 8px; border-radius: 4px; overflow: hidden; margin: 5px 0 6px;
+  background: #1a1c28; border: 1px solid #2c3350; }
+.wr-fuel-fill { height: 100%; background: linear-gradient(90deg, #a24bd8, #d08cf5);
+  transition: width .25s ease; }
+.wr-fuel-low  { border-color: #6a5a2c; }
+.wr-fuel-low  .wr-fuel-fill { background: linear-gradient(90deg, #d8a24b, #f5d08c); }
+.wr-fuel-dry  { border-color: #6a2c2c; }
+.wr-fuel-dry  .wr-fuel-fill { background: #6a2c2c; }
+.wr-fuel-btns { display: flex; flex-wrap: wrap; gap: 6px; }
+.wr-fuel-btns .wr-btn { flex: 1 1 auto; }
+
+/* ⚗️ 26s Plasmoid-Injektion im Flotten-Picker — optisch an .wr-fleetsel angelehnt,
+   aber violett abgesetzt, damit die Munition nicht wie eine weitere Schiffszeile wirkt. */
+.wr-inject { margin-top: 10px; padding: 9px 10px; border-radius: 9px;
+  background: rgba(162, 75, 216, .07); border: 1px solid #3d2a5a; }
+.wr-inject.wr-inject-on { border-color: #7a4bb8; background: rgba(162, 75, 216, .14); }
+.wr-inject .wr-fs-sum { border-top: 0; padding-top: 4px; }
+.wr-inject > .wr-sub { display: block; margin-top: 4px; font-size: .69rem; line-height: 1.35; }
 /* Legenden-Punkte für die neuen Kartenmarkierungen */
 .wr-dot-colony { background: linear-gradient(135deg, #7ad48a, #d47ad4); }
 .wr-dot-risk   { background: transparent; border: 1.5px dashed #ff8c78; }
