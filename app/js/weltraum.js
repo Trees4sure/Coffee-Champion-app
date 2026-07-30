@@ -3003,10 +3003,15 @@ function wrFallbackHtml(p, m) {
   if (!at) return '';
   const left = at - Date.now();
   const own  = p.cleared_by === m?.id;
+  // ⚠️ Die Aufzählung nennt nur Wege, die es auf einem NICHT kolonisierten Planeten
+  // wirklich gibt: Geschütze und Station verlangen serverseitig `colonized_by = member`
+  // (build_planet_defense) und sind hier gar nicht baubar. Vorher standen sie gleichrangig
+  // daneben (JP 2026-07-30: „man kann doch nur eine Kolonie gründen, danach ein Geschütz").
   return `<div class="${left < 86400000 ? 'wr-warn' : 'wr-sub'}">⏳ Ungeschützt —
     ${own ? 'dein Planet' : 'dieser Planet'} fällt in <strong>${wrCountdown(left)}</strong> an die Feinde zurück.
-    Kolonie gründen, Geschütze bauen, eine Station im Quadranten errichten oder Schiffe
-    stationieren hält ihn.</div>`;
+    Es hält ihn: eine <b>Kolonie</b> darauf gründen, <b>Schiffe stationieren</b> (Route) oder
+    eine <b>📡 Station</b> irgendwo in ${_wrEsc(p.quadrant || 'diesem Quadranten')} — sie schützt
+    den ganzen Quadranten. Geschütze gibt es nur auf Kolonien.</div>`;
 }
 
 // ── Kolonien ─────────────────────────────────────────────────────────────────
@@ -3184,36 +3189,97 @@ function wrColoniesHtml(m) {
       </div>`;
   }
 
+  // 📂 Alle vier Abschnitte klappen als GANZES zu (JP 2026-07-30: „Die ganzen Planeten
+  // ebenfalls" in einen Akkordeon). Die Zusammenfassung in der Kopfzeile ist Pflicht —
+  // zugeklappt muss man sehen, ob sich das Öffnen lohnt. Der Ernte-Knopf bleibt als
+  // `foot` IMMER sichtbar: er ist die meistgedrückte Aktion des Tabs.
+  const naechster = secRisk.map(p => wrFallbackAt(p, m)).filter(Boolean).sort((a, b) => a - b)[0];
+  const wrackSum  = secWreck.reduce((a, p) => a + wrWreckLeft(p), 0);
   return `
-    ${rows ? `<div class="wr-card">
-      <div class="wr-card-title">${wrIc("colony")} Kolonien <span class="wr-sub">Ertrag sammelt sich max. 14 Tage an</span></div>
-      ${rows}
-      <button class="wr-btn wr-btn-go" data-wr-harvest="1" ${pending < 1 ? 'disabled' : ''}>
-        ${wrIc("yield")} Ertrag einsammeln${pending > 0 ? ` (${wrFmt(pending)})` : ''}</button>
-    </div>` : ''}
-    ${secRisk.length ? `<div class="wr-card wr-card-call">
-      <div class="wr-card-title">⚠️ Ungeschützt
-        <span class="wr-sub">${secRisk.length} Planeten — Rückfall droht, stärkste zuerst</span></div>
-      ${secRisk.map(planetRow).join('')}
-      <div class="wr-sub">Ohne Kolonie, Geschütz oder Station im Quadranten fällt ein befreiter
-        Planet nach ${wrFallbackDays(m)} Tagen an die Wächter zurück. Ein einziges Geschütz genügt.<br>
-        ⚠️ Die Wächter kehren <b>verstärkt</b> zurück: mindestens ⚔️ ${wrFmt(WR_FALLBACK_FLOOR[1])}
-        (Ring 2 ${wrFmt(WR_FALLBACK_FLOOR[2])} · Ring 3 ${wrFmt(WR_FALLBACK_FLOOR[3])}), jeder weitere
-        Rückfall ×${WR_FALLBACK_GROWTH.toLocaleString('de-DE')}.</div>
-    </div>` : ''}
-    ${secWreck.length ? `<div class="wr-card">
-      <div class="wr-card-title">${wrIc('salvage')} Wrackfelder
-        <span class="wr-sub">${secWreck.length} Planeten — grösster Vorrat zuerst</span></div>
-      ${secWreck.map(planetRow).join('')}
-      <div class="wr-sub">Bergungsschiffe räumen die Felder ab; der Vorrat ist endlich.</div>
-    </div>` : ''}
-    ${secMine.length ? `<div class="wr-card">
-      <div class="wr-card-title">⛏️ Abbau
-        <span class="wr-sub">${secMine.length} befreite Planeten — reichste zuerst</span></div>
-      ${secMine.map(planetRow).join('')}
-      <div class="wr-sub">Röstkometen als Dauerernte-Route einstellen — oder ein Kolonieschiff
-        schicken, dann sammelt der Planet von allein.</div>
-    </div>` : ''}`;
+    ${rows ? wrSecCard('colonies',
+      `${wrIc("colony")} Kolonien`,
+      `${keys.length} · +${wrFmt(pending)} bereit`,
+      `${rows}<div class="wr-sub">Ertrag sammelt sich max. ${wrTechCapDays(m)} Tage an.</div>`,
+      `<button class="wr-btn wr-btn-go" data-wr-harvest="1" ${pending < 1 ? 'disabled' : ''}>
+        ${wrIc("yield")} Ertrag einsammeln${pending > 0 ? ` (${wrFmt(pending)})` : ''}</button>`) : ''}
+    ${secRisk.length ? wrSecCard('risk',
+      '⚠️ Ungeschützt',
+      `${secRisk.length} · ${naechster ? `nächster Rückfall in ${wrCountdown(naechster - Date.now())}` : 'Rückfall droht'}`,
+      `${secRisk.map(planetRow).join('')}
+       ${/* ⚠️ TEXT KORRIGIERT (JP 2026-07-30): „Ohne Kolonie, Geschütz oder Station …
+             Ein einziges Geschütz genügt" war irreführend. build_planet_defense verlangt
+             `colonized_by = member` für JEDE Aktion — Geschütze UND Station setzen also
+             selbst eine Kolonie voraus und sind auf einem bloss befreiten Planeten gar
+             nicht baubar. Die Aufzählung las sich wie vier gleichwertige Optionen.
+             MERKE: eine Aufzählung von Schutzmöglichkeiten muss die VORAUSSETZUNGEN
+             mitnennen, sonst beschreibt sie Wege, die es nicht gibt. */''}
+       <div class="wr-sub">Einen befreiten Planeten hält nur dreierlei:
+         <b>eine Kolonie darauf</b> (braucht ein Kolonieschiff), <b>stationierte Schiffe</b>
+         (Dauerernte- oder Bergungsroute) oder eine <b>📡 Quadranten-Station</b> irgendwo im
+         selben Quadranten — auch die eines Clan-Mitglieds.<br>
+         Geschütze und Station stehen selbst immer auf einer Kolonie; auf einem nur befreiten
+         Planeten lassen sie sich nicht bauen. Der Unterschied: die Station schützt den
+         <b>ganzen Quadranten</b>, die Kolonie nur ihren eigenen Planeten.<br>
+         Sonst fällt er nach ${wrFallbackDays(m)} Tagen zurück — und die Wächter kehren
+         <b>verstärkt</b> wieder: mindestens ⚔️ ${wrFmt(WR_FALLBACK_FLOOR[1])}
+         (Ring 2 ${wrFmt(WR_FALLBACK_FLOOR[2])} · Ring 3 ${wrFmt(WR_FALLBACK_FLOOR[3])}),
+         jeder weitere Rückfall ×${WR_FALLBACK_GROWTH.toLocaleString('de-DE')}.</div>`,
+      '', 'wr-card-call') : ''}
+    ${secWreck.length ? wrSecCard('wreck',
+      `${wrIc('salvage')} Wrackfelder`,
+      `${secWreck.length} · ${wrFmt(wrackSum)} Wrackteile`,
+      `${secWreck.map(planetRow).join('')}
+       <div class="wr-sub">Bergungsschiffe räumen die Felder ab; der Vorrat ist endlich.</div>`) : ''}
+    ${secMine.length ? wrSecCard('mine',
+      '⛏️ Abbau',
+      `${secMine.length} befreite Planeten`,
+      `${secMine.map(planetRow).join('')}
+       <div class="wr-sub">Röstkometen als Dauerernte-Route einstellen — oder ein Kolonieschiff
+         schicken, dann sammelt der Planet von allein.</div>`) : ''}`;
+}
+
+// ── 📂 Abschnitts-Akkordeon (JP 2026-07-30) ─────────────────────────────────
+// „Wäre vielleicht schön, wenn man Geschütze noch in einen accordion unterbringt.
+//  Die ganzen Planeten ebenfalls."
+//
+// Die EINZELNEN Planeten klappen schon seit 26l auf (wr-col-item). Was fehlte, war die
+// Ebene darüber: mit sechs Bauplätzen und drei Dutzend Planeten scrollt man an allem
+// vorbei, was man gerade nicht braucht. Diese Klappe fasst einen ganzen ABSCHNITT zusammen.
+//
+// ⚠️ Zwei Regeln, die den Unterschied machen:
+//  1. Die Kopfzeile trägt die ZUSAMMENFASSUNG (Anzahl, Feuerkraft, Ertrag). Ein
+//     zugeklappter Abschnitt, der nur seinen Namen zeigt, zwingt zum Öffnen und hat
+//     nichts gespart.
+//  2. Die HAUPTAKTION bleibt draussen (z. B. „Ertrag einsammeln"). Sonst versteckt die
+//     Klappe genau den Knopf, den man am häufigsten drückt.
+//
+// Der Zustand lebt nur in dieser Sitzung (Modul-Variable) — bewusst nicht in map_data:
+// das wäre ein Schreibzugriff auf den Blob für eine reine Ansichtssache (Tagesbilanz-Lehre).
+const WR_SEC_DEFAULT = {
+  turrets: false,   // Bauplätze: viel Fläche, selten geändert
+  colonies: true,   // der Hauptinhalt bleibt offen
+  risk: true,       // zeitkritisch (Rückfall droht) — nie verstecken
+  wreck: false,
+  mine: false,
+};
+const _wrSec = {};
+function wrSecOpen(key) {
+  return key in _wrSec ? _wrSec[key] : (WR_SEC_DEFAULT[key] !== false);
+}
+// Ein aufklappbarer Karten-Abschnitt. `head` ist der Titel, `sum` die Zusammenfassung
+// (immer sichtbar), `body` der einklappbare Inhalt, `foot` bleibt ebenfalls immer sichtbar.
+function wrSecCard(key, head, sum, body, foot, cls) {
+  const offen = wrSecOpen(key);
+  return `
+    <div class="wr-card ${cls || ''} wr-sec${offen ? ' wr-sec-open' : ''}">
+      <button type="button" class="wr-sec-head" data-wr-sec="${key}">
+        <span class="wr-sec-caret">${offen ? '▾' : '▸'}</span>
+        <span class="wr-sec-title">${head}</span>
+        <span class="wr-sec-sum">${sum || ''}</span>
+      </button>
+      ${offen ? `<div class="wr-sec-body">${body}</div>` : ''}
+      ${foot || ''}
+    </div>`;
 }
 
 // ── Angriffswelle auf den eigenen Hafen ─────────────────────────────────────
@@ -3498,10 +3564,11 @@ function wrHafenHtml(m) {
   const eDem = wrPowerDemand(m), eSup = wrPowerSupply(m), eFac = wrPowerFactor(m);
   const eShort = eDem > eSup;
 
-  let slots = '';
+  let slots = '', belegt = 0;
   for (let i = 0; i < def.slots; i++) {
     const key = 'g' + i;
     const cur = tur[key];
+    if (cur && typeof cur === 'object' && SPACE_TURRET_BY_KEY[cur.type]) belegt++;
     if (cur && typeof cur === 'object' && SPACE_TURRET_BY_KEY[cur.type]) {
       const t   = SPACE_TURRET_BY_KEY[cur.type];
       const clv = Math.max(1, Math.min(WR_TURRET_MAX, parseInt(cur.level, 10) || 1));
@@ -3624,8 +3691,16 @@ function wrHafenHtml(m) {
               : priceTxt(p))}</span>
           </div>`).join('')}
       </div>
-      <div class="wr-slots">${slots}</div>
     </div>
+    ${/* 📂 Bauplätze als eigener Klapp-Abschnitt (JP 2026-07-30). Sechs Slots mit
+          Bau-Optionen sind der längste Block des Tabs und werden selten geändert —
+          zugeklappt steht in der Kopfzeile trotzdem alles Entscheidende: wie viele Plätze
+          belegt sind, die Feuerkraft und die Energielage. */''}
+    ${wrSecCard('turrets',
+      `${wrIc("def")} Geschütze`,
+      `${belegt}/${def.slots} belegt · 🛡️ ${wrFmt(power)} · ⚡ ${wrFmt(eDem)}/${wrFmt(eSup)}`
+        + (eShort ? ' <span class="wr-bad">unterversorgt</span>' : ''),
+      `<div class="wr-slots">${slots}</div>`)}
     ${/* ⚡ Das Energie-Panel steht bewusst DIREKT unter den Bauplätzen: dort entsteht der
           Bedarf, dort wird die Entscheidung getroffen. */''}
     ${wrPowerHtml(m, canPay, priceTxt)}`;
@@ -4883,9 +4958,23 @@ function wrCanvasClick(ev) {
   if (pick) { _wrSel = { planet: pick }; wrRefreshDetail(); wrDrawMap(); }
 }
 
+// ⚠️ FIX 2026-07-30 (JP: „man kann unter Raumhafen die Dauerernte und Wracks bergen die
+// Flotten nicht erhöhen, sie reagiert nicht direkt beim Klicken").
+//
+// BEFUND: Diese Funktion zeichnet AUSSCHLIESSLICH `#wr-detail` neu — das Detail-Panel der
+// Sternkarte. Seit die Routen-, Rückfall- und Verteidigungs-Panels auch im
+// Kolonie-Akkordeon unter 🛰️ Raumhafen stehen (Teil 22), liegen dieselben +/−-Knöpfe an
+// einem Ort, an dem es `#wr-detail` gar nicht gibt: der Zähler stieg intern (`_wrRouteSel`),
+// aber nichts wurde neu gezeichnet — der Klick wirkte tot.
+//
+// MERKE: Sobald ein Panel an einer ZWEITEN Stelle wiederverwendet wird, ist jede
+// Aktualisierung, die einen festen Container-Namen annimmt, ein stiller Fehler. Der
+// Rückfall auf den vollen Render ist hier richtig: auf der Karte bleibt es beim billigen
+// Teil-Redraw (Canvas bleibt stehen), überall sonst wird der ganze Tab neu gebaut.
 function wrRefreshDetail() {
   const d = document.getElementById('wr-detail');
-  if (d) d.innerHTML = wrDetailHtml(_wrMember);
+  if (d) { d.innerHTML = wrDetailHtml(_wrMember); return; }
+  wrRender();
 }
 
 // ── Events ───────────────────────────────────────────────────────────────────
@@ -5022,6 +5111,14 @@ function wrBindEvents() {
     if (cm) {
       const pl = wrPlanetById(cm.dataset.wrColmap);
       if (pl) { _wrSel = { planet: pl }; wrSetTab('karte'); }
+      return;
+    }
+    // 📂 Abschnitts-Akkordeon auf/zu (Geschütze, Kolonien, Ungeschützt, Wrack, Abbau)
+    const sec = e.target.closest('[data-wr-sec]');
+    if (sec) {
+      const k = sec.dataset.wrSec;
+      _wrSec[k] = !wrSecOpen(k);
+      wrRender();
       return;
     }
     const ct = e.target.closest('[data-wr-coltoggle]');
