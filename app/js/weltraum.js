@@ -2794,10 +2794,15 @@ function wrColonyPowerHtml(m, p, canPay, priceTxt) {
       <div class="wr-nrg-bar ${dem > sup ? 'wr-nrg-short' : ''}">
         <div class="wr-nrg-fill" style="width:${sup > 0 ? Math.min(100, Math.round(dem / sup * 100)) : 100}%"></div>
       </div>
+      ${/* ⚠️ wr-nrg-msg ist PFLICHT: .wr-pdef-row ist ein 2-Spalten-Grid und die Meldung
+            landet sonst in der schmalen auto-Spalte, wo ihr langer Text die Spalte
+            aufbläht und die Bau-Optionen daneben zerquetscht. Eigene Klasse statt
+            .wr-bad, weil .wr-pdef-val oben ebenfalls .wr-bad trägt — die darf NICHT
+            über beide Spalten gehen. */ ''}
       ${fac < 1
-        ? `<div class="wr-bad">⚡ Unterversorgt — die Geschütze dieser Kolonie feuern mit
+        ? `<div class="wr-nrg-msg wr-bad">⚡ Unterversorgt — die Geschütze dieser Kolonie feuern mit
              ${Math.round(fac * 100)} % (es fehlen ${wrFmt(dem - sup)} Energie).</div>`
-        : `<div class="wr-sub">Versorgt. Noch ${wrFmt(Math.max(0, sup - dem))} Energie frei.</div>`}
+        : `<div class="wr-nrg-msg wr-sub">Versorgt. Noch ${wrFmt(Math.max(0, sup - dem))} Energie frei.</div>`}
       ${body}
     </div>`;
 }
