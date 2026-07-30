@@ -171,7 +171,7 @@ const SPACE_TECH = [
   { key:'wt_f6',  ast:'c', stufe:9,  name:'Resonanz-Bohrung',        cc:40000, erz:500, kristall:170, plasmoid:50, quantum:40, requires:'wt_f5', wirkung:'Abbau Ring 2/3 +25 %',                      art:'wt7_resonanz_bohrung',  live:true  },
   { key:'wt_f7',  ast:'b', stufe:14,  name:'Quadranten-Kommandostation',cc:48000,erz:600, kristall:220, plasmoid:80, quantum:50, requires:'wt_e10',wirkung:'Schaltet Quadranten-Station frei',          art:'wt7_quadranten_station',live:true  },
   { key:'wt_f8',  ast:'c', stufe:11,  name:'Terraforming-Kern',       cc:44000, erz:560, kristall:200, plasmoid:70, quantum:45, requires:'wt_c5', wirkung:'Kolonie-Ertrag +50 %',                      art:'wt7_terraforming_kern', live:true  },
-  { key:'wt_f9',  ast:'d', stufe:9,  name:'Transmuter',              cc:40000, erz:0,   kristall:0,   plasmoid:40, quantum:30, requires:'wt_f5', wirkung:'Wandelt 🟣/🌀 in CC (🟣 60 · 🌀 150 CC)',   art:'wt7_transmuter',        live:true  },
+  { key:'wt_f9',  ast:'d', stufe:9,  name:'Transmuter',              cc:40000, erz:0,   kristall:0,   plasmoid:40, quantum:30, requires:'wt_f5', wirkung:'Wandelt 🟣/🌀 sofort in CC (🟣 120 · 🌀 260 CC)',   art:'wt7_transmuter',        live:true  },
   { key:'wt_f10', ast:'d', stufe:10, name:'Xeno-Diplomatie',         cc:46000, erz:580, kristall:210, plasmoid:75, quantum:50, requires:'wt_f7', wirkung:'Hinterhalt −20 %, gelegentl. Gratis-Rohstoffe',art:'wt7_xeno_diplomatie',  live:true  },
 ];
 const SPACE_TECH_BY_KEY = SPACE_TECH.reduce((m, t) => (m[t.key] = t, m), {});
@@ -761,6 +761,11 @@ function wrQuantum(m)     { return Math.floor(parseFloat(wrSpace(m).quantum) || 
 function wrResHave(m, t)  { return t === 'plasmoid' ? wrPlasmoid(m) : t === 'quantum' ? wrQuantum(m) : t === 'kristall' ? wrKristall(m) : wrErz(m); }
 // Abbau-Gate: erz/kristall immer, Ring-Rohstoffe nur mit passendem Abbau-Tech (wt_e7/wt_f5).
 function wrResMinable(m, t) { return t === 'plasmoid' ? wrHasTech(m, 'wt_e7') : t === 'quantum' ? wrHasTech(m, 'wt_f5') : true; }
+// ⚗️ Plasmoid-Injektion (26s) — Spiegel der Zahlen in claim_space_arrival/space_inject_load.
+// ⚠️ Nur Anzeige: geladen und verbraucht wird server-seitig. Der Vorrat lebt in space.inject.
+const WR_INJECT_MAX = 100, WR_INJECT_PCT = 0.4;   // 100 🟣 = +40 % Kampfkraft (Deckel)
+function wrInject(m)      { return Math.max(0, Math.min(WR_INJECT_MAX, Math.floor(parseFloat(wrSpace(m).inject) || 0))); }
+function wrInjectFactor(m) { return 1 + wrInject(m) * WR_INJECT_PCT / 100; }
 function wrHomeShips(m) { return wrSpace(m).fleets?.home?.ships || {}; }
 function wrAway(m)      { return wrSpace(m).fleets?.away || null; }
 // 🚀 Multi-Flotte (26b): away = { trips: [ {id, ships, …} ] }. Legacy-Einzeltrip
@@ -1162,7 +1167,11 @@ async function wrSweepReconquest() {
       // Die Meldung geht an den ganzen Clan: ein verlorener Planet im Quadranten
       // betrifft auch die Nachbarn (Wächter stehen wieder im Weg).
       try {
-        wrChat(`🪐 <strong>${_wrEsc(p.name)}</strong> (${_wrEsc(p.quadrant)}, Ring ${p.ring}) `
+        // ⚠️ KEIN HTML im Chat-Text: beide Renderer (renderMessages in app.js und das
+        // 📜-Protokoll in wrLoadProtokoll) schicken die Nachricht durch _esc()/_wrEsc()
+        // — ein <strong> steht dann als roher Text in der Blase (JP 2026-07-30).
+        // Betonung nur über Emoji, Großschreibung oder „Anführungszeichen".
+        wrChat(`🪐 ${_wrEsc(p.name)} (${_wrEsc(p.quadrant)}, Ring ${p.ring}) `
              + `wurde von Feinden zurückerobert — ungeschützt zu lange sich selbst überlassen. `
              + `Wächter jetzt ⚔️ ${wrFmt(p.enemy)}.`);
       } catch (e) {}
@@ -1948,6 +1957,38 @@ function wrFleetPickerHtml(m) {
                + `(Große Jäger fliegen überall hin.)</span>`;
         })()}
       </div>
+      ${wrInjectHtml(m)}
+    </div>`;
+}
+
+// ⚗️ Plasmoid-Injektion (26s). Steht bewusst IM Flotten-Picker: sie wirkt auf den
+// nächsten Anflug, und genau hier entscheidet man über den Angriff. Nur sichtbar, wenn
+// das Ziel noch Wächter hat — auf einem Ernte- oder Kolonieflug wäre sie nur Ballast.
+// Es gibt kein What's-New-Popup (JP), also erklärt diese Box die Regel vollständig.
+function wrInjectHtml(m) {
+  const pt = _wrSel?.planet;
+  const geladen = wrInject(m);
+  if ((!pt || pt.cleared_by) && geladen <= 0) return '';
+  const have = wrPlasmoid(m);
+  const rest = WR_INJECT_MAX - geladen;
+  const pct  = Math.round(geladen * WR_INJECT_PCT * 10) / 10;
+  const paket = [10, 25, 50].filter(n => n <= Math.min(have, rest));
+  const alles = Math.min(have, rest);
+  return `
+    <div class="wr-inject${geladen > 0 ? ' wr-inject-on' : ''}">
+      <div class="wr-fs-head">⚗️ Plasmoid-Injektion
+        <span class="wr-sub">— 🟣 als Munition: 1 Stück = +${String(WR_INJECT_PCT).replace('.', ',')} % Kampfkraft</span></div>
+      <div class="wr-fs-sum">
+        <span>Geladen: <strong>${wrFmt(geladen)}</strong> / ${WR_INJECT_MAX} 🟣</span>
+        <span>Bonus: <strong class="${geladen > 0 ? 'wr-good' : ''}">+${pct} %</strong></span>
+        <span class="wr-sub">Lager: ${wrFmt(have)} 🟣</span>
+      </div>
+      <div class="wr-fs-quick">
+        ${paket.map(n => `<button class="wr-fs-q" data-wr-inject="${n}">+${n}</button>`).join('')}
+        ${alles > 0 ? `<button class="wr-fs-q" data-wr-inject="${alles}">Max (+${alles})</button>` : ''}
+      </div>
+      <div class="wr-sub">Wird beim nächsten Gefecht gegen Wächter verbraucht — Sieg oder Niederlage.
+        Ein Abbau- oder Transportflug verbrennt nichts, die Ladung bleibt liegen.</div>
     </div>`;
 }
 
@@ -2173,6 +2214,12 @@ function wrTechHtml(m) {
 }
 
 // ⚗️ Transmuter (wt_f9): Ring-Rohstoffe → CC. Erscheint im Forschungs-Tab, sobald erforscht.
+// ⚠️ CLIENT-SYNC-PFLICHT: Spiegel der Kurse in space_transmute (26s).
+// 26s (JP 2026-07-30): 60/150 → 120/260. Der Transmuter lag bei einem Drittel der
+// Raffinerie und war damit ein toter Knopf hinter einer 40.000-CC-Technik. Neue Regel:
+// knapp UNTER dem schlechtesten Raffinerie-Kurs derselben Sorte (🟣 140 auf Stufe 2,
+// 🌀 280 auf Stufe 4) — sofort und unbegrenzt, aber immer der schlechtere Preis.
+const WR_TRANSMUTE = { plasmoid: 120, quantum: 260 };
 function wrTransmuterHtml(m) {
   if (!wrHasTech(m, 'wt_f9')) return '';
   const pla = wrPlasmoid(m), qua = wrQuantum(m);
@@ -2180,13 +2227,16 @@ function wrTransmuterHtml(m) {
     <div class="wr-card-title">⚗️ Transmuter <span class="wr-sub">— Ring-Rohstoffe zu CC</span></div>
     <div class="wr-refine-row">
       <span>${wrIc('pla')} Plasmoiden-Staub: <strong>${wrFmt(pla)}</strong></span>
-      <button class="wr-btn wr-btn-sm" data-wr-transmute="plasmoid" ${pla < 1 ? 'disabled' : ''}>→ ${wrFmt(pla * 60)} CC</button>
+      <button class="wr-btn wr-btn-sm" data-wr-transmute="plasmoid" ${pla < 1 ? 'disabled' : ''}>→ ${wrFmt(pla * WR_TRANSMUTE.plasmoid)} CC</button>
     </div>
     <div class="wr-refine-row">
       <span>${wrIc('qua')} Quantenschaum: <strong>${wrFmt(qua)}</strong></span>
-      <button class="wr-btn wr-btn-sm" data-wr-transmute="quantum" ${qua < 1 ? 'disabled' : ''}>→ ${wrFmt(qua * 150)} CC</button>
+      <button class="wr-btn wr-btn-sm" data-wr-transmute="quantum" ${qua < 1 ? 'disabled' : ''}>→ ${wrFmt(qua * WR_TRANSMUTE.quantum)} CC</button>
     </div>
-    <p class="wr-sub" style="margin:4px 0 0">Kurs: ${wrIc('pla')} 60 CC · ${wrIc('qua')} 150 CC je Einheit.</p>
+    <p class="wr-sub" style="margin:4px 0 0">Kurs: ${wrIc('pla')} ${WR_TRANSMUTE.plasmoid} CC ·
+      ${wrIc('qua')} ${WR_TRANSMUTE.quantum} CC je Einheit — sofort und ohne Mengengrenze.
+      Die 🏭 Raffinerie zahlt mehr (${WR_REFINE[2].ratePla}–${WR_REFINE[6].ratePla} bzw.
+      ${WR_REFINE[4].rateQua}–${WR_REFINE[6].rateQua}), braucht aber Zeit und eine höhere Stufe.</p>
   </div>`;
 }
 async function wrTransmute(type) {
@@ -2209,6 +2259,44 @@ async function wrTransmute(type) {
     wrRender();
   } catch (e) {
     wrToast('Transmutation fehlgeschlagen: ' + e.message, 'error');
+  } finally { _wrBusy = false; }
+}
+
+// ⛽ 26s: Reaktor betanken (Hafen: planetId null). Rein server-autoritativ — die RPC
+// klemmt selbst auf Vorrat und freien Tankraum und liefert den neuen Stand zurück.
+// Bewusst KEIN Chat-Post: Nachtanken ist Routine und würde das Protokoll fluten.
+async function wrRefuel(planetId, amount) {
+  if (_wrBusy || !(amount > 0)) return;
+  _wrBusy = true;
+  try {
+    const res = await DB.spacePowerRefuel(_wrMember.id, planetId, amount);
+    if (!res || res.error) { wrToast(wrErrText(res?.error), 'error'); return; }
+    if (res.space) wrApplySpace(res.space);
+    const ic = res.res === 'quantum' ? '🌀' : '🟣';
+    wrToast(`⛽ ${wrFmt(res.added)} ${ic} getankt — Tank ${wrFmt(Math.round(res.fuel))} `
+          + `(${Math.floor((res.fuel || 0) / Math.max(1, res.perDay || 1))} Tage)`, 'success');
+    // Der Kolonie-Tank lebt in space_planets, nicht im Mitglied — Galaxie neu laden,
+    // sonst zeigt das Akkordeon den alten Stand (Zwei-Quellen-Falle aus Teil 22).
+    if (planetId) await wrEnsureGalaxy(true);
+    wrRender();
+  } catch (e) {
+    wrToast('Betanken fehlgeschlagen: ' + e.message, 'error');
+  } finally { _wrBusy = false; }
+}
+
+// ⚗️ 26s: Plasmoid-Injektion laden. Wirkt auf den NÄCHSTEN Anflug mit Gefecht und wird
+// dort verbraucht (claim_space_arrival). Der Vorrat liegt in space.inject.
+async function wrInjectLoad(amount) {
+  if (_wrBusy || !(amount > 0)) return;
+  _wrBusy = true;
+  try {
+    const res = await DB.spaceInjectLoad(_wrMember.id, amount);
+    if (!res || res.error) { wrToast(wrErrText(res?.error), 'error'); return; }
+    if (res.space) wrApplySpace(res.space);
+    wrToast(`⚗️ ${wrFmt(res.added)} 🟣 injiziert — Kampfkraft +${res.pct} % im nächsten Gefecht`, 'success');
+    wrRender();
+  } catch (e) {
+    wrToast('Injektion fehlgeschlagen: ' + e.message, 'error');
   } finally { _wrBusy = false; }
 }
 
@@ -2241,15 +2329,19 @@ async function wrBuyTech(key) {
 // 26o: 🟣 ab Stufe 3, 🌀 ab Stufe 4 verwertbar (JP 2026-07-29: „Leveln und dann kann man
 // das auch verwerten, falls man es mal über hat"). capPla/capQua = 0 heisst gesperrt —
 // die Sperre braucht keinen Sonderfall, LEAST klemmt server- wie clientseitig auf 0.
+// ⚠️ 26s (JP 2026-07-30, „> 598 Plasmoid — was mache ich damit?"): 🟣 ab Stufe 2 statt 3
+// und deutlich grössere Chargen (20/35/50/80 → 40/70/110/180), 🌀 ebenso (12/25/40 →
+// 25/45/70). Die KURSE sind bewusst unverändert — 🟣 soll abfliessen können, nicht mehr
+// wert werden. Alle Erz-/Kristall-Werte und die Stundenzahlen sind unangetastet.
 const WR_REFINE = [
   null,
-  { capErz: 40,  capKri: 15,  hours: 6,   rErz: 32, rKri: 80,  capPla: 0,  capQua: 0,  ratePla: 0,   rateQua: 0   },
-  { capErz: 80,  capKri: 30,  hours: 5,   rErz: 34, rKri: 84,  capPla: 0,  capQua: 0,  ratePla: 0,   rateQua: 0   },
-  { capErz: 140, capKri: 55,  hours: 4,   rErz: 36, rKri: 88,  capPla: 20, capQua: 0,  ratePla: 150, rateQua: 0   },
-  { capErz: 240, capKri: 100, hours: 3,   rErz: 38, rKri: 92,  capPla: 35, capQua: 12, ratePla: 170, rateQua: 280 },
-  { capErz: 400, capKri: 160, hours: 2,   rErz: 42, rKri: 100, capPla: 50, capQua: 25, ratePla: 190, rateQua: 340 },
+  { capErz: 40,  capKri: 15,  hours: 6,   rErz: 32, rKri: 80,  capPla: 0,   capQua: 0,  ratePla: 0,   rateQua: 0   },
+  { capErz: 80,  capKri: 30,  hours: 5,   rErz: 34, rKri: 84,  capPla: 15,  capQua: 0,  ratePla: 140, rateQua: 0   },
+  { capErz: 140, capKri: 55,  hours: 4,   rErz: 36, rKri: 88,  capPla: 40,  capQua: 0,  ratePla: 150, rateQua: 0   },
+  { capErz: 240, capKri: 100, hours: 3,   rErz: 38, rKri: 92,  capPla: 70,  capQua: 25, ratePla: 170, rateQua: 280 },
+  { capErz: 400, capKri: 160, hours: 2,   rErz: 42, rKri: 100, capPla: 110, capQua: 45, ratePla: 190, rateQua: 340 },
   // Stufe 6: wt_e13 Plasma-Raffinerie
-  { capErz: 600, capKri: 260, hours: 1.5, rErz: 46, rKri: 110, capPla: 80, capQua: 40, ratePla: 210, rateQua: 400 },
+  { capErz: 600, capKri: 260, hours: 1.5, rErz: 46, rKri: 110, capPla: 180, capQua: 70, ratePla: 210, rateQua: 400 },
 ];
 function wrRefineTier(m) {
   if (wrHasTech(m, 'wt_e13')) return 6;
@@ -2747,6 +2839,7 @@ function wrColonyPowerHtml(m, p, canPay, priceTxt) {
           <div class="wr-gen-name">${_wrEsc(def.name)} <span class="wr-sub">Stufe ${glv}</span></div>
           <div class="wr-gen-out">⚡ ${wrFmt(st.output)}
             <span class="wr-sub">+ ${wrFmt(wrColonyLevel(p) * WR_COLONY_PER_LEVEL)} aus der Kolonie-Stufe</span></div>
+          ${wrFuelHtml(m, gen, pid)}
           ${up
             ? `<button class="wr-btn wr-btn-sm" data-wr-pturret="${pid}:power_upgrade::"
                  ${canPay(up) ? '' : 'disabled'}>Auf Stufe ${glv + 1} ausbauen
@@ -3096,7 +3189,10 @@ function wrColoniesHtml(m) {
         <span class="wr-sub">${secRisk.length} Planeten — Rückfall droht, stärkste zuerst</span></div>
       ${secRisk.map(planetRow).join('')}
       <div class="wr-sub">Ohne Kolonie, Geschütz oder Station im Quadranten fällt ein befreiter
-        Planet nach ${wrFallbackDays(m)} Tagen an die Wächter zurück. Ein einziges Geschütz genügt.</div>
+        Planet nach ${wrFallbackDays(m)} Tagen an die Wächter zurück. Ein einziges Geschütz genügt.<br>
+        ⚠️ Die Wächter kehren <b>verstärkt</b> zurück: mindestens ⚔️ ${wrFmt(WR_FALLBACK_FLOOR[1])}
+        (Ring 2 ${wrFmt(WR_FALLBACK_FLOOR[2])} · Ring 3 ${wrFmt(WR_FALLBACK_FLOOR[3])}), jeder weitere
+        Rückfall ×${WR_FALLBACK_GROWTH.toLocaleString('de-DE')}.</div>
     </div>` : ''}
     ${secWreck.length ? `<div class="wr-card">
       <div class="wr-card-title">${wrIc('salvage')} Wrackfelder
@@ -3241,6 +3337,48 @@ function wrMemberName(id) {
 // Mechanik an der Stelle erklärt sein, an der sie wirkt. Drei Dinge müssen sichtbar
 // sein: Bedarf gegen Versorgung, was Unterversorgung konkret kostet, und wie man sie
 // behebt.
+// ⛽ Tankanzeige eines Reaktors — EINE Funktion für Hafen und Kolonie (26s).
+// `planetId` null = Raumhafen. Bewusst mit den fertigen Mengen in den Knöpfen: die
+// RPC klemmt server-seitig ohnehin auf Vorrat und freien Tankraum, aber ein Knopf mit
+// einer Zahl, die dann nicht ankommt, wirkt wie ein Fehler.
+function wrFuelHtml(m, pw, planetId) {
+  if (!pw || typeof pw !== 'object' || !pw.type) return '';
+  const lv   = Math.max(1, Math.min(WR_POWER_MAX, parseInt(pw.level, 10) || 1));
+  const rate = wrGenFuelRate(pw.type, lv);
+  if (rate <= 0) {
+    return `<div class="wr-nrg-msg wr-sub">⛽ Wartungsfrei — dieser Reaktortyp braucht keinen Treibstoff.</div>`;
+  }
+  const res  = wrGenFuelRes(pw.type);
+  const ic   = res === 'quantum' ? wrIc('qua') : wrIc('pla');
+  const left = wrGenFuelLeft(pw), max = wrGenFuelMax(pw.type, lv);
+  const days = left / rate;
+  const have = res === 'quantum' ? wrQuantum(m) : wrPlasmoid(m);
+  const room = Math.max(0, Math.floor(max - left));
+  const voll = Math.min(have, room);
+  const wo   = planetId || '-';
+  const dTxt = days >= 1 ? `${Math.floor(days)} Tage` : `${Math.max(0, Math.round(days * 24))} h`;
+  return `
+    <div class="wr-fuel ${left <= 0 ? 'wr-fuel-dry' : days < 3 ? 'wr-fuel-low' : ''}">
+      <div class="wr-fuel-head">⛽ Tank: <strong>${wrFmt(Math.round(left))}</strong> ${ic}
+        <span class="wr-sub">von ${wrFmt(max)} · Verbrauch ${wrFmt(rate)} / Tag · reicht ${dTxt}</span></div>
+      <div class="wr-fuel-bar"><div class="wr-fuel-fill" style="width:${max > 0 ? Math.min(100, Math.round(left / max * 100)) : 0}%"></div></div>
+      ${left <= 0
+        ? `<div class="wr-nrg-msg wr-bad">⛽ Tank leer — der Reaktor liefert nichts, es zählt nur die Grundversorgung.</div>`
+        : days < 3
+          ? `<div class="wr-nrg-msg wr-sub">⚠️ Reicht nur noch ${dTxt} — nachtanken, bevor die Geschütze drosseln.</div>`
+          : ''}
+      <div class="wr-fuel-btns">
+        <button class="wr-btn wr-btn-sm" data-wr-refuel="${wo}:${Math.min(have, rate * 7)}"
+          ${(have >= 1 && room >= 1) ? '' : 'disabled'}>7 Tage tanken
+          <span class="wr-btn-sub">${wrFmt(Math.min(have, rate * 7, room))} ${ic}</span></button>
+        <button class="wr-btn wr-btn-sm" data-wr-refuel="${wo}:${voll}"
+          ${voll >= 1 ? '' : 'disabled'}>Volltanken
+          <span class="wr-btn-sub">${wrFmt(voll)} ${ic}</span></button>
+      </div>
+      ${have < 1 ? `<div class="wr-nrg-msg wr-sub">Kein ${res === 'quantum' ? 'Quantenschaum' : 'Plasmoiden-Staub'} im Lager.</div>` : ''}
+    </div>`;
+}
+
 function wrPowerHtml(m, canPay, priceTxt) {
   const dem = wrPowerDemand(m), sup = wrPowerSupply(m), fac = wrPowerFactor(m);
   const gen = wrPowerGen(m), def = wrPowerGenDef(m);
@@ -3265,6 +3403,7 @@ function wrPowerHtml(m, canPay, priceTxt) {
           <div class="wr-gen-name">${_wrEsc(def.name)} <span class="wr-sub">Stufe ${glv}</span></div>
           <div class="wr-gen-out">⚡ ${wrFmt(st.output)} Ausgabe
             <span class="wr-sub">+ ${wrFmt(WR_POWER_BASE_SUPPLY + lv * WR_POWER_PER_LEVEL)} Grundversorgung des Hafens</span></div>
+          ${wrFuelHtml(m, gen, null)}
           ${up
             ? `<button class="wr-btn wr-btn-sm" id="wr-power-up" ${canPay(up) ? '' : 'disabled'}
                  >Auf Stufe ${glv + 1} ausbauen
@@ -4085,11 +4224,47 @@ function wrPowerConvertPrice(m, toType) {
   return { cc: Math.max(0, to.cc - rebate), rebate, output: to.output,
            erz: to.erz, kristall: to.kristall, plasmoid: to.plasmoid, quantum: to.quantum };
 }
+// ── ⛽ Reaktor-Treibstoff (26s, JP 2026-07-30) ────────────────────────────────
+// ⚠️ CLIENT-SYNC-PFLICHT: Spiegel von _space_gen_fuel_rate / _space_gen_fuel_left /
+// _space_gen_online. Gerechnet wird server-autoritativ, hier nur angezeigt —
+// aber die Anzeige muss dieselbe Zahl nennen, sonst wirkt ein leerer Tank wie ein Bug.
+//
+// Warum überhaupt: 🟣 hatte ausser Forschung keinen Verbrauch (JP: „nach wenigen Tagen
+// > 598 Plasmoid … was mache ich damit?"). Der Kristall-Reaktor bleibt bewusst
+// wartungsfrei — die kostenlose Einstiegsstufe darf niemanden blockieren.
+const WR_GEN_FUEL = { plasmoid: [0, 8, 13, 20], quanten: [0, 10, 16, 25] };
+const WR_GEN_FUEL_DAYS = 30;                      // Tankgrösse in Tagesrationen
+function wrGenFuelRes(type)  { return type === 'plasmoid' ? 'plasmoid' : type === 'quanten' ? 'quantum' : null; }
+function wrGenFuelRate(type, level) {
+  const row = WR_GEN_FUEL[type];
+  return row ? row[Math.max(1, Math.min(WR_POWER_MAX, level || 1))] : 0;
+}
+function wrGenFuelMax(type, level) { return wrGenFuelRate(type, level) * WR_GEN_FUEL_DAYS; }
+// Restbestand JETZT. Ohne `since` wird nichts abgezogen (Bestandsschutz) — genau wie in SQL.
+function wrGenFuelLeft(pw) {
+  if (!pw || typeof pw !== 'object') return 0;
+  const rate = wrGenFuelRate(pw.type, parseInt(pw.level, 10) || 1);
+  if (rate <= 0) return 0;
+  const fuel = Math.max(0, parseFloat(pw.fuel) || 0);
+  const since = pw.since ? Date.parse(pw.since) : NaN;
+  if (!isFinite(since)) return fuel;
+  return Math.max(0, fuel - (Date.now() - since) / 86400000 * rate);
+}
+function wrGenOnline(pw) {
+  if (!pw || typeof pw !== 'object') return false;
+  return wrGenFuelRate(pw.type, parseInt(pw.level, 10) || 1) <= 0 || wrGenFuelLeft(pw) > 0;
+}
+function wrGenFuelDaysLeft(pw) {
+  const rate = wrGenFuelRate(pw?.type, parseInt(pw?.level, 10) || 1);
+  return rate > 0 ? wrGenFuelLeft(pw) / rate : Infinity;
+}
+
 function wrPowerSupply(m) {
   const lv = wrBaseLevel(m);
   let sup = WR_POWER_BASE_SUPPLY + lv * WR_POWER_PER_LEVEL;
   const g = wrPowerGen(m);
-  if (g) sup += wrPowerStats(g.type, wrPowerGenLevel(m))?.output || 0;
+  // ⛽ 26s: ein trockener Reaktor liefert nichts — es bleibt die Grundversorgung.
+  if (g && wrGenOnline(g)) sup += wrPowerStats(g.type, wrPowerGenLevel(m))?.output || 0;
   return sup;
 }
 // ⚠️ BESCHÄDIGTE GESCHÜTZE ZIEHEN KEINE ENERGIE — dieselbe dmg-Prüfung wie in
@@ -4206,7 +4381,8 @@ function wrPgenConvertPrice(p, toType) {
 function wrColonySupply(p) {
   let sup = wrColonyLevel(p) * WR_COLONY_PER_LEVEL;
   const g = wrPlanetPower(p);
-  if (g) sup += wrPgenStats(g.type, wrPlanetGenLevel(p))?.output || 0;
+  // ⛽ 26s: gleiche Regel wie am Hafen — ohne Treibstoff keine Generator-Ausgabe.
+  if (g && wrGenOnline(g)) sup += wrPgenStats(g.type, wrPlanetGenLevel(p))?.output || 0;
   return sup;
 }
 // Bedarf aller einsatzbereiten Kolonie-Geschütze — dieselbe dmg-Regel wie am Hafen.
@@ -4236,6 +4412,16 @@ const WR_STATION = { cc: 30000, erz: 500, kristall: 200, plasmoid: 60, quantum: 
 // Die Frist war gegen einen EINZELNEN Spieler bemessen, muss aber gegen den ganzen Klan
 // wirken — alle teilen dieselbe Galaxie. wt_e12 gibt weiterhin +2 Tage (3 → 5).
 const WR_FALLBACK_DAYS = 3, WR_FALLBACK_E12 = 5;
+// 👾 Wächter-Eskalation beim Rückfall — Spiegel von sweep_space_reconquest
+// (migration_2026-07-26r). ⚠️ NUR ANZEIGE: die Zahlen rechnet ausschliesslich der Server,
+// der Client liest `enemy_strength` fertig aus space_planets. Trotzdem hier festhalten,
+// damit die Warnung im Panel „⚠️ Ungeschützt" nicht als Fliesstext verwaist —
+// bei einer SQL-Balanceänderung beide Stellen anfassen.
+// JP 2026-07-30: „die Wächter sind zwischen 50 und 120 stark, meist aber unter 80" —
+// ×1,15 war gegen eine Mutterschiff-Flotte kein Widerstand.
+const WR_FALLBACK_GROWTH = 1.6;                        // je Rückfall (vorher 1,15)
+const WR_FALLBACK_FLOOR  = { 1: 200, 2: 550, 3: 1400 }; // Mindeststärke nach dem Rückfall
+const WR_FALLBACK_CAP    = { 1: 900, 2: 2500, 3: 6000 };// Deckel (vorher 240/800/2200)
 
 function wrDefLevel(p)    { return Math.max(0, Math.min(3, parseInt(p?.def_level, 10) || 0)); }
 function wrPlanetDef(p)   { return Math.max(0, parseInt(p?.planet_defense, 10) || 0); }
@@ -4896,6 +5082,15 @@ function wrBindEvents() {
     if (tech) { await wrBuyTech(tech.dataset.wrTech); return; }
     const tm = e.target.closest('[data-wr-transmute]');
     if (tm && !tm.disabled) { await wrTransmute(tm.dataset.wrTransmute); return; }
+    // ⛽ 26s: Reaktor betanken. Format „<planetId|->:<menge>" — '-' ist der Raumhafen.
+    const rf = e.target.closest('[data-wr-refuel]');
+    if (rf && !rf.disabled) {
+      const [wo, amt] = rf.dataset.wrRefuel.split(':');
+      await wrRefuel(wo === '-' ? null : wo, parseInt(amt, 10) || 0);
+      return;
+    }
+    const inj = e.target.closest('[data-wr-inject]');
+    if (inj && !inj.disabled) { await wrInjectLoad(parseInt(inj.dataset.wrInject, 10) || 0); return; }
     if (e.target.closest('#wr-wave-help'))    { await wrRequestHelp(); return; }
     if (e.target.closest('#wr-wave-resolve')) { await wrResolveWave(); return; }
     const help = e.target.closest('[data-wr-help]');
@@ -5310,6 +5505,13 @@ async function wrDefense(action, slot, type) {
       wrChat(`[[s:${g.art || 'gen_kristall'}]] ${_wrEsc(name)} hat den ${_wrEsc(g.name || 'Energie-Generator')} `
            + `${verb} — Versorgung jetzt ⚡ ${wrFmt(nrg.supply)} bei ${wrFmt(nrg.demand)} Bedarf`
            + `${pct < 100 ? ` (Geschütze bei ${pct} %)` : ''}.`);
+      // ⛽ 26s: ein frisch gebauter Reaktor kommt mit LEEREM Tank (die Bau-RPC schreibt
+      // bewusst kein fuel-Feld — sie wird dafür nicht angefasst). Ohne diesen Hinweis
+      // wirkt der teure Neubau wie ein Fehlkauf: er liefert nichts.
+      if (action !== 'power_upgrade' && wrGenFuelRate(res.type, res.level || 1) > 0) {
+        wrToast(`⛽ Tank ist leer — ${g.name || 'der Reaktor'} liefert erst nach dem Betanken Energie `
+              + `(${wrFmt(wrGenFuelRate(res.type, res.level || 1))} ${res.type === 'quanten' ? '🌀' : '🟣'} pro Tag).`, 'error');
+      }
     } else if (action === 'turret_convert') {
       // 26k: eigener Zweig — „aufgerüstet" wäre hier irreführend, es ist ein Typwechsel.
       const t = SPACE_TURRET_BY_KEY[res.type] || {};
@@ -5368,7 +5570,7 @@ async function wrBuildMutterschiff() {
     _wrCart = null;
     wrToast(`🛸 Mutterschiff auf Kiel gelegt — fertig in ${wrDur(res.minutes)}`, 'success');
     wrChat(`[[s:mutterschiff]] ${_wrEsc(_wrMember?.name || 'Jemand')} lässt ein `
-         + `<strong>Mutterschiff</strong> bauen: ${WR_MUTTER_PARTS.map(p =>
+         + `Mutterschiff bauen: ${WR_MUTTER_PARTS.map(p =>
              `${p.count}× ${SPACE_SHIP_BY_KEY[p.ship]?.name || p.ship}`).join(', ')} `
          + `sind ausgeflogen und gehen darin auf — ${wrFmt(res.cc)} CC obendrauf.`);
     wrRender();
@@ -5416,7 +5618,7 @@ async function wrPlanetBuild(planetId, action, slot, type) {
            + `ausgebaut (${wrFmt(res.cc)} CC) — mehr Ertrag pro Tag.`);
     } else if (action === 'station_build') {
       wrToast(`📡 Quadranten-Station bei ${pl} errichtet`, 'success');
-      wrChat(`📡 ${_wrEsc(name)} hat bei ${_wrEsc(pl)} eine <strong>Quadranten-Station</strong> errichtet — `
+      wrChat(`📡 ${_wrEsc(name)} hat bei ${_wrEsc(pl)} eine Quadranten-Station errichtet — `
            + `alle befreiten Planeten in ${_wrEsc(res.quadrant || '')} sind jetzt vor Rückeroberung geschützt.`);
     } else {
       // 26l: Kolonie-Geschütze sind jetzt einzelne Waffen auf Bauplätzen, nicht mehr
@@ -5918,6 +6120,12 @@ function wrReport(r) {
       ? `<div class="wr-rep-head wr-good">⚔️ Sieg über die Wächter von ${_wrEsc(r.planet)}!</div>`
       : `<div class="wr-rep-head wr-bad">⚔️ Die Wächter von ${_wrEsc(r.planet)} haben standgehalten.</div>`);
     lines.push(`<div>Deine Kampfkraft <strong>${wrFmt(r.power)}</strong> gegen <strong>${wrFmt(r.enemy)}</strong></div>`);
+    // ⚗️ 26s: verbrauchte Injektion ausweisen — sonst wundert man sich über den
+    // verschwundenen Vorrat. `inject` steht nur im Bericht eines echten Gefechts.
+    if ((r.inject || 0) > 0) {
+      lines.push(`<div class="wr-good">⚗️ Plasmoid-Injektion: ${wrFmt(r.inject)} 🟣 verbrannt `
+                + `(+${wrFmt(r.injectPct || 0)} % Kampfkraft in diesem Gefecht)</div>`);
+    }
   } else if (r.intent === 'scout') {
     lines.push(`<div class="wr-rep-head wr-good">🛰️ Quadrant ${_wrEsc(r.quadrant)} aufgeklärt!</div>`);
     lines.push('<div>Der ganze Kaffee-Clan sieht diesen Quadranten jetzt.</div>');
@@ -6194,6 +6402,10 @@ function wrErrText(err) {
     bad_power:             'Unbekannter Generator-Typ.',
     power_empty:           'Du hast noch kein Kraftwerk — erst einen Generator bauen.',
     power_exists:          'Es steht schon ein Generator. Baue ihn aus oder rüste ihn um.',
+    // ⛽🟣 Plasmoid-Kreislauf (26s)
+    no_fuel_needed:        'Dieser Reaktortyp ist wartungsfrei — er braucht keinen Treibstoff.',
+    tank_full:             'Der Tank ist voll.',
+    inject_full:           'Mehr als 100 🟣 lassen sich nicht injizieren (+40 % ist der Deckel).',
     power_max:             'Dieser Generator ist bereits auf der höchsten Stufe.',
     power_locked:          'Diesen Generator musst du zuerst freischalten — er braucht den '
                          + 'passenden Rohstoff-Abbau (Plasmoid-Kollektor bzw. Quantenschaum-Extraktor).',

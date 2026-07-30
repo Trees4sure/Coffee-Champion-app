@@ -105,6 +105,8 @@ const ACHIEVEMENTS = [
   { id: 'space_carrier',   icon: '🛩️', name: 'Trägerverband',      desc: 'Ein Trägerschiff in der Werft fertiggestellt',         condition: null, coinReward: 350 },
   // ⚡ Energie-System (26p) — das Kraftwerk, das einen Geschütz-Vollausbau trägt
   { id: 'space_power',     icon: '⚡', name: 'Netzbetreiber',       desc: 'Einen Quantenschaum-Reaktor am Raumhafen gebaut',      condition: null, coinReward: 400 },
+  // ⚗️ Plasmoid-Kreislauf (26s) — 🟣 als Munition statt als Lagerhalde
+  { id: 'space_inject',    icon: '⚗️', name: 'Munitionsmeister',    desc: 'Mit voller Plasmoid-Injektion (100 🟣) gekämpft',      condition: null, coinReward: 400 },
 ];
 
 // 🚀 Vergabe nach einer eingelösten Weltraum-Rückkehr. Nach dem Muster von _cafeGrantAch:
@@ -163,6 +165,10 @@ async function checkSpaceAchievements(member, res) {
         && (res.action === 'power_build' || res.action === 'power_convert')) {
       grant.space_power = true;
     }
+    // ⚗️ 26s: volle Injektion im Gefecht. `inject` steht NUR im Bericht von
+    // claim_space_arrival und nur, wenn es wirklich zum Kampf kam — deshalb reicht der
+    // Wert allein als Bedingung (kein intent-Abgleich nötig).
+    if (!ex.space_inject && (parseFloat(res.inject) || 0) >= 100) grant.space_inject = true;
 
     const keys = Object.keys(grant);
     if (!keys.length) return;

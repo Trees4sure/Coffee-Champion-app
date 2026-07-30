@@ -2864,6 +2864,28 @@ const DB = (() => {
     } catch (e) { return { error: e.message }; }
   }
 
+  // ⛽ 26s: Reaktor betanken. planetId null = Raumhafen, sonst die eigene Kolonie.
+  // KEIN Tages-Log-Eintrag: hier fliesst kein CC, nur 🟣/🌀 aus dem eigenen Lager
+  // (die Tagesbilanz führt ausschliesslich CC — Rohstoffe stehen im HUD).
+  async function spacePowerRefuel(memberId, planetId, amount) {
+    try {
+      const { data, error } = await _sb.rpc('space_power_refuel', {
+        p_member_id: memberId, p_planet_id: planetId || null, p_amount: amount });
+      if (error) return { error: error.message };
+      return data || {};
+    } catch (e) { return { error: e.message }; }
+  }
+
+  // ⚗️ 26s: Plasmoid-Injektion laden (Munition für das nächste Gefecht).
+  async function spaceInjectLoad(memberId, amount) {
+    try {
+      const { data, error } = await _sb.rpc('space_inject_load', {
+        p_member_id: memberId, p_amount: amount });
+      if (error) return { error: error.message };
+      return data || {};
+    } catch (e) { return { error: e.message }; }
+  }
+
   async function buildSpaceCart(memberId, cart) {
     try {
       const { data, error } = await _sb.rpc('build_space_cart', {
@@ -3081,7 +3103,7 @@ const DB = (() => {
     ensureGalaxy, fetchGalaxy, saveSpace, buildSpace, buildSpaceDefense,
     buildPlanetDefense, sweepSpaceReconquest, buildMutterschiff,
     startSpaceTrip, recallSpaceTrip, claimSpaceArrival, harvestSpace, claimSpaceBuild, buildSpaceCart, setSpaceRoute,
-    refineStart, refineClaim, spaceTransmute,
+    refineStart, refineClaim, spaceTransmute, spacePowerRefuel, spaceInjectLoad,
     buySpaceTech, ensureSpaceWave, fetchSpaceWaves, fetchSpaceHelp,
     fetchSpaceTrades, createSpaceTrade, cancelSpaceTrade, buySpaceTrade,
     createSpaceRequest, fulfillSpaceRequest, createSpaceShipOffer, buySpaceShipOffer,
