@@ -15,6 +15,7 @@
   <link rel="stylesheet" href="css/world.css"><!-- NEU: Weltkarte -->
   <link rel="stylesheet" href="css/cafe.css"><!-- NEU: Café-Simulator -->
   <link rel="stylesheet" href="css/weltraum.css"><!-- NEU: Weltraum-Endgame -->
+  <link rel="stylesheet" href="css/chat.css"><!-- NEU: Chat-Presets-Schublade, MUSS nach style.css stehen -->
 </head>
 <body>
 
@@ -271,18 +272,29 @@
     </div>
 
     <!-- Nachrichten -->
+    <!-- Die Schnellsprüche liegen seit dem Sprüche-Booster in einer ausklappbaren,
+         höhenbegrenzten Schublade (#presets-drawer). Vorher standen alle Chips
+         direkt in der Input-Bar; mit allen 8 Packs waren das 30 Stück, die den
+         Nachrichtenverlauf komplett verdrängt haben. Siehe css/chat.css. -->
     <div class="view" id="view-nachrichten">
       <div class="messages-list" id="messages-list"></div>
       <div class="messages-input-bar">
-        <div class="pinnwand-presets">
-          <button class="preset-btn" data-msg="☕ Kaffee alle!">☕ Kaffee alle!</button>
-          <button class="preset-btn" data-msg="🥛 Milch leer!">🥛 Milch leer!</button>
-          <button class="preset-btn" data-msg="🍩 Kuchen im Pausenraum!">🍩 Kuchen!</button>
-          <button class="preset-btn" data-msg="💀 Brauche Nektar!">💀 Nektar!</button>
-          <button class="preset-btn" data-msg="🫘 Kann jemand Kaffee besorgen?">🫘 Nachschub!</button>
-          <button class="preset-btn" data-msg="⚡ Wer kommt mit zur Küche?">⚡ Küche!</button>
+        <button class="presets-toggle" id="btn-presets-toggle" type="button" aria-expanded="false">
+          <span class="presets-toggle-label">💬 Schnell-Sprüche</span>
+          <span class="presets-count" id="presets-count">6</span>
+          <span class="presets-caret" id="presets-caret">▾</span>
+        </button>
+        <div class="presets-drawer hidden" id="presets-drawer">
+          <div class="pinnwand-presets">
+            <button class="preset-btn" data-msg="☕ Kaffee alle!">☕ Kaffee alle!</button>
+            <button class="preset-btn" data-msg="🥛 Milch leer!">🥛 Milch leer!</button>
+            <button class="preset-btn" data-msg="🍩 Kuchen im Pausenraum!">🍩 Kuchen!</button>
+            <button class="preset-btn" data-msg="💀 Brauche Nektar!">💀 Nektar!</button>
+            <button class="preset-btn" data-msg="🫘 Kann jemand Kaffee besorgen?">🫘 Nachschub!</button>
+            <button class="preset-btn" data-msg="⚡ Wer kommt mit zur Küche?">⚡ Küche!</button>
+          </div>
+          <div class="pinnwand-presets" id="pinnwand-packs"></div>
         </div>
-        <div class="pinnwand-presets" id="pinnwand-packs"></div>
         <div class="msg-input-row">
           <input type="text" id="msg-input" placeholder="Nachricht schreiben…" maxlength="200" autocomplete="off">
           <button class="btn-add" id="btn-msg-send">➤</button>
@@ -353,6 +365,7 @@
 <script src="js/imperium.js"></script><!-- NEU: vor app.js! -->
 <script src="js/minigame.js"></script><!-- NEU: Kaffee-Jagd Minigame, nach imperium.js! -->
 <script src="js/app.js"></script>
+<script src="js/chatpresets.js"></script><!-- NEU: Chat-Presets-Schublade, MUSS nach app.js stehen -->
 <script src="js/quiz.js"></script><!-- NEU: Kaffee-Quiz (CIQ), nach app.js -->
 <script src="js/survey.js"></script><!-- NEU: Feedback-Umfrage, nach app.js -->
 <script src="js/loans.js"></script><!-- NEU: Kaffee-Kredit (P2P), nach app.js -->
