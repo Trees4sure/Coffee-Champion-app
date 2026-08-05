@@ -452,6 +452,28 @@ function wrxLeader(fn) {
 // ═══ 6. 👤 Weltraum-Block im Profil ═══════════════════════════════════════
 // Wird wie renderVermoegen/renderMobilProfil dynamisch in den Untertab
 // „📊 Tagesstatistik" gehängt — kein index.html-Edit.
+// 💥 Flottenverluste bewerten: Stückzahlen je Typ × Listenpreis, plus die drei
+// schwersten Posten im Klartext. Liefert { cc, top } — beides rein für die Anzeige.
+function wrxVerlustWert(st) {
+  try {
+    const lost = (st && st.lostByType) || {};
+    const defs = (typeof SPACE_SHIPS !== 'undefined') ? SPACE_SHIPS : [];
+    let cc = 0;
+    const posten = [];
+    for (const [k, v] of Object.entries(lost)) {
+      const n = parseInt(v, 10) || 0;
+      if (n <= 0) continue;
+      const d = defs.find(s => s.key === k);
+      const wert = n * (d?.cc || 0);
+      cc += wert;
+      posten.push({ name: d?.name || k, n, wert });
+    }
+    posten.sort((a, b) => b.wert - a.wert || b.n - a.n);
+    const top = posten.slice(0, 3).map(p => `${p.n}× ${p.name}`).join(' · ');
+    return { cc: Math.round(cc), top };
+  } catch (e) { return { cc: 0, top: '' }; }
+}
+
 (function patchProfil() {
   const orig = window.renderProfile;
   if (typeof orig !== 'function') { console.warn('[wr-extras] renderProfile nicht gefunden.'); return; }
@@ -472,9 +494,32 @@ function wrxLeader(fn) {
         sec.className = 'progress-section';
         host.appendChild(sec);
       }
-      const zeile = (l, v) => `<div class="vermoegen-row">
+      const zeile = (l, v, neg) => `<div class="vermoegen-row">
           <span class="vermoegen-label">${l}</span>
-          <span class="vermoegen-amount">${v}</span></div>`;
+          <span class="vermoegen-amount"${neg ? ' style="color:#e0795a"' : ''}>${v}</span></div>`;
+
+      // 💥 Flottenverluste als MINUS (JP 2026-08-06). Zusätzlich zum Stückzähler der
+      // Gegenwert in CC — sonst sagt „51 Schiffe verloren" nichts darüber, ob das
+      // 51 Jäger oder 51 Schlachtschiffe waren.
+      // ⚠️ Bewertet mit dem LISTENPREIS aus SPACE_SHIPS (ohne Werft-Rabatt und ohne
+      // Rohstoffanteil). Das ist eine Schätzung des Anschaffungswerts, keine
+      // Buchung — die Verluste tauchen deshalb bewusst NICHT im Tages-Log oder im
+      // Vermögen auf: dort stünde sonst eine Ausgabe, die nie gebucht wurde.
+      const verlust = wrxVerlustWert(st);
+      const verlustZeile = st.shipsLost
+        ? zeile('💥 Schiffe verloren',
+            `−${_f(st.shipsLost)}${verlust.cc ? ` <span style="font-size:.72rem">(≈ −${_f(verlust.cc)} CC)</span>` : ''}`,
+            true)
+          + (verlust.top ? `<div class="vermoegen-row"><span class="vermoegen-label"
+               style="color:var(--muted);font-size:.72rem;padding-left:14px">${verlust.top}</span>
+               <span class="vermoegen-amount"></span></div>` : '')
+        : '';
+      // Negative Zeile im Stil der Vermögens-Box (dort färbt app.js Minusbeträge
+      // ebenfalls mit #e0795a ein).
+      const minus = (l, v, sub) => `<div class="vermoegen-row">
+          <span class="vermoegen-label">${l}${sub ? `<span style="color:var(--muted);font-size:.72rem"> ${sub}</span>` : ''}</span>
+          <span class="vermoegen-amount" style="color:#e0795a">−${v}</span></div>`;
+      const verl = wrxVerlustWert(st);
 
       // Offene Auftragskarten mit Fortschritt — der häufigste Grund, ins Profil zu schauen.
       let auf = '';
@@ -503,7 +548,7 @@ function wrxLeader(fn) {
           ${zeile('💫 Kampfkraft', _f(live.power))}
           ${zeile('🔬 Forschung', `${live.tech}${live.techMax ? '/' + live.techMax : ''}`)}
           ${zeile('💀 Wächterstärke besiegt', _f(st.foesDefeated))}
-          ${zeile('💥 Schiffe verloren', _f(st.shipsLost))}
+          ${verlustZeile}
           ${zeile('🪙 CC aus dem All', _f(st.ccFromSpace))}
         </div>
         ${auf}
