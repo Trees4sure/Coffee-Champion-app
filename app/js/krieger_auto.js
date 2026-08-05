@@ -289,6 +289,101 @@ function kriegerAutoFindTarget(dd, seed) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// 3b) Offene Kämpfe auf bereits erkundeten Feldern
+// ═══════════════════════════════════════════════════════════════════════════
+// JP 2026-08-05: „bereits aufgedeckte Felder werden komplett ausgelassen".
+// Genau die sind aber am wertvollsten — ein Kampf auf einem schon erkundeten Feld
+// kostet KEINEN Tagesschritt (kriegerWalkBack ist gratis). Hier leben alte Gegner:
+// früher gemiedene, verlorene und solche, die man manuell nie abgeräumt hat.
+//
+// Reihenfolge im Lauf: erst alle erreichbaren Altlasten wegräumen, dann neu erkunden.
+
+let _kaPlanCache = new Map();
+
+// Entscheidet, OB und WOMIT gegen ein Tier gekämpft wird. null = zu stark.
+// Gecacht, weil die Suche nach offenen Kämpfen dieselbe Frage für dasselbe Tier
+// mehrfach stellt; der Schlüssel enthält alles, was sich im Lauf ändern kann.
+function _kaPlanFight(dd, tier) {
+  if (!tier || tier === 'boss') return null;
+  const armorKey = dd?.equipped?.armor || '';
+  const ck = `${tier}|${_kaCurHp(dd)}|${armorKey}|${_kaArmorDur(dd, armorKey)}`;
+  if (_kaPlanCache.has(ck)) return _kaPlanCache.get(ck);
+
+  let plan = null;
+  const plain = kriegerAutoBestLoadout(dd, tier, dd?.equipped, false);
+  if (plain && plain.est.pct >= KRIEGER_AUTO_MIN_WINPCT) {
+    plan = { best: plain, potionKey: null };
+  } else if (_kaFightSupportsPotion()) {
+    // 🧊 Cold Brew nur, wenn der Kampf ohne ihn NICHT reicht und mit ihm schon —
+    // nie vorsorglich, und nie unter die Reserve von KRIEGER_AUTO_POTION_KEEP.
+    const stock = (typeof kriegerPotionCount === 'function')
+      ? kriegerPotionCount(dd, KRIEGER_AUTO_COLDBREW_KEY) : 0;
+    if (stock > KRIEGER_AUTO_POTION_KEEP) {
+      const withCb = kriegerAutoBestLoadout(dd, tier, dd?.equipped, true);
+      if (withCb && withCb.est.pct >= KRIEGER_AUTO_MIN_WINPCT) {
+        plan = { best: withCb, potionKey: KRIEGER_AUTO_COLDBREW_KEY };
+      }
+    }
+  }
+  _kaPlanCache.set(ck, plan);
+  return plan;
+}
+
+// Nächstes erreichbares, bereits erkundetes Feld mit einem offenen Gegner, der
+// aktuell zu schaffen ist. `skip` enthält Felder, die in diesem Lauf schon verloren
+// wurden — ohne diese Sperre liefe der Krieger endlos zwischen Niederlage und
+// Wiederholung hin und her.
+function kriegerAutoFindPendingFight(dd, skip) {
+  const enc = dd?.encounters || {};
+  if (!Object.keys(enc).length) return null;
+
+  const start = (typeof kriegerPos === 'function') ? kriegerPos(dd) : { x: 0, y: 0 };
+  const explored = dd?.explored || {};
+  const bossX = (typeof KRIEGER_BOSS_POS !== 'undefined') ? KRIEGER_BOSS_POS.x : -1;
+  const bossY = (typeof KRIEGER_BOSS_POS !== 'undefined') ? KRIEGER_BOSS_POS.y : -1;
+  const N = (typeof KRIEGER_WORLD !== 'undefined') ? KRIEGER_WORLD : 150;
+  const NB = [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
+
+  const seen = new Set([`${start.x},${start.y}`]);
+  const prev = new Map();
+  const queue = [start];
+  let head = 0;
+
+  const candidate = (x, y) => {
+    const k = `${x},${y}`;
+    if (skip && skip.has(k)) return null;
+    if (x === bossX && y === bossY) return null;   // R6 — Drache bleibt manuell
+    const tier = enc[k];
+    if (!tier || tier === 'boss') return null;
+    return _kaPlanFight(dd, tier) ? { key: k, tier } : null;
+  };
+
+  while (head < queue.length) {
+    const cur = queue[head++];
+    const hit = candidate(cur.x, cur.y);
+    if (hit) {
+      const path = [];
+      let node = cur;
+      while (node && !(node.x === start.x && node.y === start.y)) {
+        path.unshift(node);
+        node = prev.get(`${node.x},${node.y}`);
+      }
+      return { path, target: { x: cur.x, y: cur.y }, key: hit.key, tier: hit.tier };
+    }
+    for (const [dx, dy] of NB) {
+      const nx = cur.x + dx, ny = cur.y + dy;
+      if (nx < 0 || ny < 0 || nx >= N || ny >= N) continue;
+      const k = `${nx},${ny}`;
+      if (seen.has(k) || !explored[k]) continue;
+      seen.add(k);
+      prev.set(k, cur);
+      queue.push({ x: nx, y: ny });
+    }
+  }
+  return null;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // 4) Der Lauf
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -335,7 +430,7 @@ async function kriegerAutoRun(member, state, seed, COLS, ROWS, MARGIN) {
 
   const rep = {
     cost, budget, steps: 0, walked: 0,
-    fights: 0, wins: 0, losses: 0, skipped: 0,
+    fights: 0, wins: 0, losses: 0, skipped: 0, revisits: 0,
     byTier: {}, skippedByTier: {},
     ccFight: 0, ccFind: 0, refund: 0, ep: 0,
     levelUps: [], vouchers: 0, potions: 0, coldbrews: 0,
@@ -367,6 +462,7 @@ async function kriegerAutoRun(member, state, seed, COLS, ROWS, MARGIN) {
 
   // ── Startzustand sichern ─────────────────────────────────────────────────
   const loadout0 = { ...(state.dd?.equipped || {}) };   // R8
+  _kaPlanCache = new Map();
   rep.hpStart = _kaCurHp(state.dd);
   rep.hpMax   = _kaMaxHp(state.dd);
   _kriegerAutoRunning = true;
@@ -374,16 +470,11 @@ async function kriegerAutoRun(member, state, seed, COLS, ROWS, MARGIN) {
 
   try {
     let actions = 0;
-    while (rep.steps < budget && actions < KRIEGER_AUTO_MAX_ACTIONS) {
-      actions++;
-      if (_kriegerAutoStop) { rep.endReason = 'stopped'; break; }
+    const triedKeys = new Set();   // in diesem Lauf verlorene Felder — kein zweiter Versuch
 
-      // (a) Ziel suchen
-      const route = kriegerAutoFindTarget(state.dd, seed);
-      if (!route) { rep.endReason = 'blocked'; break; }
-
-      // (b) kostenlos über erkundete Felder dorthin laufen
-      for (const tile of route.path) {
+    // Freies Laufen über bereits erkundete Felder (kostet keinen Tagesschritt).
+    const walkPath = async (path) => {
+      for (const tile of path || []) {
         if (typeof kriegerWalkBack !== 'function') break;
         state.dd = kriegerWalkBack(tile.x, tile.y, state.dd);
         rep.walked++;
@@ -391,8 +482,102 @@ async function kriegerAutoRun(member, state, seed, COLS, ROWS, MARGIN) {
         _kaRepaint(state, seed);
         await _kaSleep(KRIEGER_AUTO_WALK_DELAY);
       }
+    };
 
-      // (c) Zielfeld betreten — kostet einen Tagesschritt
+    // Führt einen geplanten Kampf aus. Rückgabe: 'won' | 'lost' | 'error' | 'noarmor'.
+    const doFight = async (tier, key, plan) => {
+      // Loadout setzen und dd speichern.
+      // ⚠️ PFLICHT: dungeon_fight liefert new_dungeon_data zurück und überschreibt damit
+      // den lokalen Stand. Ohne dieses Speichern gingen alle seit dem letzten Kampf
+      // erkundeten Felder verloren.
+      state.dd = { ...state.dd, equipped: { ...state.dd.equipped, ...plan.best.equipped } };
+      try { await DB.saveDungeonData(member.id, state.dd); } catch (e) { return 'error'; }
+
+      let result;
+      try {
+        result = plan.potionKey
+          ? await DB.dungeonFight(member.id, tier, plan.potionKey)
+          : await DB.dungeonFight(member.id, tier);
+      } catch (e) { return 'error'; }
+      if (!result || result.error) return 'error';
+
+      if (plan.potionKey) rep.coldbrews++;
+      rep.fights++;
+      rep.byTier[tier] = (rep.byTier[tier] || 0) + 1;
+      rep.ep += result.ep_awarded || 0;
+      rep.loadouts[tier] = plan.best.equipped;
+
+      state.dd = result.new_dungeon_data || { ...state.dd, level: result.new_level };
+      // R3: Der +5-Schritte-Bonus pro Sieg wird im Auto-Lauf NICHT angewendet.
+
+      if (result.cc_awarded > 0) {
+        rep.ccFight += result.cc_awarded;
+        state.memberCoins += result.cc_awarded;
+        if (typeof currentUserData !== 'undefined') currentUserData = { ...(currentUserData || {}), coins: state.memberCoins };
+        if (typeof _updateHeaderCoins === 'function') _updateHeaderCoins({ coins: state.memberCoins });
+      }
+      if (result.leveled_up) rep.levelUps.push(result.new_level);
+
+      let status;
+      if (result.won) {
+        rep.wins++;
+        status = 'won';
+        // Gewonnenes Encounter-Feld entfernen (sonst unbegrenzt farmbar) —
+        // identisch zur Logik in _runKriegerFight.
+        if (key && state.dd.encounters?.[key]) {
+          const { [key]: _drop, ...rest } = state.dd.encounters;
+          state.dd = { ...state.dd, encounters: rest };
+        }
+      } else {
+        rep.losses++;
+        status = 'lost';
+        // R11: Niederlage OHNE Rüstung verbrennt die Tagesschritte → Lauf endet.
+        const armorKey = state.dd.equipped?.armor;
+        if (!(armorKey && state.dd.owned?.[armorKey])) {
+          state.dd = {
+            ...state.dd,
+            steps_today: (typeof kriegerStepsAllowed === 'function') ? kriegerStepsAllowed(state.dd.level || 1, state.dd) : 999,
+            steps_date: (typeof _kriegerTodayKey === 'function') ? _kriegerTodayKey() : new Date().toLocaleDateString('de-DE'),
+          };
+          status = 'noarmor';
+        }
+      }
+
+      _kaRepaint(state, seed);
+      _kriegerAutoUpdateProgress(rep, budget);
+      return status;
+    };
+
+    while (actions < KRIEGER_AUTO_MAX_ACTIONS) {
+      actions++;
+      if (_kriegerAutoStop) { rep.endReason = 'stopped'; break; }
+
+      // ── PHASE 1: offene Gegner auf bereits erkundeten Feldern ──────────────
+      // Kostet keinen Tagesschritt, deshalb hat sie Vorrang. Genau hier liegen die
+      // stumpfen Altlasten, die manuell niemand abarbeiten will.
+      const pend = kriegerAutoFindPendingFight(state.dd, triedKeys);
+      if (pend) {
+        await walkPath(pend.path);
+        const plan = _kaPlanFight(state.dd, pend.tier);
+        if (!plan) { triedKeys.add(pend.key); continue; }   // HP inzwischen zu niedrig
+        rep.revisits++;
+        const st = await doFight(pend.tier, pend.key, plan);
+        if (st === 'error')   { rep.endReason = 'error';   break; }
+        if (st === 'noarmor') { rep.endReason = 'noarmor'; break; }
+        if (st === 'lost')    triedKeys.add(pend.key);
+        await _kaSleep(KRIEGER_AUTO_STEP_DELAY);
+        continue;
+      }
+
+      // ── PHASE 2: neues Feld erkunden ──────────────────────────────────────
+      if (rep.steps >= budget) { rep.endReason = 'budget'; break; }
+
+      const route = kriegerAutoFindTarget(state.dd, seed);
+      if (!route) { rep.endReason = 'blocked'; break; }
+
+      await walkPath(route.path);
+
+      // Zielfeld betreten — kostet einen Tagesschritt
       const tx = route.target.x, ty = route.target.y, key = `${tx},${ty}`;
       const res = kriegerExploreTile(tx, ty, state.dd, seed);
       let dd2 = res.newDungeonData;
@@ -409,96 +594,18 @@ async function kriegerAutoRun(member, state, seed, COLS, ROWS, MARGIN) {
       _kaRepaint(state, seed);
       _kriegerAutoUpdateProgress(rep, budget);
 
-      // (d) Kampfentscheidung (R7)
+      // Frisch entdeckter Gegner (R7)
       if (encounter && encounter.tier !== 'boss') {
-        const tier = encounter.tier;
-        // Kein Cache: die HP sinken mit jedem Kampf, also muss die Chance jedes Mal
-        // neu gerechnet werden (~4.000 Kombinationen, wenige Millisekunden).
-        let best = kriegerAutoBestLoadout(state.dd, tier, state.dd.equipped, false);
-        let potionKey = null;
-
-        // 🧊 Cold Brew nur, wenn der Kampf ohne ihn NICHT reicht und mit ihm schon —
-        // nie vorsorglich, und nie unter die Reserve von KRIEGER_AUTO_POTION_KEEP.
-        if ((!best || best.est.pct < KRIEGER_AUTO_MIN_WINPCT) && _kaFightSupportsPotion()) {
-          const stock = (typeof kriegerPotionCount === 'function')
-            ? kriegerPotionCount(state.dd, KRIEGER_AUTO_COLDBREW_KEY) : 0;
-          if (stock > KRIEGER_AUTO_POTION_KEEP) {
-            const withCb = kriegerAutoBestLoadout(state.dd, tier, state.dd.equipped, true);
-            if (withCb && withCb.est.pct >= KRIEGER_AUTO_MIN_WINPCT) {
-              best = withCb;
-              potionKey = KRIEGER_AUTO_COLDBREW_KEY;
-            }
-          }
-        }
-
-        if (!best || best.est.pct < KRIEGER_AUTO_MIN_WINPCT) {
+        const plan = _kaPlanFight(state.dd, encounter.tier);
+        if (!plan) {
           rep.skipped++;
-          rep.skippedByTier[tier] = (rep.skippedByTier[tier] || 0) + 1;
-          await _kaSleep(KRIEGER_AUTO_STEP_DELAY);
-          continue; // Encounter bleibt stehen — später manuell angreifbar
-        }
-
-        // Loadout setzen (falls nötig) und dd speichern.
-        // ⚠️ PFLICHT: dungeon_fight liefert new_dungeon_data zurück und überschreibt
-        // damit den lokalen Stand. Ohne dieses Speichern gingen alle seit dem letzten
-        // Kampf erkundeten Felder verloren.
-        state.dd = { ...state.dd, equipped: { ...state.dd.equipped, ...best.equipped } };
-        try { await DB.saveDungeonData(member.id, state.dd); }
-        catch (e) { rep.endReason = 'error'; break; }
-
-        let result;
-        try {
-          result = potionKey
-            ? await DB.dungeonFight(member.id, tier, potionKey)
-            : await DB.dungeonFight(member.id, tier);
-        }
-        catch (e) { rep.endReason = 'error'; break; }
-        if (!result || result.error) { rep.endReason = 'error'; break; }
-
-        if (potionKey) rep.coldbrews++;
-        rep.fights++;
-        rep.byTier[tier] = (rep.byTier[tier] || 0) + 1;
-        rep.ep += result.ep_awarded || 0;
-        const enemyDef = (typeof kriegerEnemyDef === 'function') ? kriegerEnemyDef(tier) : null;
-        rep.loadouts[tier] = best.equipped;
-
-        state.dd = result.new_dungeon_data || { ...state.dd, level: result.new_level };
-        // R3: Der +5-Schritte-Bonus pro Sieg wird im Auto-Lauf NICHT angewendet.
-        // (Manuelles Spiel bleibt unverändert — siehe _runKriegerFight in imperium.js.)
-
-        if (result.cc_awarded > 0) {
-          rep.ccFight += result.cc_awarded;
-          state.memberCoins += result.cc_awarded;
-          if (typeof currentUserData !== 'undefined') currentUserData = { ...(currentUserData || {}), coins: state.memberCoins };
-          if (typeof _updateHeaderCoins === 'function') _updateHeaderCoins({ coins: state.memberCoins });
-        }
-        if (result.leveled_up) rep.levelUps.push(result.new_level);
-
-        if (result.won) {
-          rep.wins++;
-          // Gewonnenes Encounter-Feld entfernen (sonst unbegrenzt farmbar) —
-          // identisch zur Logik in _runKriegerFight.
-          if (state.dd.encounters?.[key]) {
-            const { [key]: _drop, ...rest } = state.dd.encounters;
-            state.dd = { ...state.dd, encounters: rest };
-          }
+          rep.skippedByTier[encounter.tier] = (rep.skippedByTier[encounter.tier] || 0) + 1;
         } else {
-          rep.losses++;
-          // R11: Niederlage OHNE Rüstung verbrennt die Tagesschritte → Lauf endet.
-          const armorKey = state.dd.equipped?.armor;
-          if (!(armorKey && state.dd.owned?.[armorKey])) {
-            rep.endReason = 'noarmor';
-            state.dd = {
-              ...state.dd,
-              steps_today: (typeof kriegerStepsAllowed === 'function') ? kriegerStepsAllowed(state.dd.level || 1, state.dd) : 999,
-              steps_date: (typeof _kriegerTodayKey === 'function') ? _kriegerTodayKey() : new Date().toLocaleDateString('de-DE'),
-            };
-            break;
-          }
+          const st = await doFight(encounter.tier, key, plan);
+          if (st === 'error')   { rep.endReason = 'error';   break; }
+          if (st === 'noarmor') { rep.endReason = 'noarmor'; break; }
+          if (st === 'lost')    triedKeys.add(key);
         }
-
-        _kaRepaint(state, seed);
-        _kriegerAutoUpdateProgress(rep, budget);
       }
 
       await _kaSleep(KRIEGER_AUTO_STEP_DELAY);
@@ -545,7 +652,8 @@ async function kriegerAutoRun(member, state, seed, COLS, ROWS, MARGIN) {
   }
 
   // R9: anteilige Erstattung, wenn der Lauf mangels erreichbarer Felder früh endete
-  if (rep.endReason === 'blocked' && rep.steps < budget * KRIEGER_AUTO_REFUND_UNDER) {
+  if (rep.endReason === 'blocked' && rep.steps < budget * KRIEGER_AUTO_REFUND_UNDER
+      && (rep.ccFight + rep.ccFind) < cost) {
     const unused = Math.max(0, budget - rep.steps);
     rep.refund = Math.floor(cost * (unused / Math.max(1, budget)));
     if (rep.refund > 0) {
@@ -662,7 +770,7 @@ function kriegerAutoMountControls(member, state, seed, COLS, ROWS, MARGIN, body)
 
 function _kriegerAutoUpdateProgress(rep, budget) {
   const el = document.getElementById('krieger-auto-progress');
-  if (el) el.textContent = `👣 ${rep.steps}/${budget} · ⚔️ ${rep.wins} Siege · 🚫 ${rep.skipped} gemieden`;
+  if (el) el.textContent = `👣 ${rep.steps}/${budget} · ⚔️ ${rep.wins} Siege · ♻️ ${rep.revisits} alte · 🚫 ${rep.skipped} gemieden`;
 }
 
 function _kriegerAutoConfirm(member, state, seed, COLS, ROWS, MARGIN) {
@@ -745,6 +853,7 @@ function _kriegerAutoShowReport(rep, state) {
           ${row('Schritte / Felder', `${rep.steps} von ${rep.budget}`)}
           ${row('Kämpfe', `🏆 ${rep.wins} · 💀 ${rep.losses} · 🚫 ${rep.skipped} gemieden`)}
           ${row('Gegner', tierLine)}
+          ${rep.revisits ? row('Alte Felder geräumt', `♻️ ${rep.revisits}`) : ''}
           ${row('Kampfgewinne', `+${rep.ccFight} 🫘`)}
           ${row('Funde', `+${rep.ccFind} 🫘${rep.vouchers ? ` · 🎁 ${rep.vouchers}` : ''}${rep.potions ? ` · 🧪 ${rep.potions}` : ''}`)}
           ${row('Gebühr', `−${rep.cost} 🫘`)}
