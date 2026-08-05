@@ -121,10 +121,22 @@ const WR_STATS_LEER = {
   quadrantsScouted: 0, coloniesFounded: 0, planetsLost: 0,
   helpSent: 0, ccFromSpace: 0, maxPower: 0,
   ambushes: 0, firstAt: null, lastAt: null,
+  // 🧾 Verluste EINZELN nach Schiffstyp (JP 2026-08-06). `shipsLost` oben bleibt
+  // als Gesamtzahl bestehen — die läuft schon länger mit und wäre sonst entwertet.
+  // Quelle ist `res.lost` aus claim_space_arrival/resolve_space_wave, dieselbe
+  // Struktur, die wrLossBreakdown in weltraum.js für die Kampfberichte auswertet.
+  lostByType: {},
 };
 function wrStatsOf(u) {
   const s = u?.map_data?.wrStats;
-  return (s && typeof s === 'object') ? Object.assign({}, WR_STATS_LEER, s) : Object.assign({}, WR_STATS_LEER);
+  const out = (s && typeof s === 'object')
+    ? Object.assign({}, WR_STATS_LEER, s)
+    : Object.assign({}, WR_STATS_LEER);
+  // ⚠️ PFLICHT-KOPIE: Object.assign ist flach. Ohne diese Zeile zeigt `lostByType`
+  // bei einem Spieler ohne eigene Werte auf DAS OBJEKT IN WR_STATS_LEER — die erste
+  // Mutation würde die Vorlage vergiften und die Verluste bei allen anderen mitzählen.
+  out.lostByType = Object.assign({}, (s && s.lostByType) || {});
+  return out;
 }
 
 // Sammelt Deltas und schreibt sie gebündelt — nicht bei jedem Klick.
@@ -162,6 +174,37 @@ function wrBump(delta, maxFields) {
   } catch (e) { /* non-critical */ }
 }
 
+// Verluste je Schiffstyp sammeln. Eigene Funktion statt eines weiteren Feldes in
+// wrBump: dort werden Zahlen addiert, hier eine Map — das sauber zu trennen ist
+// billiger, als beide Fälle in einer Schleife zu unterscheiden.
+function wrBumpLost(lost) {
+  try {
+    if (!lost || typeof lost !== 'object') return;
+    const me = (typeof currentUserData !== 'undefined' && currentUserData) || null;
+    if (!me?.id) return;
+    _wrPending = _wrPending || { add: {}, max: {}, lost: {} };
+    _wrPending.lost = _wrPending.lost || {};
+    let any = false;
+    for (const [k, v] of Object.entries(lost)) {
+      const n = parseInt(v, 10) || 0;
+      if (n <= 0) continue;
+      _wrPending.lost[k] = (_wrPending.lost[k] || 0) + n;
+      any = true;
+    }
+    if (!any) return;
+    try {
+      const cur = wrStatsOf(me);
+      for (const [k, v] of Object.entries(lost)) {
+        const n = parseInt(v, 10) || 0;
+        if (n > 0) cur.lostByType[k] = (cur.lostByType[k] || 0) + n;
+      }
+      me.map_data = Object.assign({}, me.map_data || {}, { wrStats: cur });
+    } catch (e) {}
+    if (_wrFlushTimer) clearTimeout(_wrFlushTimer);
+    _wrFlushTimer = setTimeout(() => { wrFlushStats(); }, WR_FLUSH_MS);
+  } catch (e) { /* non-critical */ }
+}
+
 async function wrFlushStats() {
   if (_wrFlushBusy || !_wrPending) return;
   const batch = _wrPending;
@@ -174,8 +217,10 @@ async function wrFlushStats() {
     let md = {};
     try { md = await DB.fetchMemberMapData(me.id); } catch (e) { md = me.map_data || {}; }
     const s = Object.assign({}, WR_STATS_LEER, (md && md.wrStats) || {});
+    s.lostByType = Object.assign({}, (md && md.wrStats && md.wrStats.lostByType) || {});
     for (const [k, v] of Object.entries(batch.add)) s[k] = Math.round(((s[k] || 0) + v) * 100) / 100;
     for (const [k, v] of Object.entries(batch.max)) s[k] = Math.max(s[k] || 0, v);
+    for (const [k, v] of Object.entries(batch.lost || {})) s.lostByType[k] = (s.lostByType[k] || 0) + v;
     if (!s.firstAt) s.firstAt = new Date().toISOString();
     s.lastAt = new Date().toISOString();
     const next = Object.assign({}, md || {}, { wrStats: s });
@@ -193,7 +238,13 @@ async function wrFlushStats() {
   } catch (e) {
     // Fehlgeschlagene Deltas zurücklegen — beim nächsten Ereignis wird es erneut versucht.
     _wrPending = _wrPending
-      ? { add: Object.assign({}, batch.add, _wrPending.add), max: Object.assign({}, batch.max, _wrPending.max) }
+      ? { add: Object.assign({}, batch.add, _wrPending.add),
+          max: Object.assign({}, batch.max, _wrPending.max),
+          lost: (() => {
+            const m = Object.assign({}, batch.lost || {});
+            for (const [k, v] of Object.entries(_wrPending.lost || {})) m[k] = (m[k] || 0) + v;
+            return m;
+          })() }
       : batch;
     console.warn('[wr-stats] Speichern fehlgeschlagen:', e.message);
   } finally { _wrFlushBusy = false; }
@@ -235,6 +286,7 @@ wrWrap('claimSpaceArrival', (r) => {
   if (r.quantum > 0)  d.lootQua = r.quantum;
   if (r.shipsLost > 0) d.shipsLost = r.shipsLost;
   wrBump(d);
+  wrBumpLost(r.lost);
 });
 
 wrWrap('harvestSpace', (r) => {
@@ -253,6 +305,7 @@ wrWrap('resolveSpaceWave', (r) => {
   if (r.won) { d.wavesWon = 1; if (r.cc > 0) { d.ccFromSpace = r.cc; } }
   else d.wavesLost = 1;
   wrBump(d, []);
+  wrBumpLost(r.lost);
   if (r.won) wrBump({ waveStrengthMax: parseFloat(r.strength) || 0 }, ['waveStrengthMax']);
 });
 
@@ -398,6 +451,29 @@ function wrAllUsers() {
   border: 1px solid #24305a; margin: 6px 0 4px; }
 .wrs-bar-fill { height: 100%; background: linear-gradient(90deg, #4d7fd4, #7ad48a); }
 .wrs-note { font-size: .7rem; color: #7f8fbb; line-height: 1.45; margin-top: 8px; }
+/* ── Detail-Auflistungen (Flotte, Geschütze, Forschung, Ausbau) ───────────── */
+.wrs-who { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 9px; }
+.wrs-whobtn { padding: 4px 10px; border-radius: 7px; border: 1px solid #24305a;
+  background: #101733; color: #8b9ac4; font-size: .72rem; font-family: inherit; cursor: pointer; }
+.wrs-whobtn.active { border-color: #d4aa37; background: #1c2440; color: #ffd15c; }
+.wrs-sub-title { font-size: .78rem; font-weight: 700; color: #dce6ff; margin: 12px 0 5px;
+  padding-bottom: 4px; border-bottom: 1px solid #1e2947; }
+.wrs-sub-title:first-child { margin-top: 0; }
+.wrs-line { display: grid; grid-template-columns: 26px 1fr auto; gap: 8px; align-items: center;
+  padding: 4px 0; border-bottom: 1px solid #161f3c; font-size: .76rem; color: #c3cfee; }
+.wrs-line:last-child { border-bottom: 0; }
+.wrs-line-ic { width: 26px; height: 26px; display: flex; align-items: center;
+  justify-content: center; font-size: 1rem; }
+.wrs-line-ic img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.wrs-line-n { color: #dce6ff; font-weight: 700; font-variant-numeric: tabular-nums;
+  white-space: nowrap; }
+.wrs-line-n .wr-sub { font-weight: 400; }
+.wrs-line-lost { color: #e08a8a; }
+.wrs-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+.wrs-chip { font-size: .68rem; padding: 2px 7px; border-radius: 999px;
+  background: rgba(255,255,255,.05); color: #a8b6dc; }
+.wrs-chartwrap { position: relative; height: 190px; margin: 8px 0 2px; }
+.wrs-empty { font-size: .74rem; color: #7f8fbb; padding: 6px 0; }
 `;
     document.head.appendChild(s);
   } catch (e) { /* ohne CSS sieht es schlicht aus, funktioniert aber */ }
@@ -577,10 +653,287 @@ function wrsClanHtml() {
     </div>`;
 }
 
+// ── 🔍 Detail-Auflistungen je Spieler ─────────────────────────────────────
+// Alles aus vorhandenen Daten: Flotte aus members.space, Geschütze aus
+// base.turrets + space_planets.turrets, Forschung aus space.tech, Ausbauten aus
+// base/yard/power und den Kolonie-Zeilen. Nichts davon wird hier berechnet —
+// nur ausgezählt und gruppiert.
+let _wrsDetail = null;   // gewählter Spieler (null = ich)
+
+function wrsDetailUser() {
+  const me = (typeof currentUserData !== 'undefined' && currentUserData) || null;
+  if (_wrsDetail) {
+    const u = wrAllUsers().find(x => x.id === _wrsDetail);
+    if (u) return u;
+  }
+  return me || wrAllUsers()[0] || null;
+}
+
+function wrsFleetRows(u) {
+  const rows = [];
+  try {
+    const ships = wrShipsOf(u);
+    const away  = (typeof wrAwayShipsAll === 'function') ? wrAwayShipsAll(u) : {};
+    const lost  = wrStatsOf(u).lostByType || {};
+    const defs  = (typeof SPACE_SHIPS !== 'undefined') ? SPACE_SHIPS : [];
+    for (const s of defs) {
+      const h = parseInt(ships[s.key], 10) || 0;
+      const a = parseInt(away[s.key], 10) || 0;
+      const l = parseInt(lost[s.key], 10) || 0;
+      if (h + a + l < 1) continue;
+      rows.push({ key: s.key, name: s.name, icon: s.icon, atk: s.atk || 0, home: h, away: a, lost: l });
+    }
+    // Verluste eines Typs, den es in SPACE_SHIPS nicht (mehr) gibt, gehen sonst
+    // still verloren — lieber unter dem Schlüssel anzeigen als verschweigen.
+    for (const [k, v] of Object.entries(lost)) {
+      if (rows.some(r => r.key === k)) continue;
+      const n = parseInt(v, 10) || 0;
+      if (n > 0) rows.push({ key: k, name: k, icon: '❔', atk: 0, home: 0, away: 0, lost: n });
+    }
+  } catch (e) { /* leere Liste ist besser als keine Karte */ }
+  return rows;
+}
+
+function wrsTurrets(u) {
+  const hafen = {}, kolo = {};
+  const add = (m, type, lv, atk) => {
+    const e = m[type] || (m[type] = { n: 0, atk: 0, lv: {} });
+    e.n++; e.atk += atk; e.lv[lv] = (e.lv[lv] || 0) + 1;
+  };
+  const lvOf = (s) => Math.max(1, Math.min(3, parseInt(s?.level, 10) || 1));
+  try {
+    for (const s of Object.values(u?.space?.base?.turrets || {})) {
+      if (!s || typeof s !== 'object' || !s.type) continue;
+      const lv = lvOf(s);
+      add(hafen, s.type, lv, (typeof wrTurretStats === 'function' ? (wrTurretStats(s.type, lv)?.atk || 0) : 0));
+    }
+    for (const p of wrPlanets()) {
+      if (!p || p.colonized_by !== u.id) continue;
+      for (const s of Object.values(p.turrets || {})) {
+        if (!s || typeof s !== 'object' || !s.type) continue;
+        const lv = lvOf(s);
+        add(kolo, s.type, lv, (typeof wrPturretStats === 'function' ? (wrPturretStats(s.type, lv)?.atk || 0) : 0));
+      }
+    }
+  } catch (e) {}
+  return { hafen, kolo };
+}
+
+function wrsTechRows(u) {
+  const out = [];
+  try {
+    if (typeof SPACE_TECH_ASTE === 'undefined' || typeof SPACE_TECH === 'undefined') return out;
+    const own = u?.space?.tech || {};
+    for (const a of SPACE_TECH_ASTE) {
+      const list = SPACE_TECH.filter(t => t.ast === a.key);
+      const hat  = list.filter(t => own[t.key]);
+      out.push({ ast: a, total: list.length, owned: hat.length, names: hat.map(t => t.name) });
+    }
+  } catch (e) {}
+  return out;
+}
+
+function wrsAusbau(u) {
+  const sp = u?.space || {};
+  const o = {
+    port: Math.max(1, parseInt(sp.base?.level, 10) || 1),
+    yard: Math.max(1, parseInt(sp.yard?.level, 10) || 1),
+    gen: null, genLv: 0,
+    kol: { 1: 0, 2: 0, 3: 0 }, stations: 0, colGen: 0, colTurrets: 0, routes: 0,
+  };
+  try {
+    const g = sp.base?.power;
+    if (g && g.type) {
+      const def = (typeof SPACE_POWER_BY_KEY !== 'undefined') ? SPACE_POWER_BY_KEY[g.type] : null;
+      o.gen = def ? (def.icon + ' ' + def.name) : g.type;
+      o.genLv = Math.max(1, Math.min(3, parseInt(g.level, 10) || 1));
+    }
+    for (const p of wrPlanets()) {
+      if (!p || p.colonized_by !== u.id) continue;
+      const lv = (typeof wrColonyLevel === 'function') ? wrColonyLevel(p) : 1;
+      o.kol[lv] = (o.kol[lv] || 0) + 1;
+      if (p.station) o.stations++;
+      if (p.power && p.power.type) o.colGen++;
+      o.colTurrets += Object.values(p.turrets || {}).filter(s => s && s.type).length;
+    }
+    o.routes = Object.keys(sp.routes || {}).length;
+  } catch (e) {}
+  return o;
+}
+
+// Die Diagramm-Daten werden beim HTML-Bau eingesammelt und nach dem Einhängen
+// gezeichnet — ein <canvas> lässt sich erst bemalen, wenn es im DOM steht.
+let _wrsCharts = [], _wrsChartData = null;
+
+function wrsShipIcon(key, fallback) {
+  return (typeof wrShipArt === 'function') ? wrShipArt(key, 'wr-mini') : (fallback || '🚀');
+}
+
+function wrsDetailHtml() {
+  const u = wrsDetailUser();
+  if (!u) return '';
+  const me = (typeof currentUserData !== 'undefined' && currentUserData?.id) || null;
+  const users = wrsRows().map(r => r.u);
+  const who = users.map(x =>
+    `<button class="wrs-whobtn${x.id === u.id ? ' active' : ''}" data-wrs-detail="${_e(x.id)}"
+      >${_e(x.name)}${x.id === me ? ' (du)' : ''}</button>`).join('');
+
+  // ── Flotte + Verluste ──
+  const fl = wrsFleetRows(u);
+  const flHtml = fl.length ? fl.map(r => `
+    <div class="wrs-line">
+      <span class="wrs-line-ic">${wrsShipIcon(r.key, r.icon)}</span>
+      <span>${_e(r.name)}${r.atk ? ` <span class="wr-sub">⚔️ ${r.atk}</span>` : ''}</span>
+      <span class="wrs-line-n">${_f(r.home)}${r.away ? ` <span class="wr-sub">+${_f(r.away)} unterwegs</span>` : ''}${
+        r.lost ? ` <span class="wrs-line-lost">−${_f(r.lost)}</span>` : ''}</span>
+    </div>`).join('') : '<div class="wrs-empty">Noch kein Schiff gebaut.</div>';
+
+  // ── Geschütze ──
+  const tu = wrsTurrets(u);
+  const tKeys = [...new Set([...Object.keys(tu.hafen), ...Object.keys(tu.kolo)])];
+  const tDefs = (typeof SPACE_TURRETS !== 'undefined') ? SPACE_TURRETS : [];
+  tKeys.sort((a, b) => (tDefs.findIndex(x => x.key === a)) - (tDefs.findIndex(x => x.key === b)));
+  const tName = (k) => (tDefs.find(x => x.key === k) || {}).name || k;
+  const tIcon = (k) => (tDefs.find(x => x.key === k) || {}).icon || '🛡️';
+  const lvTxt = (e) => Object.keys(e.lv).sort().map(l => `${e.lv[l]}× St.${l}`).join(' · ');
+  const tuHtml = tKeys.length ? tKeys.map(k => {
+    const h = tu.hafen[k], c = tu.kolo[k];
+    return `
+      <div class="wrs-line">
+        <span class="wrs-line-ic">${tIcon(k)}</span>
+        <span>${_e(tName(k))}
+          <span class="wr-sub">${[h ? 'Hafen: ' + lvTxt(h) : '', c ? 'Kolonien: ' + lvTxt(c) : ''].filter(Boolean).join(' · ')}</span></span>
+        <span class="wrs-line-n">${_f((h?.n || 0) + (c?.n || 0))} <span class="wr-sub">🛡️ ${_f((h?.atk || 0) + (c?.atk || 0))}</span></span>
+      </div>`;
+  }).join('') : '<div class="wrs-empty">Noch kein Geschütz gebaut.</div>';
+
+  // ── Forschung ──
+  const te = wrsTechRows(u);
+  const teHtml = te.length ? te.map(t => `
+    <div class="wrs-line">
+      <span class="wrs-line-ic">${t.ast.icon}</span>
+      <span>${_e(t.ast.name)}
+        ${t.names.length ? `<span class="wrs-chips">${t.names.map(n => `<span class="wrs-chip">${_e(n)}</span>`).join('')}</span>` : '<span class="wr-sub">noch nichts erforscht</span>'}</span>
+      <span class="wrs-line-n">${t.owned}<span class="wr-sub">/${t.total}</span></span>
+    </div>`).join('') : '';
+
+  // ── Ausbauten ──
+  const a = wrsAusbau(u);
+  const kpi = (l, v) => `<div class="wrs-kpi"><span class="wrs-kpi-l">${l}</span><span class="wrs-kpi-v">${v}</span></div>`;
+  const auHtml = `<div class="wrs-grid">
+      ${kpi('🛰️ Raumhafen', 'Stufe ' + a.port)}
+      ${kpi('🏗️ Werft', 'Stufe ' + a.yard)}
+      ${kpi('⚡ Kraftwerk', a.gen ? `${_e(a.gen)}<br><span class="wr-sub">Stufe ${a.genLv}</span>` : '—')}
+      ${kpi('🪐 Kolonien', `${a.kol[1] + a.kol[2] + a.kol[3]}<br><span class="wr-sub">${a.kol[3]}× St.3 · ${a.kol[2]}× St.2 · ${a.kol[1]}× St.1</span>`)}
+      ${kpi('📡 Stationen', a.stations || '—')}
+      ${kpi('🛡️ Kolonie-Geschütze', a.colTurrets || '—')}
+      ${kpi('⚡ Kolonie-Kraftwerke', a.colGen || '—')}
+      ${kpi('🛰️ Routen', a.routes || '—')}
+    </div>`;
+
+  // Daten für die Diagramme merken (gezeichnet wird nach dem Einhängen)
+  _wrsChartData = {
+    fleet: fl.filter(r => r.home + r.away + r.lost > 0).slice(0, 14),
+    turret: tKeys.map(k => ({ name: tName(k), h: tu.hafen[k]?.n || 0, c: tu.kolo[k]?.n || 0 })),
+    tech: te,
+  };
+
+  return `
+    <div class="wr-card">
+      <div class="wr-card-title">🔍 Detailansicht
+        <span class="wr-sub">— ${_e(u.name)}</span></div>
+      ${users.length > 1 ? `<div class="wrs-who">${who}</div>` : ''}
+
+      <div class="wrs-sub-title">🚀 Flotte &amp; Verluste</div>
+      ${flHtml}
+      ${_wrsChartData.fleet.length ? '<div class="wrs-chartwrap"><canvas id="wrs-c-fleet"></canvas></div>' : ''}
+
+      <div class="wrs-sub-title">🛡️ Geschütze</div>
+      ${tuHtml}
+      ${_wrsChartData.turret.length ? '<div class="wrs-chartwrap"><canvas id="wrs-c-turret"></canvas></div>' : ''}
+
+      <div class="wrs-sub-title">🔬 Forschung</div>
+      ${teHtml || '<div class="wrs-empty">Keine Forschungsdaten.</div>'}
+      ${te.length ? '<div class="wrs-chartwrap"><canvas id="wrs-c-tech"></canvas></div>' : ''}
+
+      <div class="wrs-sub-title">🏗️ Ausbauten</div>
+      ${auHtml}
+
+      <div class="wrs-note">Die roten Zahlen in der Flotte sind <strong>Verluste nach Typ</strong> —
+        sie zählen ab Einbau der Statistik und schrumpfen nie, auch wenn du neu baust.
+        <em>Unterwegs</em> sind Schiffe, die gerade in einem Verband fliegen.</div>
+    </div>`;
+}
+
+// ── 📊 Säulendiagramme (Chart.js) ─────────────────────────────────────────
+// Chart.js liegt bereits per CDN in der index.html. ⚠️ Eigene Instanzen mit
+// eigenem Aufräumen: die Auswertungsseite hält ihre Diagramme in `charts.main`
+// und zerstört sie selbst — würden wir uns dort einhängen, zerstörte jede Seite
+// die Diagramme der anderen. Vor jedem Neuzeichnen destroy(), sonst bleiben beim
+// Tab-Wechsel Canvas-Leichen samt Event-Listenern zurück.
+const WRS_CHART_OPTS = {
+  responsive: true, maintainAspectRatio: false,
+  plugins: { legend: { labels: { color: '#c3cfee', boxWidth: 11, font: { size: 10 } } } },
+  scales: {
+    x: { ticks: { color: '#8b9ac4', font: { size: 9 }, maxRotation: 60, minRotation: 0 },
+         grid: { color: '#1a2344' } },
+    y: { beginAtZero: true, ticks: { color: '#8b9ac4', font: { size: 9 }, precision: 0 },
+         grid: { color: '#1a2344' } },
+  },
+};
+
+function wrsDestroyCharts() {
+  for (const c of _wrsCharts) { try { c.destroy(); } catch (e) {} }
+  _wrsCharts = [];
+}
+
+function wrsChart(id, labels, datasets, extra) {
+  try {
+    const cv = document.getElementById(id);
+    if (!cv || typeof Chart === 'undefined') return;
+    const opts = Object.assign({}, WRS_CHART_OPTS, extra || {});
+    _wrsCharts.push(new Chart(cv.getContext('2d'), { type: 'bar', data: { labels, datasets }, options: opts }));
+  } catch (e) { console.warn('[wr-stats] Diagramm ' + id + ':', e.message); }
+}
+
+function wrsBuildCharts() {
+  wrsDestroyCharts();
+  const d = _wrsChartData;
+  if (!d) return;
+  try {
+    if (d.fleet?.length) {
+      const ds = [
+        { label: 'Im Hafen',  data: d.fleet.map(r => r.home), backgroundColor: '#4d7fd4' },
+        { label: 'Unterwegs', data: d.fleet.map(r => r.away), backgroundColor: '#7ad48a' },
+        { label: 'Verloren',  data: d.fleet.map(r => r.lost), backgroundColor: '#e08a8a' },
+      ].filter(x => x.data.some(v => v > 0));
+      wrsChart('wrs-c-fleet', d.fleet.map(r => r.name), ds);
+    }
+    if (d.turret?.length) {
+      const ds = [
+        { label: 'Raumhafen', data: d.turret.map(r => r.h), backgroundColor: '#ffc94a' },
+        { label: 'Kolonien',  data: d.turret.map(r => r.c), backgroundColor: '#a24bd8' },
+      ].filter(x => x.data.some(v => v > 0));
+      wrsChart('wrs-c-turret', d.turret.map(r => r.name), ds);
+    }
+    if (d.tech?.length) {
+      // Gestapelt: erforscht gegen offen — so ist auf einen Blick zu sehen,
+      // welcher Ast noch Luft hat, ohne die Zahlen zu vergleichen.
+      wrsChart('wrs-c-tech', d.tech.map(t => t.ast.name), [
+        { label: 'Erforscht', data: d.tech.map(t => t.owned), backgroundColor: '#7ad48a' },
+        { label: 'Offen',     data: d.tech.map(t => t.total - t.owned), backgroundColor: '#2a3660' },
+      ], { scales: Object.assign({}, WRS_CHART_OPTS.scales, {
+        x: Object.assign({ stacked: true }, WRS_CHART_OPTS.scales.x),
+        y: Object.assign({ stacked: true }, WRS_CHART_OPTS.scales.y) }) });
+    }
+  } catch (e) { console.warn('[wr-stats] Diagramme:', e.message); }
+}
+
 function wrsPanelHtml() {
   try {
     const rows = wrsRows();
-    return wrsRanglisteHtml(rows) + wrsRegionenHtml() + wrsSteckbriefHtml() + wrsClanHtml();
+    return wrsRanglisteHtml(rows) + wrsRegionenHtml() + wrsSteckbriefHtml()
+         + wrsDetailHtml() + wrsClanHtml();
   } catch (e) {
     console.warn('[wr-stats] Panel:', e.message);
     return `<div class="wr-card"><div class="wr-card-title">📊 Statistik</div>
@@ -599,7 +952,7 @@ function wrsPanelHtml() {
   window.wrRender = function () {
     orig.apply(this, arguments);
     try {
-      if (typeof _wrTab === 'undefined' || _wrTab !== 'stats') return;
+      if (typeof _wrTab === 'undefined' || _wrTab !== 'stats') { wrsDestroyCharts(); return; }
       const wrap = document.querySelector('#imp-content .wr-wrap') ||
                    document.querySelector('.wr-wrap');
       if (!wrap) return;
@@ -608,11 +961,14 @@ function wrsPanelHtml() {
       box.innerHTML = wrsPanelHtml();
       wrap.appendChild(box);
       box.addEventListener('click', (e) => {
-        const b = e.target.closest('[data-wrs-sort]');
-        if (!b) return;
-        _wrsSort = b.dataset.wrsSort;
-        window.wrRender();
+        const s = e.target.closest('[data-wrs-sort]');
+        if (s) { _wrsSort = s.dataset.wrsSort; window.wrRender(); return; }
+        const d = e.target.closest('[data-wrs-detail]');
+        if (d) { _wrsDetail = d.dataset.wrsDetail; window.wrRender(); return; }
       });
+      // Diagramme erst NACH dem Einhängen — ein <canvas> ausserhalb des DOM
+      // hat keine Grösse, Chart.js zeichnet dann ins Leere.
+      wrsBuildCharts();
     } catch (e) { console.warn('[wr-stats] Render-Patch:', e.message); }
   };
 })();
