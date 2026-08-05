@@ -478,6 +478,18 @@ function wrAllUsers() {
 .wrs-line-ic { width: 26px; height: 26px; display: flex; align-items: center;
   justify-content: center; font-size: 1rem; }
 .wrs-line-ic img { width: 100%; height: 100%; object-fit: contain; display: block; }
+/* Emoji-Rückfall nach dem etablierten Muster: default AUS, erscheint nur, wenn
+   onerror am img feuert und die Hülle .wr-art-fail bekommt. So flackert beim
+   Neurendern kein Emoji auf (die Lehre aus dem "aufflackernden Baukran").
+   ACHTUNG: in diesem CSS-Block sind keine Backticks erlaubt — er steht in einem
+   Template-String und wuerde sonst die Datei zerreissen. */
+.wrs-line-fb { display: none; font-size: 1.05rem; }
+.wr-art-fail .wrs-line-fb { display: inline-flex; }
+.wrs-art { position: relative; display: inline-flex; align-items: center; justify-content: center;
+  width: 1.5em; height: 1.5em; vertical-align: -.35em; margin-right: 3px; }
+.wrs-art img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.wrs-art-fb { display: none; font-size: 1em; }
+.wr-art-fail .wrs-art-fb { display: inline-flex; }
 .wrs-line-n { color: #dce6ff; font-weight: 700; font-variant-numeric: tabular-nums;
   white-space: nowrap; }
 .wrs-line-n .wr-sub { font-weight: 400; }
@@ -817,6 +829,7 @@ function wrsAusbau(u) {
     if (g && g.type) {
       const def = (typeof SPACE_POWER_BY_KEY !== 'undefined') ? SPACE_POWER_BY_KEY[g.type] : null;
       o.gen = def ? (def.icon + ' ' + def.name) : g.type;
+      o.genDef = def || null;        // für das Render-Bild in der Ausbau-Kachel
       o.genLv = Math.max(1, Math.min(3, parseInt(g.level, 10) || 1));
     }
     for (const p of wrPlanets()) {
@@ -838,6 +851,35 @@ let _wrsCharts = [], _wrsChartData = null;
 
 function wrsShipIcon(key, fallback) {
   return (typeof wrShipArt === 'function') ? wrShipArt(key, 'wr-mini') : (fallback || '🚀');
+}
+
+// ── 🖼️ Echte Assets statt Emoji ────────────────────────────────────────────
+// ⚠️ Die Ordner sind NICHT einheitlich: Geschütz-Renders liegen seit JPs Umstellung
+// vom 29.07. in `assets/weltraum/` (die Forschungsbilder — die alte space/turret_*-
+// Charge sah bei allen vier gleich aus), Schiffe/Basen/Äste in `assets/space/`.
+// Deshalb wird der Ordner immer aus der Definition gelesen (wrTurretFolder bzw.
+// `folder` beim Generator) und nie fest verdrahtet.
+function wrsTurretIcon(key) {
+  const t = (typeof SPACE_TURRET_BY_KEY !== 'undefined') ? SPACE_TURRET_BY_KEY[key] : null;
+  const emoji = t?.icon || '🛡️';
+  if (t && typeof wrTurretImg === 'function') {
+    return wrTurretImg(t) + `<span class="wrs-line-fb">${emoji}</span>`;
+  }
+  return emoji;
+}
+function wrsAstIcon(a) {
+  if (!a) return '🔬';
+  if (!a.art) return a.icon || '🔬';
+  return `<img src="assets/space/${a.art}.png" alt=""
+    onerror="this.parentNode.classList.add('wr-art-fail');this.remove()"
+    ><span class="wrs-line-fb">${a.icon || '🔬'}</span>`;
+}
+// Kleines Inline-Bild für die Ausbau-Kacheln (Hafen, Werft, Kraftwerk).
+function wrsMiniArt(folder, art, emoji) {
+  if (!art) return emoji || '';
+  return `<span class="wrs-art"><img src="assets/${folder || 'space'}/${art}.png" alt=""
+    onerror="this.parentNode.classList.add('wr-art-fail');this.remove()"
+    ><span class="wrs-art-fb">${emoji || ''}</span></span>`;
 }
 
 function wrsDetailHtml() {
@@ -871,7 +913,7 @@ function wrsDetailHtml() {
     const h = tu.hafen[k], c = tu.kolo[k];
     return `
       <div class="wrs-line">
-        <span class="wrs-line-ic">${tIcon(k)}</span>
+        <span class="wrs-line-ic">${wrsTurretIcon(k)}</span>
         <span>${_e(tName(k))}
           <span class="wr-sub">${[h ? 'Hafen: ' + lvTxt(h) : '', c ? 'Kolonien: ' + lvTxt(c) : ''].filter(Boolean).join(' · ')}</span></span>
         <span class="wrs-line-n">${_f((h?.n || 0) + (c?.n || 0))} <span class="wr-sub">🛡️ ${_f((h?.atk || 0) + (c?.atk || 0))}</span></span>
@@ -882,7 +924,7 @@ function wrsDetailHtml() {
   const te = wrsTechRows(u);
   const teHtml = te.length ? te.map(t => `
     <div class="wrs-line">
-      <span class="wrs-line-ic">${t.ast.icon}</span>
+      <span class="wrs-line-ic">${wrsAstIcon(t.ast)}</span>
       <span>${_e(t.ast.name)}
         ${t.names.length ? `<span class="wrs-chips">${t.names.map(n => `<span class="wrs-chip">${_e(n)}</span>`).join('')}</span>` : '<span class="wr-sub">noch nichts erforscht</span>'}</span>
       <span class="wrs-line-n">${t.owned}<span class="wr-sub">/${t.total}</span></span>
@@ -892,9 +934,12 @@ function wrsDetailHtml() {
   const a = wrsAusbau(u);
   const kpi = (l, v) => `<div class="wrs-kpi"><span class="wrs-kpi-l">${l}</span><span class="wrs-kpi-v">${v}</span></div>`;
   const auHtml = `<div class="wrs-grid">
-      ${kpi('🛰️ Raumhafen', 'Stufe ' + a.port)}
-      ${kpi('🏗️ Werft', 'Stufe ' + a.yard)}
-      ${kpi('⚡ Kraftwerk', a.gen ? `${_e(a.gen)}<br><span class="wr-sub">Stufe ${a.genLv}</span>` : '—')}
+      ${kpi('🛰️ Raumhafen', wrsMiniArt('space', 'base_' + a.port, '🛰️') + 'Stufe ' + a.port)}
+      ${kpi('🏗️ Werft', wrsMiniArt('space', 'base_werft_' + a.yard, '🏗️') + 'Stufe ' + a.yard)}
+      ${kpi('⚡ Kraftwerk', a.genDef
+        ? wrsMiniArt(a.genDef.folder, a.genDef.art, a.genDef.icon)
+          + `${_e(a.genDef.name)}<br><span class="wr-sub">Stufe ${a.genLv}</span>`
+        : (a.gen ? _e(a.gen) : '—'))}
       ${kpi('🪐 Kolonien', `${a.kol[1] + a.kol[2] + a.kol[3]}<br><span class="wr-sub">${a.kol[3]}× St.3 · ${a.kol[2]}× St.2 · ${a.kol[1]}× St.1</span>`)}
       ${kpi('📡 Stationen', a.stations || '—')}
       ${kpi('🛡️ Kolonie-Geschütze', a.colTurrets || '—')}
