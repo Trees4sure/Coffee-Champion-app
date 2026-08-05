@@ -764,3 +764,99 @@ function _kriegerAutoShowReport(rep, state) {
     </div>`;
   document.getElementById('krieger-auto-report-close').onclick = () => popup.classList.add('hidden');
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 6) Selbstmontage — kein Patch an imperium.js nötig
+// ═══════════════════════════════════════════════════════════════════════════
+// JP 2026-08-05: „Ich patche imperium.js hier jetzt nicht." Also hängt sich das Modul
+// selbst ein. Zwei Wege, in dieser Reihenfolge:
+//
+//   WEG A (bevorzugt): _kriegerRenderDungeon umschließen. Die Funktion ist in
+//   imperium.js als klassische `function`-Deklaration im Skript-Scope definiert und
+//   liegt damit als Eigenschaft auf window — sie lässt sich ersetzen, und alle
+//   späteren Aufrufe aus imperium.js laufen durch die neue Version. Vorteil: wir
+//   bekommen das ECHTE state-Objekt des Tabs, inklusive korrektem Viewport.
+//
+//   WEG B (Notnagel): Ein MutationObserver wartet auf das Auftauchen von
+//   #krieger-canvas und baut sich seinen eigenen Zustand aus currentUserData
+//   zusammen. Greift nur, wenn Weg A nicht funktioniert (etwa weil die Funktion
+//   in einer künftigen Version in ein Modul oder eine IIFE wandert).
+//
+// Beide Wege sind in try/catch gekapselt: schlägt die Montage fehl, bleibt die App
+// exakt so, wie sie ohne diese Datei wäre.
+
+let _kriegerAutoHookInstalled = false;
+
+(function _kriegerAutoInstallHook() {
+  try {
+    const g = (typeof window !== 'undefined') ? window : null;
+    if (!g || typeof g._kriegerRenderDungeon !== 'function') return;
+
+    const _orig = g._kriegerRenderDungeon;
+    if (_orig.__kaWrapped) { _kriegerAutoHookInstalled = true; return; }
+
+    const wrapped = function (member, state, seed, COLS, ROWS, MARGIN, body) {
+      const out = _orig.apply(this, arguments);
+      try { kriegerAutoMountControls(member, state, seed, COLS, ROWS, MARGIN, body); }
+      catch (e) { console.warn('Auto-Lauf-Panel konnte nicht eingehängt werden:', e); }
+      return out;
+    };
+    wrapped.__kaWrapped = true;
+    g._kriegerRenderDungeon = wrapped;
+    _kriegerAutoHookInstalled = true;
+  } catch (e) {
+    console.warn('Auto-Lauf: Hook auf _kriegerRenderDungeon nicht möglich:', e);
+  }
+})();
+
+// ── Weg B: Beobachter als Notnagel ──────────────────────────────────────────
+// Baut Member/State/Seed aus currentUserData nach. Das state-Objekt ist dann NICHT
+// dasselbe, das imperium.js nutzt — für den Lauf selbst ist das egal (wir speichern
+// über DB und rendern das Canvas selbst), und beim nächsten Tab-Wechsel liest
+// _buildKrieger ohnehin frisch aus currentUserData.
+function _kriegerAutoBuildStandaloneState(canvas) {
+  const member = (typeof currentUserData !== 'undefined' && currentUserData) ? currentUserData : null;
+  if (!member || !member.id) return null;
+  const dd = member.dungeon_data || {};
+  const tile = (typeof KRIEGER_TILE !== 'undefined') ? KRIEGER_TILE : 20;
+  const N    = (typeof KRIEGER_WORLD !== 'undefined') ? KRIEGER_WORLD : 150;
+  const COLS = Math.floor((canvas?.width  || 320) / tile);
+  const ROWS = Math.floor((canvas?.height || 280) / tile);
+  const pos  = (typeof kriegerPos === 'function') ? kriegerPos(dd) : { x: 75, y: 75 };
+  const state = {
+    dd,
+    memberCoins: member.coins || 0,
+    vpX: Math.max(0, Math.min(N - COLS, pos.x - Math.floor(COLS / 2))),
+    vpY: Math.max(0, Math.min(N - ROWS, pos.y - Math.floor(ROWS / 2))),
+  };
+  const seed = (typeof _kriegerWorldSeed === 'function') ? _kriegerWorldSeed() : 1;
+  return { member, state, seed, COLS, ROWS, MARGIN: 4 };
+}
+
+(function _kriegerAutoInstallObserver() {
+  if (_kriegerAutoHookInstalled) return;      // Weg A hat geklappt
+  if (typeof document === 'undefined') return;
+
+  let pending = false;
+  const tryMount = () => {
+    pending = false;
+    try {
+      const canvas = document.getElementById('krieger-canvas');
+      if (!canvas) return;
+      if (document.getElementById('krieger-auto-wrap')) return;   // schon da
+      const body = document.getElementById('krieger-body') || canvas.parentElement;
+      if (!body) return;
+      const ctx = _kriegerAutoBuildStandaloneState(canvas);
+      if (!ctx) return;
+      kriegerAutoMountControls(ctx.member, ctx.state, ctx.seed, ctx.COLS, ctx.ROWS, ctx.MARGIN, body);
+    } catch (e) { console.warn('Auto-Lauf: Selbstmontage fehlgeschlagen:', e); }
+  };
+  const schedule = () => { if (!pending) { pending = true; setTimeout(tryMount, 60); } };
+
+  try {
+    new MutationObserver(schedule).observe(document.body || document.documentElement, {
+      childList: true, subtree: true,
+    });
+    schedule(); // falls der Tab beim Laden schon offen ist
+  } catch (e) { console.warn('Auto-Lauf: Beobachter konnte nicht starten:', e); }
+})();
