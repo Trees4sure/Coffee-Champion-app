@@ -116,7 +116,15 @@ const WR_STATS_LEER = {
   battlesWon: 0, battlesLost: 0, foesDefeated: 0,
   wavesWon: 0, wavesLost: 0, waveStrengthMax: 0,
   shipsBuilt: 0, shipsLost: 0,
+  // ⛏️ Rohstoffe nach HERKUNFT getrennt (JP 2026-08-06: „abgebaut durch Kolonien
+  // und durch Schiffe sowie Wrackausbeute sind doch Unterschiede").
+  //   mined*  = alles, was über harvest_space hereinkommt: Kolonie-Erträge,
+  //             Dauerernte-Routen UND Bergungsrouten. Die RPC liefert eine
+  //             Gesamtsumme — feiner geht es ohne Server-Änderung nicht.
+  //   flight* = einzelne Abbau-Flüge (Reise mit Auftrag „abbauen").
+  //   loot*   = Kampfbeute aus gewonnenen Gefechten.
   minedErz: 0, minedKri: 0, minedPla: 0, minedQua: 0,
+  flightErz: 0, flightKri: 0, flightPla: 0, flightQua: 0,
   lootCc: 0, lootErz: 0, lootKri: 0, lootPla: 0, lootQua: 0,
   quadrantsScouted: 0, coloniesFounded: 0, planetsLost: 0,
   helpSent: 0, ccFromSpace: 0, maxPower: 0,
@@ -280,10 +288,15 @@ wrWrap('claimSpaceArrival', (r) => {
   if (r.intent === 'scout' && !r.ambushed && !r.recalled) d.quadrantsScouted = 1;
   if (r.intent === 'colonize' && !r.note && !r.ambushed && !r.recalled) d.coloniesFounded = 1;
   if (r.cc > 0)       { d.lootCc = r.cc; d.ccFromSpace = r.cc; }
-  if (r.erz > 0)      d.lootErz = r.erz;
-  if (r.kristall > 0) d.lootKri = r.kristall;
-  if (r.plasmoid > 0) d.lootPla = r.plasmoid;
-  if (r.quantum > 0)  d.lootQua = r.quantum;
+  // ⚠️ FIX 2026-08-06: bisher landete JEDE Rohstoff-Rückkehr unter „erbeutet" —
+  // auch der reine Abbau-Flug. Das vermischte Bergbau und Kriegsbeute in einer
+  // Zahl. Jetzt entscheidet der Auftrag, in welchen Topf es geht.
+  const bergbau = (r.intent === 'harvest');
+  const P = bergbau ? 'flight' : 'loot';
+  if (r.erz > 0)      d[P + 'Erz'] = r.erz;
+  if (r.kristall > 0) d[P + 'Kri'] = r.kristall;
+  if (r.plasmoid > 0) d[P + 'Pla'] = r.plasmoid;
+  if (r.quantum > 0)  d[P + 'Qua'] = r.quantum;
   if (r.shipsLost > 0) d.shipsLost = r.shipsLost;
   wrBump(d);
   wrBumpLost(r.lost);
@@ -474,6 +487,31 @@ function wrAllUsers() {
   background: rgba(255,255,255,.05); color: #a8b6dc; }
 .wrs-chartwrap { position: relative; height: 190px; margin: 8px 0 2px; }
 .wrs-empty { font-size: .74rem; color: #7f8fbb; padding: 6px 0; }
+/* ── 🪨 Rohstoffzeile entzerren (JP 2026-08-06) ────────────────────────────────
+   Die HUD-Leiste in weltraum.css ist eine EINZEILIGE Flexbox mit flex:1 je Kachel.
+   Bei sechs Rohstoffen und fünfstelligen Zahlen (6.077 · 2.633 · 2.606 …) reicht
+   die Breite nicht mehr — Symbol und Zahl schieben sich ineinander.
+   ⚠️ Diese Regeln stehen bewusst HIER und nicht in weltraum.css: der <style>-Block
+   wird nach dem Stylesheet in den <head> gehängt und gewinnt damit bei gleicher
+   Spezifität, ohne dass eine fremde Datei angefasst werden muss.
+   Lösung: umbrechen statt quetschen — bei sechs Kacheln zwei Reihen à drei. */
+.wr-hud { flex-wrap: wrap; gap: 5px; }
+.wr-res { flex: 1 1 92px; min-width: 0; padding: 3px 6px; gap: 4px; }
+.wr-res-v { font-size: .8rem; font-variant-numeric: tabular-nums;
+  overflow: hidden; text-overflow: ellipsis; }
+.wr-res-art, .wr-res-ic { flex: 0 0 auto; }
+@media (max-width: 600px) { .wr-res-l { display: none; } }
+/* ── Herkunftstabelle der Rohstoffe ─────────────────────────────────────────── */
+.wrs-res-table { width: 100%; border-collapse: collapse; font-size: .74rem; }
+.wrs-res-table th { color: #7f8fbb; font-size: .66rem; font-weight: 600; text-align: right;
+  padding: 4px 5px; border-bottom: 1px solid #24305a; white-space: nowrap; }
+.wrs-res-table th:first-child { text-align: left; }
+.wrs-res-table td { padding: 5px; text-align: right; color: #c3cfee;
+  border-bottom: 1px solid #161f3c; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.wrs-res-table td:first-child { text-align: left; }
+.wrs-res-table tr:last-child td { border-bottom: 0; }
+.wrs-res-sum { color: #dce6ff; font-weight: 700; }
+.wrs-res-0 { color: #4a5680; }
 `;
     document.head.appendChild(s);
   } catch (e) { /* ohne CSS sieht es schlicht aus, funktioniert aber */ }
@@ -607,18 +645,51 @@ function wrsSteckbriefHtml() {
         ${kpi('💥 Schiffe verloren', _f(st.shipsLost))}
         ${kpi('🛰️ Quadranten aufgeklärt', _f(st.quadrantsScouted))}
         ${kpi('🪐 Kolonien gegründet', _f(st.coloniesFounded))}
-        ${kpi('⛏️ Abgebaut', `${_f(st.minedErz)} 🪨 · ${_f(st.minedKri)} 💎`)}
-        ${kpi('🏴 Erbeutet', `${_f(st.lootErz)} 🪨 · ${_f(st.lootKri)} 💎`)}
-        ${kpi('🟣🌀 Ring-Beute', `${_f(st.lootPla + st.minedPla)} 🟣 · ${_f(st.lootQua + st.minedQua)} 🌀`)}
         ${kpi('🪙 CC aus dem All', _f(st.ccFromSpace))}
         ${kpi('🤝 Verstärkung geschickt', _f(st.helpSent))}
         ${kpi('💣 Hinterhalte', _f(st.ambushes))}
         ${st.planetsLost ? kpi('🪐 Planeten zurückgefallen', _f(st.planetsLost)) : ''}
       </div>
+      ${wrsRohstoffTabelleHtml(st)}
       <div class="wrs-note">Diese Zähler laufen ab dem Tag, an dem die Statistik eingebaut wurde —
         alles davor lässt sich nicht rekonstruieren. Die Werte oben in der Rangliste (Planeten,
         Kolonien, Flotte, Forschung) zeigen dagegen immer den vollen, aktuellen Stand.</div>
     </div>`;
+}
+
+// 🪨 Woher die Rohstoffe kamen. Vier Sorten × drei Herkünfte — als Tabelle, weil
+// zwölf Zahlen als Kacheln unlesbar würden (genau das Problem, das JP in der
+// Rohstoffzeile gemeldet hat).
+//
+// ⚠️ EHRLICHE GRENZE: `harvest_space` liefert EINE Summe für Kolonie-Erträge,
+// Dauerernte- UND Bergungsrouten. Feiner geht es nur mit einer Server-Änderung;
+// die Spalte heisst deshalb bewusst „Kolonien & Routen" und nicht „Kolonien".
+function wrsRohstoffTabelleHtml(st) {
+  const sorten = [
+    { ic:'🪨', name:'Erz',           m:st.minedErz, f:st.flightErz, l:st.lootErz },
+    { ic:'💎', name:'Kristall',      m:st.minedKri, f:st.flightKri, l:st.lootKri },
+    { ic:'🟣', name:'Plasmoid',      m:st.minedPla, f:st.flightPla, l:st.lootPla },
+    { ic:'🌀', name:'Quantenschaum', m:st.minedQua, f:st.flightQua, l:st.lootQua },
+  ];
+  if (!sorten.some(s => (s.m + s.f + s.l) > 0)) return '';
+  const z = (v) => v > 0 ? _f(v) : '<span class="wrs-res-0">·</span>';
+  const rows = sorten.map(s => `
+    <tr>
+      <td>${s.ic} ${s.name}</td>
+      <td>${z(s.m)}</td><td>${z(s.f)}</td><td>${z(s.l)}</td>
+      <td class="wrs-res-sum">${z(s.m + s.f + s.l)}</td>
+    </tr>`).join('');
+  return `
+    <div class="wrs-sub-title" style="margin-top:12px">🪨 Rohstoffe nach Herkunft</div>
+    <div class="wrs-tablewrap"><table class="wrs-res-table">
+      <thead><tr><th>Sorte</th><th>🏙️ Kolonien &amp; Routen</th><th>⛏️ Abbau-Flüge</th>
+        <th>🏴 Kampfbeute</th><th>Σ</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>
+    <div class="wrs-note">Kolonie-Ertrag, Dauerernte und Wrack-Bergung kommen alle über dasselbe
+      Einsammeln herein und lassen sich ohne Server-Änderung nicht weiter trennen.
+      <strong>Abbau-Flüge</strong> sind einzelne Reisen mit dem Auftrag „abbauen" — sie zählten
+      früher fälschlich als Beute und werden ab jetzt getrennt geführt.</div>`;
 }
 
 function wrsClanHtml() {
@@ -974,11 +1045,24 @@ function wrsPanelHtml() {
 })();
 
 // ── 🎨 Regionen auf der Sternkarte ────────────────────────────────────────
-// Nachträglicher, sehr dezenter Farbschleier über kontrollierte Regionen plus
-// Namenszug. Läuft NACH wrDrawMap und wiederholt dessen Zoom/Pan-Transformation
-// (dieselben Modul-Variablen), damit Zeichnung und Karte deckungsgleich bleiben.
-// ⚠️ Bewusst mit niedriger Deckkraft und ohne Klick-Logik: die Karte bleibt in
-// jeder Hinsicht das Original.
+// ⚠️ NEUFASSUNG 2026-08-06 (JP: „Die Darstellung der Gebiete ist etwas schlecht zu
+// differenzieren"). Die erste Fassung legte über JEDES Hexfeld einer kontrollierten
+// Region einen Schleier in der SPIELERFARBE und umrandete jede Wabe einzeln. Zwei
+// Fehler auf einmal:
+//   1. Hält ein Spieler mehrere Regionen, haben sie alle dieselbe Farbe — dann sieht
+//      man zwar „das gehört jemandem", aber nicht mehr, WO eine Region aufhört.
+//   2. Sechs Einzelumrandungen je Region ergeben ein Wabengitter, keine Fläche.
+// Jetzt: nur noch der AUSSENUMRISS wird gezogen, und zwar in der REGIONSFARBE —
+// dadurch ist jede Region an sich selbst erkennbar. Wem sie gehört, sagt die
+// Beschriftung: Punkt und Name in der Spielerfarbe. Freie Regionen bekommen einen
+// dünnen gestrichelten Umriss, damit die Karte überall gegliedert ist.
+//
+// Kantenzuordnung (flat-top-Hex, Vertices bei 0°,60°,…): Kante i liegt zwischen
+// Vertex i und i+1, ihre Mitte zeigt in Richtung 30°+60°·i. Nachgerechnet über
+// wrHexCenter ergibt das die Nachbar-Reihenfolge unten — sie ist NICHT die aus
+// wrScoutable (dort steht dieselbe Menge in anderer Ordnung).
+const WRS_EDGE_DIR = [[1,0],[0,1],[-1,1],[-1,0],[0,-1],[1,-1]];
+
 (function patchMap() {
   const orig = window.wrDrawMap;
   if (typeof orig !== 'function') return;
@@ -993,41 +1077,87 @@ function wrsPanelHtml() {
       const zoom = (typeof _wrZoom !== 'undefined') ? _wrZoom : 1;
       const panX = (typeof _wrPanX !== 'undefined') ? _wrPanX : 0;
       const panY = (typeof _wrPanY !== 'undefined') ? _wrPanY : 0;
+      const R = size * 0.92;
+      const vx = (x, i) => x + R * Math.cos(Math.PI / 180 * (60 * i));
+      const vy = (y, i) => y + R * Math.sin(Math.PI / 180 * (60 * i));
 
       ctx.save();
       ctx.translate(cx + panX, cy + panY);
       ctx.scale(zoom, zoom);
       ctx.translate(-cx, -cy);
 
+      const nameOf = (id) => wrAllUsers().find(u => u.id === id)?.name || 'Unbekannt';
+
       for (const r of WR_REGIONS) {
         const st = wrRegionStand(r.key);
-        if (!st.holder) continue;
-        const col = (typeof wrMemberColor === 'function') ? wrMemberColor(st.holder.id) : r.color;
+        const h = st.holder;
+        const halterFarbe = h && typeof wrMemberColor === 'function' ? wrMemberColor(h.id) : null;
         let sx = 0, sy = 0, n = 0;
+
+        // ① Sehr leichte Tönung nur bei Besitz — sie soll die Planeten nicht überdecken.
+        if (h) {
+          ctx.globalAlpha = 0.07;
+          ctx.fillStyle = halterFarbe || r.color;
+          for (const key of r.q) {
+            const [qx, qy] = key.split(',').map(Number);
+            const c = wrHexCenter(qx, qy, size);
+            const x = cx + c.x, y = cy + c.y;
+            ctx.beginPath();
+            for (let i = 0; i < 6; i++) { const px = vx(x, i), py = vy(y, i); i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); }
+            ctx.closePath(); ctx.fill();
+          }
+          ctx.globalAlpha = 1;
+        }
+
+        // ② Aussenumriss: nur Kanten zeichnen, deren Nachbar NICHT zur Region gehört.
+        ctx.beginPath();
         for (const key of r.q) {
           const [qx, qy] = key.split(',').map(Number);
           const c = wrHexCenter(qx, qy, size);
           const x = cx + c.x, y = cy + c.y;
           sx += x; sy += y; n++;
-          ctx.beginPath();
           for (let i = 0; i < 6; i++) {
-            const a = Math.PI / 180 * (60 * i);
-            const px = x + size * 0.92 * Math.cos(a), py = y + size * 0.92 * Math.sin(a);
-            i ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+            const nk = (qx + WRS_EDGE_DIR[i][0]) + ',' + (qy + WRS_EDGE_DIR[i][1]);
+            if (WR_REGION_OF[nk] === r.key) continue;      // Innenkante → weglassen
+            ctx.moveTo(vx(x, i), vy(y, i));
+            ctx.lineTo(vx(x, (i + 1) % 6), vy(y, (i + 1) % 6));
           }
-          ctx.closePath();
-          ctx.globalAlpha = 0.10; ctx.fillStyle = col; ctx.fill();
-          ctx.globalAlpha = 0.55; ctx.strokeStyle = col; ctx.lineWidth = 1;
-          ctx.stroke();
-          ctx.globalAlpha = 1;
         }
+        ctx.strokeStyle = r.color;
+        if (h) {
+          ctx.setLineDash([]); ctx.lineWidth = 2.2; ctx.globalAlpha = 0.9;
+          ctx.shadowColor = r.color; ctx.shadowBlur = 6;
+        } else {
+          ctx.setLineDash([5, 5]); ctx.lineWidth = 1.1; ctx.globalAlpha = 0.4;
+        }
+        ctx.stroke();
+        ctx.setLineDash([]); ctx.shadowBlur = 0; ctx.globalAlpha = 1;
+
+        // ③ Beschriftung mit dunkler Unterlegung — ohne die ist der Text über den
+        // Planeten unlesbar (das war in JPs Screenshot das eigentliche Problem).
         if (n) {
-          ctx.globalAlpha = 0.9;
+          const mx = sx / n, my = sy / n - size * 0.55;
+          const txt = r.icon + ' ' + r.name;
+          const sub = h ? nameOf(h.id) : null;
           ctx.font = 'bold 11px system-ui';
           ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-          ctx.fillStyle = col;
-          ctx.fillText(r.icon + ' ' + r.name, sx / n, sy / n - size * 0.72);
+          const w = Math.max(ctx.measureText(txt).width,
+                             sub ? ctx.measureText(sub).width : 0) + 14;
+          const hgt = sub ? 30 : 18;
+          ctx.globalAlpha = 0.72; ctx.fillStyle = '#080b18';
+          if (ctx.roundRect) {
+            ctx.beginPath(); ctx.roundRect(mx - w / 2, my - hgt / 2, w, hgt, 6); ctx.fill();
+          } else {
+            ctx.fillRect(mx - w / 2, my - hgt / 2, w, hgt);   // ältere Browser
+          }
           ctx.globalAlpha = 1;
+          ctx.fillStyle = r.color;
+          ctx.fillText(txt, mx, sub ? my - 6 : my);
+          if (sub) {
+            ctx.font = '10px system-ui';
+            ctx.fillStyle = halterFarbe || '#8b9ac4';
+            ctx.fillText(sub, mx, my + 8);
+          }
         }
       }
       ctx.restore();
