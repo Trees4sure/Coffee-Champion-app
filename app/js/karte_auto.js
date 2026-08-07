@@ -30,11 +30,15 @@
 
 // ── Konstanten ──────────────────────────────────────────────────────────────
 const KARTE_AUTO_COST       = 200;  // Pauschale je Lauf (JP-Vorgabe 2026-08-05)
-// Unter dieser Zahl verbleibender Schritte wäre die Pauschale ein schlechtes Geschäft:
-// bei 5 Schritten wären das 40 CC pro Feld, während ein durchschnittlicher Schatz
-// nur ~4 CC bringt. Deshalb ist der Lauf erst ab hier kaufbar.
-const KARTE_AUTO_MIN_STEPS  = 10;
-const KARTE_AUTO_STEP_DELAY = 260;  // ms je aufgedecktem Feld (Events brauchen einen Moment)
+// Mindestzahl freier Schritte, ab der der Lauf überhaupt kaufbar ist.
+// Rechnung: Schatzchance 30 %, Durchschnittswert der 22 Schätze ~4,2 CC → roh etwa
+// 1,3 CC pro Feld. Mit Trüffelnase, Rucksack, Forschungs-Tier-Faktor und Gruppenbonus
+// kommt man realistisch auf 4–6 CC pro Feld. Die Pauschale rechnet sich damit erst
+// jenseits von ~40 Feldern; bei 5 Schritten wären es 40 CC pro Feld — ein Reinfall,
+// den man erst nach dem Bezahlen merkt. 20 ist die untere Schmerzgrenze.
+// ⚠️ Wer die Pauschale ändert, sollte diesen Wert mitziehen.
+const KARTE_AUTO_MIN_STEPS  = 20;
+const KARTE_AUTO_STEP_DELAY = 180;  // ms je aufgedecktem Feld (dazu kommt die RPC-Laufzeit)
 const KARTE_AUTO_WALK_DELAY = 40;   // ms je Feld beim kostenlosen Zurücklaufen
 const KARTE_AUTO_MAX_ACTIONS = 400; // harte Not-Obergrenze gegen Endlosschleifen
 
@@ -131,7 +135,12 @@ function _kbBuildState() {
     vpX: Math.max(0, Math.min(N - COLS, pos.x - Math.floor(COLS / 2))),
     vpY: Math.max(0, Math.min(N - ROWS, pos.y - Math.floor(ROWS / 2))),
   };
-  const seed = (typeof _karteWorldSeed === 'function') ? _karteWorldSeed() : 1;
+  // ⚠️ KEIN Fallback-Seed. _karteWorldSeed() bestimmt Terrain, Schatzplätze und
+  // Schatzindizes. Mit einem falschen Seed würde _handleKarteStep Schätze an Stellen
+  // eintragen, an denen laut echter Welt keine sind — die Karte wäre dauerhaft
+  // verfälscht. Fehlt die Funktion, läuft das Modul lieber gar nicht.
+  if (typeof _karteWorldSeed !== 'function') return null;
+  const seed = _karteWorldSeed();
   return { member, state, seed, COLS, ROWS, MARGIN: 4 };
 }
 
@@ -325,9 +334,10 @@ async function _karteAutoFinish(ctx, rep) {
 }
 
 function _karteAutoShowReport(ctx, rep, tally) {
-  const host = document.getElementById('cc-karte-popup')
-            || document.getElementById('karte-popup')
-            || _karteAutoEnsurePopupHost();
+  // Bewusst ein EIGENES Overlay statt des Karten-Popups: dessen innere Struktur und
+  // Klassen gehören _showKarteDiscovery/_showKarteEvent, und die sollen von diesem
+  // Modul nicht mitbenutzt werden.
+  const host = _karteAutoEnsurePopupHost();
   if (!host) return;
 
   const netto  = rep.coinsAfter - rep.coinsBefore;
