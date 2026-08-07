@@ -40,6 +40,8 @@ if (typeof DB === 'undefined' || typeof window.wrLive !== 'function') {
 const WRS_SOLD_SHIP   = 0.01;   // 1,0 % des Bauwerts pro Tag und Schiff
 const WRS_SOLD_ROUTE  = 0.005;  // stationierte Schiffe zur Hälfte — sie erwirtschaften selbst
 const WRS_SOLD_ANLAGE = 0.005;  // 0,5 % für Geschütze und Reaktoren
+const WRS_SOLD_STATION = 0.01;  // 1,0 % — die Station ist das mächtigste Bauwerk im Spiel
+                                //   und war als einziges ohne jeden Unterhalt (JP 2026-08-06)
 const WRS_KOL_BASIS   = 400;    // CC/Tag je Kolonie-Stufe
 const WRS_KOL_STEIG   = 0.15;   // + 15 % je weiterer Kolonie (progressiv)
 const WRS_GRACE_TAGE  = 7;      // Schonfrist: berechnen und anzeigen, aber nicht abbuchen
@@ -56,7 +58,7 @@ function wrsPlanets() { return (typeof _wrGalaxy !== 'undefined' && _wrGalaxy?.p
 // Abbuchung UND die Anzeige, damit beide nie auseinanderlaufen.
 function wrsSoldRate(u) {
   const o = { fleet: 0, routes: 0, colonies: 0, defense: 0, power: 0, total: 0,
-              nShips: 0, nRoute: 0, nCol: 0, nTur: 0, nGen: 0, detail: [] };
+              nShips: 0, nRoute: 0, nCol: 0, nTur: 0, nGen: 0, nStat: 0, station: 0, detail: [] };
   try {
     const sp = u?.space || {};
     const shipDef = (k) => (typeof SPACE_SHIPS !== 'undefined')
@@ -122,6 +124,14 @@ function wrsSoldRate(u) {
         o.defense += turCc(s.type, lv, true) * WRS_SOLD_ANLAGE;
         o.nTur++;
       }
+      // 📡 Quadranten-Station: schützt bis zu acht Planeten dauerhaft — ein Bauwerk
+      // dieser Tragweite darf nicht kostenlos laufen. Bezugsgrösse ist WR_STATION
+      // (Spiegel-Konstante, wird nur GELESEN); ohne sie greift ein Rückfallwert.
+      if (p.station) {
+        const wert = (typeof WR_STATION !== 'undefined' && WR_STATION?.cc) ? WR_STATION.cc : 30000;
+        o.station += wert * WRS_SOLD_STATION;
+        o.nStat++;
+      }
       if (p.power && p.power.type && typeof wrPgenStats === 'function') {
         const lv = Math.max(1, Math.min(3, parseInt(p.power.level, 10) || 1));
         o.power += (wrPgenStats(p.power.type, lv)?.cc || 0) * WRS_SOLD_ANLAGE;
@@ -137,8 +147,8 @@ function wrsSoldRate(u) {
 
     o.fleet = Math.round(o.fleet); o.routes = Math.round(o.routes);
     o.colonies = Math.round(o.colonies); o.defense = Math.round(o.defense);
-    o.power = Math.round(o.power);
-    o.total = o.fleet + o.routes + o.colonies + o.defense + o.power;
+    o.power = Math.round(o.power); o.station = Math.round(o.station);
+    o.total = o.fleet + o.routes + o.colonies + o.defense + o.power + o.station;
   } catch (e) { console.warn('[wr-sold] Satz:', e.message); }
   return o;
 }
@@ -227,9 +237,11 @@ async function wrsSoldAbbuchen() {
       if (rate.colonies > 0) posten.push({
         label: '🏛️ Kolonie-Verwaltung', amount: -anteil(rate.colonies), cat: 'weltraum',
         detail: `${rate.nCol} Kolonien`, aggKey: 'space_kolverw', aggBase: '🏛️ Kolonie-Verwaltung' });
-      if (rate.defense + rate.power > 0) posten.push({
-        label: '⚡ Betriebskosten Anlagen', amount: -anteil(rate.defense + rate.power), cat: 'weltraum',
-        detail: `${rate.nTur} Geschütze · ${rate.nGen} Reaktoren`,
+      if (rate.defense + rate.power + rate.station > 0) posten.push({
+        label: '⚡ Betriebskosten Anlagen',
+        amount: -anteil(rate.defense + rate.power + rate.station), cat: 'weltraum',
+        detail: `${rate.nTur} Geschütze · ${rate.nGen} Reaktoren`
+              + (rate.nStat ? ` · ${rate.nStat} Station${rate.nStat === 1 ? '' : 'en'}` : ''),
         aggKey: 'space_betrieb', aggBase: '⚡ Betriebskosten Anlagen' });
       if (posten.length) await DB.appendTodayLogFresh(me.id, posten);
     } catch (e) {}
@@ -286,7 +298,7 @@ function wrsSoldPopup(rate) {
           <strong>Dein aktueller Satz: ${_f(rate.total)} CC pro Tag</strong><br>
           <span style="font-size:.78rem">
             ⚓ Flotte ${_f(rate.fleet + rate.routes)} · 🏛️ Kolonien ${_f(rate.colonies)} ·
-            ⚡ Anlagen ${_f(rate.defense + rate.power)}</span><br><br>
+            ⚡ Anlagen ${_f(rate.defense + rate.power)}${rate.station ? ` · 📡 Stationen ${_f(rate.station)}` : ''}</span><br><br>
           Kolonien werden dabei <strong>progressiv</strong> teurer: jede weitere kostet 15 %
           mehr als die vorige. Abgerechnet wird beim Öffnen der App für die verstrichene Zeit —
           spiegelbildlich zum passiven Einkommen, das genauso läuft.<br><br>
@@ -328,6 +340,7 @@ function wrsSoldCardHtml() {
           ${rate.routes ? kpi('🛰️ Stationiert', `${_f(rate.routes)}<br><span class="wr-sub">${_f(rate.nRoute)} Schiffe</span>`) : ''}
           ${kpi('🏛️ Kolonien', `${_f(rate.colonies)}<br><span class="wr-sub">${rate.nCol} Stück</span>`)}
           ${kpi('⚡ Anlagen', `${_f(rate.defense + rate.power)}<br><span class="wr-sub">${rate.nTur} Geschütze · ${rate.nGen} Reaktoren</span>`)}
+          ${rate.nStat ? kpi('📡 Stationen', `${_f(rate.station)}<br><span class="wr-sub">${rate.nStat} Stück</span>`) : ''}
           ${kpi('🪙 Guthaben reicht', `${reicht > 999 ? '999+' : reicht} Tage`)}
           ${st?.paid ? kpi('📉 Bisher gezahlt', _f(st.paid)) : ''}
         </div>
