@@ -363,10 +363,14 @@ function _karteAutoShowReport(ctx, rep, tally) {
     ? rep.events.map(e => `<div style="font-size:11px;opacity:.75">${e.emoji} ${_kbEsc(e.name)}${e.note ? ` — ${_kbEsc(e.note)}` : ''}</div>`).join('')
     : '';
 
-  host.classList.remove('hidden');
   host.innerHTML = `
-    <div class="cc-karte-popup-inner" style="max-width:360px;width:100%">
-      <div class="cc-karte-popup-hdr">🥾 Heute großen Appetit gehabt</div>
+    <div class="cc-karte-popup-inner" id="karte-auto-card"
+         style="max-width:360px;width:100%;max-height:none;margin:auto 0">
+      <div class="cc-karte-popup-hdr" style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+        <span>🥾 Heute großen Appetit gehabt</span>
+        <button id="karte-auto-x" aria-label="Schließen"
+          style="background:none;border:0;color:inherit;font-size:20px;line-height:1;padding:0 4px;cursor:pointer">✕</button>
+      </div>
       <div class="cc-karte-popup-body" style="flex-direction:column;align-items:stretch;gap:5px">
         ${row('Felder aufgedeckt', `${rep.steps}`)}
         <div style="border-top:1px solid rgba(255,255,255,.12);margin:4px 0;padding-top:5px"></div>
@@ -383,35 +387,46 @@ function _karteAutoShowReport(ctx, rep, tally) {
       <button class="cc-karte-popup-close" id="karte-auto-report-close" style="width:100%;margin-top:10px">Schließen</button>
     </div>`;
 
-  document.getElementById('karte-auto-report-close').onclick = () => {
-    host.classList.add('hidden');
-    host.innerHTML = '';
-    // Karten-Tab neu aufbauen, damit die Tipp-Steuerung wieder auf frischem Stand ist
-    try {
-      const el = document.getElementById('imp-content');
-      if (el && typeof _buildKarte === 'function' && typeof currentUserData !== 'undefined') {
-        el.innerHTML = '';
-        _buildKarte(currentUserData, el);
-      }
-    } catch (e) { /* egal */ }
-    // Ein während des Laufs freigeschalteter Dungeon-Meilenstein kommt jetzt zum Zug
-    if (rep.dungeonArgs && typeof _showDungeonModal === 'function') {
-      try { _showDungeonModal(...rep.dungeonArgs); } catch (e) { /* egal */ }
-    }
-  };
+  const close = () => _karteAutoCloseReport(rep);
+  document.getElementById('karte-auto-report-close').onclick = close;
+  document.getElementById('karte-auto-x').onclick = close;
+  // Tipp neben die Karte schließt ebenfalls — bei langen Listen ist der Button
+  // unten oft außerhalb des Bildes, und genau daneben tippt man dann.
+  host.addEventListener('click', (e) => { if (e.target === host) close(); });
 }
 
-// Falls die Karte kein eigenes Popup-Element hat, legen wir eines an.
+// Eigenes Overlay. Wichtig: Es wird zum Schließen RESTLOS ENTFERNT, nicht nur
+// versteckt. Die Klasse `hidden` (display:none) kann den Inline-Style display:flex
+// nicht überschreiben — Inline gewinnt. Genau daran lag das „graue Einfrieren":
+// eine unsichtbare, bildschirmfüllende Schicht blieb liegen und fing alle Klicks ab.
 function _karteAutoEnsurePopupHost() {
-  let host = document.getElementById('karte-auto-popup');
-  if (host) return host;
-  host = document.createElement('div');
+  document.getElementById('karte-auto-popup')?.remove();
+  const host = document.createElement('div');
   host.id = 'karte-auto-popup';
-  host.className = 'cc-karte-popup';
-  host.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;'
-    + 'justify-content:center;padding:16px;background:rgba(0,0,0,.72)';
+  host.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;'
+    + 'align-items:flex-start;justify-content:center;padding:24px 16px;'
+    + 'background:rgba(0,0,0,.72);overflow-y:auto;-webkit-overflow-scrolling:touch';
   document.body.appendChild(host);
   return host;
+}
+
+// Einziger Weg, den Bericht zu schließen — von Button, Backdrop und Kopfzeilen-✕.
+function _karteAutoCloseReport(rep) {
+  document.getElementById('karte-auto-popup')?.remove();
+
+  // Karten-Tab neu aufbauen, damit die Tipp-Steuerung wieder auf frischem Stand ist
+  try {
+    const el = document.getElementById('imp-content');
+    if (el && typeof _buildKarte === 'function' && typeof currentUserData !== 'undefined') {
+      el.innerHTML = '';
+      _buildKarte(currentUserData, el);
+    }
+  } catch (e) { console.warn('Karten-Tab konnte nicht neu aufgebaut werden:', e); }
+
+  // Ein während des Laufs freigeschalteter Dungeon-Meilenstein kommt jetzt zum Zug
+  if (rep?.dungeonArgs && typeof _showDungeonModal === 'function') {
+    try { _showDungeonModal(...rep.dungeonArgs); } catch (e) { /* egal */ }
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
