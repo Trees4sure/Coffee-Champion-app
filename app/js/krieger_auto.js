@@ -31,6 +31,12 @@
 const KRIEGER_AUTO_MIN_LEVEL    = 80;    // R1 — Freischaltung
 const KRIEGER_AUTO_COST_PER_LV  = 5;     // R2 — Kosten = Stufe × Faktor
 const KRIEGER_AUTO_MIN_WINPCT   = 0.60;  // R7 — nur kämpfen ab dieser Siegchance
+// Selbstkorrektur: Jede Niederlage ist der Beweis, dass die Schätzung zu optimistisch war
+// (falsche Schadensformel, unbekannte HP, fehlende Talente). Statt weiter blind zu vertrauen,
+// steigt die Schwelle nach jeder Niederlage — nach der dritten wird gar nicht mehr gekämpft
+// und nur noch erkundet. Das wirkt UNABHÄNGIG davon, ob der Adapter korrekt ausgefüllt ist.
+const KRIEGER_AUTO_LOSS_PENALTY = 0.10;  // +10 Prozentpunkte je Niederlage
+const KRIEGER_AUTO_MAX_LOSSES   = 3;     // danach: nur noch erkunden
 const KRIEGER_AUTO_REFUND_UNDER = 0.50;  // R9 — anteilige Erstattung unter dieser Nutzung
 const KRIEGER_AUTO_STEP_DELAY   = 110;   // ms Pause je Schritt (UI bleibt bedienbar)
 const KRIEGER_AUTO_WALK_DELAY   = 35;    // ms Pause je Feld beim kostenlosen Zurücklaufen
@@ -84,22 +90,74 @@ function _kaSleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 // Die alte Formel 80 + Stufe×4 ergäbe 644 — die Differenz von 77 kommt vermutlich aus
 // dem Talentbaum. Genau deshalb existiert dieser Adapter.
 
-// Maximale Trefferpunkte inklusive aller dauerhaften Boni (Talente etc.).
-function _kaMaxHp(dd) {
-  if (typeof kriegerMaxHp === 'function') { const v = kriegerMaxHp(dd); if (v > 0) return v; }
-  if (dd?.hpMax > 0) return dd.hpMax;
-  if (dd?.maxHp > 0) return dd.maxHp;
-  return 80 + (dd?.level || 1) * 4;   // ⚠️ Fallback der Ursprungsversion
+// ── HP-Erkennung ────────────────────────────────────────────────────────────
+// Mehrstufig, weil die Feldnamen von außen nicht bekannt sind. Reihenfolge:
+//   1. bekannte Funktionsnamen aus krieger.js
+//   2. numerische Felder in dungeon_data, die nach HP aussehen
+//   3. Auslesen aus der Oberfläche („❤️ 508/721" in der Erholungs-Leiste)
+//   4. Notformel — und dann bewusst PESSIMISTISCH, siehe unten
+let _kaHpUnknown = false;
+// ❤️ Direkt aus dem Kampfergebnis (result.hp / result.hp_max). Das ist die verlässlichste
+// Quelle überhaupt — der Server sagt selbst, wie viel Leben übrig ist. Wird bei jedem
+// Laufstart zurückgesetzt.
+let _kaHpLive = { cur: null, max: null };
+
+function _kaHpFromDom() {
+  try {
+    const scope = document.getElementById('imp-content') || document.body;
+    const m = (scope?.textContent || '').match(/❤️[^\d]{0,4}(\d+)\s*\/\s*(\d+)/);
+    if (!m) return null;
+    const cur = parseInt(m[1], 10), max = parseInt(m[2], 10);
+    if (!(max > 0) || cur < 0 || cur > max) return null;
+    return { cur, max };
+  } catch (e) { return null; }
 }
 
-// Aktueller HP-Stand. Kritisch: der Auto-Lauf muss mit den ECHTEN HP rechnen, nicht
-// mit vollen — sonst hält er einen Kampf für sicher, den er halbtot verliert.
-function _kaCurHp(dd) {
-  if (typeof kriegerCurrentHp === 'function') { const v = kriegerCurrentHp(dd); if (v !== undefined && v !== null) return Math.max(0, v); }
-  if (dd?.hp !== undefined && dd.hp !== null) return Math.max(0, dd.hp);
-  if (dd?.hpCurrent !== undefined && dd.hpCurrent !== null) return Math.max(0, dd.hpCurrent);
-  return _kaMaxHp(dd);                // ⚠️ Fallback: nimmt volle HP an
+function _kaHpFromDd(dd) {
+  if (!dd) return null;
+  const num = (v) => typeof v === 'number' && isFinite(v) && v >= 0;
+  const maxK = ['hpMax','maxHp','hp_max','max_hp','healthMax','lebenMax'].find(k => num(dd[k]));
+  const curK = ['hp','hpCurrent','currentHp','hp_current','health','leben'].find(k => num(dd[k]));
+  if (!maxK && !curK) return null;
+  const max = maxK ? dd[maxK] : null;
+  const cur = curK ? dd[curK] : null;
+  if (max && cur !== null) return { cur: Math.min(cur, max), max };
+  if (max) return { cur: max, max };
+  return null;
 }
+
+function _kaHpState(dd) {
+  if (_kaHpLive.cur !== null && _kaHpLive.max) {
+    _kaHpUnknown = false;
+    return { cur: _kaHpLive.cur, max: _kaHpLive.max };
+  }
+  if (typeof kriegerMaxHp === 'function') {
+    const max = kriegerMaxHp(dd);
+    if (max > 0) {
+      let cur = max;
+      if (typeof kriegerCurrentHp === 'function') { const c = kriegerCurrentHp(dd); if (c !== undefined && c !== null) cur = Math.max(0, c); }
+      else { const d = _kaHpFromDd(dd) || _kaHpFromDom(); if (d) cur = d.cur; }
+      _kaHpUnknown = false;
+      return { cur, max };
+    }
+  }
+  const fromDd = _kaHpFromDd(dd);
+  if (fromDd) { _kaHpUnknown = false; return fromDd; }
+
+  const fromDom = _kaHpFromDom();
+  if (fromDom) { _kaHpUnknown = false; return fromDom; }
+
+  // Nichts gefunden. Die alte Formel als Notnagel — aber NICHT mit vollen HP rechnen.
+  // Genau dieser Optimismus hat den Krieger vorher bis zur Erschöpfung kämpfen lassen.
+  // 60 % ist eine bewusst vorsichtige Annahme: lieber ein paar Kämpfe zu wenig als
+  // ein Lauf, der die Pauschale verbrennt.
+  _kaHpUnknown = true;
+  const max = 80 + (dd?.level || 1) * 4;
+  return { cur: Math.round(max * 0.6), max };
+}
+
+function _kaMaxHp(dd) { return _kaHpState(dd).max; }
+function _kaCurHp(dd) { return _kaHpState(dd).cur; }
 
 // Dauerhafte Talent-Boni auf die Kampfwerte. Erwartet { atk, def, crit }.
 function _kaTalentBonus(dd) {
@@ -116,16 +174,37 @@ function _kaLevelCap() {
   return 0; // 0 = unbekannt, Anzeige lässt den Zusatz dann weg
 }
 
-// Kann der Kampf-RPC einen Trank entgegennehmen? Nur dann setzt der Auto-Lauf
-// Cold Brew ein — sonst würde er auf eine Heilung wetten, die nie stattfindet.
-function _kaFightSupportsPotion() {
-  try { return typeof DB?.dungeonFight === 'function' && DB.dungeonFight.length >= 3; }
-  catch (e) { return false; }
-}
+// (_kaFightSupportsPotion wurde entfernt: die Signatur von kriegerFight ist bestätigt —
+//  potionKey ist Parameter 4. Die frühere Heuristik über Function.length hat bei einem
+//  Default-Parameter nur 2 gezählt und war der Grund, warum Cold Brew nie zum Einsatz kam.)
 
 // ═══════════════════════════════════════════════════════════════════════════
 // 1) Kampfabschätzung
 // ═══════════════════════════════════════════════════════════════════════════
+
+// ── Gegnerwerte MIT Level- und Flavor-Skalierung ────────────────────────────
+// ⚠️ DER FEHLER, der den Krieger Kämpfe verlieren ließ, die er für sicher hielt:
+// KRIEGER_ENEMIES enthält nur BASISWERTE. Der echte Gegner bekommt obendrauf
+//   hp + Level×2 · atk + floor(Level/4) · def + floor(Level/5)
+// und vorher noch den Flavor-Faktor (idx0 ×0,7 · idx1 ×1,0 · idx2 ×1,4).
+// Ein t4-Gegner auf Stufe 27 hat damit 394 statt 340 HP und 42 statt 36 ATK.
+// Beides wird deterministisch aus den Feldkoordinaten bestimmt — dieselbe Rechnung
+// wie im Prompt vor dem manuellen Kampf.
+function _kaEnemyAt(tier, tx, ty, dd, seed) {
+  const base = (typeof kriegerEnemyDef === 'function') ? kriegerEnemyDef(tier) : null;
+  if (!base) return null;
+  const idx = (typeof kriegerEnemyFlavorIdx === 'function') ? kriegerEnemyFlavorIdx(tx, ty, tier, seed) : 0;
+  const fm  = (typeof kriegerFlavorMod === 'function') ? kriegerFlavorMod(tier, idx) : 1;
+  const lvl = (typeof kriegerEnemyLevel === 'function')
+    ? kriegerEnemyLevel(tx, ty, tier, seed, dd?.level || 1) : (dd?.level || 1);
+  return {
+    tier, flavorIdx: idx, level: lvl,
+    hp:  Math.round((base.hp  || 1) * fm) + lvl * 2,
+    atk: Math.round((base.atk || 1) * fm) + Math.floor(lvl / 4),
+    def: Math.round((base.def || 0) * fm) + Math.floor(lvl / 5),
+    name: base.name,
+  };
+}
 
 // Erwarteter Schaden pro Runde. SPIEGEL der SQL-Formel in dungeon_fight —
 // bei Abweichung hier anpassen, nicht dort.
@@ -174,9 +253,8 @@ function kriegerAutoStatsFor(dd, equipped) {
 // Geschätzte Siegchance (0..1) gegen ein Gegner-Tier.
 // Verfahren: Runden-Vergleich. rSurv = Runden, die ich überlebe; rNeed = Runden,
 // die ich zum Töten brauche. Gleichstand ≈ 50 %, 20 % Vorsprung ≈ 60 %.
-// withColdbrew = true rechnet die Sofort-Heilung mit ein.
-function kriegerAutoWinChance(dd, equipped, tier, withColdbrew) {
-  const enemy = (typeof kriegerEnemyDef === 'function') ? kriegerEnemyDef(tier) : null;
+// enemy = Objekt aus _kaEnemyAt (bereits level- und flavorskaliert).
+function kriegerAutoWinChance(dd, equipped, enemy, withColdbrew) {
   if (!enemy) return { pct: 0, rNeed: 99, rSurv: 0 };
 
   const own   = kriegerAutoStatsFor(dd, equipped);
@@ -204,7 +282,7 @@ function kriegerAutoWinChance(dd, equipped, tier, withColdbrew) {
 // Sucht das beste Loadout aus dem BESITZ gegen ein bestimmtes Gegner-Tier.
 // Der 'feet'-Slot wird NIE angefasst (R5): Stiefel gehen in kriegerStepsAllowed()
 // ein — ein Wechsel mitten im Lauf würde das Tagesbudget verändern.
-function kriegerAutoBestLoadout(dd, tier, currentEquipped, withColdbrew) {
+function kriegerAutoBestLoadout(dd, enemy, currentEquipped, withColdbrew) {
   if (typeof KRIEGER_ITEMS === 'undefined') return null;
   const owned = dd?.owned || {};
   const cand = slot => {
@@ -218,7 +296,7 @@ function kriegerAutoBestLoadout(dd, tier, currentEquipped, withColdbrew) {
   let best = null;
   for (const w of ws) for (const a of as) for (const t of ts) {
     const eq  = { ...cur, weapon: w, armor: a, talisman: t }; // feet bleibt unberührt
-    const est = kriegerAutoWinChance(dd, eq, tier, withColdbrew);
+    const est = kriegerAutoWinChance(dd, eq, enemy, withColdbrew);
     const sameAsNow = (w === cur.weapon && a === cur.armor && t === cur.talisman);
     if (!best) { best = { equipped: eq, est, sameAsNow }; continue; }
     // Zielfunktion: höchste Siegchance → dann kürzerer Kampf → dann kein Wechsel
@@ -303,25 +381,34 @@ let _kaPlanCache = new Map();
 // Entscheidet, OB und WOMIT gegen ein Tier gekämpft wird. null = zu stark.
 // Gecacht, weil die Suche nach offenen Kämpfen dieselbe Frage für dasselbe Tier
 // mehrfach stellt; der Schlüssel enthält alles, was sich im Lauf ändern kann.
-function _kaPlanFight(dd, tier) {
+// lossCount = Zahl der Niederlagen in diesem Lauf (Selbstkorrektur, s. Konstanten oben)
+// tx/ty werden gebraucht, weil Gegner-Level und Flavor aus den Feldkoordinaten stammen.
+function _kaPlanFight(dd, tier, tx, ty, seed, lossCount) {
   if (!tier || tier === 'boss') return null;
+  const losses = lossCount || 0;
+  if (losses >= KRIEGER_AUTO_MAX_LOSSES) return null;   // ab hier nur noch erkunden
+  const need = KRIEGER_AUTO_MIN_WINPCT + losses * KRIEGER_AUTO_LOSS_PENALTY;
+
+  const enemy = _kaEnemyAt(tier, tx, ty, dd, seed);
+  if (!enemy) return null;
+
   const armorKey = dd?.equipped?.armor || '';
-  const ck = `${tier}|${_kaCurHp(dd)}|${armorKey}|${_kaArmorDur(dd, armorKey)}`;
+  const ck = `${tier}|${enemy.level}|${enemy.flavorIdx}|${_kaCurHp(dd)}|${armorKey}|${_kaArmorDur(dd, armorKey)}|${losses}`;
   if (_kaPlanCache.has(ck)) return _kaPlanCache.get(ck);
 
   let plan = null;
-  const plain = kriegerAutoBestLoadout(dd, tier, dd?.equipped, false);
-  if (plain && plain.est.pct >= KRIEGER_AUTO_MIN_WINPCT) {
-    plan = { best: plain, potionKey: null };
-  } else if (_kaFightSupportsPotion()) {
+  const plain = kriegerAutoBestLoadout(dd, enemy, dd?.equipped, false);
+  if (plain && plain.est.pct >= need) {
+    plan = { best: plain, potionKey: null, enemy };
+  } else {
     // 🧊 Cold Brew nur, wenn der Kampf ohne ihn NICHT reicht und mit ihm schon —
     // nie vorsorglich, und nie unter die Reserve von KRIEGER_AUTO_POTION_KEEP.
     const stock = (typeof kriegerPotionCount === 'function')
       ? kriegerPotionCount(dd, KRIEGER_AUTO_COLDBREW_KEY) : 0;
     if (stock > KRIEGER_AUTO_POTION_KEEP) {
-      const withCb = kriegerAutoBestLoadout(dd, tier, dd?.equipped, true);
-      if (withCb && withCb.est.pct >= KRIEGER_AUTO_MIN_WINPCT) {
-        plan = { best: withCb, potionKey: KRIEGER_AUTO_COLDBREW_KEY };
+      const withCb = kriegerAutoBestLoadout(dd, enemy, dd?.equipped, true);
+      if (withCb && withCb.est.pct >= need) {
+        plan = { best: withCb, potionKey: KRIEGER_AUTO_COLDBREW_KEY, enemy };
       }
     }
   }
@@ -333,7 +420,7 @@ function _kaPlanFight(dd, tier) {
 // aktuell zu schaffen ist. `skip` enthält Felder, die in diesem Lauf schon verloren
 // wurden — ohne diese Sperre liefe der Krieger endlos zwischen Niederlage und
 // Wiederholung hin und her.
-function kriegerAutoFindPendingFight(dd, skip) {
+function kriegerAutoFindPendingFight(dd, skip, lossCount, seed) {
   const enc = dd?.encounters || {};
   if (!Object.keys(enc).length) return null;
 
@@ -355,7 +442,12 @@ function kriegerAutoFindPendingFight(dd, skip) {
     if (x === bossX && y === bossY) return null;   // R6 — Drache bleibt manuell
     const tier = enc[k];
     if (!tier || tier === 'boss') return null;
-    return _kaPlanFight(dd, tier) ? { key: k, tier } : null;
+    // ⚠️ Seit dem Respawn-Umbau bleibt der Encounter-Eintrag NACH einem Sieg stehen.
+    // Ohne diese Prüfung liefe der Auto-Lauf immer wieder zu längst erledigten Feldern
+    // (Cooldown) oder zu endgültig toten (permaDead) — genau der Eindruck, dass
+    // „pausierte Kämpfe trotzdem bekämpft werden".
+    if (typeof kriegerEnemyActive === 'function' && !kriegerEnemyActive(dd, k)) return null;
+    return _kaPlanFight(dd, tier, x, y, seed, lossCount) ? { key: k, tier } : null;
   };
 
   while (head < queue.length) {
@@ -463,6 +555,7 @@ async function kriegerAutoRun(member, state, seed, COLS, ROWS, MARGIN) {
   // ── Startzustand sichern ─────────────────────────────────────────────────
   const loadout0 = { ...(state.dd?.equipped || {}) };   // R8
   _kaPlanCache = new Map();
+  _kaHpLive = { cur: null, max: null };   // pro Lauf frisch
   rep.hpStart = _kaCurHp(state.dd);
   rep.hpMax   = _kaMaxHp(state.dd);
   _kriegerAutoRunning = true;
@@ -485,7 +578,7 @@ async function kriegerAutoRun(member, state, seed, COLS, ROWS, MARGIN) {
     };
 
     // Führt einen geplanten Kampf aus. Rückgabe: 'won' | 'lost' | 'error' | 'noarmor'.
-    const doFight = async (tier, key, plan) => {
+    const doFight = async (tier, key, plan, tx, ty) => {
       // Loadout setzen und dd speichern.
       // ⚠️ PFLICHT: dungeon_fight liefert new_dungeon_data zurück und überschreibt damit
       // den lokalen Stand. Ohne dieses Speichern gingen alle seit dem letzten Kampf
@@ -493,12 +586,17 @@ async function kriegerAutoRun(member, state, seed, COLS, ROWS, MARGIN) {
       state.dd = { ...state.dd, equipped: { ...state.dd.equipped, ...plan.best.equipped } };
       try { await DB.saveDungeonData(member.id, state.dd); } catch (e) { return 'error'; }
 
+      // ⚠️ VOLLSTÄNDIGE SIGNATUR — das war der schwerste Fehler der ersten Fassung:
+      //   kriegerFight(memberId, enemyTier, flavorIdx, potionKey, potionKey2, enemyLevel)
+      // Vorher wurde nur (id, tier) übergeben. Der Trank landete dadurch auf der
+      // flavorIdx-Position, und das Gegner-Level fehlte ganz.
+      const e = plan.enemy || {};
       let result;
       try {
-        result = plan.potionKey
-          ? await DB.dungeonFight(member.id, tier, plan.potionKey)
-          : await DB.dungeonFight(member.id, tier);
-      } catch (e) { return 'error'; }
+        result = (typeof kriegerFight === 'function')
+          ? await kriegerFight(member.id, tier, e.flavorIdx ?? 0, plan.potionKey || null, null, e.level)
+          : await DB.dungeonFight(member.id, tier, e.flavorIdx ?? 0, plan.potionKey || null, null, e.level);
+      } catch (err) { return 'error'; }
       if (!result || result.error) return 'error';
 
       if (plan.potionKey) rep.coldbrews++;
@@ -508,6 +606,9 @@ async function kriegerAutoRun(member, state, seed, COLS, ROWS, MARGIN) {
       rep.loadouts[tier] = plan.best.equipped;
 
       state.dd = result.new_dungeon_data || { ...state.dd, level: result.new_level };
+      // ❤️ Die RPC liefert den echten HP-Stand zurück — verlässlicher als jede Schätzung.
+      if (typeof result.hp === 'number')     _kaHpLive.cur = Math.max(0, result.hp);
+      if (typeof result.hp_max === 'number') _kaHpLive.max = result.hp_max;
       // R3: Der +5-Schritte-Bonus pro Sieg wird im Auto-Lauf NICHT angewendet.
 
       if (result.cc_awarded > 0) {
@@ -522,12 +623,9 @@ async function kriegerAutoRun(member, state, seed, COLS, ROWS, MARGIN) {
       if (result.won) {
         rep.wins++;
         status = 'won';
-        // Gewonnenes Encounter-Feld entfernen (sonst unbegrenzt farmbar) —
-        // identisch zur Logik in _runKriegerFight.
-        if (key && state.dd.encounters?.[key]) {
-          const { [key]: _drop, ...rest } = state.dd.encounters;
-          state.dd = { ...state.dd, encounters: rest };
-        }
+        // ⚠️ NICHT mehr den Encounter löschen! Seit dem Respawn-Umbau verwaltet der
+        // Server das über defeatedAt/permaDead in new_dungeon_data. Ein Löschen hier
+        // würde diesen Zustand zerstören und das Feld als „nie bekämpft" hinterlassen.
       } else {
         rep.losses++;
         status = 'lost';
@@ -555,13 +653,13 @@ async function kriegerAutoRun(member, state, seed, COLS, ROWS, MARGIN) {
       // ── PHASE 1: offene Gegner auf bereits erkundeten Feldern ──────────────
       // Kostet keinen Tagesschritt, deshalb hat sie Vorrang. Genau hier liegen die
       // stumpfen Altlasten, die manuell niemand abarbeiten will.
-      const pend = kriegerAutoFindPendingFight(state.dd, triedKeys);
+      const pend = kriegerAutoFindPendingFight(state.dd, triedKeys, rep.losses, seed);
       if (pend) {
         await walkPath(pend.path);
-        const plan = _kaPlanFight(state.dd, pend.tier);
+        const plan = _kaPlanFight(state.dd, pend.tier, pend.target.x, pend.target.y, seed, rep.losses);
         if (!plan) { triedKeys.add(pend.key); continue; }   // HP inzwischen zu niedrig
         rep.revisits++;
-        const st = await doFight(pend.tier, pend.key, plan);
+        const st = await doFight(pend.tier, pend.key, plan, pend.target.x, pend.target.y);
         if (st === 'error')   { rep.endReason = 'error';   break; }
         if (st === 'noarmor') { rep.endReason = 'noarmor'; break; }
         if (st === 'lost')    triedKeys.add(pend.key);
@@ -585,7 +683,14 @@ async function kriegerAutoRun(member, state, seed, COLS, ROWS, MARGIN) {
       if (encounter) dd2 = { ...dd2, encounters:   { ...(dd2.encounters   || {}), [key]: encounter.tier } };
       if (gimmick)   dd2 = { ...dd2, gimmickTiles: { ...(dd2.gimmickTiles || {}), [key]: true } };
       if (gimmick?.voucher) { dd2 = { ...dd2, equipmentVoucher: gimmick.voucher }; rep.vouchers++; }
-      if (gimmick?.potion)  rep.potions++;   // Bestand kommt aus newDungeonData
+      if (gimmick?.potion) {
+        // ⚠️ kriegerExploreTile meldet den Trank nur — EINTRAGEN muss ihn der Aufrufer.
+        // Genau deshalb sind die Trankfunde des Auto-Laufs vorher spurlos verschwunden.
+        const pots = { ...(dd2.potions || {}) };
+        pots[gimmick.potion] = (pots[gimmick.potion] || 0) + 1;
+        dd2 = { ...dd2, potions: pots };
+        rep.potions++;
+      }
       if (gimmick?.cc)      rep.ccFind += gimmick.cc;
       state.dd = dd2;
       rep.steps++;
@@ -596,12 +701,12 @@ async function kriegerAutoRun(member, state, seed, COLS, ROWS, MARGIN) {
 
       // Frisch entdeckter Gegner (R7)
       if (encounter && encounter.tier !== 'boss') {
-        const plan = _kaPlanFight(state.dd, encounter.tier);
+        const plan = _kaPlanFight(state.dd, encounter.tier, tx, ty, seed, rep.losses);
         if (!plan) {
           rep.skipped++;
           rep.skippedByTier[encounter.tier] = (rep.skippedByTier[encounter.tier] || 0) + 1;
         } else {
-          const st = await doFight(encounter.tier, key, plan);
+          const st = await doFight(encounter.tier, key, plan, tx, ty);
           if (st === 'error')   { rep.endReason = 'error';   break; }
           if (st === 'noarmor') { rep.endReason = 'noarmor'; break; }
           if (st === 'lost')    triedKeys.add(key);
@@ -680,7 +785,7 @@ async function kriegerAutoRun(member, state, seed, COLS, ROWS, MARGIN) {
 
 // Chat (genau EINE Zusammenfassung) + Achievements
 async function _kriegerAutoFinish(member, state, rep) {
-  const net = rep.ccFight + rep.ccFind + rep.refund - rep.cost;
+  const net = Math.round(rep.ccFight + rep.ccFind + rep.refund - rep.cost);
   try {
     await DB.postMessage(
       `🤖 ${_kaEsc(member.name)} schickte den Krieger auf Patrouille: ${rep.steps} Felder, ` +
@@ -781,12 +886,19 @@ function _kriegerAutoConfirm(member, state, seed, COLS, ROWS, MARGIN) {
   const left  = (typeof kriegerStepsLeft === 'function') ? kriegerStepsLeft(state.dd) : 0;
 
   // Vorschau: welches Tier wäre mit dem aktuellen Besitz schaffbar?
+  // Vorschau mit einem typischen Gegner: Flavor ×1,0 und Gegner-Level = eigenes Level.
+  // Auf dem Feld schwankt beides, deshalb ist das ein Richtwert, keine Zusage.
+  const pos = (typeof kriegerPos === 'function') ? kriegerPos(state.dd) : { x: 0, y: 0 };
   const preview = ['t1','t2','t3','t4'].map(t => {
-    const b = kriegerAutoBestLoadout(state.dd, t, state.dd.equipped);
+    const base = (typeof kriegerEnemyDef === 'function') ? kriegerEnemyDef(t) : null;
+    if (!base) return '';
+    const lvl = state.dd?.level || 1;
+    const enemy = { tier: t, flavorIdx: 1, level: lvl,
+      hp: base.hp + lvl * 2, atk: base.atk + Math.floor(lvl / 4), def: base.def + Math.floor(lvl / 5) };
+    const b = kriegerAutoBestLoadout(state.dd, enemy, state.dd.equipped, false);
     const ok = b && b.est.pct >= KRIEGER_AUTO_MIN_WINPCT;
-    const def = (typeof kriegerEnemyDef === 'function') ? kriegerEnemyDef(t) : null;
     return `<div style="display:flex;justify-content:space-between;font-size:11px">
-      <span>${ok ? '⚔️' : '🚫'} ${_kaEsc(def?.name || t)}</span>
+      <span>${ok ? '⚔️' : '🚫'} ${_kaEsc(base.name || t)}</span>
       <span style="opacity:.7">${b ? Math.round(b.est.pct * 100) : 0} %</span></div>`;
   }).join('');
 
@@ -798,7 +910,7 @@ function _kriegerAutoConfirm(member, state, seed, COLS, ROWS, MARGIN) {
         <div class="cc-karte-popup-body" style="flex-direction:column;align-items:stretch;gap:8px">
           <div style="font-size:12px">Der Krieger verbraucht <strong>alle ${left} Schritte</strong> von heute.</div>
           <div style="font-size:12px">Kosten: <strong>${cost} 🫘</strong> (Stufe ${level} × ${KRIEGER_AUTO_COST_PER_LV})</div>
-          <div style="font-size:12px">Zustand: <strong>❤️ ${_kaCurHp(state.dd)}/${_kaMaxHp(state.dd)}</strong>${_kaFightSupportsPotion() ? ` · 🧊 ${(typeof kriegerPotionCount === 'function' ? kriegerPotionCount(state.dd, KRIEGER_AUTO_COLDBREW_KEY) : 0)} Cold Brew` : ''}</div>
+          <div style="font-size:12px">Zustand: <strong>❤️ ${_kaCurHp(state.dd)}/${_kaMaxHp(state.dd)}</strong> · 🧊 ${(typeof kriegerPotionCount === 'function' ? kriegerPotionCount(state.dd, KRIEGER_AUTO_COLDBREW_KEY) : 0)} Cold Brew</div>
           <div style="margin-top:4px;font-size:11px;opacity:.7">Geschätzte Siegchance je Gegnerart:</div>
           ${preview}
           <div style="font-size:11px;opacity:.6;margin-top:4px">
@@ -828,7 +940,7 @@ function _kriegerAutoConfirm(member, state, seed, COLS, ROWS, MARGIN) {
 function _kriegerAutoShowReport(rep, state) {
   const popup = document.getElementById('krieger-popup');
   if (!popup) return;
-  const net = rep.ccFight + rep.ccFind + rep.refund - rep.cost;
+  const net = Math.round(rep.ccFight + rep.ccFind + rep.refund - rep.cost);
   const tierLine = Object.keys(rep.byTier).map(t => {
     const d = (typeof kriegerEnemyDef === 'function') ? kriegerEnemyDef(t) : null;
     return `${_kaEsc(d?.name || t)}: ${rep.byTier[t]}`;
@@ -841,6 +953,8 @@ function _kriegerAutoShowReport(rep, state) {
     error:   'Vorzeitig beendet (Verbindungsproblem). Alles bis hierher wurde gespeichert.',
     safety:  'Sicherheitsgrenze erreicht.',
   }[rep.endReason] || '';
+  const warnHp   = _kaHpUnknown ? 'Trefferpunkte konnten nicht ausgelesen werden — es wurde vorsichtig gerechnet.' : '';
+  const warnLoss = rep.losses >= KRIEGER_AUTO_MAX_LOSSES ? `Nach ${rep.losses} Niederlagen wurde nur noch erkundet.` : '';
 
   const row = (l, v) => `<div style="display:flex;justify-content:space-between;font-size:12px"><span style="opacity:.75">${l}</span><span>${v}</span></div>`;
 
@@ -854,8 +968,8 @@ function _kriegerAutoShowReport(rep, state) {
           ${row('Kämpfe', `🏆 ${rep.wins} · 💀 ${rep.losses} · 🚫 ${rep.skipped} gemieden`)}
           ${row('Gegner', tierLine)}
           ${rep.revisits ? row('Alte Felder geräumt', `♻️ ${rep.revisits}`) : ''}
-          ${row('Kampfgewinne', `+${rep.ccFight} 🫘`)}
-          ${row('Funde', `+${rep.ccFind} 🫘${rep.vouchers ? ` · 🎁 ${rep.vouchers}` : ''}${rep.potions ? ` · 🧪 ${rep.potions}` : ''}`)}
+          ${row('Kampfgewinne', `+${Math.round(rep.ccFight)} 🫘`)}
+          ${row('Funde', `+${Math.round(rep.ccFind)} 🫘${rep.vouchers ? ` · 🎁 ${rep.vouchers}` : ''}${rep.potions ? ` · 🧪 ${rep.potions}` : ''}`)}
           ${row('Gebühr', `−${rep.cost} 🫘`)}
           ${rep.refund ? row('Erstattung', `+${rep.refund} 🫘`) : ''}
           <div style="display:flex;justify-content:space-between;font-weight:700;border-top:1px solid rgba(255,255,255,.12);padding-top:5px;margin-top:3px">
@@ -866,6 +980,8 @@ function _kriegerAutoShowReport(rep, state) {
           ${rep.coldbrews ? row('Cold Brew', `🧊 ${rep.coldbrews} eingesetzt`) : ''}
           ${rep.levelUps.length ? `<div class="krieger-levelup">🎉 Stufe ${rep.levelUps[rep.levelUps.length - 1]} erreicht!</div>` : ''}
           ${endMsg ? `<div style="font-size:11px;opacity:.6;margin-top:5px">${_kaEsc(endMsg)}</div>` : ''}
+          ${warnLoss ? `<div style="font-size:11px;opacity:.75">⚠️ ${_kaEsc(warnLoss)}</div>` : ''}
+          ${warnHp ? `<div style="font-size:11px;opacity:.75">⚠️ ${_kaEsc(warnHp)}</div>` : ''}
           ${rep.skipped ? `<div style="font-size:11px;opacity:.6">Gemiedene Gegner bleiben stehen — du kannst sie jederzeit selbst angehen.</div>` : ''}
         </div>
         <button class="cc-karte-popup-close" id="krieger-auto-report-close" style="width:100%;margin-top:10px">Schließen</button>
