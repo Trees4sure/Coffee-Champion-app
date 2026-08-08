@@ -564,6 +564,10 @@ async function kriegerAutoRun(member, state, seed, COLS, ROWS, MARGIN) {
   try {
     let actions = 0;
     const triedKeys = new Set();   // in diesem Lauf verlorene Felder — kein zweiter Versuch
+    // Notbremse gegen Stillstand: zählt Kämpfe je Feld in diesem Lauf. Sollte die
+    // Zustandsführung je wieder auseinanderlaufen, dreht sich der Krieger höchstens
+    // zweimal im Kreis statt endlos — und das Protokoll zeigt es als gemiedenes Feld.
+    const fightCount = new Map();
 
     // Freies Laufen über bereits erkundete Felder (kostet keinen Tagesschritt).
     const walkPath = async (path) => {
@@ -623,9 +627,23 @@ async function kriegerAutoRun(member, state, seed, COLS, ROWS, MARGIN) {
       if (result.won) {
         rep.wins++;
         status = 'won';
-        // ⚠️ NICHT mehr den Encounter löschen! Seit dem Respawn-Umbau verwaltet der
-        // Server das über defeatedAt/permaDead in new_dungeon_data. Ein Löschen hier
-        // würde diesen Zustand zerstören und das Feld als „nie bekämpft" hinterlassen.
+        // ⚠️ BUCHFÜHRUNG IST CLIENT-SACHE. dungeon_fight bekommt KEINE Feldkoordinaten
+        // (memberId, tier, flavorIdx, potionKey, potionKey2, enemyLevel) — die RPC kann
+        // also gar nicht wissen, welches Feld gefallen ist. Genau wie _runKriegerFight
+        // im manuellen Spiel muss der Client defeatedAt/permaDead selbst setzen.
+        //
+        // Ohne das bleibt kriegerEnemyActive() dauerhaft true, Phase 1 findet immer
+        // wieder dasselbe Feld und der Krieger dreht sich auf der Stelle.
+        //
+        // permaDead beim ZWEITEN Sieg: gab es schon einen Eintrag in defeatedAt, war
+        // dies der Respawn-Kampf — danach ist das Feld endgültig erledigt.
+        if (key) {
+          const wasDefeated = state.dd.defeatedAt?.[key] != null;
+          const defeatedAt  = { ...(state.dd.defeatedAt || {}), [key]: Date.now() };
+          const permaDead   = { ...(state.dd.permaDead  || {}) };
+          if (wasDefeated) permaDead[key] = true;
+          state.dd = { ...state.dd, defeatedAt, permaDead };
+        }
       } else {
         rep.losses++;
         status = 'lost';
@@ -654,7 +672,12 @@ async function kriegerAutoRun(member, state, seed, COLS, ROWS, MARGIN) {
       // Kostet keinen Tagesschritt, deshalb hat sie Vorrang. Genau hier liegen die
       // stumpfen Altlasten, die manuell niemand abarbeiten will.
       const pend = kriegerAutoFindPendingFight(state.dd, triedKeys, rep.losses, seed);
+      if (pend && (fightCount.get(pend.key) || 0) >= 2) {
+        triedKeys.add(pend.key);
+        continue;
+      }
       if (pend) {
+        fightCount.set(pend.key, (fightCount.get(pend.key) || 0) + 1);
         await walkPath(pend.path);
         const plan = _kaPlanFight(state.dd, pend.tier, pend.target.x, pend.target.y, seed, rep.losses);
         if (!plan) { triedKeys.add(pend.key); continue; }   // HP inzwischen zu niedrig
