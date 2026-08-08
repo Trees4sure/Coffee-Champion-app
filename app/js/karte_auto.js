@@ -294,7 +294,7 @@ function karteAutoTally(treasures) {
     const key = t.name || '?';
     const e = map.get(key) || { emoji: t.emoji || '❓', name: key, count: 0, cc: 0 };
     e.count++;
-    e.cc += t.cc || 0;
+    e.cc += Math.round(t.cc || 0);
     map.set(key, e);
   }
   return [...map.values()].sort((a, b) => b.count - a.count || b.cc - a.cc);
@@ -311,7 +311,10 @@ function _karteAutoTallyText(tally, max = 4) {
 async function _karteAutoFinish(ctx, rep) {
   const { member } = ctx;
   const tally = karteAutoTally(rep.treasures);
-  const netto = rep.coinsAfter - rep.coinsBefore;   // ohne Pauschale (die ist schon abgezogen)
+  // ⚠️ RUNDEN. Schatzwerte werden mit Faktoren multipliziert (Rucksack ×1,25,
+  // Forschungs-Tier, Gruppenbonus) — das erzeugt Fließkomma-Reste wie
+  // 1340.9999999999982. Jede nach außen sichtbare CC-Zahl wird gerundet.
+  const netto = Math.round(rep.coinsAfter - rep.coinsBefore);
 
   // EINE Chat-Nachricht statt einer pro Fund
   try {
@@ -340,8 +343,8 @@ function _karteAutoShowReport(ctx, rep, tally) {
   const host = _karteAutoEnsurePopupHost();
   if (!host) return;
 
-  const netto  = rep.coinsAfter - rep.coinsBefore;
-  const gesamt = netto - rep.cost;
+  const netto  = Math.round(rep.coinsAfter - rep.coinsBefore);
+  const gesamt = Math.round(netto - rep.cost);
   const endMsg = {
     steps:   'Alle Tagesschritte verbraucht.',
     stopped: 'Von dir gestoppt.',
