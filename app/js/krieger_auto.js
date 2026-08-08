@@ -43,12 +43,18 @@ const KRIEGER_AUTO_MAX_LOSSES   = 3;     // danach: nur noch erkunden
 // nie zum Erkunden gekommen. Für den Spieler sah das aus wie Stillstand: die Figur
 // bewegte sich kaum, der Schrittzähler blieb auf 0, und ein besiegtes Feld behält
 // sein ⚔️-Symbol (es wird nur blasser). Deshalb jetzt: immer abwechselnd.
-const KRIEGER_AUTO_MAX_DETOUR   = 20;    // max. Felder Umweg zu einem alten Gegner
-const KRIEGER_AUTO_MAX_REVISITS = 40;    // Obergrenze alter Felder pro Lauf
+// Umweg zu einem alten Gegner. Solange noch Schritte übrig sind, bleibt er kurz —
+// Erkundung hat dann Vorrang und lange Anmärsche würden nur Zeit fressen. Sind die
+// Tagesschritte aufgebraucht, kostet Laufen nichts mehr außer Zeit: dann darf der
+// Krieger weit ausholen, denn Aufräumen ist alles, was noch geht (JP 2026-08-05:
+// „er soll enden, wenn er keine Gegner mehr findet, nicht wenn die Schritte vorbei sind").
+const KRIEGER_AUTO_MAX_DETOUR      = 20;   // mit Schritten übrig
+const KRIEGER_AUTO_MAX_DETOUR_LATE = 70;   // nach Schrittende — praktisch die halbe Karte
+const KRIEGER_AUTO_MAX_REVISITS    = 200;  // Obergrenze alter Felder pro Lauf (Sicherung)
 const KRIEGER_AUTO_REFUND_UNDER = 0.50;  // R9 — anteilige Erstattung unter dieser Nutzung
 const KRIEGER_AUTO_STEP_DELAY   = 110;   // ms Pause je Schritt (UI bleibt bedienbar)
 const KRIEGER_AUTO_WALK_DELAY   = 35;    // ms Pause je Feld beim kostenlosen Zurücklaufen
-const KRIEGER_AUTO_MAX_ACTIONS  = 600;   // harte Not-Obergrenze gegen Endlosschleifen
+const KRIEGER_AUTO_MAX_ACTIONS  = 1200;  // harte Not-Obergrenze gegen Endlosschleifen
 // 🧊 Cold Brew: heilt laut Trankbeschreibung „+50 % Max-HP vor Kampfbeginn".
 // Wird eingesetzt, wenn der Kampf NUR damit über die 60-%-Schwelle kommt — nie vorsorglich.
 const KRIEGER_AUTO_COLDBREW_KEY  = 'coldbrew';
@@ -428,7 +434,7 @@ function _kaPlanFight(dd, tier, tx, ty, seed, lossCount) {
 // aktuell zu schaffen ist. `skip` enthält Felder, die in diesem Lauf schon verloren
 // wurden — ohne diese Sperre liefe der Krieger endlos zwischen Niederlage und
 // Wiederholung hin und her.
-function kriegerAutoFindPendingFight(dd, skip, lossCount, seed) {
+function kriegerAutoFindPendingFight(dd, skip, lossCount, seed, maxDetour) {
   const enc = dd?.encounters || {};
   if (!Object.keys(enc).length) return null;
 
@@ -474,7 +480,7 @@ function kriegerAutoFindPendingFight(dd, skip, lossCount, seed) {
     // Umwegbegrenzung: ein alter Gegner 60 Felder entfernt ist die Laufzeit nicht wert
     // (bei 35 ms je Feld allein zwei Sekunden Anmarsch pro Richtung).
     const d = depth.get(`${cur.x},${cur.y}`) || 0;
-    if (d >= KRIEGER_AUTO_MAX_DETOUR) continue;
+    if (d >= (maxDetour || KRIEGER_AUTO_MAX_DETOUR)) continue;
     for (const [dx, dy] of NB) {
       const nx = cur.x + dx, ny = cur.y + dy;
       if (nx < 0 || ny < 0 || nx >= N || ny >= N) continue;
@@ -703,8 +709,10 @@ async function kriegerAutoRun(member, state, seed, COLS, ROWS, MARGIN) {
       // Abwechslung: solange Schritte übrig sind, kommt nach jedem alten Feld ein
       // neues. Erst wenn das Tagesbudget aufgebraucht ist, räumt der Lauf nur noch auf.
       const stepsLeft = rep.steps < budget;
-      const doPending = !(preferExplore && stepsLeft) && rep.revisits < KRIEGER_AUTO_MAX_REVISITS;
-      const pend = doPending ? kriegerAutoFindPendingFight(state.dd, triedKeys, rep.losses, seed) : null;
+      const detour    = stepsLeft ? KRIEGER_AUTO_MAX_DETOUR : KRIEGER_AUTO_MAX_DETOUR_LATE;
+      const capHit    = rep.revisits >= KRIEGER_AUTO_MAX_REVISITS;
+      const doPending = !(preferExplore && stepsLeft) && !capHit;
+      const pend = doPending ? kriegerAutoFindPendingFight(state.dd, triedKeys, rep.losses, seed, detour) : null;
       if (pend && (fightCount.get(pend.key) || 0) >= 2) {
         triedKeys.add(pend.key);
         continue;
@@ -727,8 +735,9 @@ async function kriegerAutoRun(member, state, seed, COLS, ROWS, MARGIN) {
       // ── PHASE 2: neues Feld erkunden ──────────────────────────────────────
       preferExplore = false;
       if (rep.steps >= budget) {
-        // Keine Schritte mehr UND nichts Altes mehr erreichbar → fertig.
-        rep.endReason = 'budget';
+        // Schritte alle. Hierher kommt der Lauf nur, wenn Phase 1 nichts mehr gefunden
+        // hat — also ist wirklich nichts Bekämpfbares mehr in Reichweite.
+        rep.endReason = capHit ? 'revisitcap' : 'nofights';
         break;
       }
 
@@ -736,8 +745,8 @@ async function kriegerAutoRun(member, state, seed, COLS, ROWS, MARGIN) {
       if (!route) {
         // Nichts Neues erreichbar — aber vielleicht noch alte Felder. Dann weiterräumen,
         // statt den Lauf zu beenden.
-        if (!preferExplore && rep.revisits < KRIEGER_AUTO_MAX_REVISITS
-            && kriegerAutoFindPendingFight(state.dd, triedKeys, rep.losses, seed)) {
+        if (!capHit && kriegerAutoFindPendingFight(state.dd, triedKeys, rep.losses, seed,
+                                                   KRIEGER_AUTO_MAX_DETOUR_LATE)) {
           continue;
         }
         rep.endReason = 'blocked';
@@ -946,7 +955,11 @@ function kriegerAutoMountControls(member, state, seed, COLS, ROWS, MARGIN, body)
 
 function _kriegerAutoUpdateProgress(rep, budget) {
   const el = document.getElementById('krieger-auto-progress');
-  if (el) el.textContent = `👣 ${rep.steps}/${budget} · ⚔️ ${rep.wins} Siege · ♻️ ${rep.revisits} alte · 🚫 ${rep.skipped} gemieden`;
+  if (!el) return;
+  // Nach dem Schrittende läuft nur noch die Aufräumphase — das soll man sehen,
+  // sonst wirkt ein Lauf mit „👣 19/19" wie hängengeblieben.
+  const phase = rep.steps >= budget ? '♻️ Aufräumen' : `👣 ${rep.steps}/${budget}`;
+  el.textContent = `${phase} · ⚔️ ${rep.wins} Siege · ♻️ ${rep.revisits} alte · 🚫 ${rep.skipped} gemieden`;
 }
 
 function _kriegerAutoConfirm(member, state, seed, COLS, ROWS, MARGIN) {
@@ -1017,7 +1030,9 @@ function _kriegerAutoShowReport(rep, state) {
     return `${_kaEsc(d?.name || t)}: ${rep.byTier[t]}`;
   }).join(' · ') || '—';
   const endMsg = {
-    budget:  'Alle Tagesschritte verbraucht.',
+    budget:     'Alle Tagesschritte verbraucht.',
+    nofights:   'Schritte aufgebraucht und kein schaffbarer Gegner mehr in Reichweite.',
+    revisitcap: `Obergrenze von ${KRIEGER_AUTO_MAX_REVISITS} aufgeräumten Feldern erreicht.`,
     stopped: 'Vom Spieler gestoppt.',
     blocked: 'Kein erreichbares unerkundetes Feld mehr — Bohrer oder Granate helfen weiter.',
     noarmor: 'Niederlage ohne Rüstung — die Tagesschritte sind aufgebraucht.',
