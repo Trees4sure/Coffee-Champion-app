@@ -37,6 +37,14 @@ const KRIEGER_AUTO_MIN_WINPCT   = 0.60;  // R7 — nur kämpfen ab dieser Siegch
 // und nur noch erkundet. Das wirkt UNABHÄNGIG davon, ob der Adapter korrekt ausgefüllt ist.
 const KRIEGER_AUTO_LOSS_PENALTY = 0.10;  // +10 Prozentpunkte je Niederlage
 const KRIEGER_AUTO_MAX_LOSSES   = 3;     // danach: nur noch erkunden
+// ── Abwechslung zwischen Altlasten und Erkundung (2026-08-05) ──────────────
+// Phase 1 hatte absoluten Vorrang. Auf einer weit erkundeten Karte liegen aber
+// hunderte alte Gegnerfelder — der Lauf hätte sie erst alle abgearbeitet und wäre
+// nie zum Erkunden gekommen. Für den Spieler sah das aus wie Stillstand: die Figur
+// bewegte sich kaum, der Schrittzähler blieb auf 0, und ein besiegtes Feld behält
+// sein ⚔️-Symbol (es wird nur blasser). Deshalb jetzt: immer abwechselnd.
+const KRIEGER_AUTO_MAX_DETOUR   = 20;    // max. Felder Umweg zu einem alten Gegner
+const KRIEGER_AUTO_MAX_REVISITS = 40;    // Obergrenze alter Felder pro Lauf
 const KRIEGER_AUTO_REFUND_UNDER = 0.50;  // R9 — anteilige Erstattung unter dieser Nutzung
 const KRIEGER_AUTO_STEP_DELAY   = 110;   // ms Pause je Schritt (UI bleibt bedienbar)
 const KRIEGER_AUTO_WALK_DELAY   = 35;    // ms Pause je Feld beim kostenlosen Zurücklaufen
@@ -433,6 +441,7 @@ function kriegerAutoFindPendingFight(dd, skip, lossCount, seed) {
 
   const seen = new Set([`${start.x},${start.y}`]);
   const prev = new Map();
+  const depth = new Map([[`${start.x},${start.y}`, 0]]);
   const queue = [start];
   let head = 0;
 
@@ -462,6 +471,10 @@ function kriegerAutoFindPendingFight(dd, skip, lossCount, seed) {
       }
       return { path, target: { x: cur.x, y: cur.y }, key: hit.key, tier: hit.tier };
     }
+    // Umwegbegrenzung: ein alter Gegner 60 Felder entfernt ist die Laufzeit nicht wert
+    // (bei 35 ms je Feld allein zwei Sekunden Anmarsch pro Richtung).
+    const d = depth.get(`${cur.x},${cur.y}`) || 0;
+    if (d >= KRIEGER_AUTO_MAX_DETOUR) continue;
     for (const [dx, dy] of NB) {
       const nx = cur.x + dx, ny = cur.y + dy;
       if (nx < 0 || ny < 0 || nx >= N || ny >= N) continue;
@@ -469,6 +482,7 @@ function kriegerAutoFindPendingFight(dd, skip, lossCount, seed) {
       if (seen.has(k) || !explored[k]) continue;
       seen.add(k);
       prev.set(k, cur);
+      depth.set(k, d + 1);
       queue.push({ x: nx, y: ny });
     }
   }
@@ -568,6 +582,9 @@ async function kriegerAutoRun(member, state, seed, COLS, ROWS, MARGIN) {
     // Zustandsführung je wieder auseinanderlaufen, dreht sich der Krieger höchstens
     // zweimal im Kreis statt endlos — und das Protokoll zeigt es als gemiedenes Feld.
     const fightCount = new Map();
+    // true = in diesem Durchgang zuerst erkunden. Wird nach jedem Altlasten-Kampf
+    // gesetzt, damit Erkundung und Aufräumen sich abwechseln.
+    let preferExplore = false;
 
     // Freies Laufen über bereits erkundete Felder (kostet keinen Tagesschritt).
     const walkPath = async (path) => {
@@ -627,22 +644,34 @@ async function kriegerAutoRun(member, state, seed, COLS, ROWS, MARGIN) {
       if (result.won) {
         rep.wins++;
         status = 'won';
-        // ⚠️ BUCHFÜHRUNG IST CLIENT-SACHE. dungeon_fight bekommt KEINE Feldkoordinaten
-        // (memberId, tier, flavorIdx, potionKey, potionKey2, enemyLevel) — die RPC kann
-        // also gar nicht wissen, welches Feld gefallen ist. Genau wie _runKriegerFight
-        // im manuellen Spiel muss der Client defeatedAt/permaDead selbst setzen.
+        // ⚠️ BUCHFÜHRUNG IST CLIENT-SACHE — und sie muss VOLLSTÄNDIG sein.
+        // dungeon_fight bekommt keine Feldkoordinaten (memberId, tier, flavorIdx,
+        // potionKey, potionKey2, enemyLevel); die RPC kann also gar nicht wissen,
+        // welches Feld gefallen ist.
         //
-        // Ohne das bleibt kriegerEnemyActive() dauerhaft true, Phase 1 findet immer
-        // wieder dasselbe Feld und der Krieger dreht sich auf der Stelle.
+        // ⚠️ LEHRGELD 2026-08-05: Ein Zwischenstand hat das Löschen des Encounters
+        // entfernt und nur defeatedAt gesetzt — mit dem Kommentar in krieger.js als
+        // Begründung („nach einem Sieg nicht mehr gelöscht"). Ergebnis in der Praxis:
+        // das ⚔️ blieb stehen (Cooldown wird nur blasser gezeichnet), die Wegfindung
+        // fand dasselbe Feld erneut, der Zähler lief und die Figur nicht.
+        // Deshalb jetzt BEIDES:
+        //   1. Encounter-Eintrag entfernen → Feld ist sichtbar erledigt, die Suche
+        //      kann es nicht wiederfinden. Das ist die Fassung, die nachweislich lief.
+        //   2. defeatedAt/permaDead trotzdem mitschreiben → der Zustand bleibt zu dem
+        //      konsistent, was das manuelle Spiel erzeugt.
         //
-        // permaDead beim ZWEITEN Sieg: gab es schon einen Eintrag in defeatedAt, war
-        // dies der Respawn-Kampf — danach ist das Feld endgültig erledigt.
+        // BEWUSSTE ABWEICHUNG: Ohne Encounter-Eintrag respawnt dieses Feld nicht mehr.
+        // Im manuellen Spiel käme der Gegner einmal zurück. Der Auto-Lauf verzichtet
+        // also auf einen späteren Zweitkampf — der Preis dafür, dass er überhaupt
+        // vorankommt. Wer respawnende Gegner will, kämpft manuell.
         if (key) {
           const wasDefeated = state.dd.defeatedAt?.[key] != null;
           const defeatedAt  = { ...(state.dd.defeatedAt || {}), [key]: Date.now() };
           const permaDead   = { ...(state.dd.permaDead  || {}) };
           if (wasDefeated) permaDead[key] = true;
-          state.dd = { ...state.dd, defeatedAt, permaDead };
+          const enc = { ...(state.dd.encounters || {}) };
+          delete enc[key];
+          state.dd = { ...state.dd, encounters: enc, defeatedAt, permaDead };
         }
       } else {
         rep.losses++;
@@ -671,12 +700,17 @@ async function kriegerAutoRun(member, state, seed, COLS, ROWS, MARGIN) {
       // ── PHASE 1: offene Gegner auf bereits erkundeten Feldern ──────────────
       // Kostet keinen Tagesschritt, deshalb hat sie Vorrang. Genau hier liegen die
       // stumpfen Altlasten, die manuell niemand abarbeiten will.
-      const pend = kriegerAutoFindPendingFight(state.dd, triedKeys, rep.losses, seed);
+      // Abwechslung: solange Schritte übrig sind, kommt nach jedem alten Feld ein
+      // neues. Erst wenn das Tagesbudget aufgebraucht ist, räumt der Lauf nur noch auf.
+      const stepsLeft = rep.steps < budget;
+      const doPending = !(preferExplore && stepsLeft) && rep.revisits < KRIEGER_AUTO_MAX_REVISITS;
+      const pend = doPending ? kriegerAutoFindPendingFight(state.dd, triedKeys, rep.losses, seed) : null;
       if (pend && (fightCount.get(pend.key) || 0) >= 2) {
         triedKeys.add(pend.key);
         continue;
       }
       if (pend) {
+        preferExplore = true;
         fightCount.set(pend.key, (fightCount.get(pend.key) || 0) + 1);
         await walkPath(pend.path);
         const plan = _kaPlanFight(state.dd, pend.tier, pend.target.x, pend.target.y, seed, rep.losses);
@@ -691,10 +725,24 @@ async function kriegerAutoRun(member, state, seed, COLS, ROWS, MARGIN) {
       }
 
       // ── PHASE 2: neues Feld erkunden ──────────────────────────────────────
-      if (rep.steps >= budget) { rep.endReason = 'budget'; break; }
+      preferExplore = false;
+      if (rep.steps >= budget) {
+        // Keine Schritte mehr UND nichts Altes mehr erreichbar → fertig.
+        rep.endReason = 'budget';
+        break;
+      }
 
       const route = kriegerAutoFindTarget(state.dd, seed);
-      if (!route) { rep.endReason = 'blocked'; break; }
+      if (!route) {
+        // Nichts Neues erreichbar — aber vielleicht noch alte Felder. Dann weiterräumen,
+        // statt den Lauf zu beenden.
+        if (!preferExplore && rep.revisits < KRIEGER_AUTO_MAX_REVISITS
+            && kriegerAutoFindPendingFight(state.dd, triedKeys, rep.losses, seed)) {
+          continue;
+        }
+        rep.endReason = 'blocked';
+        break;
+      }
 
       await walkPath(route.path);
 
