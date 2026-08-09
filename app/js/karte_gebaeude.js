@@ -141,7 +141,68 @@ function _kgBuildHtml(member) {
   return `<div style="padding:2px 0">${kopf}${html}</div>`;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Gruppenansicht — nach Personen aufgedröselt
+// ═══════════════════════════════════════════════════════════════════════════
+// Quelle ist appData.users (dieselbe Liste, aus der auch die Statistik-Kacheln in
+// imperium.js gespeist werden). Jeder Eintrag trägt sein eigenes map_data.buildings.
+// Rein lesend; fehlt appData, bleibt die Ansicht leer statt zu krachen.
+function _kgGroupHtml() {
+  const users = (typeof appData !== 'undefined' && Array.isArray(appData?.users)) ? appData.users : null;
+  if (!users || !users.length) {
+    return '<div style="font-size:12px;opacity:.6;padding:6px 0">Keine Gruppendaten geladen.</div>';
+  }
+  if (typeof KARTE_BUILDINGS === 'undefined') return '';
+
+  const rows = users.map(u => {
+    const md = u.map_data || {};
+    const perDay = (typeof calcBuildingPerDay === 'function') ? calcBuildingPerDay(md.buildings) : 0;
+    const steps  = (typeof calcBuildingStepBonus === 'function') ? calcBuildingStepBonus(md.buildings) : 0;
+    let done = 0, building = 0, damaged = 0;
+    const byType = new Map();
+    for (const def of KARTE_BUILDINGS) {
+      const t = kgBuildingTally(md, def.key);
+      done += t.done; building += t.building; damaged += t.damaged;
+      if (t.total > 0) byType.set(def.key, { def, t });
+    }
+    // Auffälligste Bauten zuerst — bei vielen Typen wird die Zeile sonst unlesbar.
+    const liste = [...byType.values()]
+      .sort((a, b) => b.t.done - a.t.done || (b.def.perDay || 0) - (a.def.perDay || 0))
+      .map(x => `${x.def.emoji}${x.t.done + x.t.building}`)
+      .join(' ');
+    return { name: u.name || '?', perDay, steps, done, building, damaged, liste };
+  }).sort((a, b) => b.perDay - a.perDay || b.done - a.done);
+
+  const sumPerDay = rows.reduce((s, r) => s + r.perDay, 0);
+  const sumDone   = rows.reduce((s, r) => s + r.done, 0);
+
+  const body = rows.map((r, i) => `<div style="padding:6px 0;border-top:1px solid rgba(255,255,255,.07)">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px">
+        <span>${i === 0 && r.perDay > 0 ? '👑 ' : ''}<strong>${_kgEsc(r.name)}</strong></span>
+        <span style="white-space:nowrap">+${Math.round(r.perDay)} 🫘/Tag</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;gap:8px;font-size:11px;opacity:.75;margin-top:2px">
+        <span>${r.done} fertig${r.building ? ` · 🚧 ${r.building}` : ''}${r.damaged ? ` · ⚠️ ${r.damaged}` : ''}${r.steps ? ` · +${r.steps} Schritte` : ''}</span>
+      </div>
+      ${r.liste ? `<div style="font-size:13px;margin-top:3px;letter-spacing:1px">${r.liste}</div>` : ''}
+    </div>`).join('');
+
+  return `<div style="padding:2px 0">
+    <div style="display:flex;justify-content:space-between;font-size:12px">
+      <span style="opacity:.75">Gebäude in der Gruppe</span><strong>${sumDone}</strong></div>
+    <div style="display:flex;justify-content:space-between;font-weight:700;border-top:1px solid rgba(255,255,255,.15);margin-top:5px;padding-top:5px">
+      <span>Gruppen-Einkommen</span><span>+${Math.round(sumPerDay)} 🫘/Tag</span></div>
+    ${body}
+    <div style="font-size:10.5px;opacity:.5;margin-top:8px">
+      Die Symbolzeile zeigt Anzahl je Gebäudetyp (fertig + im Bau).
+    </div>
+  </div>`;
+}
+
 // ── Einhängen (eigene aufklappbare Sektion am Ende des Karten-Tabs) ─────────
+// Gewählte Ansicht überlebt Re-Renders innerhalb der Sitzung.
+let _kgView = 'mine';
+
 function karteGebaeudeMount() {
   const canvas = document.getElementById('cc-karte-canvas');
   if (!canvas) return;
@@ -150,18 +211,35 @@ function karteGebaeudeMount() {
   const member = (typeof currentUserData !== 'undefined') ? currentUserData : null;
   if (!member) return;
 
-  // Aufklapp-Zustand über einen Re-Render hinweg merken
+  // Aufklapp-Zustand und gewählte Ansicht über einen Re-Render hinweg merken
   const wasOpen = document.getElementById('kg-details')?.open;
   document.getElementById('kg-wrap')?.remove();
+
+  const view = _kgView;   // 'mine' | 'group'
+  const tab = (id, label) => `<button data-kg-view="${id}"
+    style="flex:1;padding:5px 8px;font-size:11px;border-radius:8px;cursor:pointer;
+    border:1px solid ${view === id ? 'var(--gold)' : 'rgba(255,255,255,.15)'};
+    background:${view === id ? 'rgba(212,175,55,.15)' : 'transparent'};
+    color:inherit;font-weight:${view === id ? '700' : '400'}">${label}</button>`;
 
   const wrap = document.createElement('div');
   wrap.id = 'kg-wrap';
   wrap.style.cssText = 'margin-top:10px;padding:10px;border:1px solid rgba(255,255,255,.12);border-radius:10px';
   wrap.innerHTML = `<details id="kg-details" ${wasOpen ? 'open' : ''}>
       <summary style="cursor:pointer;font-weight:700;list-style:none">🏗️ Gebäude-Übersicht</summary>
-      <div style="margin-top:8px">${_kgBuildHtml(member)}</div>
+      <div style="display:flex;gap:6px;margin:8px 0">${tab('mine', '🏠 Meine')}${tab('group', '👥 Gruppe')}</div>
+      <div>${view === 'group' ? _kgGroupHtml() : _kgBuildHtml(member)}</div>
     </details>`;
   host.appendChild(wrap);
+
+  wrap.querySelectorAll('[data-kg-view]').forEach(b => {
+    b.addEventListener('click', (e) => {
+      e.preventDefault();
+      _kgView = b.dataset.kgView;
+      karteGebaeudeMount();
+      document.getElementById('kg-details')?.setAttribute('open', '');
+    });
+  });
 }
 
 // ── Selbstmontage (gleiches Muster wie karte_auto.js) ──────────────────────
