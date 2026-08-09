@@ -67,6 +67,20 @@ function _kbStepsLeft(state) {
 //
 // `blocked` stammt aus dem tile_block-Event („ein Tier blockiert das Feld heute") und
 // gilt laut Design nur für unerkundete Felder — deshalb wird es nur beim Ziel geprüft.
+// JP 2026-08-05: „geht komplett über das ganze Kartenfeld bis zum Ende und dann wieder
+// zurück. Könnte er auch entlang der bereits vorhandenen Fläche drumherum gehen?"
+//
+// Ursache: die Suche nahm das ERSTBESTE unerkundete Feld in Breitensuchen-Reihenfolge.
+// Das ist zwar das nächstgelegene, aber oft eine Sackgasse — ein einzelnes Loch am Rand.
+// Ist es aufgedeckt, liegt das nächste Ziel wieder ganz woanders, und die Figur pendelt
+// quer über die Karte.
+//
+// Jetzt: alle Kandidaten im Umkreis der kürzesten gefundenen Entfernung einsammeln
+// (plus KARTE_AUTO_FRONTIER_SLACK Felder Toleranz) und daraus das Feld mit den MEISTEN
+// unerkundeten Nachbarn wählen. Das ist die offene Kante der erkundeten Fläche — der
+// Lauf arbeitet sich am Rand entlang, statt Löcher quer über die Karte abzuklappern.
+const KARTE_AUTO_FRONTIER_SLACK = 4;
+
 function karteAutoFindTarget(state) {
   const mapData  = state.mapData || {};
   const start    = (typeof kartePos === 'function') ? kartePos(mapData) : { x: 0, y: 0 };
@@ -78,29 +92,52 @@ function karteAutoFindTarget(state) {
 
   const seen  = new Set([`${start.x},${start.y}`]);
   const prev  = new Map();
+  const depth = new Map([[`${start.x},${start.y}`, 0]]);
   const queue = [start];
   let head = 0;
 
+  // Wie „offen" ist ein Feld? = Zahl der unerkundeten, betretbaren Nachbarn.
+  const openness = (x, y) => {
+    let n = 0;
+    for (const [dx, dy] of NB) {
+      const nx = x + dx, ny = y + dy;
+      if (nx < 0 || ny < 0 || nx >= N || ny >= N) continue;
+      const k = `${nx},${ny}`;
+      if (!explored[k] && blocked[k] !== today) n++;
+    }
+    return n;
+  };
+
+  const buildPath = (node) => {
+    const path = [];
+    let cur = node;
+    while (cur && !(cur.x === start.x && cur.y === start.y)) {
+      path.unshift(cur);
+      cur = prev.get(`${cur.x},${cur.y}`);
+    }
+    return path;
+  };
+
+  let bestDepth = Infinity;
+  let best = null;   // { from, target, open }
+
   while (head < queue.length) {
     const cur = queue[head++];
+    const d = depth.get(`${cur.x},${cur.y}`) || 0;
+    // Sobald wir deutlich weiter sind als der bisher beste Fund, lohnt kein Weitersuchen.
+    if (d > bestDepth + KARTE_AUTO_FRONTIER_SLACK) break;
 
-    // 1) unerkundeter, betretbarer Nachbar?
     for (const [dx, dy] of NB) {
       const nx = cur.x + dx, ny = cur.y + dy;
       if (nx < 0 || ny < 0 || nx >= N || ny >= N) continue;
       const k = `${nx},${ny}`;
       if (explored[k]) continue;
       if (blocked[k] === today) continue;      // 🐾 heute gesperrt
-      const path = [];
-      let node = cur;
-      while (node && !(node.x === start.x && node.y === start.y)) {
-        path.unshift(node);
-        node = prev.get(`${node.x},${node.y}`);
-      }
-      return { path, target: { x: nx, y: ny } };
+      const open = openness(nx, ny);
+      if (d < bestDepth) bestDepth = d;
+      if (!best || open > best.open) best = { from: cur, target: { x: nx, y: ny }, open };
     }
 
-    // 2) weiter über erkundete Nachbarn
     for (const [dx, dy] of NB) {
       const nx = cur.x + dx, ny = cur.y + dy;
       if (nx < 0 || ny < 0 || nx >= N || ny >= N) continue;
@@ -108,10 +145,13 @@ function karteAutoFindTarget(state) {
       if (seen.has(k) || !explored[k]) continue;
       seen.add(k);
       prev.set(k, cur);
+      depth.set(k, d + 1);
       queue.push({ x: nx, y: ny });
     }
   }
-  return null;
+
+  if (!best) return null;
+  return { path: buildPath(best.from), target: best.target };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -468,8 +508,11 @@ function karteAutoMountControls() {
       </button>`;
   }
 
-  const anchor = document.getElementById('karte-hint') || canvas;
-  (anchor.parentElement || canvas.parentElement)?.appendChild(wrap);
+  // JP 2026-08-05: „lieber ganz oben anzeigen." Als ERSTES Kind des Karten-Containers
+  // einhängen, damit man nicht am Canvas vorbeiscrollen muss.
+  const host = canvas.parentElement;
+  if (!host) return;
+  host.insertBefore(wrap, host.firstChild);
 
   document.getElementById('karte-auto-stop')?.addEventListener('click', () => {
     _karteAutoStop = true;
@@ -519,8 +562,13 @@ let _karteAutoHookInstalled = false;
   } catch (e) { console.warn('Auto-Wanderung: Hook nicht möglich:', e); }
 })();
 
+// ⚠️ Der Beobachter läuft ZUSÄTZLICH zum Hook, nicht nur als Ersatz.
+// _karteUpdateHUD wird erst nach dem ersten Schritt aufgerufen — vorher gab es das
+// Panel schlicht nicht (JP 2026-08-05: „wird erst angezeigt, wenn man einen Schritt
+// getan hat"). Der Beobachter fängt das Auftauchen des Canvas ab und montiert sofort.
+// Doppelt kann nichts entstehen: karteAutoMountControls entfernt ein vorhandenes
+// #karte-auto-wrap immer zuerst, und der Beobachter prüft zusätzlich darauf.
 (function _karteAutoInstallObserver() {
-  if (_karteAutoHookInstalled) return;
   if (typeof document === 'undefined') return;
   let pending = false;
   const tryMount = () => {
