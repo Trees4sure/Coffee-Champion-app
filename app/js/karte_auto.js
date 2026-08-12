@@ -67,19 +67,43 @@ function _kbStepsLeft(state) {
 //
 // `blocked` stammt aus dem tile_block-Event („ein Tier blockiert das Feld heute") und
 // gilt laut Design nur für unerkundete Felder — deshalb wird es nur beim Ziel geprüft.
-// JP 2026-08-05: „geht komplett über das ganze Kartenfeld bis zum Ende und dann wieder
-// zurück. Könnte er auch entlang der bereits vorhandenen Fläche drumherum gehen?"
+// ── Zielauswahl: „wie eine Schnecke" ────────────────────────────────────────
+// JP 2026-08-06: „es geht eine zur Seite und dann ewig lang weiter. Dadurch kann man
+// nicht mehr easy zurück … kann man nicht wie eine Schnecke sich immer um sein
+// nächstes Feld herum drehen? Heißt man bleibt immer nah beim vorherigen Feld."
 //
-// Ursache: die Suche nahm das ERSTBESTE unerkundete Feld in Breitensuchen-Reihenfolge.
-// Das ist zwar das nächstgelegene, aber oft eine Sackgasse — ein einzelnes Loch am Rand.
-// Ist es aufgedeckt, liegt das nächste Ziel wieder ganz woanders, und die Figur pendelt
-// quer über die Karte.
+// ⚠️ MEIN VORIGER FIX WAR GENAU FALSCH HERUM. Er wählte das Feld mit den meisten
+// UNERKUNDETEN Nachbarn, um Sackgassen zu meiden. Das ist aber exakt die Regel, die
+// ins Freie ausbricht: das äußerste Feld am Rand des Bekannten hat die meisten freien
+// Nachbarn. Ergebnis war ein einzelner Arm quer bis zum Kartenrand.
 //
-// Jetzt: alle Kandidaten im Umkreis der kürzesten gefundenen Entfernung einsammeln
-// (plus KARTE_AUTO_FRONTIER_SLACK Felder Toleranz) und daraus das Feld mit den MEISTEN
-// unerkundeten Nachbarn wählen. Das ist die offene Kante der erkundeten Fläche — der
-// Lauf arbeitet sich am Rand entlang, statt Löcher quer über die Karte abzuklappern.
-const KARTE_AUTO_FRONTIER_SLACK = 4;
+// Jetzt umgekehrt — Kompaktheit statt Vorstoß:
+//   1. meiste bereits ERKUNDETE Nachbarn  → füllt Kerben und Löcher am eigenen Rand
+//   2. bei Gleichstand: kürzester Weg     → bleibt nah beim Spieler
+//   3. bei Gleichstand: näher am Schwerpunkt der erkundeten Fläche → wächst nach innen
+// Die erkundete Fläche wächst dadurch als geschlossener Klecks, nicht als Tentakel.
+// Nebeneffekt: der Rückweg bleibt immer kurz.
+//
+// Bestehende Ausläufer (die „Barriere bis zum Kartenrand") werden davon nicht entfernt —
+// aber sie wachsen nicht weiter, und die Löcher an ihren Flanken werden bevorzugt
+// aufgefüllt, weil dort die meisten erkundeten Nachbarn liegen.
+const KARTE_AUTO_SEARCH_SLACK = 6;   // Felder Toleranz gegenüber dem kürzesten Fund
+
+// Schwerpunkt der erkundeten Fläche — gecacht, weil er sich je Schritt nur minimal
+// ändert und über tausende Felder sonst je Suche neu summiert würde.
+let _kbCentroid = { count: -1, x: 0, y: 0 };
+function _kbExploredCentroid(explored) {
+  const keys = Object.keys(explored || {});
+  if (keys.length === _kbCentroid.count) return _kbCentroid;
+  let sx = 0, sy = 0;
+  for (const k of keys) {
+    const c = k.indexOf(',');
+    sx += +k.slice(0, c); sy += +k.slice(c + 1);
+  }
+  const n = keys.length || 1;
+  _kbCentroid = { count: keys.length, x: sx / n, y: sy / n };
+  return _kbCentroid;
+}
 
 function karteAutoFindTarget(state) {
   const mapData  = state.mapData || {};
@@ -89,6 +113,7 @@ function karteAutoFindTarget(state) {
   const today    = _kbToday();
   const N        = (typeof KARTE_WORLD !== 'undefined') ? KARTE_WORLD : 128;
   const NB = [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
+  const cen = _kbExploredCentroid(explored);
 
   const seen  = new Set([`${start.x},${start.y}`]);
   const prev  = new Map();
@@ -96,14 +121,14 @@ function karteAutoFindTarget(state) {
   const queue = [start];
   let head = 0;
 
-  // Wie „offen" ist ein Feld? = Zahl der unerkundeten, betretbaren Nachbarn.
-  const openness = (x, y) => {
+  // Zahl der bereits erkundeten Nachbarn = wie tief das Feld in einer Kerbe liegt.
+  // 8 wäre ein reines Loch mitten in der Fläche, 1 ein Vorposten im Nirgendwo.
+  const enclosure = (x, y) => {
     let n = 0;
     for (const [dx, dy] of NB) {
       const nx = x + dx, ny = y + dy;
       if (nx < 0 || ny < 0 || nx >= N || ny >= N) continue;
-      const k = `${nx},${ny}`;
-      if (!explored[k] && blocked[k] !== today) n++;
+      if (explored[`${nx},${ny}`]) n++;
     }
     return n;
   };
@@ -119,13 +144,13 @@ function karteAutoFindTarget(state) {
   };
 
   let bestDepth = Infinity;
-  let best = null;   // { from, target, open }
+  let best = null;   // { from, target, enc, dist, cdist }
 
   while (head < queue.length) {
     const cur = queue[head++];
     const d = depth.get(`${cur.x},${cur.y}`) || 0;
     // Sobald wir deutlich weiter sind als der bisher beste Fund, lohnt kein Weitersuchen.
-    if (d > bestDepth + KARTE_AUTO_FRONTIER_SLACK) break;
+    if (d > bestDepth + KARTE_AUTO_SEARCH_SLACK) break;
 
     for (const [dx, dy] of NB) {
       const nx = cur.x + dx, ny = cur.y + dy;
@@ -133,9 +158,19 @@ function karteAutoFindTarget(state) {
       const k = `${nx},${ny}`;
       if (explored[k]) continue;
       if (blocked[k] === today) continue;      // 🐾 heute gesperrt
-      const open = openness(nx, ny);
       if (d < bestDepth) bestDepth = d;
-      if (!best || open > best.open) best = { from: cur, target: { x: nx, y: ny }, open };
+      const cand = {
+        from: cur, target: { x: nx, y: ny },
+        enc: enclosure(nx, ny),
+        dist: d + 1,
+        cdist: Math.abs(nx - cen.x) + Math.abs(ny - cen.y),
+      };
+      if (!best
+          || cand.enc > best.enc
+          || (cand.enc === best.enc && cand.dist < best.dist)
+          || (cand.enc === best.enc && cand.dist === best.dist && cand.cdist < best.cdist)) {
+        best = cand;
+      }
     }
 
     for (const [dx, dy] of NB) {
