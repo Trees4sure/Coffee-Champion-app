@@ -28,7 +28,13 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 // ── Konstanten / Balancing ──────────────────────────────────────────────────
-const KRIEGER_AUTO_MIN_LEVEL    = 80;    // R1 — Freischaltung
+// R1 — Freischaltung. 2026-08-06 von 80 auf 20 gesenkt (JP): Stufe 80 war am
+// Boss-Gate ausgerichtet, aber der Auto-Lauf ist kein Endgame-Inhalt, sondern nimmt
+// Fleißarbeit ab — und die beginnt viel früher. Ab Stufe 20 gibt es rund 40 Schritte
+// am Tag und genug erkundete Felder, dass sich ein Lauf lohnt.
+// Nebenwirkung, bewusst in Kauf genommen: Die Kosten (5 × Stufe) betragen auf Stufe 20
+// nur 100 CC. Das ist günstig, aber die Erträge auf diesem Niveau sind ebenfalls klein.
+const KRIEGER_AUTO_MIN_LEVEL    = 20;
 const KRIEGER_AUTO_COST_PER_LV  = 5;     // R2 — Kosten = Stufe × Faktor
 const KRIEGER_AUTO_MIN_WINPCT   = 0.60;  // R7 — nur kämpfen ab dieser Siegchance
 // Selbstkorrektur: Jede Niederlage ist der Beweis, dass die Schätzung zu optimistisch war
