@@ -870,3 +870,22 @@
 .wr-tech-run  { color: #9dc0ff; font-weight: 600; }
 .wr-tech-node.wr-tech-running { border-color: #4d7fd4; }
 .wr-tech-node.wr-tech-blocked { opacity: .55; }
+
+/* 🔧 26u — laufender Bau an einem Bauplatz (Geschütz oder Reaktor).
+   Ersetzt den Ausbau-Knopf: solange gebaut wird, ist die nächste Stufe bereits bestellt
+   und der Server lehnt einen zweiten Auftrag ab. Bewusst dieselbe Zeilenhöhe wie der
+   Knopf, damit die Karte beim Baubeginn nicht springt. */
+.wr-slot-build {
+  display: flex; flex-direction: column; gap: 1px; padding: 5px 8px; font-size: .78rem;
+  border: 1px dashed #4d7fd4; border-radius: var(--radius, 10px);
+  background: color-mix(in srgb, #4d7fd4 10%, transparent); color: #9dc0ff;
+}
+
+/* 🏛️ 26u — Ausrüstung einer Kolonie-Mission.
+   Steht unter dem Kolonisieren-Knopf. Grün = vorhanden, rot = fehlt; die Zahlen sind
+   immer „ist/soll", damit man sieht, WIE VIEL fehlt und nicht nur DASS etwas fehlt. */
+.wr-kit { margin-top: 8px; padding: 8px 10px; font-size: .78rem;
+  border: 1px solid #3a4a78; border-radius: var(--radius, 10px);
+  background: rgba(20,30,60,.45); }
+.wr-kit-grid { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 5px; }
+.wr-kit-grid > span { white-space: nowrap; }
