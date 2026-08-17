@@ -24,10 +24,17 @@
 // atk = Kampfkraft · mine = Abbau je Schiff · needs = Forschungs-Freischaltung
 // Erste Bauten sind bewusst REIN CC: wer noch keine Rohstoffe hat, muss trotzdem
 // starten können (sonst Deadlock — Rohstoffe gibt es nur aus dem All).
+// ⚠️ EMOJI SIND HIER NUR DER RÜCKFALL. Angezeigt wird `assets/space/ship_*.png` über
+// `wrShipArt()`; das Emoji erscheint erst, wenn das Bild fehlt. Trotzdem muss es passen —
+// es steht in Toasts und Chat-Meldungen, wo kein HTML gerendert wird.
+// ⚠️ 2026-08-17 (JP: „bitte die richtigen Assets auswählen, nicht die Spritzpistole"):
+// Der Jäger trug 🔫, und das rendert auf iOS seit 2016 und auf Android seit 2018 als
+// WASSERPISTOLE. Auf dem Desktop fällt es nicht auf — auf dem Handy steht dort ein
+// Spielzeug. Jetzt 🗡️: der kleine, schnelle Angreifer neben dem ⚔️ Schlachtschiff.
 const SPACE_SHIPS = [
   { key:'sonde', buildMin:60, art:'ship_spaeher',   icon:'🛰️', name:'Bohnen-Sonde',   atk:1,  mine:0, cc:600,  erz:0,  kristall:0,
     needs:'wt_ionenantrieb', desc:'Deckt den Nebel eines Quadranten auf' },
-  { key:'jaeger', buildMin:90, art:'ship_jaeger',  icon:'🔫', name:'Jäger',           atk:10, mine:0, cc:900,  erz:0,  kristall:0,
+  { key:'jaeger', buildMin:90, art:'ship_jaeger',  icon:'🗡️', name:'Jäger',           atk:10, mine:0, cc:900,  erz:0,  kristall:0,
     needs:'wt_ionenantrieb', desc:'Billige Kampfkraft — Anzahl entscheidet' },
   // 🛩️ Großer Jäger (JP 2026-07-27): füllt die Lücke zwischen Wegwerf-Jäger und der
   // Fregatte. Bleibt leichte Klasse — Konterbonus gegen Schwärme, kleiner Schild.
@@ -765,13 +772,29 @@ function wrColonyKitMissing(m, ring, sel) {
   }
   return out;
 }
-const WR_KIT_LABEL = {
-  kolonie: '🛸 Kolonieschiff', jaeger: '🔫 Jäger', kutter: '🚀 Espresso-Kutter',
-  fregatte: '🛡️ Fregatte', ernter: '⛏️ Röstkomet',
-  cc: '💰 CC', erz: '🪨 Erz', kristall: '💎 Kristall',
-  plasmoid: '🟣 Plasmoid', quantum: '🌀 Quantenschaum',
-};
-function wrKitLabel(k) { return WR_KIT_LABEL[k] || k; }
+// ⚠️ KEINE zweite Emoji-Tabelle. Die Schiffssymbole stehen in SPACE_SHIPS und werden
+// von dort gelesen — sonst hätte man beim nächsten Symbolwechsel zwei Orte zu pflegen
+// und würde genau einen davon vergessen. (Ich hatte hier zuerst 🔫 hartkodiert und damit
+// die Wasserpistole wieder eingeschleppt, die anderswo längst behoben war.)
+const WR_KIT_RES = { cc: ['💰', 'CC'], erz: ['🪨', 'Erz'],
+  kristall: ['💎', 'Kristall'], plasmoid: ['🟣', 'Plasmoid'],
+  quantum: ['🌀', 'Quantenschaum'] };
+
+// Reiner Text — für Toasts und Chat, wo KEIN HTML gerendert wird (Lehre aus Teil 23).
+function wrKitLabel(k) {
+  const sh = SPACE_SHIP_BY_KEY[k];
+  if (sh) return `${sh.icon} ${sh.name}`;
+  const r = WR_KIT_RES[k];
+  return r ? `${r[0]} ${r[1]}` : k;
+}
+// Mit Bild — für Panels. Nutzt `wrShipArt()`, das genau für dieses Problem gebaut wurde
+// („die Emoji sind teils irreführend"): echtes Render, Emoji nur als Rückfall.
+function wrKitLabelHtml(k) {
+  const sh = SPACE_SHIP_BY_KEY[k];
+  if (sh) return `${wrShipArt(k)} ${_wrEsc(sh.name)}`;
+  const r = WR_KIT_RES[k];
+  return r ? `${r[0]} ${r[1]}` : _wrEsc(k);
+}
 
 // Die Anforderung als Block unter dem Kolonisieren-Knopf. Fehlendes rot.
 function wrColonyKitHtml(m, ring, sel) {
@@ -779,7 +802,7 @@ function wrColonyKitHtml(m, ring, sel) {
   if (!k) return '';
   const fehlt = new Set(wrColonyKitMissing(m, ring, sel).map(x => x.was));
   const zeile = (key, wert, ist) => wert <= 0 ? '' :
-    `<span class="${fehlt.has(key) ? 'wr-bad' : 'wr-good'}">${wrKitLabel(key)} ${wrFmt(ist)}/${wrFmt(wert)}</span>`;
+    `<span class="${fehlt.has(key) ? 'wr-bad' : 'wr-good'}">${wrKitLabelHtml(key)} ${wrFmt(ist)}/${wrFmt(wert)}</span>`;
   const f = sel || {};
   return `<div class="wr-kit">
     <div class="wr-sub"><strong>Ring ${ring}: Ausrüstung der Kolonie-Mission</strong> —
@@ -2240,6 +2263,50 @@ function wrFleetQuick(kind, m) {
   if (kind === 'none')    _wrSelFleet = all([]);
 }
 
+// 🏛️ 26u: Verband für eine Kolonie-Mission automatisch zusammenstellen (JP 2026-08-17:
+// „ich fänds cooler, wenn direkt alle Schiffe ausgewählt werden, wenn man kolonisieren
+// klickt"). Genau die geforderte Menge, nicht mehr — die Schiffe gehen bei der Gründung
+// im Rumpf auf (26y), ein zu grosser Verband wäre also verschenkt.
+// ⚠️ Gedeckelt auf den Hafenbestand: fehlt etwas, wird so viel gesetzt wie da ist, und
+// die Anforderungsliste zeigt weiterhin rot, was fehlt. Stillschweigend weniger zu
+// nehmen wäre schlimmer als gar nichts zu tun.
+// Rückgabe: true, wenn der Verband damit vollständig ist.
+// 🛸 27e: Fliegt bereits eine Kolonie-Mission zu diesem Planeten? Spiegel von
+// `_space_colonize_inbound`. ⚠️ CLAN-WEIT — die Reisen ALLER Mitglieder stehen in
+// `appData.users[].space`, nicht nur die eigenen. Nur die eigenen zu prüfen wäre der
+// teuerste Fall: zwei Spieler zahlen voll, einer bekommt nichts.
+function wrColonizeInbound(planetId) {
+  try {
+    const users = (typeof appData !== 'undefined' && appData?.users) || [];
+    for (const u of users) {
+      const trips = u?.space?.fleets?.away?.trips;
+      if (!Array.isArray(trips)) continue;
+      for (const t of trips) {
+        if (!t || t.intent !== 'colonize' || t.planetId !== planetId) continue;
+        const an = Date.parse(t.arriveAt);
+        // Abgelaufene Reisen blockieren nicht — sie warten nur auf den Claim.
+        if (!isFinite(an) || an <= Date.now()) continue;
+        return { id: u.id, name: u.name || 'Jemand', arriveAt: t.arriveAt,
+                 self: u.id === _wrMember?.id };
+      }
+    }
+  } catch (e) {}
+  return null;
+}
+
+function wrColonyFleetFill(m, ring) {
+  const k = WR_COLONY_KIT[Math.max(1, Math.min(3, ring || 1))];
+  if (!k) return false;
+  const ships = wrHomeShips(m);
+  const f = {};
+  for (const sh of SPACE_SHIPS) f[sh.key] = 0;
+  const nimm = (key, n) => { f[key] = Math.min(n, parseInt(ships[key], 10) || 0); };
+  nimm('kolonie', 1);
+  for (const key of WR_KIT_SHIPS) if (k[key] > 0) nimm(key, k[key]);
+  _wrSelFleet = f;
+  return wrColonyKitMissing(m, ring, f).length === 0;
+}
+
 // ── Hafen-Übersicht (Klick auf den Heimatquadranten) ────────────────────────
 // Zeigt die Heimatflotte auf einen Blick — vorher sah man seine Schiffe nur, wenn man
 // einen Planeten anklickte, und dort auch nur als Auswahl-Stepper.
@@ -2893,12 +2960,31 @@ function wrDetailHtml(m) {
         ${cleared && !colon ? (() => {
           // 🏛️ 26u: Die Mission verlangt einen kompletten Verband. Ohne diese Vorschau
           // sah man nur „colony_kit_incomplete", nachdem man auf Start gedrückt hatte.
+          // 🛸 27e: Fliegt schon jemand hin? Dann gibt es hier nichts mehr zu tun —
+          // ein zweiter Verband käme an, fände die Kolonie vor und kehrte um. Bezahlt
+          // wäre er längst (alles wird beim START abgebucht).
+          const inb = wrColonizeInbound(p.id);
+          if (inb) {
+            return `<div class="wr-warn">🛸 ${inb.self ? 'Deine' : `${_wrEsc(inb.name)}s`}
+              Kolonie-Mission ist unterwegs — Ankunft in
+              ${wrCountdown(Date.parse(inb.arriveAt) - Date.now())}.
+              ${inb.self ? 'Ein zweiter Verband würde nur umkehren.'
+                         : 'Warte ab oder such dir ein anderes Ziel.'}</div>`;
+          }
           const kitFehlt = wrColonyKitMissing(m, p.ring, sel);
-          return `<button class="wr-btn" data-wr-send="colonize"
-              ${(busy || gate.blocked || kitFehlt.length) ? 'disabled' : ''}>
-            🛸 Kolonisieren <span class="wr-btn-sub">${kitFehlt.length
-              ? `${kitFehlt.length} Posten fehlen — siehe unten`
-              : `Verband geht im Rumpf auf · dauerhaft ~${wrFmt(Math.round(p.richness * 3 * resMeta.mine))} ${resIcon}/Tag`}</span></button>`;
+          // Was fehlt, weil es im HAFEN nicht da ist? Nur das ist ein echtes Hindernis —
+          // eine unvollständige AUSWAHL füllt der Knopf selbst auf (JP-Wunsch).
+          const probe = {}; for (const sh of SPACE_SHIPS) probe[sh.key] = parseInt(wrHomeShips(m)[sh.key], 10) || 0;
+          const echtFehlt = wrColonyKitMissing(m, p.ring, probe);
+          const nurAuswahl = kitFehlt.length > 0 && echtFehlt.length === 0;
+          return `<button class="wr-btn${nurAuswahl ? '' : ' wr-btn-go'}" data-wr-send="colonize"
+              ${(busy || gate.blocked || echtFehlt.length) ? 'disabled' : ''}>
+            🛸 ${nurAuswahl ? 'Verband zusammenstellen' : 'Kolonisieren'}
+            <span class="wr-btn-sub">${echtFehlt.length
+              ? `es fehlt: ${echtFehlt.map(x => wrKitLabel(x.was)).join(' · ')}`
+              : nurAuswahl
+                ? 'setzt genau die nötigen Schiffe — danach nochmal drücken'
+                : `Verband geht im Rumpf auf · dauerhaft ~${wrFmt(Math.round(p.richness * 3 * resMeta.mine))} ${resIcon}/Tag`}</span></button>`;
         })() : ''}
       </div>
       ${cleared && !colon ? wrColonyKitHtml(m, p.ring, sel) : ''}
@@ -5993,6 +6079,33 @@ async function wrSend(intent) {
   // Auftragsbedingte Mindestanforderungen, bevor die Flotte umsonst startet
   if (intent === 'scout'    && !(fleet.sonde   > 0)) { wrToast('Ohne 🛰️ Bohnen-Sonde lässt sich kein Quadrant aufklären.', 'error'); return; }
   if (intent === 'colonize') {
+    // 🛸 27e: Doppelflug abfangen, BEVOR irgendetwas zusammengestellt oder gesendet wird.
+    const inb = wrColonizeInbound(planet.id);
+    if (inb) {
+      wrToast(inb.self
+        ? `🛸 Deine Kolonie-Mission fliegt bereits dorthin — Ankunft in ${wrCountdown(Date.parse(inb.arriveAt) - Date.now())}.`
+        : `🛸 ${inb.name} fliegt diesen Planeten bereits an — Ankunft in ${wrCountdown(Date.parse(inb.arriveAt) - Date.now())}.`,
+        'error');
+      return;
+    }
+    // 🏛️ Erster Klick bei unvollständiger Auswahl: Verband automatisch zusammenstellen
+    // statt abzulehnen (JP 2026-08-17). Bewusst KEIN Sofortstart danach — eine Mission,
+    // die dauerhaft 30 Jäger und 8 Kutter verbraucht, soll nicht aus einem einzigen
+    // Klick entstehen. Der Spieler sieht erst, was zusammengestellt wurde.
+    if (wrColonyKitMissing(m, planet.ring, fleet).length) {
+      const voll = wrColonyFleetFill(m, planet.ring);
+      wrRefreshDetail();
+      if (voll) {
+        wrToast('🛸 Verband zusammengestellt — nochmal auf Kolonisieren drücken zum Start.', 'info');
+        return;
+      }
+      // ⚠️ `fleet` ist `const` — den Inhalt austauschen statt die Bindung. (Ein
+      // `fleet = …` hätte `node --check` klaglos passiert und wäre erst beim Klick als
+      // „Assignment to constant variable" hochgekommen: derselbe Mechanismus wie bei den
+      // plpgsql-Körpern, nur in JS.)
+      for (const k of Object.keys(fleet)) delete fleet[k];
+      for (const [k, n] of Object.entries(wrSyncFleetSel(m))) if (n > 0) fleet[k] = n;
+    }
     // ⚠️ Alle fehlenden Posten auf einmal nennen — vier Anläufe für vier Meldungen wären
     // genau die Zumutung, die der Server bereits vermeidet (er sammelt sie ebenfalls).
     const kitFehlt = wrColonyKitMissing(m, planet.ring, fleet);
@@ -6034,11 +6147,17 @@ async function wrSend(intent) {
     if (res.space) wrApplySpace(res.space);
     const info = SPACE_INTENTS[intent] || {};
     // JP 2026-07-22 (#32): „zurück in 30 Min" ergab bei der Kolonie keinen Sinn —
-    // das Kolonieschiff BLEIBT am Ziel, nur die Eskorte kehrt zurück.
+    // das Kolonieschiff BLEIBT am Ziel.
+    // ⚠️ TEXT KORRIGIERT 2026-08-17: hier stand „der Rest kehrt zurück". Seit 26y stimmt
+    // das nicht mehr — der GANZE Begleitverband geht bei der Gründung im Rumpf auf. Der
+    // Text beschrieb also weiter die Welt vor der Regeländerung, und der Spieler hätte
+    // seine 30 Jäger zurückerwartet. Genau die Sorte Text, die wie ein Fehler aussieht,
+    // wenn die Schiffe dann nicht kommen.
     const fuelTxt = (res.fuel > 0) ? ` · 💎 −${wrFmt(res.fuel)} Treibstoff` : '';
     wrToast(intent === 'colonize'
-      ? `🛸 Kolonie-Mission gestartet — Gründung bei Ankunft in ${wrCountdown(Date.parse(res.trip.arriveAt) - Date.now())}; `
-        + `das Kolonieschiff bleibt dort, der Rest kehrt zurück${fuelTxt}`
+      ? `🛸 Kolonie-Mission gestartet — Gründung bei Ankunft in ${wrCountdown(Date.parse(res.trip.arriveAt) - Date.now())}. `
+        + `Der Verband geht bei der Gründung im Rumpf auf und kehrt NICHT zurück`
+        + `${res.colonyCc ? ` · 💰 −${wrFmt(res.colonyCc)} CC` : ''}${fuelTxt}`
       : `${info.icon || '🚀'} Flotte gestartet — zurück in ${wrCountdown(Date.parse(res.trip.returnAt) - Date.now())}${fuelTxt}`,
       'success');
 
@@ -7296,6 +7415,8 @@ function wrErrText(err) {
     not_enough_ships:      'Nicht genug Schiffe im Hafen.',
     empty_fleet:           'Keine Schiffe ausgewählt.',
     bad_intent:            'Unbekannter Auftrag.',
+    colony_inbound:        'Zu diesem Planeten fliegt bereits eine Kolonie-Mission — ein zweiter Verband würde nur umkehren.',
+    already_colonized:     'Dieser Planet ist bereits kolonisiert.',
     colony_kit_incomplete: 'Der Kolonie-Mission fehlt noch etwas — die Anforderung steht unter dem Kolonisieren-Knopf.',
     transmute_cooldown:    'Der Transmuter läuft noch nach — er braucht 48 Stunden zwischen zwei Vorgängen.',
     region_too_strong:     'Diese Region gehört jemand anderem — dein Verband ist zu schwach für eine Kolonie dort (nötig: das 1,15-fache der Regionsverteidigung).',
