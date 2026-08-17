@@ -2912,6 +2912,149 @@ const DB = (() => {
     } catch (e) { return { error: e.message }; }
   }
 
+  // ── ⏳ 26u Tempo-Bremse: zwei Abholungen im Werft-Muster ───────────────────
+  // Fertige Forschung übernehmen. Seit 26u landet ein Kauf nicht mehr sofort in
+  // `space.tech`, sondern als `space.techJob` mit `doneAt`.
+  async function claimSpaceTech(memberId) {
+    try {
+      const { data, error } = await _sb.rpc('claim_space_tech', { p_member_id: memberId });
+      if (error) return { error: error.message };
+      return data || {};
+    } catch (e) { return { error: e.message }; }
+  }
+
+  // ── ⚓ 26w: laufende Kosten, serverseitig ──────────────────────────────────
+  // ⚠️ Bis 26w hat `weltraum_sold.js` selbst über `spend_coins` abgebucht. Seit 26w
+  // rechnet ausschliesslich der Server — sonst wird derselbe Zeitraum zweimal kassiert.
+  // Der Zustand liegt in `space.sold`, nicht mehr in `map_data.wrSold`.
+  async function chargeSpaceSold(memberId) {
+    try {
+      const { data, error } = await _sb.rpc('space_charge_sold', { p_member_id: memberId });
+      if (error) return { error: error.message };
+      return data || {};
+    } catch (e) { return { error: e.message }; }
+  }
+
+  // Eingemottete Flotte auslösen — Rückstand ganz bezahlen, keine Teilzahlung.
+  async function unmothballSpace(memberId) {
+    try {
+      const { data, error } = await _sb.rpc('space_unmothball', { p_member_id: memberId });
+      if (error) return { error: error.message };
+      return data || {};
+    } catch (e) { return { error: e.message }; }
+  }
+
+  // Nur lesen: Tagessatz, Zustand, eingemottete Schiffe (für die Kostenkarte).
+  async function spaceSoldInfo(memberId) {
+    try {
+      const { data, error } = await _sb.rpc('space_sold_info', { p_member_id: memberId });
+      if (error) return null;
+      return data || null;
+    } catch (e) { return null; }
+  }
+
+  // ── 🎖️ 26x: Söldner ───────────────────────────────────────────────────────
+  // ⚠️ Söldner liegen in `space.merc`, NICHT in `space.fleets`. Dadurch sind sie
+  // strukturell von Recycling, Reisen, Routen und Flottensold ausgeschlossen — es gibt
+  // keine Prüfung dafür, weil keine nötig ist. Nicht nach `fleets` verschieben.
+  async function hireSpaceMerc(memberId, ships) {
+    try {
+      const { data, error } = await _sb.rpc('hire_space_merc', {
+        p_member_id: memberId, p_ships: ships });
+      if (error) return { error: error.message };
+      // Regel 4: der Mietpreis ist eine CC-Bewegung.
+      if (data && data.ok && (data.cc || 0) > 0) {
+        try {
+          await appendTodayLogFresh(memberId, [{ label: '🎖️ Söldner angeheuert',
+            amount: -data.cc, cat: 'weltraum',
+            detail: `${data.count} Schiffe · ${data.days} Tage`, invest: true,
+            aggKey: 'space_merc', aggBase: '🎖️ Söldner angeheuert' }]);
+        } catch (e) {}
+      }
+      return data || {};
+    } catch (e) { return { error: e.message }; }
+  }
+
+  // Bewachung setzen (planetId = null → zurück an den Raumhafen).
+  async function setSpaceMercGuard(memberId, planetId) {
+    try {
+      const { data, error } = await _sb.rpc('set_space_merc_guard', {
+        p_member_id: memberId, p_planet_id: planetId || null });
+      if (error) return { error: error.message };
+      return data || {};
+    } catch (e) { return { error: e.message }; }
+  }
+
+  // Abgelaufenes Geschwader räumen (lazy beim Tab-Aufruf).
+  async function spaceMercSweep(memberId) {
+    try {
+      const { data, error } = await _sb.rpc('space_merc_sweep', { p_member_id: memberId });
+      if (error) return { error: error.message };
+      return data || {};
+    } catch (e) { return { error: e.message }; }
+  }
+
+  // ── 🚨 26v: Angriffe auf Kolonien ─────────────────────────────────────────
+  // Lazy-Planung beim Öffnen des 🚀-Tabs (kein Cron). Der SERVER würfelt — und zwar
+  // deterministisch je (Planet, Tag), damit ein Neuladen nichts erwürfeln kann.
+  async function ensureColonyAttacks(memberId) {
+    try {
+      if (!_groupId) return { error: 'no_group' };
+      const { data, error } = await _sb.rpc('ensure_colony_attacks', {
+        p_member_id: memberId, p_group_id: _groupId });
+      if (error) return { error: error.message };
+      return data || {};
+    } catch (e) { return { error: e.message }; }
+  }
+
+  async function fetchColonyAttacks(memberId) {
+    try {
+      const { data, error } = await _sb.rpc('fetch_colony_attacks', { p_member_id: memberId });
+      if (error) return [];
+      return Array.isArray(data) ? data : [];
+    } catch (e) { return []; }
+  }
+
+  async function resolveColonyAttack(memberId, planetId) {
+    try {
+      const { data, error } = await _sb.rpc('resolve_colony_attack', {
+        p_member_id: memberId, p_planet_id: planetId });
+      if (error) return { error: error.message };
+      return data || {};
+    } catch (e) { return { error: e.message }; }
+  }
+
+  // Reparatur eines Wracks — ganz oder gar nicht (JPs Regel). Der Server rechnet den
+  // Preis; der Client schickt nur, WELCHER Bauplatz gemeint ist.
+  async function repairPlanetTurret(memberId, planetId, slot) {
+    try {
+      const { data, error } = await _sb.rpc('repair_planet_turret', {
+        p_member_id: memberId, p_planet_id: planetId, p_slot: slot });
+      if (error) return { error: error.message };
+      // Regel 4 (Statistik-Vollständigkeit): jede CC-Bewegung gehört in den Tages-Log.
+      if (data && data.ok && (data.cc || 0) > 0) {
+        try {
+          await appendTodayLogFresh(memberId, [{ label: '🛠️ Geschütz repariert',
+            amount: -data.cc, cat: 'weltraum', detail: `Kolonie · Stufe ${data.level}`,
+            invest: true, aggKey: 'space_repair', aggBase: '🛠️ Geschütz repariert' }]);
+        } catch (e) {}
+      }
+      return data || {};
+    } catch (e) { return { error: e.message }; }
+  }
+
+  // Fertige Geschütze/Generatoren auf KOLONIEN in die Feuerkraft übernehmen.
+  // ⚠️ Der Raumhafen braucht das nicht — seine Feuerkraft wird bei jedem Lesen gerechnet.
+  // Eine Kolonie trägt sie materialisiert in `space_planets.planet_defense`, und dort
+  // muss jemand den fertigen Bau eintragen. Claim-on-action, kein Cron.
+  async function claimSpaceTurrets(memberId) {
+    try {
+      const { data, error } = await _sb.rpc('claim_space_turrets', { p_member_id: memberId });
+      if (error) return { error: error.message };
+      return data || {};
+    } catch (e) { return { error: e.message }; }
+  }
+
   // Dauerernte-Route setzen (0 = auflösen).
   async function setSpaceRoute(memberId, planetId, count, mode) {
     try {
@@ -3103,6 +3246,10 @@ const DB = (() => {
     ensureGalaxy, fetchGalaxy, saveSpace, buildSpace, buildSpaceDefense,
     buildPlanetDefense, sweepSpaceReconquest, buildMutterschiff,
     startSpaceTrip, recallSpaceTrip, claimSpaceArrival, harvestSpace, claimSpaceBuild, buildSpaceCart, setSpaceRoute,
+    claimSpaceTech, claimSpaceTurrets,        // ⏳ 26u
+    ensureColonyAttacks, fetchColonyAttacks, resolveColonyAttack, repairPlanetTurret,  // 🚨 26v
+    chargeSpaceSold, unmothballSpace, spaceSoldInfo,   // ⚓ 26w
+    hireSpaceMerc, setSpaceMercGuard, spaceMercSweep,  // 🎖️ 26x
     refineStart, refineClaim, spaceTransmute, spacePowerRefuel, spaceInjectLoad,
     buySpaceTech, ensureSpaceWave, fetchSpaceWaves, fetchSpaceHelp,
     fetchSpaceTrades, createSpaceTrade, cancelSpaceTrade, buySpaceTrade,

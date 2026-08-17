@@ -160,116 +160,124 @@ function wrsSoldState(u) {
 }
 
 // ── Abbuchung ──────────────────────────────────────────────────────────────
+// ⚠️ SEIT 26w RECHNET DER SERVER. Diese Funktion bucht NICHTS mehr selbst ab — sie
+// ruft `space_charge_sold` und stellt das Ergebnis dar.
+//
+// Warum der Wechsel: Der ursprüngliche Client-Sold war „ohne Zähne" (siehe Kopf dieser
+// Datei) — reichte das Guthaben nicht, wurde der Rest ERLASSEN. Damit war der Sold für
+// einen reichen Spieler eine Gebühr und für einen armen gar nichts; er bremste also
+// niemanden. Die eigentliche Konsequenz, das EINMOTTEN, war clientseitig unmöglich:
+// Kampfkraft rechnet der Server aus `space.fleets` und ignoriert jedes Client-Flag.
+// 26w löst das, indem es die Schiffe nicht markiert, sondern nach
+// `space.fleets.mothballed` VERSCHIEBT — dann ist die Heimatflotte schlicht leer.
+//
+// ⚠️ HIER DARF NIE WIEDER `DB.spendCoins` STEHEN. Zwei Abbuchungen für denselben
+// Zeitraum sind die naheliegendste Art, dieses Feature kaputtzumachen, und sie fällt im
+// Betrieb kaum auf — man sieht nur, dass das Geld schneller weg ist als angekündigt.
+// Der Zustand liegt seit 26w in `space.sold`, NICHT mehr in `map_data.wrSold`
+// (die Migration hat ihn einmalig übernommen).
 let _wrsBusy = false;
 
 async function wrsSoldAbbuchen() {
   if (_wrsBusy) return;
   const me = wrsMe();
-  if (!me?.id) return;
+  if (!me?.id || typeof DB.chargeSpaceSold !== 'function') return;
   _wrsBusy = true;
   try {
-    const rate = wrsSoldRate(me);
+    const res = await DB.chargeSpaceSold(me.id);
+    if (!res || res.error) return;
 
-    // ── Erstkontakt: Schonfrist starten, nichts abbuchen ──
-    let st = wrsSoldState(me);
-    if (!st) {
-      const jetzt = Date.now();
-      await wrsSoldSave({ since: new Date(jetzt).toISOString(),
-                          graceUntil: new Date(jetzt + WRS_GRACE_TAGE * 86400000).toISOString(),
-                          paid: 0, days: 0 });
-      if (rate.total > 0) wrsSoldPopup(rate);
+    // Erstkontakt oder laufende Schonfrist: nur ankündigen, nichts ist passiert.
+    if (res.grace) {
+      const r = wrsSoldRate(me);
+      if (r.total > 0 && !res.graceUntil) wrsSoldPopup(r);
       return;
     }
-    if (rate.total <= 0) return;                       // nichts zu unterhalten
+    if (!(res.charged > 0) && !res.mothballed) return;
 
-    const seit = Date.parse(st.since || '');
-    if (!Number.isFinite(seit)) { await wrsSoldSave(Object.assign({}, st, { since: new Date().toISOString() })); return; }
-    const tage = Math.min(WRS_CAP_TAGE, (Date.now() - seit) / 86400000);
-    if (tage < WRS_MIN_TAG) return;                    // Kleckerbeträge vermeiden
-
-    // ── Schonfrist läuft noch: nur mitzählen, nicht abbuchen ──
-    const grace = Date.parse(st.graceUntil || '');
-    if (Number.isFinite(grace) && Date.now() < grace) return;
-
-    const faellig = Math.round(rate.total * tage);
-    if (faellig < 1) return;
-
-    // ⚠️ REIHENFOLGE WIE IN applyDailyLevy: den Zeitstempel ZUERST vorrücken,
-    // dann abbuchen. `wrSold` liegt in map_data und ist Last-Write-Wins — zwei
-    // gleichzeitig offene Geräte würden sonst denselben Zeitraum doppelt kassieren.
-    // Schlägt das Abbuchen danach fehl, ist der Sold für diesen Zeitraum erlassen;
-    // das ist die harmlosere Richtung.
-    await wrsSoldSave(Object.assign({}, st, {
-      since: new Date().toISOString(),
-      paid: Math.round((parseFloat(st.paid) || 0) + faellig),
-      days: Math.round(((parseFloat(st.days) || 0) + tage) * 100) / 100,
-    }));
-
-    // Ohne Zähne: es wird abgebucht, was da ist. Ein Rest wird ERLASSEN — kein
-    // Schuldenkonto, keine Sperre (JP-Entscheidung 2026-08-06).
-    const guthaben = Math.floor(parseFloat(me.coins) || 0);
-    const zahlen = Math.min(faellig, guthaben);
-    if (zahlen < 1) return;
-
-    let rest = null;
-    try { rest = await DB.spendCoins(me.id, zahlen); } catch (e) { return; }
-    if (rest === null || rest === undefined) return;    // Server sagt: reicht nicht
-
+    // Guthaben lokal nachziehen (der Server hat bereits abgebucht).
     try {
-      me.coins = rest;
+      if (typeof res.space === 'object' && res.space) me.space = res.space;
+      const neu = Math.max(0, (parseFloat(me.coins) || 0) - (res.charged || 0));
+      me.coins = neu;
       if (typeof appData !== 'undefined' && appData?.users) {
         const u = appData.users.find(x => x.id === me.id);
-        if (u) u.coins = rest;
+        if (u) { u.coins = neu; if (res.space) u.space = res.space; }
       }
-      if (typeof _updateHeaderCoins === 'function') _updateHeaderCoins({ coins: rest });
+      if (typeof _updateHeaderCoins === 'function') _updateHeaderCoins({ coins: neu });
     } catch (e) {}
 
-    // Regel 4: aufgeschlüsselt ins Tages-Log, damit im Profil sichtbar ist,
-    // WOFÜR das Geld weg ist — eine Sammelzeile „Unterhalt" wäre wertlos.
+    // Regel 4: aufgeschlüsselt ins Tages-Log, damit im Profil sichtbar ist, WOFÜR das
+    // Geld weg ist — eine Sammelzeile „Unterhalt" wäre wertlos.
+    // ⚠️ Die BETRÄGE kommen aus der Server-Antwort (`res.rate`), die STÜCKZAHLEN für den
+    // Erklärtext aus der lokalen Rechnung. Nur so kann die Aufteilung nicht von dem
+    // abweichen, was tatsächlich abgebucht wurde.
     try {
-      const anteil = (x) => Math.round(zahlen * (x / rate.total));
+      const sr = res.rate || {};
+      const tot = parseFloat(sr.total) || 0;
+      const cnt = wrsSoldRate(me);
+      const tage = parseFloat(res.days) || 0;
+      const anteil = (x) => tot > 0 ? Math.round((res.charged || 0) * ((parseFloat(x) || 0) / tot)) : 0;
       const posten = [];
-      if (rate.fleet + rate.routes > 0) posten.push({
-        label: '⚓ Flottensold', amount: -anteil(rate.fleet + rate.routes), cat: 'weltraum',
-        detail: `${_f(rate.nShips)} Schiffe${rate.nRoute ? ` + ${_f(rate.nRoute)} stationiert` : ''}`
+      const flotte = (parseFloat(sr.fleet) || 0) + (parseFloat(sr.routes) || 0);
+      if (flotte > 0) posten.push({
+        label: '⚓ Flottensold', amount: -anteil(flotte), cat: 'weltraum',
+        detail: `${_f(cnt.nShips)} Schiffe${cnt.nRoute ? ` + ${_f(cnt.nRoute)} stationiert` : ''}`
               + ` · ${Math.round(tage * 10) / 10} Tage`,
         aggKey: 'space_sold', aggBase: '⚓ Flottensold' });
-      if (rate.colonies > 0) posten.push({
-        label: '🏛️ Kolonie-Verwaltung', amount: -anteil(rate.colonies), cat: 'weltraum',
-        detail: `${rate.nCol} Kolonien`, aggKey: 'space_kolverw', aggBase: '🏛️ Kolonie-Verwaltung' });
-      if (rate.defense + rate.power + rate.station > 0) posten.push({
-        label: '⚡ Betriebskosten Anlagen',
-        amount: -anteil(rate.defense + rate.power + rate.station), cat: 'weltraum',
-        detail: `${rate.nTur} Geschütze · ${rate.nGen} Reaktoren`
-              + (rate.nStat ? ` · ${rate.nStat} Station${rate.nStat === 1 ? '' : 'en'}` : ''),
+      if ((parseFloat(sr.colonies) || 0) > 0) posten.push({
+        label: '🏛️ Kolonie-Verwaltung', amount: -anteil(sr.colonies), cat: 'weltraum',
+        detail: `${sr.colonyCount || cnt.nCol} Kolonien (progressiv)`,
+        aggKey: 'space_kolverw', aggBase: '🏛️ Kolonie-Verwaltung' });
+      const anlagen = (parseFloat(sr.defense) || 0) + (parseFloat(sr.power) || 0)
+                    + (parseFloat(sr.station) || 0);
+      if (anlagen > 0) posten.push({
+        label: '⚡ Betriebskosten Anlagen', amount: -anteil(anlagen), cat: 'weltraum',
+        detail: `${cnt.nTur} Geschütze · ${cnt.nGen} Reaktoren`
+              + (cnt.nStat ? ` · ${cnt.nStat} Station${cnt.nStat === 1 ? '' : 'en'}` : ''),
         aggKey: 'space_betrieb', aggBase: '⚡ Betriebskosten Anlagen' });
-      if (posten.length) await DB.appendTodayLogFresh(me.id, posten);
+      if (posten.length && (res.charged || 0) > 0) await DB.appendTodayLogFresh(me.id, posten);
     } catch (e) {}
 
-    if (typeof showToast === 'function') {
-      showToast(`⚓ Unterhalt für ${Math.round(tage * 10) / 10} Tage: −${_f(zahlen)} CC`, 'info');
+    if (res.mothballed) {
+      // ⚠️ Das ist die einzige Stelle, an der der Spieler erfährt, dass seine Flotte
+      // handlungsunfähig ist. Sie MUSS den Weg zurück nennen — eine Warnung ohne Ausweg
+      // liest sich wie ein Defekt.
+      if (typeof showToast === 'function') {
+        showToast(`⚓ Sold nicht gedeckt — die Heimatflotte ist eingemottet. `
+                + `Rückstand ${_f(res.due)} CC begleichen, dann fliegt sie wieder.`, 'error');
+      }
+    } else if (typeof showToast === 'function') {
+      showToast(`⚓ Unterhalt für ${Math.round((parseFloat(res.days) || 0) * 10) / 10} Tage: `
+              + `−${_f(res.charged)} CC`, 'info');
     }
   } catch (e) {
     console.warn('[wr-sold] Abbuchung:', e.message);
   } finally { _wrsBusy = false; }
 }
 
-// map_data frisch lesen, nur wrSold mergen (Muster appendTodayLogFresh).
-async function wrsSoldSave(next) {
+// Eingemottete Flotte auslösen (Rückstand ganz bezahlen — keine Teilzahlung).
+async function wrsUnmothball() {
   const me = wrsMe();
-  if (!me?.id) return;
-  let md = {};
-  try { md = await DB.fetchMemberMapData(me.id); } catch (e) { md = me.map_data || {}; }
-  const out = Object.assign({}, md || {}, { wrSold: next });
-  await DB.updateMapData(me.id, out);
+  if (!me?.id || typeof DB.unmothballSpace !== 'function') return;
   try {
-    me.map_data = out;
-    if (typeof appData !== 'undefined' && appData?.users) {
-      const u = appData.users.find(x => x.id === me.id);
-      if (u) u.map_data = out;
+    const res = await DB.unmothballSpace(me.id);
+    if (!res || res.error) {
+      if (typeof showToast === 'function') {
+        showToast(res && res.need
+          ? `Rückstand ${_f(res.need)} CC — so viel ist gerade nicht da.`
+          : 'Auslösen fehlgeschlagen.', 'error');
+      }
+      return;
     }
-    if (typeof _wrMember !== 'undefined' && _wrMember && _wrMember.id === me.id) _wrMember.map_data = out;
-  } catch (e) {}
+    if (res.released) {
+      if (typeof res.space === 'object' && res.space) me.space = res.space;
+      if (typeof showToast === 'function') {
+        showToast(`⚓ Flotte ausgelöst (−${_f(res.paid)} CC) — sie ist wieder einsatzbereit.`, 'success');
+      }
+      try { if (typeof wrRender === 'function') wrRender(); } catch (e) {}
+    }
+  } catch (e) { console.warn('[wr-sold] Auslösen:', e.message); }
 }
 
 // ── 📣 Ankündigung (Regel 1 + 3) ───────────────────────────────────────────
@@ -406,6 +414,7 @@ function wrsSoldCardHtml() {
 
 window.wrsSoldRate     = wrsSoldRate;
 window.wrsSoldAbbuchen = wrsSoldAbbuchen;
+window.wrsUnmothball   = wrsUnmothball;
 
 console.info('[wr-sold] Unterhalt aktiv — Flottensold, Kolonie-Verwaltung, Betriebskosten.');
 

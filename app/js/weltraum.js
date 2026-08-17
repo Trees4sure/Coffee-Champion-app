@@ -25,24 +25,24 @@
 // Erste Bauten sind bewusst REIN CC: wer noch keine Rohstoffe hat, muss trotzdem
 // starten können (sonst Deadlock — Rohstoffe gibt es nur aus dem All).
 const SPACE_SHIPS = [
-  { key:'sonde', buildMin:10, art:'ship_spaeher',   icon:'🛰️', name:'Bohnen-Sonde',   atk:1,  mine:0, cc:600,  erz:0,  kristall:0,
+  { key:'sonde', buildMin:60, art:'ship_spaeher',   icon:'🛰️', name:'Bohnen-Sonde',   atk:1,  mine:0, cc:600,  erz:0,  kristall:0,
     needs:'wt_ionenantrieb', desc:'Deckt den Nebel eines Quadranten auf' },
-  { key:'jaeger', buildMin:15, art:'ship_jaeger',  icon:'🔫', name:'Jäger',           atk:10, mine:0, cc:900,  erz:0,  kristall:0,
+  { key:'jaeger', buildMin:90, art:'ship_jaeger',  icon:'🔫', name:'Jäger',           atk:10, mine:0, cc:900,  erz:0,  kristall:0,
     needs:'wt_ionenantrieb', desc:'Billige Kampfkraft — Anzahl entscheidet' },
   // 🛩️ Großer Jäger (JP 2026-07-27): füllt die Lücke zwischen Wegwerf-Jäger und der
   // Fregatte. Bleibt leichte Klasse — Konterbonus gegen Schwärme, kleiner Schild.
   // ⚠️ Spiegel: _space_ship_cost/_stats/_role/_build_min in migration_2026-07-26i.
-  { key:'grossjaeger', buildMin:22, art:'ship_grossjaeger', icon:'🛩️', name:'Großer Jäger', atk:20, mine:0, cc:1400, erz:20, kristall:0,
+  { key:'grossjaeger', buildMin:180, art:'ship_grossjaeger', icon:'🛩️', name:'Großer Jäger', atk:20, mine:0, cc:1400, erz:20, kristall:0,
     needs:'wt_frachtmodule', desc:'Schwerer Abfangjäger — doppelte Feuerkraft je Rumpf, leichter Schild' },
-  { key:'kutter', buildMin:25, art:'ship_kutter',  icon:'🚀', name:'Espresso-Kutter', atk:2,  mine:0, cc:1200, erz:0,  kristall:0,
+  { key:'kutter', buildMin:180, art:'ship_kutter',  icon:'🚀', name:'Espresso-Kutter', atk:2,  mine:0, cc:1200, erz:0,  kristall:0,
     needs:'wt_frachtmodule', desc:'Frachter, bringt Ausbeute sicher heim' },
-  { key:'ernter', buildMin:35, art:'ship_ernter',  icon:'⛏️', name:'Röstkomet',       atk:3,  mine:8, cc:1200, erz:20, kristall:0,
+  { key:'ernter', buildMin:240, art:'ship_ernter',  icon:'⛏️', name:'Röstkomet',       atk:3,  mine:8, cc:1200, erz:20, kristall:0,
     needs:'wt_handbohrer',   desc:'Baut Erz und Koffeinkristall ab' },
-  { key:'berger', buildMin:30, art:'ship_berger',  icon:'♻️', name:'Bergungsschiff', atk:1,  mine:0, cc:1500, erz:40, kristall:0,
+  { key:'berger', buildMin:240, art:'ship_berger',  icon:'♻️', name:'Bergungsschiff', atk:1,  mine:0, cc:1500, erz:40, kristall:0,
     needs:'wt_frachtmodule', desc:'Holt mehr aus Wracks — im Kampf und an befreiten Planeten' },
-  { key:'kolonie', buildMin:90, art:'ship_kolonie', icon:'🛸', name:'Kolonieschiff',   atk:0,  mine:0, cc:3000, erz:70, kristall:20,
+  { key:'kolonie', buildMin:1440, art:'ship_kolonie', icon:'🛸', name:'Kolonieschiff',   atk:0,  mine:0, cc:3000, erz:70, kristall:20,
     needs:'wt_frachtmodule', desc:'Gründet eine Kolonie — bleibt am Zielplaneten' },
-  { key:'fregatte', buildMin:40, art:'ship_fregatte', icon:'🛡️', name:'Fregatte', atk:28, mine:0, cc:1800, erz:55, kristall:0,
+  { key:'fregatte', buildMin:360, art:'ship_fregatte', icon:'🛡️', name:'Fregatte', atk:28, mine:0, cc:1800, erz:55, kristall:0,
     needs:'wt_frachtmodule', desc:'Leichter Begleitschutz — Schild senkt die Verluste des ganzen Verbands' },
   // 🛩️ Trägerschiff (JP 2026-07-29): der Grund, warum es kleine Jäger weiterhin gibt.
   // ⚠️ Spiegel: _space_ship_cost/_stats/_role/_build_min in migration_2026-07-26m.
@@ -51,7 +51,7 @@ const SPACE_SHIPS = [
   // (42P13). Steht so auch im Kopf der Migration.
   // Die Kapazität gehört in den desc-Text: es gibt bewusst KEIN What's-New-Popup (JP),
   // also muss die Regel dort stehen, wo man das Schiff kauft.
-  { key:'traeger', buildMin:150, art:'ship_traeger', icon:'🛩️', name:'Trägerschiff', atk:40, mine:0, cc:18000, erz:500, kristall:180,
+  { key:'traeger', buildMin:2880, art:'ship_traeger', icon:'🛩️', name:'Trägerschiff', atk:40, mine:0, cc:18000, erz:500, kristall:180,
     needs:'wt_frachtmodule', desc:'Nimmt 20 Jäger auf: nur so kommen kleine Jäger nach Ring 2/3. Schützt sie mit seinem Schild und gibt +5 % Kampfkraft auf den ganzen Verband (max. +15 %)' },
   // ⚠️ JP 2026-07-22: Bomber ↔ Kreuzer haben NAME/BILD/ICON getauscht — der Kreuzer
   // ist optisch größer und soll daher das stärkere, teurere Schiff sein. Die KEYS,
@@ -59,18 +59,18 @@ const SPACE_SHIPS = [
   // _space_ship_stats/loss_order UND in den Flottenbeständen der Spieler — ein
   // Key-Tausch hätte bestehende Flotten still umbewertet. CHAT_ART (app.js) ist
   // spiegelbildlich mitgetauscht, sonst zeigte der Chat das alte Bild zum neuen Namen.
-  { key:'kreuzer', buildMin:70, art:'ship_bomber', icon:'💣', name:'Bomber', atk:65, mine:0, cc:3600, erz:140, kristall:20,
+  { key:'kreuzer', buildMin:720, art:'ship_bomber', icon:'💣', name:'Bomber', atk:65, mine:0, cc:3600, erz:140, kristall:20,
     needs:'wt_frachtmodule', desc:'Kapitalschiff-Jäger: stark gegen schwere Gegner, träge gegen Schwärme' },
-  { key:'bomber', buildMin:100, art:'ship_kreuzer', icon:'🚨', name:'Kreuzer', atk:90, mine:0, cc:5500, erz:210, kristall:45,
+  { key:'bomber', buildMin:1440, art:'ship_kreuzer', icon:'🚨', name:'Kreuzer', atk:90, mine:0, cc:5500, erz:210, kristall:45,
     needs:'wt_frachtmodule', desc:'Überall stark, gegen Geschütze verheerend' },
-  { key:'schlachtschiff', buildMin:150, art:'ship_schlachtschiff', icon:'⚔️', name:'Schlachtschiff', atk:180, mine:0, cc:11000, erz:440, kristall:110,
+  { key:'schlachtschiff', buildMin:2880, art:'ship_schlachtschiff', icon:'⚔️', name:'Schlachtschiff', atk:180, mine:0, cc:11000, erz:440, kristall:110,
     needs:'wt_frachtmodule', desc:'Überall stark, hoher Schild — das Rückgrat einer großen Flotte' },
-  { key:'dunkle_roestung', buildMin:240, art:'ship_dunkle_roestung', icon:'🌑', name:'Dunkle Röstung', atk:320, mine:0, cc:21000, erz:850, kristall:260,
+  { key:'dunkle_roestung', buildMin:5760, art:'ship_dunkle_roestung', icon:'🌑', name:'Dunkle Röstung', atk:320, mine:0, cc:21000, erz:850, kristall:260,
     needs:'wt_frachtmodule', desc:'Elite-Kapitalschiff: überall stark, höchster Schild, enormer Preis' },
   // 🛸 Flaggschiff (JP 2026-07-27). `special:'flagship'` heißt: NICHT über den Warenkorb
   // kaufbar — es entsteht nur in build_mutterschiff aus eingelösten Rümpfen. Die Werft
   // überspringt solche Schiffe deshalb in beiden Schleifen und zeigt ein eigenes Panel.
-  { key:'mutterschiff', buildMin:300, art:'ship_mutterschiff', icon:'🛸', name:'Mutterschiff', atk:1170, mine:0,
+  { key:'mutterschiff', buildMin:10080, art:'ship_mutterschiff', icon:'🛸', name:'Mutterschiff', atk:1170, mine:0,
     cc:30000, erz:600, kristall:250, plasmoid:80, quantum:40, special:'flagship',
     needs:'wt_frachtmodule', desc:'Flaggschiff aus eingelösten Rümpfen — hebt die Kampfkraft des ganzen Verbands' },
 ];
@@ -542,6 +542,8 @@ const WR_TURRET_MAX = 3;
 // ⚠️ CLIENT-SYNC-PFLICHT: Spiegel von _space_turret_energy / _space_power_base /
 // _space_power_def / _space_power_supply / _space_turret_demand / _space_power_factor in
 // migration_2026-07-26p_energie.sql. Bei Balance-Änderungen IMMER beide Seiten.
+// ⚠️ Die AKTUELLEN Zahlen für WR_TURRET_ENERGY und WR_POWER_FLOOR stehen in
+// migration_2026-08-17_26t_energie_balance.sql — 26p ist für diese beiden überholt.
 //
 // JP 2026-07-30: „Je mehr Geschütze, desto mehr Energie muss die Raumstation bekommen …
 // holt das OP der Geschützflut etwas runter! Wenn zu wenig Energie vorhanden ist, dann
@@ -550,8 +552,17 @@ const WR_TURRET_MAX = 3;
 // Energiebedarf je Geschütz auf Stufe 1. Der Stufenfaktor ist derselbe wie bei der
 // Feuerkraft (WR_TURRET_ATK_MULT) — Energie ist Unterhalt und skaliert mit der Wirkung,
 // nicht mit dem Kaufpreis.
+//
+// ⚠️ BALANCE 26t (Plan B.6.1): resonanz 26 → 34, quantenlanze 40 → 64. Nachgerechnet,
+// nicht geschätzt: mit den alten Werten brauchte ein Quanten-Vollausbau (6 Slots, St. 3)
+// 576 Energie, ein Plasmoid-Reaktor St. 3 lieferte 540 — also 94 %. Der Quantenschaum-
+// Reaktor war damit totes Inventar, obwohl seine Beschreibung ihn als einzigen ausweist,
+// der einen Quanten-Vollausbau trägt. Auf Kolonien war es eindeutig: 3 Quanten-Geschütze
+// St. 3 brauchten 288, ein Plasmoid-Reaktor St. 1 liefert bereits 310.
+// Neu: Vollausbau Resonanz 490 (Plasmoid St. 3 trägt ihn bequem), Quanten 922 (nur der
+// Quanten-Reaktor trägt ihn). Die Beschreibung stimmt ab jetzt.
 const WR_TURRET_ENERGY = {
-  railgun: 2, laser: 4, plasma: 8, singularity: 14, resonanz: 26, quantenlanze: 40,
+  railgun: 2, laser: 4, plasma: 8, singularity: 14, resonanz: 34, quantenlanze: 64,
 };
 // Grundversorgung des Hafens OHNE Generator: 10 + Stufe × 10 → 20 / 30 / 40.
 // Ein voller Railgun-Ausbau (29) läuft damit ab Hafenstufe 2 ohne Kraftwerk — wer klein
@@ -560,7 +571,14 @@ const WR_POWER_BASE_SUPPLY = 10, WR_POWER_PER_LEVEL = 10;
 // Untergrenze des Faktors. Unterversorgung soll wehtun, aber niemanden wehrlos machen:
 // sonst ruiniert sich ein Spieler durch einen Bau unwiederbringlich — genau dann, wenn er
 // investiert hat. Heilbar ist der Zustand jederzeit durch einen Generator-Ausbau.
-const WR_POWER_FLOOR = 0.35;
+//
+// ⚠️ BALANCE 26t (Plan B.6.3): 0,35 → 0,25. Bei 0,35 trug ein Quanten-Vollausbau OHNE
+// einen einzigen CC für Energie noch 1 613 Feuerkraft — mehr als ein sauber versorgter
+// Ausbau mit mittleren Geschützen. Der Boden war als Rettungsleine gedacht und wirkte als
+// Rabatt; mit 0,25 sind es 1 152. Er bleibt bewusst bestehen und wird NICHT auf 0 gesetzt
+// (siehe Begründung oben). Einsteiger merken nichts: zwei Railguns brauchen 29 Energie und
+// bekommen 20–40 aus der Grundversorgung — der Boden greift erst bei massivem Überbau.
+const WR_POWER_FLOOR = 0.25;
 // Generatoren. `out` = Ausgabe je Stufe (Index 1..3, Feld 0 bleibt leer). Die Kurve ist
 // bewusst flacher als bei den Geschützen: der Sprung liegt im TYP, nicht in der Stufe —
 // sonst liesse sich der Quanten-Generator über Stufen umgehen.
@@ -664,7 +682,11 @@ const SPACE_INTENTS = {
   colonize: { icon:'🛸', name:'Kolonisieren', hint:'Nur auf befreiten Planeten, verbraucht ein Kolonieschiff' },
 };
 
-const SPACE_MIN_PER_RING = 20;  // Minuten je Ring und Strecke — Spiegel von start_space_trip
+// ⚠️ BALANCE 26u (Plan B.1.1): 20 → 240 Minuten je Ring und Strecke.
+// Ring 1 = 4 h · Ring 2 = 8 h · Ring 3 = 12 h. Damit wird die Antriebsforschung erstmals
+// wertvoll: mit wt_a3 + wt_a5 + wt_e4 sinkt Ring 1 auf ~1,2 h. Spiegel von
+// `v_per_ring` in start_space_trip (migration_2026-08-17_26u_tempo.sql).
+const SPACE_MIN_PER_RING = 240;
                                 //   (war 6; JP wollte längere Flugzeiten)
 
 // Canvas-Geometrie an EINER Stelle: Zeichnen und Klick-Treffer müssen dieselbe Größe
@@ -1206,6 +1228,10 @@ async function _buildWeltraum(member, el) {
   // Erste Rückkehr direkt einlösen, falls die Flotte während der Abwesenheit gelandet ist
   await wrTryClaim(true);
   await wrClaimBuild(true);
+  await wrClaimTech(true);        // ⏳ 26u: fertige Forschung
+  await wrClaimTurrets(true);     // ⏳ 26u: fertige Bauplätze auf Kolonien
+  await wrSyncAttacks(true);      // 🚨 26v: Kolonie-Angriffe auswerten und planen
+  try { await DB.spaceMercSweep(_wrMember.id); } catch (e) {}   // 🎖️ 26x: abgelaufene Söldner
   await wrAutoHarvest();
   await wrAutoRefineClaim();
   await wrLoadWaves(true);
@@ -2564,7 +2590,7 @@ function wrDetailHtml(m) {
     const sonden   = sel.sonde || 0;
     const nAway    = wrTrips(m).length;
     const busy     = nAway >= 5;
-    const min = q.ring * SPACE_MIN_PER_RING;
+    const min = wrTripMin(q.ring, q.key, m);   // 🗺️ 26z: −20 % in der eigenen Region
     // 🛩️ 26m: das Ring-Gate gilt für JEDEN Start, auch für die Aufklärung — wer der
     // Sonde Jäger als Geleit mitgibt, läuft sonst hier in den Serverfehler.
     const gate = wrCarrierGap(sel, q.ring);
@@ -2613,7 +2639,7 @@ function wrDetailHtml(m) {
   const resIcon = resMeta.icon;
   const resName = resMeta.name;
   const resGated = !wrResMinable(m, p.resource_type);   // Ring-Rohstoff ohne Abbau-Tech
-  const min     = p.ring * SPACE_MIN_PER_RING;
+  const min     = wrTripMin(p.ring, p.quadrant, m);   // 🗺️ 26z
   const nAway    = wrTrips(m).length;
   const busy    = nAway >= 5;
 
@@ -2779,6 +2805,25 @@ function wrPlanetSlotsHtml(m, p) {
       const st  = wrPturretStats(cur.type, clv);
       const up  = clv < WR_TURRET_MAX ? wrPturretStats(cur.type, clv + 1) : null;
       const ziele = SPACE_TURRETS.filter(z => z.atk > t.atk && wrTurretUnlocked(m, z.key));
+      // ── 🚨 26v: Wrack aus einem Kolonie-Angriff ──────────────────────────
+      // ⚠️ Ganz oder gar nicht (JPs Regel): keine Teilreparatur, kein anteiliges
+      // Hochfahren. Bis zur bezahlten Reparatur zählt der Bauplatz mit 0 — deshalb
+      // stehen hier weder Ausbau- noch Umrüst-Knöpfe, nur die Reparatur.
+      if (cur.wreck) {
+        const rep = wrRepairPrice(cur.type, clv);
+        out += `
+          <div class="wr-pslot wr-pslot-full wr-pslot-wreck">
+            <span class="wr-pslot-art">💥<span class="wr-pslot-fb">${t.icon}</span></span>
+            <span class="wr-pslot-txt"><strong>⚠️ ${_wrEsc(t.name)} — Wrack</strong>
+              <span class="wr-sub">Stufe ${clv} · 🛡️ 0 (feuert nicht)</span></span>
+            <span class="wr-pslot-act">
+              <button class="wr-btn wr-btn-sm${canPay(rep) ? '' : ' wr-btn-off'}"
+                      data-wr-repair="${p.id}:${key}">🛠️ Reparieren
+                <span class="wr-btn-sub">${priceTxt(rep)}</span></button>
+            </span>
+          </div>`;
+        continue;
+      }
       out += `
         <div class="wr-pslot wr-pslot-full">
           <span class="wr-pslot-art wr-ship-zoom" data-wr-tinfo="${t.key}" title="Groß ansehen">
@@ -3710,7 +3755,80 @@ function wrHafenHtml(m) {
       `<div class="wr-slots">${slots}</div>`)}
     ${/* ⚡ Das Energie-Panel steht bewusst DIREKT unter den Bauplätzen: dort entsteht der
           Bedarf, dort wird die Entscheidung getroffen. */''}
-    ${wrPowerHtml(m, canPay, priceTxt)}`;
+    ${wrPowerHtml(m, canPay, priceTxt)}
+    ${wrMercHtml(m)}`;
+}
+
+// ── 🎖️ Söldner-Geschwader (26x) ─────────────────────────────────────────────
+// Drei feste Grössen statt eines freien Zusammenstellers: der Zweck ist eine SCHNELLE
+// Entscheidung im Vorwarnfenster, nicht Flottenplanung. Wer frei wählen will, baut selbst.
+const WR_MERC_SQUADS = [
+  { key: 'klein',  icon: '🔫', name: 'Streifengeschwader', ships: { jaeger: 15, fregatte: 3 } },
+  { key: 'mittel', icon: '🛡️', name: 'Schutzverband',      ships: { jaeger: 30, fregatte: 8, kreuzer: 2 } },
+  { key: 'gross',  icon: '⚔️', name: 'Kriegsflotte',        ships: { jaeger: 50, fregatte: 15, kreuzer: 6, schlachtschiff: 2 } },
+];
+
+function wrMercHtml(m) {
+  const aktiv = wrMercActive(m);
+  const coins = parseFloat(m?.coins) || 0;
+  const mc    = wrMerc(m);
+  let body = '', sum = '';
+
+  if (aktiv) {
+    const left  = wrMercLeftMs(m);
+    const std   = Math.floor(left / 3600000);
+    const rest  = std >= 24 ? `${Math.floor(std / 24)} d ${std % 24} h` : `${std} h`;
+    const liste = Object.entries(mc.ships || {})
+      .filter(([, n]) => n > 0)
+      .map(([k, n]) => `${wrFmt(n)}× ${_wrEsc(SPACE_SHIP_BY_KEY[k]?.name || k)}`).join(' · ');
+    // Wo steht das Geschwader? ⚠️ Entweder Hafen ODER eine Kolonie — nie beides. Genau
+    // diese Entscheidung ist der taktische Gehalt; deshalb steht sie ganz oben.
+    const wache = mc.guard
+      ? ((_wrGalaxy?.planets || []).find(p => p.id === mc.guard)?.name || 'unbekannt')
+      : null;
+    const kolonien = (_wrGalaxy?.planets || []).filter(p => p.colonized_by === m?.id);
+    sum = `${wrFmt(wrMercCount(m))} Schiffe · noch ${rest} · `
+        + (wache ? `bewacht ${_wrEsc(wache)}` : 'am Raumhafen');
+    body = `
+      <div class="wr-merc-run">
+        <div class="wr-sub">${liste}</div>
+        <div class="wr-sub">⏳ Läuft noch <strong>${rest}</strong> — danach verfällt das
+          Geschwader ersatzlos. Verluste im Gefecht werden nicht erstattet.</div>
+        <div class="wr-merc-guard">
+          <span class="wr-sub"><strong>Standort:</strong> Ein Geschwader kann nur an EINEM
+            Ort verteidigen.</span>
+          <button class="wr-btn wr-btn-sm${mc.guard ? '' : ' wr-btn-on'}"
+                  data-wr-merc-guard="">🛰️ Raumhafen</button>
+          ${kolonien.map(p => `
+            <button class="wr-btn wr-btn-sm${mc.guard === p.id ? ' wr-btn-on' : ''}"
+                    data-wr-merc-guard="${p.id}">🏙️ ${_wrEsc(p.name)}</button>`).join('')}
+        </div>
+      </div>`;
+  } else {
+    sum = 'kein Geschwader — anheuerbar';
+    body = `
+      <div class="wr-sub">Gemietete Kampfkraft für <strong>${WR_MERC_DAYS} Tage</strong>.
+        Söldner verteidigen sofort, aber sie fliegen keine Einsätze, lassen sich nicht
+        stationieren und nicht in Mutterschiff-Rümpfe einlösen — man mietet Bereitschaft,
+        keinen Besitz.</div>
+      <div class="wr-merc-list">
+        ${WR_MERC_SQUADS.map(s => {
+          const preis = wrMercPrice(s.ships);
+          const liste = Object.entries(s.ships)
+            .map(([k, n]) => `${n}× ${_wrEsc(SPACE_SHIP_BY_KEY[k]?.name || k)}`).join(' · ');
+          return `
+            <div class="wr-merc-row">
+              <span class="wr-merc-ic">${s.icon}</span>
+              <span class="wr-merc-txt"><strong>${_wrEsc(s.name)}</strong>
+                <span class="wr-sub">${liste}</span></span>
+              <button class="wr-btn wr-btn-sm${coins >= preis ? '' : ' wr-btn-off'}"
+                      data-wr-merc="${s.key}">Anheuern
+                <span class="wr-btn-sub">${wrFmt(preis)} CC</span></button>
+            </div>`;
+        }).join('')}
+      </div>`;
+  }
+  return wrSecCard('merc', '🎖️ Söldner', sum, body);
 }
 
 // Einstell-Panel im Planeten-Detail (nur auf befreiten Planeten)
@@ -4212,9 +4330,17 @@ function wrShipCost(s, m, count) {
 // 2 Sonden = 10 + 2 = 12 Min. Serienbau lohnt sich dadurch massiv; die Bremse
 // sind die Kosten, nicht die Uhr. Spiegel von build_space_cart —
 // inkl. A4 Orbitalwerft (_space_tech_buildtime), die hier ebenfalls fehlte.
+// ⚠️ BALANCE 26u (Plan B.1.3): Stückzuschlag war „Grundzeit + 1 Minute je Stück" — bei
+// 7 Tagen Grundzeit bedeutungslos. Neu: +2 % der Grundzeit je ZUSÄTZLICHEM Stück.
+// 50 Jäger = 90 × (1 + 0,02 × 49) = 178 min. Spiegel von `_space_ship_build_min_n`.
+// ⚠️ Nebenbefund aus 26u: Server und Client hatten hier ZWEI Formeln — `build_space`
+// (Einzelkauf) rechnete voll multiplikativ (× Stück), `build_space_cart` sublinear
+// (+ Stück), obwohl ein Kommentar in 21e das Gegenteil behauptet. Beide Pfade rufen
+// jetzt dieselbe Funktion, und diese hier ist ihr Spiegel.
 function wrShipBuildMin(s, m, count) {
   const cut = wrYardDef(wrYardLevel(m)).timeCut;
-  return Math.max(1, Math.round(((s.buildMin || 10) + (count || 1))
+  const n   = Math.max(1, count || 1);
+  return Math.max(1, Math.round((s.buildMin || 10) * (1 + 0.02 * (n - 1))
                                 * (1 - cut) * wrTechBuildTime(m)));
 }
 
@@ -4297,7 +4423,8 @@ function wrTurretDamaged(slot) {
 function wrPowerGen(m)    { return wrSpace(m).base?.power || null; }
 function wrPowerGenDef(m) { const g = wrPowerGen(m); return g ? SPACE_POWER_BY_KEY[g.type] || null : null; }
 function wrPowerGenLevel(m) {
-  return Math.max(1, Math.min(WR_POWER_MAX, parseInt(wrPowerGen(m)?.level, 10) || 1));
+  // 26u: während eines Ausbaus zählt die ALTE Stufe (wrSlotLevel), nicht die bestellte.
+  return Math.max(1, Math.min(WR_POWER_MAX, wrSlotLevel(wrPowerGen(m)) || 1));
 }
 // Ausgabe und Kosten eines Generators auf einer Stufe (Spiegel von _space_power_def).
 function wrPowerStats(type, level) {
@@ -4345,9 +4472,40 @@ function wrGenFuelRate(type, level) {
 }
 function wrGenFuelMax(type, level) { return wrGenFuelRate(type, level) * WR_GEN_FUEL_DAYS; }
 // Restbestand JETZT. Ohne `since` wird nichts abgezogen (Bestandsschutz) — genau wie in SQL.
+// ── ⏳ Bauzeit für Bauplätze (26u, Plan B.1.3) ───────────────────────────────
+// ⚠️ Spiegel von `_space_slot_level` in migration_2026-08-17_26u_tempo.sql.
+// Effektive Stufe eines Bauplatzes (Geschütz ODER Generator):
+//   • kein `readyAt` oder abgelaufen → die eingetragene Stufe (Normalfall)
+//   • Bau läuft und `lvlFrom` da     → die ALTE Stufe: ein AUSBAU läuft weiter
+//   • Bau läuft und kein `lvlFrom`   → null = zählt gar nicht (Neubau/Umrüstung)
+// null ist damit die Antwort auf „dieser Bauplatz kann noch nichts".
+// ⚠️ Ein unlesbarer Zeitstempel darf einen Bauplatz nicht dauerhaft abschalten —
+// dieselbe Regel wie bei `wrTurretDamaged`.
+function wrSlotLevel(slot) {
+  if (!slot || typeof slot !== 'object') return null;
+  // ⚠️ 26v: ein Wrack aus einem Kolonie-Angriff zählt gar nicht, bis es BEZAHLT
+  // repariert ist (JPs Regel: ganz oder gar nicht). Bewusst ein eigenes Feld statt des
+  // bestehenden `dmg` — `dmg` ist ein Zeitstempel und heilt nach 12 h von selbst, das
+  // ist die richtige Regel für den Hafen und die falsche hier.
+  if (slot.wreck) return null;
+  const clamp = (v) => Math.max(1, Math.min(WR_TURRET_MAX, parseInt(v, 10) || 1));
+  const ready = slot.readyAt ? Date.parse(slot.readyAt) : NaN;
+  if (!isFinite(ready) || ready <= Date.now()) return clamp(slot.level);
+  if (slot.lvlFrom === undefined || slot.lvlFrom === null) return null;
+  return clamp(slot.lvlFrom);
+}
+// Restzeit eines laufenden Baus in Millisekunden (0 = fertig). Für die Anzeige.
+function wrSlotBuildLeft(slot) {
+  const ready = slot?.readyAt ? Date.parse(slot.readyAt) : NaN;
+  if (!isFinite(ready)) return 0;
+  return Math.max(0, ready - Date.now());
+}
+
 function wrGenFuelLeft(pw) {
   if (!pw || typeof pw !== 'object') return 0;
-  const rate = wrGenFuelRate(pw.type, parseInt(pw.level, 10) || 1);
+  const lv = wrSlotLevel(pw);
+  if (lv === null) return 0;                     // 26u: noch im Bau
+  const rate = wrGenFuelRate(pw.type, lv);
   if (rate <= 0) return 0;
   const fuel = Math.max(0, parseFloat(pw.fuel) || 0);
   const since = pw.since ? Date.parse(pw.since) : NaN;
@@ -4356,10 +4514,12 @@ function wrGenFuelLeft(pw) {
 }
 function wrGenOnline(pw) {
   if (!pw || typeof pw !== 'object') return false;
-  return wrGenFuelRate(pw.type, parseInt(pw.level, 10) || 1) <= 0 || wrGenFuelLeft(pw) > 0;
+  const lv = wrSlotLevel(pw);
+  if (lv === null) return false;                 // 26u: im Bau = offline
+  return wrGenFuelRate(pw.type, lv) <= 0 || wrGenFuelLeft(pw) > 0;
 }
 function wrGenFuelDaysLeft(pw) {
-  const rate = wrGenFuelRate(pw?.type, parseInt(pw?.level, 10) || 1);
+  const rate = wrGenFuelRate(pw?.type, wrSlotLevel(pw) || 1);
   return rate > 0 ? wrGenFuelLeft(pw) / rate : Infinity;
 }
 
@@ -4380,7 +4540,9 @@ function wrPowerDemand(m) {
   for (const slot of Object.values(wrTurrets(m))) {
     if (!slot || typeof slot !== 'object') continue;
     if (wrTurretDamaged(slot)) continue;
-    sum += wrTurretEnergy(slot.type, slot.level);
+    const lv = wrSlotLevel(slot);            // 26u: null = noch im Bau, zieht keine Energie
+    if (lv === null) continue;
+    sum += wrTurretEnergy(slot.type, lv);
   }
   return Math.round(sum);
 }
@@ -4402,7 +4564,9 @@ function wrTurretPowerRaw(m) {
   for (const slot of Object.values(wrTurrets(m))) {
     if (!slot || typeof slot !== 'object') continue;
     if (wrTurretDamaged(slot)) continue;
-    sum += wrTurretStats(slot.type, slot.level)?.atk || 0;
+    const lv = wrSlotLevel(slot);            // 26u: ein Bauplatz im Bau trägt nichts bei
+    if (lv === null) continue;
+    sum += wrTurretStats(slot.type, lv)?.atk || 0;
   }
   return Math.round(sum * wrPowerFactor(m));
 }
@@ -4423,6 +4587,92 @@ const WR_PDEF = [ null,
 // 🏙️ Kolonie-Bauplätze (26l) — Spiegel von _space_planet_slots/_space_pturret_mult.
 const WR_PLANET_SLOTS = 3;
 const WR_PTURRET_MULT = 1.5;   // Kolonie-Aufschlag auf alle Geschützkosten
+// ── 🗺️ 26z: Regionen-Effekte ────────────────────────────────────────────────
+// ⚠️ Spiegel von `_space_region_rates` in migration_2026-08-17_26z_regionen.sql.
+const WR_REGION_RATES = {
+  ertrag: 1.20,      // Abbau und Kolonie-Ertrag in der eigenen Region
+  flugzeit: 0.80,    // Flugzeit zu Zielen in der eigenen Region
+  sonde: 0.50,       // Sondenkosten (Treibstoff) dort
+  abgabe: 0.05,      // Regionsabgabe an den Zweitplatzierten
+  uebernahme: 1.15,  // nötige Übermacht für eine Kolonie in fremder Region
+};
+// ⚠️ Die Regionen-TABELLE steht bewusst NICHT hier, sondern in weltraum_stats.js
+// (`WR_REGIONS` / `WR_REGION_OF`, dort seit Teil A und im Betrieb bewährt). Sie ein
+// zweites Mal zu schreiben wäre die sicherste Art, sie auseinanderlaufen zu lassen —
+// dieselbe Falle wie bei jeder Spiegel-Konstante, nur schlimmer, weil sie 36 Zeilen hat.
+// weltraum_stats.js lädt NACH dieser Datei, deshalb wird erst beim Aufruf zugegriffen.
+function wrRegionOfQuad(q) { return (window.WR_REGION_OF || {})[q] || null; }
+function wrRegionHolderId(regionKey) {
+  try {
+    if (typeof wrRegionStand !== 'function' || !regionKey) return null;
+    return wrRegionStand(regionKey).holder?.id || null;
+  } catch (e) { return null; }
+}
+// Kontrolliere ICH die Region dieses Planeten/Quadranten?
+function wrRegionMine(quadrant, m) {
+  const h = wrRegionHolderId(wrRegionOfQuad(quadrant));
+  return !!(h && h === (m || _wrMember)?.id);
+}
+// Flugzeit-Vorschau inklusive Regionsbonus — Spiegel der Rechnung in start_space_trip.
+function wrTripMin(ring, quadrant, m) {
+  const bonus = wrRegionMine(quadrant, m) ? WR_REGION_RATES.flugzeit : 1;
+  return Math.round(ring * SPACE_MIN_PER_RING * bonus);
+}
+
+// ── 🎖️ 26x: Söldner ─────────────────────────────────────────────────────────
+// ⚠️ Spiegel von `_space_merc_rates` / `_space_merc_price` / `_space_merc_active` in
+// migration_2026-08-17_26x_soeldner.sql.
+//
+// ⚠️ DIE WICHTIGSTE EIGENSCHAFT IST EINE AUSLASSUNG: Söldner stehen NICHT in
+// `space.fleets`, sondern in `space.merc`. Dadurch sind sie automatisch von allem
+// ausgeschlossen, was `fleets` liest — Mutterschiff-Recycling, Reisen, Routen und der
+// Flottensold aus 26w. Es gibt keine Prüfung, die jemand vergessen könnte.
+// Wer sie je nach `fleets` verschiebt, hebt alle vier Verbote auf einmal auf.
+const WR_MERC_FACTOR = 3;   // Preis = 3 × CC-Bauwert
+const WR_MERC_DAYS   = 7;   // Laufzeit
+function wrMerc(m)   { const x = wrSpace(m).merc; return (x && typeof x === 'object') ? x : null; }
+function wrMercPrice(ships) {
+  let cc = 0;
+  for (const [k, n] of Object.entries(ships || {})) {
+    const c = SPACE_SHIP_BY_KEY[k];
+    if (!c || !(n > 0)) continue;
+    cc += (c.cc || 0) * n;
+  }
+  return Math.round(cc * WR_MERC_FACTOR);
+}
+// ⚠️ Im Zweifel „aktiv": ein unlesbarer Zeitstempel darf ein BEZAHLTES Geschwader nicht
+// stillschweigend verfallen lassen. Umgekehrt als bei `readyAt` in 26u, wo „fertig" die
+// für den Spieler harmlose Richtung war — hier ist es „läuft noch".
+function wrMercActive(m) {
+  const x = wrMerc(m);
+  if (!x || !x.ships || !Object.values(x.ships).some(n => n > 0)) return false;
+  const until = x.until ? Date.parse(x.until) : NaN;
+  if (!isFinite(until)) return true;
+  return until > Date.now();
+}
+function wrMercLeftMs(m) {
+  const x = wrMerc(m);
+  const until = x?.until ? Date.parse(x.until) : NaN;
+  return isFinite(until) ? Math.max(0, until - Date.now()) : 0;
+}
+function wrMercCount(m) {
+  const x = wrMerc(m);
+  return Object.values(x?.ships || {}).reduce((a, n) => a + (parseInt(n, 10) || 0), 0);
+}
+
+// 🛠️ 26v: Reparaturpreis eines Wracks = 40 % des Kolonie-Neupreises der AKTUELLEN Stufe
+// („Kosten proportional zum Schaden", JP). Spiegel von `repair_planet_turret`.
+// ⚠️ Der Server rechnet den Preis selbst nach — dieser Wert ist reine Anzeige. Weicht er
+// ab, lehnt der Server ab, und der Knopf wäre trotzdem aktiv gewesen (dieselbe Falle wie
+// beim Umrüstpreis in 26p). Deshalb steht der Faktor hier als benannte Konstante.
+const WR_REPAIR_FACTOR = 0.4;
+function wrRepairPrice(type, level) {
+  const s = wrPturretStats(type, level);
+  if (!s) return { cc: 0, erz: 0, kristall: 0, plasmoid: 0, quantum: 0 };
+  const f = (v) => Math.round((v || 0) * WR_REPAIR_FACTOR);
+  return { cc: f(s.cc), erz: f(s.erz), kristall: f(s.kristall),
+           plasmoid: f(s.plasmoid), quantum: f(s.quantum) };
+}
 function wrPturretStats(type, level) {
   const s = wrTurretStats(type, level);
   if (!s) return null;
@@ -4460,7 +4710,8 @@ const WR_COLONY_PER_LEVEL = 10;
 function wrPlanetPower(p)   { const g = p && p.power; return (g && typeof g === 'object' && g.type) ? g : null; }
 function wrPlanetGenDef(p)  { const g = wrPlanetPower(p); return g ? SPACE_POWER_BY_KEY[g.type] || null : null; }
 function wrPlanetGenLevel(p) {
-  return Math.max(1, Math.min(WR_POWER_MAX, parseInt(wrPlanetPower(p)?.level, 10) || 1));
+  // 26u: siehe wrPowerGenLevel.
+  return Math.max(1, Math.min(WR_POWER_MAX, wrSlotLevel(wrPlanetPower(p)) || 1));
 }
 // Kolonie-Generator: gleiche Ausgabe, Preis ×1,5 (wie alle Kolonie-Bauten, 26l).
 function wrPgenStats(type, level) {
@@ -4495,7 +4746,9 @@ function wrColonyDemand(p) {
   for (const slot of Object.values(wrPlanetTurrets(p))) {
     if (!slot || typeof slot !== 'object') continue;
     if (wrTurretDamaged(slot)) continue;
-    sum += wrTurretEnergy(slot.type, slot.level);
+    const lv = wrSlotLevel(slot);            // 26u
+    if (lv === null) continue;
+    sum += wrTurretEnergy(slot.type, lv);
   }
   return Math.round(sum);
 }
@@ -4529,6 +4782,21 @@ const WR_FALLBACK_CAP    = { 1: 900, 2: 2500, 3: 6000 };// Deckel (vorher 240/80
 
 function wrDefLevel(p)    { return Math.max(0, Math.min(3, parseInt(p?.def_level, 10) || 0)); }
 function wrPlanetDef(p)   { return Math.max(0, parseInt(p?.planet_defense, 10) || 0); }
+// ⏳ 26u: Was in `planet_defense` stehen MÜSSTE — Spiegel von `_space_planet_power_nrg`.
+// Wird für die Vorprüfung in wrClaimTurrets gebraucht: weicht der gespeicherte Wert ab,
+// ist auf dieser Kolonie ein Bau fertig geworden (oder eine Balance-Änderung wirksam),
+// und der Server muss ihn neu eintragen. Bauplätze im Bau zählen über wrSlotLevel nicht.
+function wrColonyPowerExpected(p) {
+  let raw = 0;
+  for (const slot of Object.values(wrPlanetTurrets(p) || {})) {
+    if (!slot || typeof slot !== 'object') continue;
+    if (wrTurretDamaged(slot)) continue;
+    const lv = wrSlotLevel(slot);
+    if (lv === null) continue;
+    raw += wrTurretStats(slot.type, lv)?.atk || 0;
+  }
+  return Math.round(raw * wrColonyFactor(p));
+}
 function wrColonyLevel(p) { return Math.max(1, Math.min(3, parseInt(p?.colony_level, 10) || 1)); }
 function wrIsStation(p)   { return !!(p && p.station); }
 function wrQuadStation(qkey) {
@@ -5101,6 +5369,67 @@ function wrBindEvents() {
     if (e.target.closest('#wr-port-up')) { await wrDefense('port_upgrade', null, null); return; }
     if (e.target.closest('#wr-yard-up'))  { await wrDefense('yard_upgrade', null, null); return; }
     if (e.target.closest('#wr-job-claim')) { await wrClaimBuild(false); return; }
+    // 🎖️ 26x: Söldner anheuern.
+    const mrc = e.target.closest('[data-wr-merc]');
+    if (mrc) {
+      if (_wrBusy) return;
+      const sq = WR_MERC_SQUADS.find(s => s.key === mrc.getAttribute('data-wr-merc'));
+      if (!sq) return;
+      _wrBusy = true;
+      try {
+        const res = await DB.hireSpaceMerc(_wrMember.id, sq.ships);
+        if (!res || res.error) { wrToast(wrErrText(res && res.error), 'error'); return; }
+        if (res.space) wrApplySpace(res.space);
+        wrToast(`🎖️ ${sq.name} angeheuert (${wrFmt(res.cc)} CC, ${res.days} Tage)`, 'success');
+        // ⚠️ Chat ist reiner Text (Teil 23) — Betonung nur über Emoji.
+        try {
+          wrChat(`🎖️ ${_wrEsc(_wrMember?.name || 'Jemand')} hat ein Söldner-Geschwader `
+               + `angeheuert: ${_wrEsc(sq.name)}, ${wrFmt(res.count)} Schiffe für `
+               + `${res.days} Tage.`);
+        } catch (err) {}
+        wrRender();
+      } catch (err) {
+        wrToast('Anheuern fehlgeschlagen: ' + err.message, 'error');
+      } finally { _wrBusy = false; }
+      return;
+    }
+    // 🎖️ 26x: Bewachung umstellen (leerer Wert = zurück an den Raumhafen).
+    const grd = e.target.closest('[data-wr-merc-guard]');
+    if (grd) {
+      if (_wrBusy) return;
+      const pid = grd.getAttribute('data-wr-merc-guard') || null;
+      _wrBusy = true;
+      try {
+        const res = await DB.setSpaceMercGuard(_wrMember.id, pid || null);
+        if (!res || res.error) { wrToast(wrErrText(res && res.error), 'error'); return; }
+        if (res.space) wrApplySpace(res.space);
+        wrToast(pid ? '🎖️ Geschwader bewacht die Kolonie' : '🎖️ Geschwader am Raumhafen', 'info');
+        wrRender();
+      } catch (err) {
+        wrToast('Umstellen fehlgeschlagen: ' + err.message, 'error');
+      } finally { _wrBusy = false; }
+      return;
+    }
+    // 🛠️ 26v: Wrack reparieren — ganz oder gar nicht.
+    const rep = e.target.closest('[data-wr-repair]');
+    if (rep) {
+      if (_wrBusy) return;
+      const [pid, slot] = (rep.getAttribute('data-wr-repair') || '').split(':');
+      if (!pid || !slot) return;
+      _wrBusy = true;
+      try {
+        const res = await DB.repairPlanetTurret(_wrMember.id, pid, slot);
+        if (!res || res.error) { wrToast(wrErrText(res && res.error), 'error'); return; }
+        if (res.space) wrApplySpace(res.space);
+        _wrGalaxy = await DB.fetchGalaxy();
+        wrToast(`🛠️ ${SPACE_TURRET_BY_KEY[res.type]?.name || 'Geschütz'} repariert `
+              + `(${wrFmt(res.cc)} CC)`, 'success');
+        wrRender();
+      } catch (err) {
+        wrToast('Reparatur fehlgeschlagen: ' + err.message, 'error');
+      } finally { _wrBusy = false; }
+      return;
+    }
     const tb = e.target.closest('[data-wr-tbuild]');
     if (tb && !tb.disabled) {
       const [slot, type] = tb.dataset.wrTbuild.split(':');
@@ -5390,6 +5719,133 @@ async function wrBuildCart() {
     wrRender();
   } catch (e) {
     wrToast('Bau fehlgeschlagen: ' + e.message, 'error');
+  } finally { _wrBusy = false; }
+}
+
+// ── 🚨 26v: Angriffe auf Kolonien ───────────────────────────────────────────
+// Offene Vorwarnungen dieser Sitzung. Bewusst NICHT in `map_data` — es ist ein
+// Serverzustand, den `fetch_colony_attacks` jederzeit liefert (Tagesbilanz-Lehre:
+// keine Blob-Schreibzugriffe für Dinge, die woanders autoritativ stehen).
+let _wrAttacks = [];
+
+// Planen, lesen, fällige auswerten — alles beim Öffnen des 🚀-Tabs.
+// ⚠️ Reihenfolge: erst AUSWERTEN, dann neu planen. Andersherum könnte ein Angriff, der
+// gerade eingeschlagen ist, im selben Durchgang durch einen neuen ersetzt werden und
+// stillschweigend verpuffen.
+async function wrSyncAttacks(silent) {
+  try {
+    _wrAttacks = await DB.fetchColonyAttacks(_wrMember.id);
+    const faellig = _wrAttacks.filter(a => Date.parse(a.arriveAt) <= Date.now());
+    for (const a of faellig) {
+      const res = await DB.resolveColonyAttack(_wrMember.id, a.planetId);
+      if (!res || res.error || !res.resolved) continue;
+      const r = res.report || {};
+      // ⚠️ Chat-Text ist REINER TEXT (Lehre aus Teil 23) — Betonung nur über Emoji und
+      // Grossschreibung, niemals <strong>.
+      if (res.outcome === 'held') {
+        wrToast(`🛡️ Angriff auf ${r.planet} abgewehrt`, 'success');
+        wrChat(`[[s:hafen]] ${_wrEsc(_wrMember?.name || 'Jemand')} hat einen Angriff auf `
+             + `die Kolonie ${_wrEsc(r.planet)} abgewehrt `
+             + `(${wrFmt(r.strength)} gegen ${wrFmt(r.defense)}). `
+             + `${r.turretsHit} Geschütz(e) beschädigt.`);
+      } else if (res.outcome === 'partial') {
+        wrToast(`💥 ${r.planet}: Kolonie beschädigt — Stufe ${r.levelAfter}`, 'error');
+        wrChat(`💥 Die Kolonie ${_wrEsc(r.planet)} von ${_wrEsc(_wrMember?.name || 'Jemand')} `
+             + `hat einen Angriff NICHT gehalten (${wrFmt(r.strength)} gegen `
+             + `${wrFmt(r.defense)}). Alle Geschütze sind Wracks, die Stufe ist auf `
+             + `${r.levelAfter} gefallen.`);
+      } else {
+        wrToast(`☠️ Kolonie ${r.planet} verloren!`, 'error');
+        wrChat(`☠️ Die Kolonie ${_wrEsc(r.planet)} von ${_wrEsc(_wrMember?.name || 'Jemand')} `
+             + `wurde vernichtet — der Planet ist wieder in der Hand der Wächter. `
+             + `Ohne Geschütze, Besatzung oder Station im Quadranten war nichts zu halten.`);
+      }
+      // 📊 Regel 4: Karriere-Zähler (weltraum_stats.js). Nie blockierend.
+      try {
+        if (typeof wrStatBump === 'function') {
+          wrStatBump(res.outcome === 'held'
+            ? { colonyAttacksWon: 1 }
+            : { colonyAttacksLost: 1,
+                coloniesDestroyed: res.outcome === 'destroyed' ? 1 : 0 });
+        }
+      } catch (e) { /* Statistik darf die Auswertung nie verhindern */ }
+    }
+    if (faellig.length) {
+      _wrGalaxy   = await DB.fetchGalaxy();
+      _wrAttacks  = await DB.fetchColonyAttacks(_wrMember.id);
+    }
+    // Erst jetzt neu planen (siehe Reihenfolge-Hinweis oben).
+    const plan = await DB.ensureColonyAttacks(_wrMember.id);
+    if (plan && plan.count > 0) {
+      _wrAttacks = await DB.fetchColonyAttacks(_wrMember.id);
+      for (const n of (plan.new || [])) {
+        wrToast(`🚨 Angriff auf ${n.planet} in Anflug!`, 'error');
+      }
+    }
+    if (!silent && faellig.length) wrRender();
+  } catch (e) { /* Regel 3: der Tab muss auch ohne Angriffssystem aufgehen */ }
+}
+
+// ── ⏳ 26u: die zwei neuen Abholungen ────────────────────────────────────────
+// Beide folgen exakt dem Muster von wrClaimBuild: erst lokal prüfen, ob überhaupt etwas
+// fällig ist (spart bei jedem Tab-Wechsel einen RPC), dann einlösen.
+// ⚠️ Regel 3: eine fehlgeschlagene Abholung darf den Tab-Aufbau nie blockieren, deshalb
+// im stillen Modus keine Toasts und kein Weiterreichen von Fehlern.
+async function wrClaimTech(silent) {
+  if (_wrBusy) return false;
+  const job = wrSpace(_wrMember).techJob;
+  if (!job || typeof job !== 'object' || !job.key) return false;
+  const due = Date.parse(job.doneAt);
+  if (isFinite(due) && Date.now() < due) return false;
+  _wrBusy = true;
+  try {
+    const res = await DB.claimSpaceTech(_wrMember.id);
+    if (!res || res.error) {
+      if (!silent && res && res.error) wrToast(wrErrText(res.error), 'error');
+      return false;
+    }
+    if (res.space) wrApplySpace(res.space);
+    if (res.done) {
+      const t = SPACE_TECH_BY_KEY?.[res.tech];
+      wrToast(`🔬 Forschung abgeschlossen: ${t?.name || res.tech}`, 'success');
+      try {
+        wrChat(`[[s:hafen]] ${_wrEsc(_wrMember?.name || 'Jemand')} hat die Forschung `
+             + `„${t?.name || res.tech}" abgeschlossen.`);
+      } catch (e) { /* Meldung darf den Abschluss nie verhindern */ }
+    }
+    if (!silent) wrRender();
+    return true;
+  } catch (e) {
+    if (!silent) wrToast('Übernahme fehlgeschlagen: ' + e.message, 'error');
+    return false;
+  } finally { _wrBusy = false; }
+}
+
+// Fertige Bauplätze auf KOLONIEN in die materialisierte Feuerkraft übernehmen.
+// ⚠️ Der Raumhafen braucht das nicht: seine Feuerkraft rechnet der Server bei jedem
+// Lesen. Eine Kolonie trägt sie in `space_planets.planet_defense` — dort muss der
+// fertige Bau eingetragen werden, sonst bliebe er bis zum nächsten Bau unsichtbar.
+async function wrClaimTurrets(silent) {
+  if (_wrBusy) return false;
+  // ⚠️ Die Vorprüfung vergleicht den GESPEICHERTEN Wert mit dem, den der Client gerade
+  // ausrechnet. Naheliegender wäre „gibt es einen Bauplatz, dessen readyAt abgelaufen
+  // ist" — das wäre aber nach dem ersten Claim für immer wahr (readyAt bleibt stehen)
+  // und würde bei JEDEM Tab-Wechsel einen RPC auslösen. Der Wertvergleich stimmt nach
+  // dem Claim wieder überein und schaltet sich damit selbst ab.
+  const mine = (_wrGalaxy?.planets || []).filter(p => p.colonized_by === _wrMember?.id);
+  if (!mine.some(p => wrColonyPowerExpected(p) !== wrPlanetDef(p))) return false;
+  _wrBusy = true;
+  try {
+    const res = await DB.claimSpaceTurrets(_wrMember.id);
+    if (!res || res.error) return false;
+    if (res.updated > 0) {
+      _wrGalaxy = await DB.fetchGalaxy();   // planet_defense hat sich geändert
+      if (!silent) wrToast(`🛡️ ${res.updated} Kolonie(n) neu berechnet`, 'success');
+    }
+    if (!silent) wrRender();
+    return true;
+  } catch (e) {
+    return false;
   } finally { _wrBusy = false; }
 }
 
@@ -6456,6 +6912,14 @@ function wrErrText(err) {
     not_enough_ships:      'Nicht genug Schiffe im Hafen.',
     empty_fleet:           'Keine Schiffe ausgewählt.',
     bad_intent:            'Unbekannter Auftrag.',
+    region_too_strong:     'Diese Region gehört jemand anderem — dein Verband ist zu schwach für eine Kolonie dort (nötig: das 1,15-fache der Regionsverteidigung).',
+    merc_active:           'Es läuft bereits ein Söldner-Geschwader.',
+    merc_not_rentable:     'Dieses Schiff lässt sich nicht mieten.',
+    merc_too_big:          'So grosse Geschwader vermittelt niemand.',
+    no_merc:               'Kein Söldner-Geschwader vorhanden.',
+    not_your_colony:       'Das ist nicht deine Kolonie.',
+    tech_busy:             'Es läuft bereits ein Forschungsprojekt.',
+    not_damaged:           'Dieses Geschütz ist unbeschädigt.',
     bad_ship:              'Dieses Schiff lässt sich so nicht bauen (das Mutterschiff nur über sein eigenes Panel).',
     insufficient_coins:    'Nicht genug CoffeeCoins.',
     insufficient_erz:      'Nicht genug 🪨 Erz.',

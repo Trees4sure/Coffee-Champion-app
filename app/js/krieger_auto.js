@@ -21,10 +21,12 @@
 //     exakt wie vorher. Jeder Zugriff auf fremde Funktionen ist typeof-geprüft.
 //
 // ⚠️ ARCHITEKTUR-SYNC (wichtigster Fehlerkandidat dieses Features)
-//   _kaExpDmg() / kriegerAutoWinChance() SPIEGELN die Schadensformel aus der
-//   SQL-Funktion dungeon_fight(). Weicht sie ab, verliert der Auto-Lauf systematisch
-//   Kämpfe, die er für sicher hielt. Bei jeder Änderung an dungeon_fight MUSS diese
-//   Datei nachgezogen werden (nie umgekehrt — die SQL ist die Wahrheit).
+//   _kaPlayerDmg() / _kaEnemyDmg() / _kaMaxRounds() / kriegerAutoWinChance() SPIEGELN die
+//   Schadensformel aus der SQL-Funktion dungeon_fight(). Weicht sie ab, verliert der
+//   Auto-Lauf systematisch Kämpfe, die er für sicher hielt. Bei jeder Änderung an
+//   dungeon_fight MUSS diese Datei nachgezogen werden (nie umgekehrt — die SQL ist die
+//   Wahrheit). Prüfstand: plans/tests/test_krieger_auto.js.
+//   Stand des Abgleichs: migration_2026-07-30_krieger_levelcap.sql (2026-08-17).
 // ═══════════════════════════════════════════════════════════════════════════
 
 // ── Konstanten / Balancing ──────────────────────────────────────────────────
@@ -98,17 +100,33 @@ function _kaSetCulture(eq)  { return (typeof kriegerActiveSetCulture === 'functi
 function _kaSleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// ADAPTER — HIER ANPASSEN (Claude Code)
+// ADAPTER — ✅ AUSGEFÜLLT 2026-08-17 (gegen js/krieger.js + die Live-SQL)
 // ═══════════════════════════════════════════════════════════════════════════
-// Diese fünf Funktionen sind die EINZIGE Stelle, an der dieses Modul auf Mechaniken
-// zugreift, die ich beim Schreiben nicht einsehen konnte (persistente HP, Talentbaum,
-// Level-Cap). Jede hat einen defensiven Fallback, damit nichts abstürzt — aber solange
-// die Fallbacks greifen, RECHNET DER AUTO-LAUF FALSCH. Bitte gegen die Live-Version
-// prüfen und bei Bedarf ersetzen.
+// Diese Funktionen sind die EINZIGE Stelle, an der dieses Modul auf Mechaniken zugreift,
+// die beim Schreiben nicht einsehbar waren (persistente HP, Talentbaum, Level-Deckel).
 //
-// Bekannter Messwert aus JPs Screenshot (2026-08-05, Stufe 141): ❤️ 508/721.
-// Die alte Formel 80 + Stufe×4 ergäbe 644 — die Differenz von 77 kommt vermutlich aus
-// dem Talentbaum. Genau deshalb existiert dieser Adapter.
+// ⚠️ BEFUND: ALLE FÜNF Vorgaben trafen daneben — nicht weil die Mechanik fehlte, sondern
+// weil sie ANDERS HEISST. Jede Prüfung `typeof kriegerMaxHp === 'function'` war schlicht
+// false, und das Modul ist stillschweigend in seine Notnagel-Zweige gefallen:
+//
+//   geraten                  tatsächlich in krieger.js
+//   ─────────────────────────────────────────────────────────────────────────
+//   kriegerMaxHp(dd)      →  kriegerHpMax(dd)          (Zeile 893)
+//   kriegerCurrentHp(dd)  →  kriegerHp(dd)             (Zeile 898)
+//   kriegerTalentBonus()  →  kriegerTalentStatBonus()  (Zeile 910) — ANDERE FORM!
+//   KRIEGER_MAX_LEVEL     →  KRIEGER_LEVEL_MAX         (Zeile 1571, Wert 999)
+//   _kaFightSupportsPotion→  entfällt, Signatur bestätigt (siehe unten)
+//
+// ⚠️ ÜBERTRAGBARE LEHRE: Ein `typeof x === 'function'`-Fallback macht einen falschen
+// NAMEN unsichtbar. Er schützt vor dem Absturz und verbirgt dabei genau den Fehler, den
+// ein Absturz sofort gezeigt hätte. Wer so einen Adapter baut, muss den Namen gegen die
+// Quelle prüfen — nicht gegen die eigene Erinnerung.
+//
+// ✅ ABNAHMETEST BESTANDEN (Handover §8): JPs Screenshot vom 2026-08-05 zeigt bei
+// Stufe 141 ❤️ 508/721. `kriegerHpMax` rechnet 80 + 141×4 = 644, und mit den Talenten
+// „Vollmundig" (+8 % Max-HP) UND „Meisterröster" (alle Talente ×1,5) wird daraus
+// 644 × (1 + 0,08 × 1,5) = 644 × 1,12 = 721,3 → **721**. Exakt der Screenshot-Wert; die
+// im Handover gesuchten „fehlenden 77" sind genau diese beiden Talente.
 
 // ── HP-Erkennung ────────────────────────────────────────────────────────────
 // Mehrstufig, weil die Feldnamen von außen nicht bekannt sind. Reihenfolge:
@@ -151,11 +169,16 @@ function _kaHpState(dd) {
     _kaHpUnknown = false;
     return { cur: _kaHpLive.cur, max: _kaHpLive.max };
   }
-  if (typeof kriegerMaxHp === 'function') {
-    const max = kriegerMaxHp(dd);
+  // ✅ Der echte Weg. `kriegerHpMax` spiegelt die SQL (80 + Stufe×4, +8 % bei Vollmundig,
+  // das mit Meisterröster auf ×1,5 skaliert). `kriegerHp` kennt zusätzlich `dd.hpDate`:
+  // an einem neuen Tag ist der Krieger voll geheilt, auch wenn `dd.hp` noch den Reststand
+  // von gestern trägt. ⚠️ Genau das könnte _kaHpFromDd (das nur `dd.hp` liest) NICHT
+  // wissen — es hätte den Lauf jeden Morgen mit den HP des Vorabends geplant.
+  if (typeof kriegerHpMax === 'function') {
+    const max = kriegerHpMax(dd);
     if (max > 0) {
       let cur = max;
-      if (typeof kriegerCurrentHp === 'function') { const c = kriegerCurrentHp(dd); if (c !== undefined && c !== null) cur = Math.max(0, c); }
+      if (typeof kriegerHp === 'function') { const c = kriegerHp(dd); if (c !== undefined && c !== null) cur = Math.max(0, Math.min(max, c)); }
       else { const d = _kaHpFromDd(dd) || _kaHpFromDom(); if (d) cur = d.cur; }
       _kaHpUnknown = false;
       return { cur, max };
@@ -179,18 +202,41 @@ function _kaHpState(dd) {
 function _kaMaxHp(dd) { return _kaHpState(dd).max; }
 function _kaCurHp(dd) { return _kaHpState(dd).cur; }
 
-// Dauerhafte Talent-Boni auf die Kampfwerte. Erwartet { atk, def, crit }.
+// Dauerhafte Talent-Boni auf die Kampfwerte. Liefert { atk, def, crit }.
+//
+// ⚠️ `kriegerTalentStatBonus` hat eine ANDERE Form als hier ursprünglich erwartet:
+// es liefert { crit, hpMult } — es gibt schlicht kein Talent, das ATK oder DEF dauerhaft
+// hebt. Von den elf Talenten sind nur zwei statisch (fein_gemahlen: +5 CRIT · vollmundig:
+// +8 % Max-HP), beide skaliert mit Meisterröster ×1,5. Der Rest wirkt DYNAMISCH im Kampf
+// (Alpha-Strike, HP-abhängiger Schadensbonus, Rundenzahl …) und lässt sich nicht als
+// Konstante addieren — das Nötige davon steht in _kaMaxRounds und _kaPlayerDmg.
+//
+// ⚠️ hpMult wird hier BEWUSST NICHT verwendet: `kriegerHpMax` hat den Bonus bereits
+// eingerechnet (Zeile 895 in krieger.js). Ein zweites Mal angewandt hätte der Auto-Lauf
+// mit 12 % zu vielen Trefferpunkten geplant — und wäre genau darum zu mutig gewesen.
 function _kaTalentBonus(dd) {
-  if (typeof kriegerTalentBonus === 'function') {
-    const t = kriegerTalentBonus(dd) || {};
-    return { atk: t.atk || 0, def: t.def || 0, crit: t.crit || 0 };
+  if (typeof kriegerTalentStatBonus === 'function') {
+    const t = kriegerTalentStatBonus(dd) || {};
+    return { atk: 0, def: 0, crit: t.crit || 0 };
   }
   return { atk: 0, def: 0, crit: 0 };  // ⚠️ Fallback: Talente wirken nicht auf die Schätzung
 }
 
+// Rundendeckel aus dungeon_fight: `v_max_rounds INT := 40`, mit dem Talent
+// „Filterkaffee-Geduld" + ROUND(2 × v_tmult). ⚠️ Ein Kampf, der den Deckel reisst, ist
+// eine NIEDERLAGE — die Schleife endet, `v_won` bleibt false. Das ist die zweite Art zu
+// verlieren, und die Schätzung kannte sie bisher gar nicht (siehe kriegerAutoWinChance).
+function _kaMaxRounds(dd) {
+  const t = dd?.talents || {};
+  const mult = t.meisterroester ? 1.5 : 1;
+  return 40 + (t.filterkaffee ? Math.round(2 * mult) : 0);
+}
+
 // Höchste erreichbare Stufe — nur für die Anzeige „Stufe X von Y" relevant.
+// ⚠️ Heisst KRIEGER_LEVEL_MAX (999 seit migration_2026-07-30_krieger_levelcap.sql),
+// nicht KRIEGER_MAX_LEVEL. Die geratene Schreibweise lieferte immer 0 („unbekannt").
 function _kaLevelCap() {
-  if (typeof KRIEGER_MAX_LEVEL !== 'undefined') return KRIEGER_MAX_LEVEL;
+  if (typeof KRIEGER_LEVEL_MAX !== 'undefined') return KRIEGER_LEVEL_MAX;
   return 0; // 0 = unbekannt, Anzeige lässt den Zusatz dann weg
 }
 
@@ -226,12 +272,53 @@ function _kaEnemyAt(tier, tx, ty, dd, seed) {
   };
 }
 
-// Erwarteter Schaden pro Runde. SPIEGEL der SQL-Formel in dungeon_fight —
-// bei Abweichung hier anpassen, nicht dort.
-function _kaExpDmg(atk, def, crit) {
-  const base = Math.max(1, (atk || 0) - (def || 0));
+// ── Erwarteter Schaden pro Runde ────────────────────────────────────────────
+// SPIEGEL der Formeln aus dungeon_fight (zuletzt definiert in
+// migration_2026-07-30_krieger_levelcap.sql). Bei Abweichung HIER anpassen, nicht dort.
+//
+// ⚠️ 2026-08-17 nachgeprüft (Handover §9.1, „wichtigster Fehlerkandidat" — zu Recht).
+// Die alte gemeinsame Funktion `_kaExpDmg(atk, def, crit)` hatte ZWEI Fehler, die in
+// entgegengesetzte Richtungen zogen und sich deshalb nie zu einem klaren Symptom addierten:
+//
+//   1. KRIT ist ×2, nicht ×1,5. Die SQL macht `v_dmg := v_dmg * 2` (mit Wüstensturm-Set
+//      sogar `ROUND(v_dmg * 2.5)`). Angesetzt waren +50 % — der eigene Schaden wurde also
+//      systematisch ZU NIEDRIG geschätzt, und der Lauf hat Gegner stehen lassen, die er
+//      sicher gepackt hätte.
+//   2. Der GEGNERSCHADEN hat keinen Boden von 1, sondern von 2 % der Max-HP:
+//      `v_dmg := GREATEST(CEIL(v_php_max * 0.02)::INT, v_edmg - v_pdef_run)`
+//      (Chip-Schaden, 2026-07-13b). Bei 721 Max-HP sind das mindestens **15 Schaden pro
+//      Runde**, auch gegen den schwächsten Gegner. Mit dem angesetzten Boden von 1 hielt
+//      sich ein gut gepanzerter Krieger für nahezu unsterblich (rSurv in den Hunderten)
+//      und ging in lange Kämpfe, die er nicht durchhielt.
+//
+// Fehler 2 ist der schwerere: er wirkt genau dort, wo der Auto-Lauf seinen Zweck hat —
+// bei vielen kleinen Kämpfen hintereinander.
+//
+// Spielerschaden. `setCulture` ist der aktive Set-Bonus (kriegerActiveSetCulture).
+function _kaPlayerDmg(atk, enemyDef, crit, setCulture) {
+  // Mittelalter-Set „Rüstungsdurchschlag": ROUND(v_edef_eff * 0.6) — 40 % der Gegner-DEF
+  // werden ignoriert.
+  const pen  = (setCulture === 'mittelalter')
+    ? Math.round((enemyDef || 0) * 0.6) : (enemyDef || 0);
+  const base = Math.max(1, (atk || 0) - pen);
   const c    = Math.max(0, Math.min(100, crit || 0));
-  return base * (1 + (c / 100) * 0.5); // Krit = +50 % Schaden
+  // ×2 normal, ×2,5 mit Wüstensturm (orient). Die +10 CRIT des Sets stecken bereits in
+  // `crit` (kriegerAutoStatsFor) — hier kommt nur der Multiplikator dazu, keine Dopplung.
+  const critMul = (setCulture === 'orient') ? 2.5 : 2;
+  let dmg = base * (1 + (c / 100) * (critMul - 1));
+  // Europa-Set „Doppelter Espresso": 25 % Chance auf einen zweiten Schlag je Runde.
+  if (setCulture === 'europa') dmg *= 1.25;
+  return dmg;
+}
+
+// Gegnerschaden. ⚠️ `hpMax` ist Pflicht — ohne die eigenen Max-HP lässt sich der
+// Chip-Schaden-Boden nicht rechnen, und genau der ist der Kern der Korrektur.
+function _kaEnemyDmg(enemyAtk, ownDef, hpMax, setCulture) {
+  let dmg = Math.max(Math.ceil((hpMax || 1) * 0.02), (enemyAtk || 0) - (ownDef || 0));
+  // Mittelalter-Set: nach den ersten beiden halbierten Treffern dauerhaft ×0,9.
+  // (Die zwei halben Treffer selbst stecken als Bonus-HP in kriegerAutoWinChance.)
+  if (setCulture === 'mittelalter') dmg = Math.max(1, Math.round(dmg * 0.9));
+  return dmg;
 }
 
 // Eigene Kampfwerte für ein HYPOTHETISCHES Loadout (nicht zwingend das ausgerüstete).
@@ -278,22 +365,39 @@ function kriegerAutoWinChance(dd, equipped, enemy, withColdbrew) {
   if (!enemy) return { pct: 0, rNeed: 99, rSurv: 0 };
 
   const own   = kriegerAutoStatsFor(dd, equipped);
-  const pDmg  = _kaExpDmg(own.atk, enemy.def, own.crit);
-  const eDmg  = _kaExpDmg(enemy.atk, own.def, 0);
+  const pDmg  = _kaPlayerDmg(own.atk, enemy.def, own.crit, own.setCulture);
+  const eDmg  = _kaEnemyDmg(enemy.atk, own.def, own.hpMax, own.setCulture);
 
-  // Set „Eisern": die ersten 2 gegnerischen Treffer −50 % → entspricht rund
-  // einem zusätzlichen überlebten Treffer.
+  // 🧊 Cold Brew heilt 50 % der Max-HP, gedeckelt bei Max — gegen die SQL bestätigt:
+  // `v_php := LEAST(v_php_max, GREATEST(0, v_php) + ROUND(v_php_max * 0.5))`.
   let effHp = own.hp;
   if (withColdbrew) {
     const heal = own.hpMax * KRIEGER_AUTO_COLDBREW_HEAL;
     effHp = KRIEGER_AUTO_COLDBREW_CAP ? Math.min(own.hpMax, own.hp + heal) : own.hp + heal;
   }
+  // Mittelalter-Set „Eisern": die ersten 2 gegnerischen Treffer −50 % → zusammen ein
+  // gesparter voller Treffer. (Die dauerhafte ×0,9 danach steckt schon in eDmg.)
   if (own.setCulture === 'mittelalter') effHp += eDmg;
 
-  const rNeed = Math.ceil(enemy.hp / Math.max(0.01, pDmg));
-  const rSurv = Math.ceil(effHp    / Math.max(0.01, eDmg));
+  // Steppe-Set „Eröffnungssalve": ein kostenloser Fernschuss (0,8 × ATK) VOR Runde 1.
+  // ⚠️ Handover §9.2 fragte, ob eine der Utility-Kulturen doch kampfwirksam ist — genau
+  // diese ist es. Gegen schwache Gegner entscheidet sie den Kampf, bevor er beginnt.
+  let eHp = enemy.hp;
+  if (own.setCulture === 'steppe') eHp = Math.max(0, eHp - Math.max(1, Math.round(own.atk * 0.8)));
+
+  const rNeed = Math.ceil(eHp   / Math.max(0.01, pDmg));
+  const rSurv = Math.ceil(effHp / Math.max(0.01, eDmg));
+
+  // ⚠️ DIE ZWEITE ART ZU VERLIEREN: Die SQL-Schleife läuft `WHILE v_round < v_max_rounds`.
+  // Wer bis dahin nicht durch ist, verliert — `v_won` bleibt false, egal wie viel Leben
+  // noch übrig war. Die Schätzung kannte bisher nur „wer stirbt zuerst" und hätte einen
+  // zähen Panzer gegen einen HP-starken Gegner mit 99 % bewertet, obwohl der Kampf am
+  // Rundendeckel sicher verloren geht.
+  const maxR = _kaMaxRounds(dd);
+  if (rNeed > maxR) return { pct: 0.02, rNeed, rSurv, maxRounds: maxR, capped: true };
+
   const raw   = 0.5 + 0.5 * (rSurv - rNeed) / Math.max(1, rNeed);
-  return { pct: Math.max(0.02, Math.min(0.99, raw)), rNeed, rSurv };
+  return { pct: Math.max(0.02, Math.min(0.99, raw)), rNeed, rSurv, maxRounds: maxR, capped: false };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
