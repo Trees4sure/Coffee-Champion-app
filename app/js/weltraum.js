@@ -723,6 +723,78 @@ const SPACE_INTENTS = {
   harvest:  { icon:'⛏️', name:'Abbauen',      hint:'Nur auf befreiten Planeten, braucht Röstkometen' },
   colonize: { icon:'🛸', name:'Kolonisieren', hint:'Nur auf befreiten Planeten, verbraucht ein Kolonieschiff' },
 };
+// ── 🏛️ 26u/26y: Ausrüstung einer Kolonie-Mission ────────────────────────────
+// ⚠️ Spiegel von `_space_colony_kit` in migration_2026-08-17_26u_tempo.sql.
+// JP 2026-08-17: „ich wollte kolonisieren und dann ging es nicht" → `colony_kit_incomplete`.
+// Zum VIERTEN Mal derselbe Fehlertyp: die Regel stand serverseitig, die Anzeige fehlte.
+// Der Plan verlangt sie ausdrücklich („Der Kolonisieren-Knopf zeigt die Anforderung
+// vorab, wie beim Mutterschiff-Panel") — ich hatte sie in 26u nicht gebaut.
+//
+// ⚠️ Die Schiffe gehen bei der Gründung im Rumpf auf (26y) und kommen NICHT zurück.
+// Das gehört in den Erklärtext, sonst wirkt der Verlust wie ein Fehler.
+const WR_COLONY_KIT = {
+  1: { erz: 600,  kristall: 180, plasmoid:   0, quantum:  0, cc:  8000,
+       jaeger: 10, kutter: 3, fregatte: 0, ernter: 0 },
+  2: { erz: 1000, kristall: 320, plasmoid:  60, quantum:  0, cc: 16000,
+       jaeger: 20, kutter: 5, fregatte: 2, ernter: 1 },
+  3: { erz: 1600, kristall: 500, plasmoid: 120, quantum: 50, cc: 28000,
+       jaeger: 30, kutter: 8, fregatte: 4, ernter: 2 },
+};
+const WR_KIT_SHIPS = ['jaeger', 'kutter', 'fregatte', 'ernter'];
+
+// Was fehlt für eine Kolonie-Mission? Liefert eine Liste [{was, need, have, schiff}].
+// ⚠️ Es werden ALLE Posten gesammelt statt beim ersten Treffer abzubrechen — sonst
+// sammelt man in vier Anläufen vier Fehlermeldungen (dieselbe Überlegung wie serverseitig).
+function wrColonyKitMissing(m, ring, sel) {
+  const k = WR_COLONY_KIT[Math.max(1, Math.min(3, ring || 1))];
+  if (!k) return [];
+  const f = sel || {};
+  const out = [];
+  if (!((f.kolonie || 0) >= 1)) out.push({ was: 'kolonie', need: 1, have: f.kolonie || 0, schiff: true });
+  for (const key of WR_KIT_SHIPS) {
+    if (k[key] > 0 && (f[key] || 0) < k[key]) {
+      out.push({ was: key, need: k[key], have: f[key] || 0, schiff: true });
+    }
+  }
+  const vorrat = { cc: parseFloat(m?.coins) || 0, erz: wrErz(m), kristall: wrKristall(m),
+                   plasmoid: wrPlasmoid(m), quantum: wrQuantum(m) };
+  for (const key of ['cc', 'erz', 'kristall', 'plasmoid', 'quantum']) {
+    if (k[key] > 0 && vorrat[key] < k[key]) {
+      out.push({ was: key, need: k[key], have: Math.floor(vorrat[key]), schiff: false });
+    }
+  }
+  return out;
+}
+const WR_KIT_LABEL = {
+  kolonie: '🛸 Kolonieschiff', jaeger: '🔫 Jäger', kutter: '🚀 Espresso-Kutter',
+  fregatte: '🛡️ Fregatte', ernter: '⛏️ Röstkomet',
+  cc: '💰 CC', erz: '🪨 Erz', kristall: '💎 Kristall',
+  plasmoid: '🟣 Plasmoid', quantum: '🌀 Quantenschaum',
+};
+function wrKitLabel(k) { return WR_KIT_LABEL[k] || k; }
+
+// Die Anforderung als Block unter dem Kolonisieren-Knopf. Fehlendes rot.
+function wrColonyKitHtml(m, ring, sel) {
+  const k = WR_COLONY_KIT[Math.max(1, Math.min(3, ring || 1))];
+  if (!k) return '';
+  const fehlt = new Set(wrColonyKitMissing(m, ring, sel).map(x => x.was));
+  const zeile = (key, wert, ist) => wert <= 0 ? '' :
+    `<span class="${fehlt.has(key) ? 'wr-bad' : 'wr-good'}">${wrKitLabel(key)} ${wrFmt(ist)}/${wrFmt(wert)}</span>`;
+  const f = sel || {};
+  return `<div class="wr-kit">
+    <div class="wr-sub"><strong>Ring ${ring}: Ausrüstung der Kolonie-Mission</strong> —
+      diese Schiffe gehen bei der Gründung im Rumpf auf und kehren <strong>nicht</strong> zurück.</div>
+    <div class="wr-kit-grid">
+      ${zeile('kolonie', 1, f.kolonie || 0)}
+      ${WR_KIT_SHIPS.map(key => zeile(key, k[key], f[key] || 0)).join('')}
+      ${zeile('cc', k.cc, Math.floor(parseFloat(m?.coins) || 0))}
+      ${zeile('erz', k.erz, wrErz(m))}
+      ${zeile('kristall', k.kristall, wrKristall(m))}
+      ${zeile('plasmoid', k.plasmoid, wrPlasmoid(m))}
+      ${zeile('quantum', k.quantum, wrQuantum(m))}
+    </div>
+  </div>`;
+}
 
 // ⚠️ BALANCE 26u (Plan B.1.1): 20 → 240 Minuten je Ring und Strecke.
 // Ring 1 = 4 h · Ring 2 = 8 h · Ring 3 = 12 h. Damit wird die Antriebsforschung erstmals
@@ -2818,9 +2890,18 @@ function wrDetailHtml(m) {
             ⚔️ Angreifen <span class="wr-btn-sub">⚔️ ${wrFmt(power)} Kampfkraft</span></button>` : ''}
         ${cleared ? `<button class="wr-btn" data-wr-send="harvest" ${(busy || ernter < 1 || gate.blocked) ? 'disabled' : ''}>
             ${wrIc("mine")} Abbauen <span class="wr-btn-sub">${resGated ? '🔒 Abbau-Tech fehlt' : `≈ ${wrFmt(Math.round(ernter * p.richness * resMeta.mine))} ${resIcon}`}</span></button>` : ''}
-        ${cleared && !colon ? `<button class="wr-btn" data-wr-send="colonize" ${(busy || kolo < 1 || gate.blocked) ? 'disabled' : ''}>
-            🛸 Kolonisieren <span class="wr-btn-sub">Schiff bleibt dort · dauerhaft ~${wrFmt(Math.round(p.richness * 3 * resMeta.mine))} ${resIcon}/Tag</span></button>` : ''}
+        ${cleared && !colon ? (() => {
+          // 🏛️ 26u: Die Mission verlangt einen kompletten Verband. Ohne diese Vorschau
+          // sah man nur „colony_kit_incomplete", nachdem man auf Start gedrückt hatte.
+          const kitFehlt = wrColonyKitMissing(m, p.ring, sel);
+          return `<button class="wr-btn" data-wr-send="colonize"
+              ${(busy || gate.blocked || kitFehlt.length) ? 'disabled' : ''}>
+            🛸 Kolonisieren <span class="wr-btn-sub">${kitFehlt.length
+              ? `${kitFehlt.length} Posten fehlen — siehe unten`
+              : `Verband geht im Rumpf auf · dauerhaft ~${wrFmt(Math.round(p.richness * 3 * resMeta.mine))} ${resIcon}/Tag`}</span></button>`;
+        })() : ''}
       </div>
+      ${cleared && !colon ? wrColonyKitHtml(m, p.ring, sel) : ''}
       ${cleared ? wrPlanetDefHtml(m, p) : ''}
       ${resGated && cleared ? `<div class="wr-warn">🔒 ${resName} lässt sich erst mit der Forschung <strong>${p.resource_type === 'plasmoid' ? 'Plasmoid-Kollektor' : 'Quantenschaum-Extraktor'}</strong> abbauen — bis dahin wirft dieser Planet nichts ab.</div>` : ''}
       ${cleared ? wrRoutePanelHtml(m, p) : ''}
@@ -2943,10 +3024,11 @@ function wrPlanetSlotsHtml(m, p) {
           <span class="wr-pslot-txt"><strong>${_wrEsc(t.name)}</strong>
             <span class="wr-sub">Stufe ${clv} · 🛡️ ${wrFmt(st.atk)}</span></span>
           <span class="wr-pslot-act">
-            ${up ? `<button class="wr-btn wr-btn-sm" data-wr-pturret="${p.id}:turret_upgrade:${key}:"
+            ${wrSlotBuilding(cur) ? wrBuildBadgeHtml(cur) : (up
+              ? `<button class="wr-btn wr-btn-sm" data-wr-pturret="${p.id}:turret_upgrade:${key}:"
                       ${canPay(up) ? '' : 'disabled'}>Aufrüsten
                       <span class="wr-btn-sub">${priceTxt(up)} → 🛡️ ${wrFmt(up.atk)}</span></button>`
-                 : '<span class="wr-slot-max">✅ Vollausbau</span>'}
+              : '<span class="wr-slot-max">✅ Vollausbau</span>')}
             ${ziele.map(z => {
               const pr = wrPturretConvertPrice(t.key, clv, z.key);
               return wrConvBtnHtml(`${p.id}:turret_convert:${key}:${z.key}`, 'data-wr-pturret',
@@ -3010,11 +3092,11 @@ function wrColonyPowerHtml(m, p, canPay, priceTxt) {
           <div class="wr-gen-out">⚡ ${wrFmt(st.output)}
             <span class="wr-sub">+ ${wrFmt(wrColonyLevel(p) * WR_COLONY_PER_LEVEL)} aus der Kolonie-Stufe</span></div>
           ${wrFuelHtml(m, gen, pid)}
-          ${up
+          ${wrSlotBuilding(gen) ? wrBuildBadgeHtml(gen) : (up
             ? `<button class="wr-btn wr-btn-sm" data-wr-pturret="${pid}:power_upgrade::"
                  ${canPay(up) ? '' : 'disabled'}>Auf Stufe ${glv + 1} ausbauen
                  <span class="wr-btn-sub">${priceTxt(up)} → ⚡ ${wrFmt(up.output)}</span></button>`
-            : '<div class="wr-slot-max">✅ Vollausbau</div>'}
+            : '<div class="wr-slot-max">✅ Vollausbau</div>')}
           ${zie.length ? `<div class="wr-slot-conv">${zie.map(g => {
             const pr = wrPgenConvertPrice(p, g.key);
             return `<button class="wr-btn wr-btn-sm wr-btn-conv"
@@ -3721,11 +3803,11 @@ function wrPowerHtml(m, canPay, priceTxt) {
           <div class="wr-gen-out">⚡ ${wrFmt(st.output)} Ausgabe
             <span class="wr-sub">+ ${wrFmt(WR_POWER_BASE_SUPPLY + lv * WR_POWER_PER_LEVEL)} Grundversorgung des Hafens</span></div>
           ${wrFuelHtml(m, gen, null)}
-          ${up
+          ${wrSlotBuilding(gen) ? wrBuildBadgeHtml(gen) : (up
             ? `<button class="wr-btn wr-btn-sm" id="wr-power-up" ${canPay(up) ? '' : 'disabled'}
                  >Auf Stufe ${glv + 1} ausbauen
                  <span class="wr-btn-sub">${priceTxt(up)} → ⚡ ${wrFmt(up.output)}</span></button>`
-            : '<div class="wr-slot-max">✅ Vollausbau erreicht</div>'}
+            : '<div class="wr-slot-max">✅ Vollausbau erreicht</div>')}
           ${zie.length ? `<div class="wr-slot-conv">${zie.map(g => {
             const p = wrPowerConvertPrice(m, g.key);
             // Gleicher Bauplan wie beim Geschütz-Umrüsten (26k) — vier gestapelte
@@ -3832,10 +3914,10 @@ function wrHafenHtml(m) {
                 was ein weiteres Geschütz kostet. Ein beschädigtes zieht keine Energie. */''}
           <div class="wr-slot-nrg">⚡ ${dmg ? '<span class="wr-sub">0 (beschädigt)</span>'
             : wrFmt(Math.round(wrTurretEnergy(cur.type, clv)))}</div>
-          ${up
+          ${wrSlotBuilding(cur) ? wrBuildBadgeHtml(cur) : (up
             ? `<button class="wr-btn wr-btn-sm" data-wr-tup="${key}" ${canPay(up) ? '' : 'disabled'}
                  >Aufrüsten <span class="wr-btn-sub">${priceTxt(up)} → 🛡️ ${wrFmt(up.atk)}</span></button>`
-            : '<div class="wr-slot-max">✅ Vollausbau</div>'}
+            : '<div class="wr-slot-max">✅ Vollausbau</div>')}
           ${(() => {
             // ⬆️ Umrüsten (26k, JP: „indem man seine Geschütze updaten kann für Geld").
             // Nur stärkere, freigeschaltete Typen; die Stufe fällt dabei auf 1 zurück —
@@ -4695,6 +4777,32 @@ function wrSlotBuildLeft(slot) {
   const ready = slot?.readyAt ? Date.parse(slot.readyAt) : NaN;
   if (!isFinite(ready)) return 0;
   return Math.max(0, ready - Date.now());
+}
+function wrSlotBuilding(slot) { return wrSlotBuildLeft(slot) > 0; }
+
+// ⚠️ NACHGEREICHT 2026-08-17 (JP, Screenshot Weltraum_Kolonie_Kraftwerk_fehler.PNG):
+// „Stufe 3 will ich bauen, aber es zeigt, dass es nicht ginge, weil bereits erreicht."
+//
+// URSACHE — und es ist die Kehrseite einer bewussten Entscheidung aus 26u:
+// `wrSlotLevel` liefert während eines Ausbaus die ALTE Stufe, damit die Versorgung nicht
+// einbricht. Die Anzeige stand deshalb auf „Stufe 2" und bot den Ausbau erneut an —
+// während der Server die EINGETRAGENE Stufe 3 liest und mit `power_max` ablehnt.
+//
+// ⚠️ ÜBERTRAGBARE LEHRE: Ein Feld mit zwei Bedeutungen („was der Bauplatz KANN" gegen
+// „was bestellt ist") braucht zwei Abfragen. Für Ausgabe, Energie und Feuerkraft zählt
+// die effektive Stufe — für die Frage „ist noch ein Ausbau möglich?" die bestellte. Wer
+// nur eine davon anbietet, bekommt genau diesen Widerspruch: die Oberfläche verspricht
+// etwas, das der Server bereits vergeben hat.
+//
+// Diese Marke ersetzt deshalb den Ausbau-Knopf, solange gebaut wird.
+function wrBuildBadgeHtml(slot) {
+  const ms = wrSlotBuildLeft(slot);
+  if (ms <= 0) return '';
+  const neu  = slot.lvlFrom === undefined || slot.lvlFrom === null;
+  const ziel = Math.max(1, Math.min(WR_TURRET_MAX, parseInt(slot.level, 10) || 1));
+  return `<div class="wr-slot-build">🔧 ${neu
+    ? 'wird gebaut' : `wird auf Stufe ${ziel} ausgebaut`}
+    <span class="wr-sub">noch ${wrCountdown(ms)}${neu ? '' : ' — solange zählt die alte Stufe'}</span></div>`;
 }
 
 function wrGenFuelLeft(pw) {
@@ -5884,7 +5992,16 @@ async function wrSend(intent) {
 
   // Auftragsbedingte Mindestanforderungen, bevor die Flotte umsonst startet
   if (intent === 'scout'    && !(fleet.sonde   > 0)) { wrToast('Ohne 🛰️ Bohnen-Sonde lässt sich kein Quadrant aufklären.', 'error'); return; }
-  if (intent === 'colonize' && !(fleet.kolonie > 0)) { wrToast('Ohne 🛸 Kolonieschiff keine Kolonie.', 'error'); return; }
+  if (intent === 'colonize') {
+    // ⚠️ Alle fehlenden Posten auf einmal nennen — vier Anläufe für vier Meldungen wären
+    // genau die Zumutung, die der Server bereits vermeidet (er sammelt sie ebenfalls).
+    const kitFehlt = wrColonyKitMissing(m, planet.ring, fleet);
+    if (kitFehlt.length) {
+      wrToast('Kolonie-Mission unvollständig — es fehlen: '
+        + kitFehlt.map(x => `${wrKitLabel(x.was)} ${wrFmt(x.have)}/${wrFmt(x.need)}`).join(' · '), 'error');
+      return;
+    }
+  }
   if (intent === 'harvest'  && wrFleetMine(fleet) < 1) { wrToast('Ohne ⛏️ Röstkometen gibt es nichts abzubauen.', 'error'); return; }
   if (intent === 'attack'   && wrFleetPower(fleet) < 1) { wrToast('Dieser Verband hat keine Kampfkraft.', 'error'); return; }
 
@@ -5898,7 +6015,22 @@ async function wrSend(intent) {
   _wrBusy = true;
   try {
     const res = await DB.startSpaceTrip(m.id, planet.id, intent, fleet, wrSpeedPct(m));
-    if (!res || res.error) { wrToast(wrErrText(res?.error), 'error'); return; }
+    if (!res || res.error) {
+      // ⚠️ `colony_kit_incomplete` und `region_too_strong` liefern KONKRETE Angaben mit.
+      // Sie zu verwerfen und nur den Code anzuzeigen war der eigentliche Ärger: die
+      // Antwort auf „warum nicht?" lag vor und wurde weggeworfen.
+      if (res?.error === 'colony_kit_incomplete' && Array.isArray(res.missing)) {
+        wrToast(`Ring ${res.ring}: es fehlen `
+          + res.missing.map(x => `${wrKitLabel(x.what)} ${wrFmt(x.have)}/${wrFmt(x.need)}`).join(' · '),
+          'error');
+      } else if (res?.error === 'region_too_strong') {
+        wrToast(`Diese Region gehört jemand anderem — dein Verband bringt ⚔️ ${wrFmt(res.have)}, `
+              + `nötig sind ${wrFmt(res.need)} (das 1,15-fache der Regionsverteidigung).`, 'error');
+      } else {
+        wrToast(wrErrText(res?.error), 'error');
+      }
+      return;
+    }
     if (res.space) wrApplySpace(res.space);
     const info = SPACE_INTENTS[intent] || {};
     // JP 2026-07-22 (#32): „zurück in 30 Min" ergab bei der Kolonie keinen Sinn —
@@ -7164,6 +7296,7 @@ function wrErrText(err) {
     not_enough_ships:      'Nicht genug Schiffe im Hafen.',
     empty_fleet:           'Keine Schiffe ausgewählt.',
     bad_intent:            'Unbekannter Auftrag.',
+    colony_kit_incomplete: 'Der Kolonie-Mission fehlt noch etwas — die Anforderung steht unter dem Kolonisieren-Knopf.',
     transmute_cooldown:    'Der Transmuter läuft noch nach — er braucht 48 Stunden zwischen zwei Vorgängen.',
     region_too_strong:     'Diese Region gehört jemand anderem — dein Verband ist zu schwach für eine Kolonie dort (nötig: das 1,15-fache der Regionsverteidigung).',
     merc_active:           'Es läuft bereits ein Söldner-Geschwader.',
