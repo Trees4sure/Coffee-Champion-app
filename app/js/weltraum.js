@@ -1337,6 +1337,7 @@ function wrRender() {
         ${wrTabsHtml()}
       </div>
       ${wrWaveHtml(m)}
+      ${wrColonyAlertHtml(m)}
       ${wrHelpCallsHtml(m)}
       ${wrTripStripHtml(m, trips)}
       <div class="wr-map-card"${_wrTab === 'karte' ? '' : ' hidden'}>
@@ -1422,10 +1423,26 @@ async function wrCheckHelpPopup() {
         ${_wrEsc(tier.name)} (Stärke ${wrFmt(w.strength)}) schlägt in
         <b>${wrCountdown(Date.parse(w.arrive_at) - Date.now())}</b> ein!</div>`;
     }).join('');
+    // ⚠️ FIX 2026-08-17 (JP, Screenshot `reference/Fehlermeldung_Popup-hilferuf.PNG`):
+    // Der Hilferuf klebte oben links, überdeckte die Kopfzeile und war unten so
+    // abgeschnitten, dass „Später" und „Zum Weltall" nicht mehr sichtbar waren — man
+    // konnte ihn also gar nicht wegklicken.
+    //
+    // URSACHE: Das Popup borgte sich `quiz-backdrop`/`quiz-box` aus `css/style.css`.
+    // Dort ist `.quiz-backdrop` aber `position: ABSOLUTE` und `.quiz-box`
+    // `position: relative` — beide setzen einen POSITIONIERTEN Eltern-Container voraus,
+    // den das Quiz-Modal mitbringt. `#wr-help-modal` ist ein nacktes <div> an
+    // `document.body`: kein `fixed`, kein Zentrieren, Inhalt im normalen Textfluss.
+    //
+    // ⚠️ ÜBERTRAGBARE LEHRE: Geborgte CSS-Klassen bringen ihre VORAUSSETZUNGEN nicht mit.
+    // `.quiz-card` (reines Aussehen) lässt sich überall verwenden, `.quiz-box`/-backdrop
+    // (Positionierung) nur im vorgesehenen Rahmen. Wer Layout-Klassen ausleiht, muss den
+    // Container mitliefern — hier die bereits vorhandene `.wr-overlay` (fixed, zentriert,
+    // z-index 9000), die im selben Stylesheet steht und genau dafür da ist.
     let mEl = document.getElementById('wr-help-modal');
     if (!mEl) { mEl = document.createElement('div'); mEl.id = 'wr-help-modal'; document.body.appendChild(mEl); }
+    mEl.className = 'wr-overlay';
     mEl.innerHTML = `
-      <div class="quiz-backdrop"></div>
       <div class="quiz-box"><div class="quiz-card" style="text-align:center">
         <div class="quiz-emoji">📣</div>
         <h2>Hilferuf aus dem All!</h2>
@@ -3337,6 +3354,71 @@ function wrSecCard(key, head, sum, body, foot, cls) {
 // ── Angriffswelle auf den eigenen Hafen ─────────────────────────────────────
 // Der Vorlauf (30–60 Min) ist der Kern des Features: nur deshalb kann man reagieren,
 // Geschütze nachrüsten oder die Gruppe um Hilfe bitten.
+// ── 🚨 26v/26aa: Vorwarnung bei Kolonie-Angriffen ───────────────────────────
+// ⚠️ NACHGEREICHT 2026-08-17 (JP: „ganz viele kurze Popupmeldungen von Angriffen auf
+// Kolonien … aber ich kann sie weder anschauen noch irgendwo anders wahrnehmen").
+// Der Fehler war ein Denkfehler, kein Tippfehler: Ich hatte in 26v die Auswertung,
+// den Chat-Eintrag und die Wrack-Anzeige gebaut — aber für die VORWARNUNG nur einen
+// Toast. Ein Toast ist nach drei Sekunden weg, und genau in dem Fenster, in dem der
+// Spieler etwas tun könnte (30–120 min), gab es nichts mehr zu sehen.
+//
+// ⚠️ ÜBERTRAGBARE LEHRE: Eine Meldung über etwas, das ERST NOCH passiert, darf nie nur
+// flüchtig sein. Ein Toast taugt für Vollzugsmeldungen („abgewehrt"), nicht für
+// Vorwarnungen — die brauchen einen Ort, an den man zurückkehren kann.
+//
+// Deshalb steht dieses Panel direkt neben `wrWaveHtml` und wird damit auf JEDEM Tab
+// gezeigt, nicht nur unter Raumhafen. Dieselben Klassen wie die Hafen-Welle: zwei
+// Bedrohungen derselben Art sollen nicht verschieden aussehen.
+function wrColonyAlertHtml(m) {
+  const list = (_wrAttacks || []).slice().sort(
+    (a, b) => Date.parse(a.arriveAt) - Date.parse(b.arriveAt));
+  if (!list.length) return '';
+
+  const mercFrei = wrMercActive(m);
+  const zeilen = list.map(a => {
+    const rest = Date.parse(a.arriveAt) - Date.now();
+    const min  = Math.max(0, Math.round(rest / 60000));
+    const zeit = rest <= 0 ? 'JETZT'
+               : min >= 60 ? `${Math.floor(min / 60)} h ${min % 60} min` : `${min} min`;
+    const def  = parseFloat(a.defense) || 0;
+    const str  = parseFloat(a.strength) || 0;
+    const ok   = def >= str;
+    const mc   = wrMerc(m);
+    const wacht = mc && mc.guard === a.planetId;
+    return `
+      <div class="wr-calert-row">
+        <span class="wr-calert-txt">
+          <strong>🏙️ ${_wrEsc(a.planet)}</strong>
+          <span class="wr-sub">Ring ${a.ring} · Quadrant ${_wrEsc(a.quadrant)}</span>
+          <span class="wr-sub">🛡️ ${wrFmt(def)} gegen 👾 ${wrFmt(str)} —
+            ${ok ? '<span class="wr-good">wird gehalten</span>'
+                 : '<span class="wr-bad">zu schwach!</span>'}</span>
+        </span>
+        <span class="wr-calert-act">
+          <strong class="${rest <= 0 ? 'wr-bad' : ''}">⏳ ${zeit}</strong>
+          ${mercFrei && !wacht ? `<button class="wr-btn wr-btn-sm"
+              data-wr-merc-guard="${a.planetId}">🎖️ Söldner hin</button>` : ''}
+          ${wacht ? '<span class="wr-sub">🎖️ bewacht</span>' : ''}
+        </span>
+      </div>`;
+  }).join('');
+
+  // ⚠️ Die Erklärzeile nennt die VORAUSSETZUNGEN der Gegenmittel (Lehre aus Teil 25):
+  // ohne Kolonie kann man dort nichts bauen, und Schiffe müssen VOR dem Einschlag da sein.
+  return `
+    <div class="wr-wave wr-calert${list.some(a => (parseFloat(a.defense) || 0)
+        < (parseFloat(a.strength) || 0)) ? ' wr-wave-danger' : ''}">
+      <div class="wr-card-title">🚨 Angriff auf ${list.length === 1 ? 'eine Kolonie' : `${list.length} Kolonien`}</div>
+      ${zeilen}
+      <div class="wr-sub" style="margin-top:6px">
+        Es zählt, was beim Einschlag da ist: Planeten-Geschütze der Kolonie, dort
+        stationierte Ernte-/Bergungsschiffe und eine 📡 Station im selben Quadranten.
+        Ein Söldner-Geschwader lässt sich sofort hinschicken — es verteidigt dann aber
+        nicht mehr den Raumhafen.
+      </div>
+    </div>`;
+}
+
 function wrWaveHtml(m) {
   const w = _wrWave;
   if (!w) return '';
@@ -3763,7 +3845,11 @@ function wrHafenHtml(m) {
 // Drei feste Grössen statt eines freien Zusammenstellers: der Zweck ist eine SCHNELLE
 // Entscheidung im Vorwarnfenster, nicht Flottenplanung. Wer frei wählen will, baut selbst.
 const WR_MERC_SQUADS = [
-  { key: 'klein',  icon: '🔫', name: 'Streifengeschwader', ships: { jaeger: 15, fregatte: 3 } },
+  // ⚠️ NICHT 🔫 verwenden: das Zeichen rendert auf iOS und Android als WASSERPISTOLE
+  // (Apple hat es 2016 umgestellt, Google 2018 nachgezogen). Auf JPs Handy stand also
+  // eine Wasserpistole vor dem Söldner-Geschwader. Die drei Symbole steigern sich
+  // stattdessen als Wache → Schild → Schwerter.
+  { key: 'klein',  icon: '💂', name: 'Streifengeschwader', ships: { jaeger: 15, fregatte: 3 } },
   { key: 'mittel', icon: '🛡️', name: 'Schutzverband',      ships: { jaeger: 30, fregatte: 8, kreuzer: 2 } },
   { key: 'gross',  icon: '⚔️', name: 'Kriegsflotte',        ships: { jaeger: 50, fregatte: 15, kreuzer: 6, schlachtschiff: 2 } },
 ];
@@ -5780,6 +5866,15 @@ async function wrSyncAttacks(silent) {
       _wrAttacks = await DB.fetchColonyAttacks(_wrMember.id);
       for (const n of (plan.new || [])) {
         wrToast(`🚨 Angriff auf ${n.planet} in Anflug!`, 'error');
+        // ⚠️ Zusätzlich ins Protokoll: ein Toast ist nach Sekunden weg, die Vorwarnzeit
+        // dauert aber 30–120 Minuten. Wer die App in dem Moment nicht offen hat, soll
+        // den Angriff später noch nachlesen können (JP 2026-08-17).
+        try {
+          wrChat(`🚨 ${_wrEsc(_wrMember?.name || 'Jemand')} bekommt Besuch: die Kolonie `
+               + `${_wrEsc(n.planet)} (Ring ${n.ring}) wird angegriffen — Stärke `
+               + `${wrFmt(n.strength)} gegen ${wrFmt(n.defense)} Verteidigung. `
+               + `Vorwarnzeit ${plan.warnMin} Minuten.`);
+        } catch (e) {}
       }
     }
     if (!silent && faellig.length) wrRender();
