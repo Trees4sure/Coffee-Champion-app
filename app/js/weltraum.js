@@ -3351,7 +3351,11 @@ function wrFallbackHtml(p, m) {
     Es hält ihn: eine <b>Kolonie</b> darauf gründen, <b>Schiffe stationieren</b> (Route) oder
     eine <b>📡 Station</b> irgendwo in ${_wrEsc(p.quadrant || 'diesem Quadranten')} — sie
     verdreifacht die Frist im ganzen Quadranten (${wrFallbackDays(m)} → ${wrFallbackDays(m) * WR_FALLBACK_STATION_MULT} Tage),
-    hält den Planeten aber nicht für immer. Geschütze gibt es nur auf Kolonien.</div>`;
+    hält den Planeten aber nicht für immer. Geschütze gibt es nur auf Kolonien.
+    ${wrQuadStationDown(p.quadrant)
+      ? `<br><span class="wr-bad">📡 Die Station auf ${_wrEsc(wrQuadStationDown(p.quadrant).name)}
+         ist ausgefallen — ihre Geschütze sind Wracks. Repariere eines, dann wirkt sie wieder.</span>`
+      : ''}</div>`;
 }
 
 // ── Kolonien ─────────────────────────────────────────────────────────────────
@@ -5182,6 +5186,9 @@ function wrFallbackDaysAt(p, m) {
 }
 // Wie viele Stationen hat dieser Spieler schon?
 function wrStationCount(m) {
+  // ⚠️ Zählt nach BESITZ, nicht nach Wirksamkeit: eine ausgefallene Station belegt den
+  // Bauplatz weiterhin (sie lässt sich reparieren). Sonst könnte man bei drei
+  // beschädigten Stationen eine vierte bauen und hätte am Ende vier.
   return (_wrGalaxy?.planets || [])
     .filter(p => p.station && p.colonized_by === (m || _wrMember)?.id).length;
 }
@@ -5215,8 +5222,27 @@ function wrColonyPowerExpected(p) {
 }
 function wrColonyLevel(p) { return Math.max(1, Math.min(3, parseInt(p?.colony_level, 10) || 1)); }
 function wrIsStation(p)   { return !!(p && p.station); }
+// 📡 27h: Eine Station wirkt nur, solange sie STEHT — ihr Planet muss kolonisiert sein
+// und mindestens ein intaktes Geschütz tragen. JP 2026-08-17: „sie kann ja dennoch
+// angegriffen werden, und würde dann beschädigt werden können, also deren Bestandteile."
+// Genau so ist es jetzt: sind nach einem Angriff alle Geschütze Wracks, sinkt
+// `planet_defense` auf 0 und die Station fällt aus, bis eines repariert ist.
+//
+// ⚠️ Vorher fragte diese Funktion nur `p.station` — ein blosses Flag, das jede Zerstörung
+// überlebte. Eine Station, deren Kolonie vernichtet wurde, verlängerte die Frist im
+// Quadranten damit FÜR IMMER: ohne Besitzer, ohne Unterhalt, ohne auf die 3er-Grenze zu
+// zählen. Spiegel von `_space_quad_station_active`.
+function wrStationActive(p) {
+  return !!(p && p.station && p.colonized_by && wrPlanetDef(p) > 0);
+}
 function wrQuadStation(qkey) {
-  return (_wrGalaxy?.planets || []).find(p => p.quadrant === qkey && p.station) || null;
+  return (_wrGalaxy?.planets || []).find(p => p.quadrant === qkey && wrStationActive(p)) || null;
+}
+// Steht dort eine Station, die gerade NICHT wirkt? Für die Anzeige — „da ist eine, aber
+// sie schweigt" ist eine andere Auskunft als „da ist keine".
+function wrQuadStationDown(qkey) {
+  return (_wrGalaxy?.planets || [])
+    .find(p => p.quadrant === qkey && p.station && !wrStationActive(p)) || null;
 }
 // Deckungsfeuer am Ziel — Spiegel von _space_planet_cover (OHNE Tech-Faktor; der kommt
 // wie am Hafen erst am Aufrufort dazu, sonst wäre er doppelt drin).
