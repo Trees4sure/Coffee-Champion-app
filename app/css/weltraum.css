@@ -856,3 +856,17 @@
 .wr-calert-txt { display: flex; flex-direction: column; gap: 1px; min-width: 0; font-size: .8rem; }
 .wr-calert-act { display: flex; flex-direction: column; align-items: flex-end; gap: 4px;
   white-space: nowrap; font-size: .8rem; }
+
+/* ⏳ 26u — laufendes Forschungsprojekt.
+   Steht ganz oben in der Technik-Karte: ohne diese Zeile musste man den richtigen Ast
+   suchen, um überhaupt zu sehen, DASS etwas läuft. */
+.wr-techjob {
+  display: flex; flex-direction: column; gap: 2px; margin: 8px 0 10px; padding: 8px 10px;
+  border: 1px solid #4d7fd4; border-radius: var(--radius, 10px);
+  background: color-mix(in srgb, #4d7fd4 14%, transparent); font-size: .82rem;
+}
+.wr-techjob-done { border-color: #3f7a4c; background: color-mix(in srgb, #3f7a4c 16%, transparent); }
+/* Ein laufendes Projekt am Knoten selbst — und die anderen sichtbar gesperrt. */
+.wr-tech-run  { color: #9dc0ff; font-weight: 600; }
+.wr-tech-node.wr-tech-running { border-color: #4d7fd4; }
+.wr-tech-node.wr-tech-blocked { opacity: .55; }
