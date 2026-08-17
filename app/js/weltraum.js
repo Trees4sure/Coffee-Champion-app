@@ -219,11 +219,53 @@ function wrTechCapDays(m)  { return wrHasTech(m,'wt_d3') ? 21   : 14; }
 function wrTechColonyCc(m) { return (wrHasTech(m,'wt_d4') ? 25 : 0) + (wrHasTech(m,'wt_e15') ? 25 : 0); }
 function wrTechWreck(m)    { return (wrHasTech(m,'wt_d5') ? 1.3 : 1.0) * (wrHasTech(m,'wt_e8') ? 1.3 : 1.0); }
 // Kaufbar? (Voraussetzung erfüllt, noch nicht besessen, Effekt verdrahtet)
+// ── ⏳ 26u: das laufende Forschungsprojekt ──────────────────────────────────
+// ⚠️ NACHGEREICHT 2026-08-17 (JP: „wenn man eine Forschung anklickt, heisst es ‚es läuft
+// bereits eine Forschung', aber man sieht keine laufende Forschung und das, was ich
+// gerade erforschen wollte, ist immer noch anklickbar").
+//
+// Derselbe Fehlertyp wie bei den Kolonie-Angriffen: Ich habe in 26u die Server-Mechanik
+// gebaut (`space.techJob`, `claim_space_tech`) und die ANZEIGE vergessen. Der Baum kannte
+// nur „besessen" und „nicht besessen" — ein bezahltes, laufendes Projekt sah deshalb aus
+// wie ein unangetastetes, und jeder weitere Klick lief in `tech_busy`.
+//
+// ⚠️ ÜBERTRAGBARE LEHRE: Wer einen Vorgang von SOFORT auf DAUERT umstellt, führt einen
+// dritten Zustand ein. Jede Anzeige, die vorher mit zwei Zuständen auskam, ist damit
+// unvollständig — und zwar stillschweigend, weil sie weiterhin etwas Plausibles zeigt.
+function wrTechJob(m) {
+  const j = wrSpace(m).techJob;
+  return (j && typeof j === 'object' && j.key) ? j : null;
+}
+// Restzeit in ms. Ein unlesbarer Zeitstempel gilt als fertig — eine kaputte Uhr darf ein
+// bezahltes Projekt nicht ewig festhalten (Kulanzrichtung wie bei readyAt in 26u).
+function wrTechJobLeftMs(m) {
+  const j = wrTechJob(m);
+  if (!j || !j.doneAt) return 0;
+  const done = Date.parse(j.doneAt);
+  if (!isFinite(done)) return 0;
+  return Math.max(0, done - Date.now());
+}
+function wrTechJobRestTxt(m) {
+  const ms = wrTechJobLeftMs(m);
+  if (ms <= 0) return 'gleich fertig';
+  const min = Math.round(ms / 60000);
+  if (min < 60) return `${min} min`;
+  const std = Math.floor(min / 60);
+  return std < 24 ? `${std} h ${min % 60} min` : `${Math.floor(std / 24)} d ${std % 24} h`;
+}
+
 function wrTechState(m, t) {
   if (!t) return 'unknown';
   if (wrHasTech(m, t.key))                        return 'owned';
+  const job = wrTechJob(m);
+  // ⚠️ VOR den übrigen Prüfungen: ein laufendes Projekt ist bezahlt und muss als solches
+  // erkennbar sein, auch wenn die Mittel inzwischen für etwas anderes ausgegeben wurden.
+  if (job && job.key === t.key)                   return 'running';
   if (!t.live)                                    return 'soon';
   if (t.requires && !wrHasTech(m, t.requires))    return 'locked';
+  // Labor belegt — die Sperre kommt NACH 'locked', damit eine gesperrte Technik weiter
+  // ihre Voraussetzung nennt (die ist die nützlichere Auskunft).
+  if (job)                                        return 'blocked';
   const sp = (m && m.space) || {};
   const affordable = (m.coins || 0) >= t.cc
     && (parseFloat(sp.erz) || 0) >= (t.erz || 0) && (parseFloat(sp.kristall) || 0) >= (t.kristall || 0)
@@ -2222,6 +2264,8 @@ function wrTechHtml(m) {
         const st = wrTechState(m, t);
         const aktion = {
           owned:  '<span class="wr-tech-ok">✓ erforscht</span>',
+          running: `<span class="wr-tech-run">⏳ läuft — noch ${wrTechJobRestTxt(m)}</span>`,
+          blocked: '<span class="wr-tech-lock">🔬 Labor belegt</span>',
           soon:   '<span class="wr-tech-soon">in Vorbereitung</span>',
           locked: `<span class="wr-tech-lock">🔒 braucht ${_wrEsc((SPACE_TECH_BY_KEY[t.requires] || {}).name || '')}</span>`,
           poor:   '<span class="wr-tech-poor">Mittel reichen nicht</span>',
@@ -2262,6 +2306,21 @@ function wrTechHtml(m) {
   return `${wrTransmuterHtml(m)}<div class="wr-card">
       <div class="wr-card-title">🔬 Weltraum-Technik
         <span class="wr-sub">verstärkt, was du schon hast</span></div>
+      ${/* ⏳ 26u: das laufende Projekt ganz oben. Ohne diese Zeile musste man den
+            richtigen Ast suchen, um überhaupt zu sehen, DASS etwas läuft — und die
+            Fehlermeldung „es läuft bereits eine Forschung" blieb unerklärlich. */''}
+      ${(() => {
+        const job = wrTechJob(m);
+        if (!job) return '';
+        const t = SPACE_TECH_BY_KEY[job.key];
+        const fertig = wrTechJobLeftMs(m) <= 0;
+        return `<div class="wr-techjob${fertig ? ' wr-techjob-done' : ''}">
+          <span>⏳ <strong>${_wrEsc(t?.name || job.key)}</strong> wird erforscht</span>
+          <span class="wr-sub">${fertig
+            ? 'fertig — wird beim nächsten Öffnen übernommen'
+            : `noch ${wrTechJobRestTxt(m)} · solange ist das Labor belegt`}</span>
+        </div>`;
+      })()}
       ${(sp || bt) ? `<div class="wr-facts">
         ${sp ? `<span>${wrIc('time')} Flugzeit: <strong>−${sp} %</strong></span>` : ''}
         ${bt ? `<span>${wrIc('time')} Bauzeit: <strong>−${bt} %</strong></span>` : ''}
@@ -3431,7 +3490,23 @@ function wrColonyAlertHtml(m) {
         </span>
         <span class="wr-calert-act">
           <strong class="${rest <= 0 ? 'wr-bad' : ''}">⏳ ${zeit}</strong>
-          ${mercFrei && !wacht ? `<button class="wr-btn wr-btn-sm"
+          ${/* ⚠️ NACHGEREICHT 2026-08-17 (JP, Screenshot Weltraum_Angriff_Kolonie.PNG):
+                „wie kann man nun zu dem Angriff übergehen? Und man hat auch nicht die
+                Möglichkeit, direkt auf die angegebene Kolonie zu gehen und dort evtl.
+                noch Geschütze zu bauen."
+                Das Panel war eine Sackgasse: es zeigte vier Angriffe auf JETZT und bot
+                nichts zum Drücken. Die Auswertung lief zwar automatisch beim Öffnen des
+                Tabs — aber sie ist in try/catch gekapselt und meldet sich nie, also war
+                für JP nicht unterscheidbar, ob sie hängt oder gar nicht vorgesehen ist.
+                ⚠️ ÜBERTRAGBARE LEHRE: Eine Anzeige, die einen Zustand meldet, muss den
+                Weg zur Handlung gleich mitliefern — sonst ist sie eine Sackgasse, und
+                der Spieler sucht die Handlung dort, wo sie nicht ist. */''}
+          ${rest <= 0
+            ? `<button class="wr-btn wr-btn-sm wr-btn-go"
+                 data-wr-resolve-attack="${a.planetId}">⚔️ Auswerten</button>`
+            : `<button class="wr-btn wr-btn-sm"
+                 data-wr-goto-colony="${a.planetId}">🏙️ Zur Kolonie</button>`}
+          ${mercFrei && !wacht && rest > 0 ? `<button class="wr-btn wr-btn-sm"
               data-wr-merc-guard="${a.planetId}">🎖️ Söldner hin</button>` : ''}
           ${wacht ? '<span class="wr-sub">🎖️ bewacht</span>' : ''}
         </span>
@@ -5490,6 +5565,53 @@ function wrBindEvents() {
     if (e.target.closest('#wr-port-up')) { await wrDefense('port_upgrade', null, null); return; }
     if (e.target.closest('#wr-yard-up'))  { await wrDefense('yard_upgrade', null, null); return; }
     if (e.target.closest('#wr-job-claim')) { await wrClaimBuild(false); return; }
+    // 🏙️ Zur betroffenen Kolonie springen (Raumhafen → Abschnitt Kolonien → aufklappen).
+    const goCol = e.target.closest('[data-wr-goto-colony]');
+    if (goCol) {
+      const pid = goCol.getAttribute('data-wr-goto-colony');
+      _wrTab = 'hafen';          // wrSetTab() würde bei gleichem Tab früh aussteigen
+      _wrSec.colonies = true;    // Abschnitt offen, falls zugeklappt
+      _wrColOpen = pid;          // genau diese Kolonie aufklappen
+      wrRender();
+      // Nach dem Neuaufbau zur Kolonie scrollen — sonst landet man oben und sucht sie.
+      setTimeout(() => {
+        try {
+          document.querySelector(`[data-wr-coltoggle="${pid}"]`)
+                  ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } catch (err) {}
+      }, 60);
+      return;
+    }
+    // ⚔️ Fälligen Angriff von Hand auswerten.
+    // ⚠️ Der automatische Lauf beim Tab-Öffnen bleibt — dieser Knopf ist der sichtbare
+    // Weg für den Fall, dass er nicht gegriffen hat. Und er MELDET Fehler, während der
+    // automatische Lauf sie schluckt (Regel 3): so wird ein Problem überhaupt sichtbar.
+    const resAtk = e.target.closest('[data-wr-resolve-attack]');
+    if (resAtk) {
+      if (_wrBusy) return;
+      const pid = resAtk.getAttribute('data-wr-resolve-attack');
+      _wrBusy = true;
+      try {
+        const res = await DB.resolveColonyAttack(_wrMember.id, pid);
+        if (!res || res.error) { wrToast(wrErrText(res && res.error), 'error'); return; }
+        if (res.nothing) { wrToast('Dieser Angriff ist bereits erledigt.', 'info'); }
+        _wrGalaxy  = await DB.fetchGalaxy();
+        _wrAttacks = await DB.fetchColonyAttacks(_wrMember.id);
+        if (res.resolved) {
+          const r = res.report || {};
+          wrToast(res.outcome === 'held'
+            ? `🛡️ Angriff auf ${r.planet} abgewehrt (${r.turretsHit} Geschütz(e) beschädigt)`
+            : res.outcome === 'partial'
+              ? `💥 ${r.planet}: gehalten hat es nicht — Stufe ${r.levelAfter}, alle Geschütze Wracks`
+              : `☠️ Kolonie ${r.planet} verloren`,
+            res.outcome === 'held' ? 'success' : 'error');
+        }
+        wrRender();
+      } catch (err) {
+        wrToast('Auswertung fehlgeschlagen: ' + err.message, 'error');
+      } finally { _wrBusy = false; }
+      return;
+    }
     // 🎖️ 26x: Söldner anheuern.
     const mrc = e.target.closest('[data-wr-merc]');
     if (mrc) {
