@@ -809,3 +809,35 @@
 .wr-ast-fb { display: none; }
 .wr-art-fail.wr-ast-art img { display: none; }
 .wr-art-fail .wr-ast-fb { display: inline; }
+
+/* 🚨 26v — Wrack aus einem Kolonie-Angriff.
+   Bewusst kein Rot-auf-Rot: die Zeile muss auffallen, aber der Reparatur-Knopf daneben
+   muss lesbar bleiben. Gleiche Rahmenstärke wie .wr-pslot-full, damit die Liste nicht
+   springt, sobald ein Geschütz zum Wrack wird. */
+.wr-pslot-wreck {
+  border-color: var(--wr-danger, #c0392b);
+  background: color-mix(in srgb, var(--wr-danger, #c0392b) 12%, transparent);
+}
+.wr-pslot-wreck .wr-pslot-art { filter: grayscale(1) brightness(.8); font-size: 1.4rem; }
+.wr-pslot-wreck .wr-pslot-txt strong { color: var(--wr-danger, #c0392b); }
+
+/* 🎖️ 26x — Söldner-Geschwader.
+   Bewusst zurückhaltend: der Abschnitt sitzt unter den Bauplätzen und soll die
+   Geschütze nicht optisch überstimmen. Die Standort-Knöpfe sind der einzige Teil,
+   der auffallen muss — dort liegt die eigentliche Entscheidung. */
+.wr-merc-list { display: flex; flex-direction: column; gap: 6px; }
+.wr-merc-row {
+  display: grid; grid-template-columns: 28px 1fr auto; gap: 8px; align-items: center;
+}
+.wr-merc-ic { font-size: 1.3rem; text-align: center; }
+.wr-merc-txt { font-size: .78rem; color: #dce6ff; min-width: 0; }
+.wr-merc-txt .wr-sub { display: block; }
+.wr-merc-run { display: flex; flex-direction: column; gap: 8px; }
+.wr-merc-guard { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+/* Der aktive Standort muss auf einen Blick erkennbar sein — sonst klickt man ihn
+   versehentlich weg und merkt es erst im Kampfbericht. */
+.wr-btn-on {
+  border-color: var(--wr-accent, #4aa3ff);
+  background: color-mix(in srgb, var(--wr-accent, #4aa3ff) 22%, transparent);
+  font-weight: 600;
+}
