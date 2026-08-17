@@ -3046,8 +3046,11 @@ function wrStationLightbox() {
   const c = WR_STATION;
   wrArtLightbox('base_station', '📡 ', 'Quadranten-Station',
     'Ein ausgebauter Geschütz-Planet wird zum Kommandoposten des ganzen Quadranten. '
-  + 'Die Station hält alle befreiten Planeten im selben Quadranten dauerhaft in Clan-Hand — '
-  + 'auch die deiner Mitspieler — und deckt anfliegende Verbände mit halber Feuerkraft.', [
+  + `Sie verdreifacht die Rückfallfrist für ALLE befreiten Planeten im selben Quadranten `
+  + `— auch die deiner Mitspieler — und deckt anfliegende Verbände mit halber Feuerkraft. `
+  + `Aus ${WR_FALLBACK_DAYS} Tagen werden ${WR_FALLBACK_DAYS * WR_FALLBACK_STATION_MULT}, `
+  + `mit Frühwarn-Netz aus ${WR_FALLBACK_E12} sogar ${WR_FALLBACK_E12 * WR_FALLBACK_STATION_MULT}. `
+  + `Sie macht Planeten NICHT unverlierbar — wer gar nicht hinsieht, verliert sie trotzdem.`, [
     ['🔬 Freischaltung', `${_wrEsc(wrTechName('wt_f7'))}<br><span class="wr-sub">${_wrEsc(wrTechRef('wt_f7'))}</span>`],
     ['🛡️ Voraussetzung', 'Planeten-Geschütze Stufe 3'],
     ['💰 Kosten', `${wrFmt(c.cc)} CC · ${c.erz} 🪨 · ${c.kristall} 💎 · ${c.plasmoid} 🟣 · ${c.quantum} 🌀`],
@@ -3309,7 +3312,7 @@ function wrPlanetDefHtml(m, p) {
                in ${_wrEsc(p.quadrant)} sind vor Rückeroberung geschützt, auch die deiner Clan-Mitglieder.</div>
            </div>`
         : `<div class="wr-pdef-row">
-             <div class="wr-pdef-lbl">${wrStationArt()} Quadranten-Station <span class="wr-sub">schützt ${_wrEsc(p.quadrant)} komplett</span></div>
+             <div class="wr-pdef-lbl">${wrStationArt()} Quadranten-Station <span class="wr-sub">verdreifacht die Rückfallfrist in ${_wrEsc(p.quadrant)}</span></div>
              <div class="wr-pdef-val">${stationQ ? '— vorhanden' : '—'}</div>
              ${stationQ
                ? `<div class="wr-sub">In diesem Quadranten steht bereits eine Station (${_wrEsc(stationQ.name)}).</div>`
@@ -3318,9 +3321,14 @@ function wrPlanetDefHtml(m, p) {
                       <span class="wr-sub">(${_wrEsc(wrTechRef('wt_f7'))})</span>.</div>`
                  : dlv < 3
                    ? '<div class="wr-warn">🔒 Erst die Planeten-Geschütze auf Stufe 3 ausbauen.</div>'
-                   : `<button class="wr-btn wr-btn-sm" data-wr-pbuild="${p.id}:station_build" ${canPay(WR_STATION) ? '' : 'disabled'}
+                   : wrStationCount(m) >= WR_STATION_MAX
+                     ? `<div class="wr-warn">📡 Du hast bereits ${WR_STATION_MAX} Stationen —
+                          mehr sind je Spieler nicht erlaubt.
+                          <span class="wr-sub">Sonst kauft der Führende auf Dauer die halbe
+                          Karte still zusammen.</span></div>`
+                     : `<button class="wr-btn wr-btn-sm" data-wr-pbuild="${p.id}:station_build" ${canPay(WR_STATION) ? '' : 'disabled'}
                         >📡 Station errichten
-                        <span class="wr-btn-sub">${priceTxt(WR_STATION)}</span></button>`}
+                        <span class="wr-btn-sub">${priceTxt(WR_STATION)} · ${wrStationCount(m)}/${WR_STATION_MAX} gebaut</span></button>`}
            </div>`}
 
       <div class="wr-sub">Geschütze decken den Anflug auf diesen Planeten, schießen zu 50 %
@@ -3341,8 +3349,9 @@ function wrFallbackHtml(p, m) {
   return `<div class="${left < 86400000 ? 'wr-warn' : 'wr-sub'}">⏳ Ungeschützt —
     ${own ? 'dein Planet' : 'dieser Planet'} fällt in <strong>${wrCountdown(left)}</strong> an die Feinde zurück.
     Es hält ihn: eine <b>Kolonie</b> darauf gründen, <b>Schiffe stationieren</b> (Route) oder
-    eine <b>📡 Station</b> irgendwo in ${_wrEsc(p.quadrant || 'diesem Quadranten')} — sie schützt
-    den ganzen Quadranten. Geschütze gibt es nur auf Kolonien.</div>`;
+    eine <b>📡 Station</b> irgendwo in ${_wrEsc(p.quadrant || 'diesem Quadranten')} — sie
+    verdreifacht die Frist im ganzen Quadranten (${wrFallbackDays(m)} → ${wrFallbackDays(m) * WR_FALLBACK_STATION_MULT} Tage),
+    hält den Planeten aber nicht für immer. Geschütze gibt es nur auf Kolonien.</div>`;
 }
 
 // ── Kolonien ─────────────────────────────────────────────────────────────────
@@ -5159,6 +5168,23 @@ const WR_STATION = { cc: 30000, erz: 500, kristall: 200, plasmoid: 60, quantum: 
 // Die Frist war gegen einen EINZELNEN Spieler bemessen, muss aber gegen den ganzen Klan
 // wirken — alle teilen dieselbe Galaxie. wt_e12 gibt weiterhin +2 Tage (3 → 5).
 const WR_FALLBACK_DAYS = 3, WR_FALLBACK_E12 = 5;
+// 📡 27g (Plan B.6.2): Die Station gewährt keine IMMUNITÄT mehr, sondern verdreifacht
+// die Rückfallfrist. Spiegel von `_space_fallback_mult` / `_space_fallback_days_at`.
+// ⚠️ JPs Begründung im Plan ist der Kern: die Rückeroberung ist der MATERIALKREISLAUF
+// des Spiels — sie erzeugt Wrackfelder, neue Ziele und hält die Karte in Bewegung. Ein
+// Bauwerk, das sie quadrantenweise abschaltet, nimmt dem Endgame seinen Nachschub, und
+// zwar unbemerkt: es fühlt sich nichts falsch an, es passiert nur nichts mehr.
+const WR_FALLBACK_STATION_MULT = 3;
+const WR_STATION_MAX = 3;   // je Spieler (Plan B.6.2, Punkt 3)
+// Frist für EINEN Planeten, inklusive Stations-Verlängerung.
+function wrFallbackDaysAt(p, m) {
+  return wrFallbackDays(m) * (wrQuadStation(p?.quadrant) ? WR_FALLBACK_STATION_MULT : 1);
+}
+// Wie viele Stationen hat dieser Spieler schon?
+function wrStationCount(m) {
+  return (_wrGalaxy?.planets || [])
+    .filter(p => p.station && p.colonized_by === (m || _wrMember)?.id).length;
+}
 // 👾 Wächter-Eskalation beim Rückfall — Spiegel von sweep_space_reconquest
 // (migration_2026-07-26r). ⚠️ NUR ANZEIGE: die Zahlen rechnet ausschliesslich der Server,
 // der Client liest `enemy_strength` fertig aus space_planets. Trotzdem hier festhalten,
@@ -5227,7 +5253,10 @@ function wrPlanetProtected(p, m) {
   if (!p || !p.cleared_by) return true;
   if (p.colonized_by) return true;
   if (wrPlanetDef(p) > 0) return true;
-  if (wrQuadStation(p.quadrant)) return true;
+  // ⚠️ 27g: Hier stand `if (wrQuadStation(...)) return true;` — die Station galt als
+  // dauerhafter Schutz. Sie verlängert jetzt nur noch die Frist (wrFallbackDaysAt), der
+  // Planet fällt also weiterhin zurück. Ohne diese Entfernung würde die Anzeige „sicher"
+  // melden, während der Server nach 9 Tagen zugreift.
   const r = wrRoutes(m) || {};
   return (parseInt(r[p.id]?.count, 10) || 0) > 0 || (parseInt(r[p.id + ':w']?.count, 10) || 0) > 0;
 }
@@ -5239,7 +5268,7 @@ function wrFallbackAt(p, m) {
   if (wrPlanetProtected(p, m)) return null;
   const t = Date.parse(p.cleared_at || '');
   if (!Number.isFinite(t)) return null;
-  return t + wrFallbackDays(m) * 86400000;
+  return t + wrFallbackDaysAt(p, m) * 86400000;   // 📡 27g: Station verdreifacht
 }
 // Spielerfarbe, deterministisch aus der member_id (kein Durchnummerieren — bei
 // Neuzugängen bliebe sonst keine Farbe stabil). Gleiche Quelle wie _wrHash.
@@ -7415,6 +7444,7 @@ function wrErrText(err) {
     not_enough_ships:      'Nicht genug Schiffe im Hafen.',
     empty_fleet:           'Keine Schiffe ausgewählt.',
     bad_intent:            'Unbekannter Auftrag.',
+    station_limit:         'Höchstens 3 Quadranten-Stationen je Spieler.',
     colony_inbound:        'Zu diesem Planeten fliegt bereits eine Kolonie-Mission — ein zweiter Verband würde nur umkehren.',
     already_colonized:     'Dieser Planet ist bereits kolonisiert.',
     colony_kit_incomplete: 'Der Kolonie-Mission fehlt noch etwas — die Anforderung steht unter dem Kolonisieren-Knopf.',
