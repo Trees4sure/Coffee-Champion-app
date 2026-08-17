@@ -2276,24 +2276,59 @@ function wrTechHtml(m) {
 // Raffinerie und war damit ein toter Knopf hinter einer 40.000-CC-Technik. Neue Regel:
 // knapp UNTER dem schlechtesten Raffinerie-Kurs derselben Sorte (🟣 140 auf Stufe 2,
 // 🌀 280 auf Stufe 4) — sofort und unbegrenzt, aber immer der schlechtere Preis.
-const WR_TRANSMUTE = { plasmoid: 120, quantum: 260 };
+// ── ⚗️ Transmuter (Kurse 26s, Losgrösse + Pause 27b) ────────────────────────
+// ⚠️ Spiegel von `_space_transmute_def` in migration_2026-08-17_27b_transmuter.sql.
+// JP 2026-08-17: „> 1.300.000 CC instant … das ist ziemlich OP!" — der Kurs war nie das
+// Problem, die fehlende Mengengrenze war es. Ein Preisnachteil von 43 % gegenüber der
+// Raffinerie wiegt keine 34 Stunden Wartezeit auf.
+const WR_TRANSMUTE       = { plasmoid: 120, quantum: 260 };
+const WR_TRANSMUTE_MAX   = 500;   // Einheiten je Vorgang
+const WR_TRANSMUTE_PAUSE = 48;    // Stunden Pause danach — gilt fürs GANZE Gerät
+
+// Wann ist der Transmuter wieder frei? 0 = jetzt. Spiegel von `_space_transmute_ready`.
+// ⚠️ Ein unlesbarer Zeitstempel gilt als „frei" — eine kaputte Uhr darf das Gerät nicht
+// dauerhaft sperren (dieselbe Kulanzrichtung wie bei wrSlotLevel/readyAt).
+function wrTransmuteLeftMs(m) {
+  const t = wrSpace(m).transmute;
+  if (!t || typeof t !== 'object' || !t.at) return 0;
+  const at = Date.parse(t.at);
+  if (!isFinite(at)) return 0;
+  return Math.max(0, at + WR_TRANSMUTE_PAUSE * 3600000 - Date.now());
+}
+
 function wrTransmuterHtml(m) {
   if (!wrHasTech(m, 'wt_f9')) return '';
   const pla = wrPlasmoid(m), qua = wrQuantum(m);
+  const restMs = wrTransmuteLeftMs(m);
+  const gesperrt = restMs > 0;
+  const std = Math.floor(restMs / 3600000), min = Math.round((restMs % 3600000) / 60000);
+  const restTxt = std >= 1 ? `${std} h ${min} min` : `${min} min`;
+
+  // ⚠️ Der Knopf zeigt, was WIRKLICH passiert (höchstens 500), nicht den ganzen Bestand.
+  // Vorher versprach er den Gesamtwert des Lagers — der Server hätte ihn geklemmt, und
+  // der Spieler hätte den Unterschied erst am Kontostand gemerkt.
+  const zeile = (typ, menge, icon, name) => {
+    const los = Math.min(menge, WR_TRANSMUTE_MAX);
+    return `<div class="wr-refine-row">
+      <span>${icon} ${name}: <strong>${wrFmt(menge)}</strong>${
+        menge > WR_TRANSMUTE_MAX ? ` <span class="wr-sub">(${WR_TRANSMUTE_MAX} je Vorgang)</span>` : ''}</span>
+      ${gesperrt
+        ? `<span class="wr-sub">⏳ ${restTxt}</span>`
+        : `<button class="wr-btn wr-btn-sm" data-wr-transmute="${typ}" ${los < 1 ? 'disabled' : ''}>→ ${wrFmt(los * WR_TRANSMUTE[typ])} CC</button>`}
+    </div>`;
+  };
+
   return `<div class="wr-card">
     <div class="wr-card-title">⚗️ Transmuter <span class="wr-sub">— Ring-Rohstoffe zu CC</span></div>
-    <div class="wr-refine-row">
-      <span>${wrIc('pla')} Plasmoiden-Staub: <strong>${wrFmt(pla)}</strong></span>
-      <button class="wr-btn wr-btn-sm" data-wr-transmute="plasmoid" ${pla < 1 ? 'disabled' : ''}>→ ${wrFmt(pla * WR_TRANSMUTE.plasmoid)} CC</button>
-    </div>
-    <div class="wr-refine-row">
-      <span>${wrIc('qua')} Quantenschaum: <strong>${wrFmt(qua)}</strong></span>
-      <button class="wr-btn wr-btn-sm" data-wr-transmute="quantum" ${qua < 1 ? 'disabled' : ''}>→ ${wrFmt(qua * WR_TRANSMUTE.quantum)} CC</button>
-    </div>
+    ${zeile('plasmoid', pla, wrIc('pla'), 'Plasmoiden-Staub')}
+    ${zeile('quantum',  qua, wrIc('qua'), 'Quantenschaum')}
     <p class="wr-sub" style="margin:4px 0 0">Kurs: ${wrIc('pla')} ${WR_TRANSMUTE.plasmoid} CC ·
-      ${wrIc('qua')} ${WR_TRANSMUTE.quantum} CC je Einheit — sofort und ohne Mengengrenze.
+      ${wrIc('qua')} ${WR_TRANSMUTE.quantum} CC je Einheit — sofort, aber höchstens
+      <strong>${WR_TRANSMUTE_MAX} Einheiten</strong>, danach <strong>${WR_TRANSMUTE_PAUSE} h Pause</strong>
+      für beide Sorten. ${gesperrt ? `Wieder frei in ${restTxt}.` : ''}
       Die 🏭 Raffinerie zahlt mehr (${WR_REFINE[2].ratePla}–${WR_REFINE[6].ratePla} bzw.
-      ${WR_REFINE[4].rateQua}–${WR_REFINE[6].rateQua}), braucht aber Zeit und eine höhere Stufe.</p>
+      ${WR_REFINE[4].rateQua}–${WR_REFINE[6].rateQua}) und hat den besseren Durchsatz —
+      der Transmuter ist der Notausgang, nicht der Hauptweg.</p>
   </div>`;
 }
 async function wrTransmute(type) {
@@ -7007,6 +7042,7 @@ function wrErrText(err) {
     not_enough_ships:      'Nicht genug Schiffe im Hafen.',
     empty_fleet:           'Keine Schiffe ausgewählt.',
     bad_intent:            'Unbekannter Auftrag.',
+    transmute_cooldown:    'Der Transmuter läuft noch nach — er braucht 48 Stunden zwischen zwei Vorgängen.',
     region_too_strong:     'Diese Region gehört jemand anderem — dein Verband ist zu schwach für eine Kolonie dort (nötig: das 1,15-fache der Regionsverteidigung).',
     merc_active:           'Es läuft bereits ein Söldner-Geschwader.',
     merc_not_rentable:     'Dieses Schiff lässt sich nicht mieten.',
