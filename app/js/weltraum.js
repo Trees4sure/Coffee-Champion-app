@@ -247,7 +247,67 @@ function wrTechColony(m) { return (wrHasTech(m,'wt_c5') ? 1.5 : 1.0) * (wrHasTec
 function wrTechResCost(m)  { return wrHasTech(m,'wt_d1') ? 0.8  : 1.0; }
 function wrTechSalvage(m)  { return (wrHasTech(m,'wt_d2') ? 1.25 : 1.0) * (wrHasTech(m,'wt_e5') ? 1.25 : 1.0); }
 function wrTechCapDays(m)  { return wrHasTech(m,'wt_d3') ? 21   : 14; }
+// ⚠️ 27x ERSETZT DIESE FUNKTION. Sie bleibt als Beleg stehen, wird aber nirgends mehr
+// gerufen — `harvest_space` rechnet seit 27x nach KOLONIE-STUFE statt nach Reichtum.
+// JP: „Die Einnahmen/Tag sind lächerlich niedrig gegenüber den Kosten einer Kolonie."
+// Nachgerechnet stimmte das: höchstens 250 CC/Tag (Reichtum 5 × 50) gegen 400–2.820 CC
+// Verwaltung — eine Kolonie war ab Stufe 2 unter JEDER Bedingung ein Verlustgeschäft.
+// ⚠️ ÜBERTRAGBARE LEHRE: Ein Ertrag gehört gegen die UNTERHALTSKOSTEN derselben Sache
+// gemessen, nicht gegen null. Der Gegenposten stand die ganze Zeit sichtbar in derselben
+// Kostenkarte.
 function wrTechColonyCc(m) { return (wrHasTech(m,'wt_d4') ? 25 : 0) + (wrHasTech(m,'wt_e15') ? 25 : 0); }
+
+// 💰 27x — Spiegel von `_space_colony_cc_base` / `_space_tech_colony_share` /
+// `_space_colony_kutter_cc`.
+const WR_COLONY_CC = [0, 1500, 3500, 5000];   // je Kolonie-Stufe und Tag
+const WR_KUTTER_CC = 150;                     // 10 % des Kutter-Bauwerts (1.500 CC)
+// ⚠️ AUF ZWEI TECHNIKEN AUFGETEILT: wt_d4 die Hälfte, wt_e15 die andere. Läge alles auf
+// einer, wäre die spätere wertlos — und JPs Sorge („die Investitionen kann man vielleicht
+// gar nicht mehr einholen") verlangt, dass sich beide noch lohnen.
+function wrColonyCcShare(m) {
+  return (wrHasTech(m, 'wt_d4') ? 0.5 : 0) + (wrHasTech(m, 'wt_e15') ? 0.5 : 0);
+}
+// 🚀 Handels-Kutter: KEIN eigenes System — sie stehen in der GARNISON (27k), wo es die
+// „10 Plätze je Stufe" längst gibt und Kutter längst stationierbar sind. Sie taten dort
+// bloss nichts. Ein zweites Stationierungs-System wäre in diesem Modul der vierte Fall
+// von „zwei Dinge, ein Name" gewesen.
+// ⚠️ Eingemottet ⇒ 0, spiegelbildlich zu `wrGarrisonPower`.
+function wrColonyKutterCc(m, planetId) {
+  if (wrMothCount(m) > 0) return 0;
+  return (parseInt(wrGarrisonShips(m, planetId).kutter, 10) || 0) * WR_KUTTER_CC;
+}
+// Voller Tagesertrag einer Kolonie in CC — Grundertrag + Kutter, mal Regionsbonus.
+function wrColonyCcDay(m, p) {
+  if (!p) return 0;
+  const basis = WR_COLONY_CC[wrColonyLevel(p)] * wrColonyCcShare(m);
+  const mult  = wrRegionMine(p.quadrant, m) ? WR_REGION_RATES.ertrag : 1;
+  return Math.round((basis + wrColonyKutterCc(m, p.id)) * mult);
+}
+// ⚠️ 27w — GEFUNDEN BEI EINER PRÜFUNG ALLER 42 TECHNIKEN (JP: „prüfe by the way, ob alle
+// Forschungen wirklich greifen"). Ergebnis: 41 wirken serverseitig, wt_e6 ist bewusst
+// eine reine Client-Sache (Nahbereichs-Ortung). ABER drei wirkten, ohne dass der Client
+// es je sagte — dieselbe Familie wie mothballed (26w), merc (26x), garrison (27k),
+// wrAllUsers (27s):
+//   • wt_d4/wt_e15 → CC je Kolonie: `wrTechColonyCc` war seit 26e definiert und NIE
+//     aufgerufen. Geld, das jeden Tag floss, ohne dass irgendwo stand, woher.
+//   • wt_e11/wt_b5 → Reparaturzeit beschädigter Geschütze. Der Client nannte an zwei
+//     Stellen fest „12 Stunden", obwohl der Server 2 h (e11) bzw. 4 h (b5) rechnet.
+//   • wt_f4 → Faltraum-Anker: einmal am Tag kehrt ein zurückgerufener Verband SOFORT
+//     heim. Der Rückruf-Knopf versprach weiterhin „Rückweg = bisherige Flugzeit".
+// ⚠️ MERKE: Eine Zahl, die im Fliesstext festgeschrieben ist, überlebt jede Forschung,
+// die sie ändern soll. Konstanten in Erklärtexten gehören durch Funktionen ersetzt.
+// Spiegel von `_space_tech_turret_repair_h` (26e).
+function wrTechRepairH(m) {
+  return wrHasTech(m, 'wt_e11') ? 2 : wrHasTech(m, 'wt_b5') ? 4 : 12;
+}
+// Ist der Faltraum-Anker HEUTE noch frei? Spiegel der `faltraumDay`-Prüfung in
+// `recall_space_trip` (26g). ⚠️ Der Server vergleicht gegen UTC — der Client muss
+// dasselbe tun, sonst zeigt er den Anker am Abend als verbraucht an, obwohl er frei ist.
+function wrFaltraumFrei(m) {
+  if (!wrHasTech(m, 'wt_f4')) return false;
+  const heute = new Date().toISOString().slice(0, 10);
+  return (wrSpace(m).faltraumDay || '') !== heute;
+}
 function wrTechWreck(m)    { return (wrHasTech(m,'wt_d5') ? 1.3 : 1.0) * (wrHasTech(m,'wt_e8') ? 1.3 : 1.0); }
 // Kaufbar? (Voraussetzung erfüllt, noch nicht besessen, Effekt verdrahtet)
 // ── ⏳ 26u: das laufende Forschungsprojekt ──────────────────────────────────
@@ -2059,7 +2119,9 @@ function wrTripHtml(m, trip) {
         : `<div class="wr-trip-eta">Rückkehr in <strong data-wr-eta="${trip.id}">${wrCountdown(ret - now)}</strong></div>
            ${(now < arrive && !trip.recalled)
              ? `<button class="wr-btn wr-btn-sm wr-btn-recall" data-wr-recall="${trip.id}">↩️ Zurückrufen`
-               + '<span class="wr-btn-sub">Auftrag verfällt · Rückweg = bisherige Flugzeit</span></button>'
+               + `<span class="wr-btn-sub">Auftrag verfällt · ${wrFaltraumFrei(m)
+                   ? '🌀 Faltraum-Anker: SOFORT zu Hause (1× am Tag)'
+                   : 'Rückweg = bisherige Flugzeit'}</span></button>`
              : ''}
            ${trip.recalled ? '<div class="wr-sub">↩️ Auf dem Rückweg — der Auftrag wurde abgebrochen.</div>' : ''}`}
     </div>`;
@@ -2821,7 +2883,11 @@ function wrTechHtml(m) {
 // Raffinerie wiegt keine 34 Stunden Wartezeit auf.
 const WR_TRANSMUTE       = { plasmoid: 120, quantum: 260 };
 const WR_TRANSMUTE_MAX   = 500;   // Einheiten je Vorgang
-const WR_TRANSMUTE_PAUSE = 48;    // Stunden Pause danach — gilt fürs GANZE Gerät
+// ⚠️ 27w: 48 → 24 h (JP). Geprüft gegen den KONKURRIERENDEN Weg, nicht gegen sich selbst:
+// die Raffinerie schafft auf Stufe 6 rund 1.280 🟣 + 640 🌀 am Tag zu besseren Kursen
+// (210/400 gegen 120/260). Der Transmuter bleibt also auch verdoppelt der zweitbeste Weg
+// und damit das, was 27b aus ihm machen wollte — ein Notausgang, kein Hauptweg.
+const WR_TRANSMUTE_PAUSE = 24;    // Stunden Pause danach — gilt fürs GANZE Gerät
 
 // Wann ist der Transmuter wieder frei? 0 = jetzt. Spiegel von `_space_transmute_ready`.
 // ⚠️ Ein unlesbarer Zeitstempel gilt als „frei" — eine kaputte Uhr darf das Gerät nicht
@@ -3790,8 +3856,19 @@ function wrGarrisonHtml(m, p) {
 
       <div class="wr-sub">Eigene Schiffe, die hier dauerhaft stehen. Sie verteidigen diese
         Kolonie mit voller Kampfkraft — dafür verteidigen sie den Raumhafen nicht mehr und
-        können von hier keine Angriffe fliegen. <strong>Sie zahlen vollen Flottensold</strong>,
-        weil sie nichts erwirtschaften. Platz: ${WR_GARRISON_PER_LEVEL} Schiffe je Kolonie-Stufe.</div>
+        können von hier keine Angriffe fliegen. <strong>Sie zahlen vollen Flottensold</strong>.
+        Platz: ${WR_GARRISON_PER_LEVEL} Schiffe je Kolonie-Stufe.</div>
+      ${/* 🚀 27x: der Kutter ist die Ausnahme von „sie erwirtschaften nichts" — deshalb
+            steht der Satz oben jetzt ohne diese Begründung da. Regel 4: die neue Regel
+            gehört an den Ort, an dem man sie benutzt. */''}
+      <div class="wr-sub">🚀 <strong>Espresso-Kutter handeln hier:</strong>
+        ${wrFmt(WR_KUTTER_CC)} CC je Tag und Stück (10 % seines Bauwerts), abzüglich
+        ${wrFmt(Math.round((SPACE_SHIP_BY_KEY.kutter?.cc || 1500) * 0.01))} CC Sold.
+        Er belegt dafür einen Platz, den sonst ein Kampfschiff hätte — Handel gegen Schutz.${
+        (parseInt(ships.kutter, 10) || 0) > 0
+          ? ` Hier stehen <strong>${wrFmt(parseInt(ships.kutter, 10))}</strong> und bringen
+              <strong>${wrFmt(wrColonyKutterCc(m, pid))} CC/Tag</strong>.`
+          : ''}</div>
 
       ${moth ? `<div class="wr-warn">🧊 Deine Flotte ist eingemottet — die Garnison zählt
         solange mit 0 und kostet auch nichts. Erst auslösen, dann verteidigt sie wieder.</div>` : ''}
@@ -3929,9 +4006,19 @@ function wrColoniesHtml(m) {
     const tagAmt  = wrResMinable(m, typ) ? (fak === 1 ? tagBase : Math.round(tagBase * fak)) : 0;
     const tagSide = (typ === 'plasmoid' || typ === 'quantum')
       ? { erz: Math.round(tagBase * 0.5), kri: Math.round(tagBase * 0.5 * 0.25) } : null;
+    // ⚠️ 27w (JP 2026-08-20: „Bekomme ich nun eigentlich auch CC je Kolonie … es wird
+    // nämlich nicht angegeben."). JA — und zwar seit wt_d4 (Fern-Handelsroute, 25) plus
+    // wt_e15 (Handelskolonie, nochmal 25), mal Reichtum, mal Regionsbonus. `harvest_space`
+    // zahlt es bei jeder Ernte aus.
+    // ⚠️ `wrTechColonyCc` gab es im Client SEIT 26e — definiert und NIE aufgerufen. Wieder
+    // der Fall „Server-Mechanik gebaut, Anzeige vergessen" (mothballed 26w, merc 26x,
+    // garrison 27k, wrAllUsers 27s). Diesmal war es Geld, das jeden Tag floss, ohne dass
+    // irgendwo stand, woher. Ein Einkommen, das niemand sieht, ist kein Anreiz.
+    const ccTag = wrColonyCcDay(m, pl);
     const proTag = [tagAmt > 0 ? `${wrFmt(tagAmt)} ${meta.icon}` : '']
       .concat(tagSide ? [`${wrFmt(tagSide.erz)} ${wrIc('erz')}`,
                          `${wrFmt(tagSide.kri)} ${wrIc('kri')}`] : [])
+      .concat(ccTag > 0 ? [`${wrFmt(ccTag)} CC`] : [])
       .filter(Boolean).join(' · ');
     rows += `
       <div class="wr-col-item${offen ? ' wr-col-open' : ''}">
@@ -4048,7 +4135,25 @@ function wrColoniesHtml(m) {
     ${rows ? wrSecCard('colonies',
       `${wrIc("colony")} Kolonien`,
       `${keys.length} · +${wrFmt(pending)} bereit`,
-      `${rows}<div class="wr-sub">🛡️ Geschütze der Kolonie · ${wrIc('atk')} Garnison (deine dort stationierten Schiffe) — zwei getrennte Posten, der Server führt sie auch getrennt. Ertrag sammelt sich max. ${wrTechCapDays(m)} Tage an.</div>`,
+      `${rows}${(() => {
+         // ⚠️ Woher die CC kommen, gehört unter die Liste (Regel 4: die Regel dort, wo
+         // man auf sie trifft). Seit 27x hängt der Grundertrag an der KOLONIE-STUFE,
+         // nicht mehr am Reichtum — der treibt schon den Rohstoff-Ertrag.
+         const anteil = wrColonyCcShare(m);
+         const stufen = [1, 2, 3].map(lv => wrFmt(Math.round(WR_COLONY_CC[lv] * (anteil || 1))))
+                                 .join(' / ');
+         if (!anteil) return `<div class="wr-sub">💰 Kolonien werfen zusätzlich CC ab, sobald
+           <strong>${_wrEsc(wrTechName('wt_d4'))}</strong> erforscht ist
+           (${_wrEsc(wrTechRef('wt_d4'))}) — die Hälfte von ${stufen} CC je Tag nach
+           Kolonie-Stufe, den Rest mit <strong>${_wrEsc(wrTechName('wt_e15'))}</strong>.</div>`;
+         return `<div class="wr-sub">💰 <strong>${stufen} CC je Tag</strong> nach Kolonie-Stufe${
+           anteil < 1 ? ` — die Hälfte, weil <strong>${_wrEsc(wrTechName('wt_e15'))}</strong>
+           noch fehlt (damit wären es ${[1, 2, 3].map(lv => wrFmt(WR_COLONY_CC[lv])).join(' / ')})`
+           : ''}. Dazu <strong>${wrFmt(WR_KUTTER_CC)} CC je Tag und Espresso-Kutter</strong>,
+           den du in die Garnison einer Kolonie stellst — er belegt dort einen der
+           ${WR_GARRISON_PER_LEVEL} Plätze je Stufe, den sonst ein Kampfschiff hätte.
+           Alles wird beim Ernten ausgezahlt.</div>`;
+       })()}       })()}<div class="wr-sub">🛡️ Geschütze der Kolonie · ${wrIc('atk')} Garnison (deine dort stationierten Schiffe) — zwei getrennte Posten, der Server führt sie auch getrennt. Ertrag sammelt sich max. ${wrTechCapDays(m)} Tage an.</div>`,
       `<button class="wr-btn wr-btn-go" data-wr-harvest="1" ${pending < 1 ? 'disabled' : ''}>
         ${wrIc("yield")} Ertrag einsammeln${pending > 0 ? ` (${wrFmt(pending)})` : ''}</button>`) : ''}
     ${secRisk.length ? wrSecCard('risk',
@@ -4305,7 +4410,7 @@ function wrWaveHtml(m) {
         <span class="wr-sub"> Verluste ca. ${loss} % der Heimatflotte.</span>
       </div>
       <div class="wr-sub wr-wave-note">Eine Niederlage kostet dich <strong>keine</strong> Kolonien —
-        aber ein Viertel deiner Rohstoffe, und Geschütze fallen für 12 h aus.</div>
+        aber ein Viertel deiner Rohstoffe, und Geschütze fallen für ${wrTechRepairH(m)} h aus.</div>
       ${/* 26k-Regelanpassung ohne Ankündigungs-Popup (JP, Plan §11): die Wellen wachsen
             seit dem Geschütz-Ausbau deutlich schneller. Ohne diesen Satz wirkt der
             Sprung wie ein Fehler — er muss also hier stehen, wo die Stärke steht. */''}
@@ -5517,7 +5622,14 @@ function wrPowerConvertPrice(m, toType) {
 // Warum überhaupt: 🟣 hatte ausser Forschung keinen Verbrauch (JP: „nach wenigen Tagen
 // > 598 Plasmoid … was mache ich damit?"). Der Kristall-Reaktor bleibt bewusst
 // wartungsfrei — die kostenlose Einstiegsstufe darf niemanden blockieren.
-const WR_GEN_FUEL = { plasmoid: [0, 8, 13, 20], quanten: [0, 10, 16, 25] };
+// ⚠️ 27w (JP 2026-08-20: „wir müssen den Verbrauch durch die Kraftwerke nochmal erhöhen,
+// weil sonst ist es weniger relevant außer für Bau und Forschung").
+// Plasmoid 8/13/20 → 10/18/30 · Quanten 10/16/25 → 14/26/42.
+// ⚠️ NACH OBEN GEWICHTET: Stufe 1 steigt kaum, Stufe 3 deutlich. Wer seinen ersten
+// Reaktor anwirft, merkt fast nichts; wer vier Kolonien auf Vollausbau fährt, zahlt
+// spürbar. Genau dort liegt der Überschuss. Eine gleichmässige Erhöhung hätte die
+// getroffen, die noch gar keinen haben — dieselbe Vorsicht wie bei den Bauzeiten.
+const WR_GEN_FUEL = { plasmoid: [0, 10, 18, 30], quanten: [0, 14, 26, 42] };
 const WR_GEN_FUEL_DAYS = 30;                      // Tankgrösse in Tagesrationen
 function wrGenFuelRes(type)  { return type === 'plasmoid' ? 'plasmoid' : type === 'quanten' ? 'quantum' : null; }
 function wrGenFuelRate(type, level) {
@@ -8393,7 +8505,7 @@ function wrWaveReport(r) {
     if (pl.length) lines.push(`<div class="wr-bad">Geplündert: ${pl.join(' · ')}</div>`);
     if (r.turretsDamaged > 0) {
       lines.push(`<div class="wr-bad">${wrFmt(r.turretsDamaged)} Geschütz(e) beschädigt —
-        sie fallen 12 Stunden aus.</div>`);
+        sie fallen ${wrTechRepairH(_wrMember)} Stunden aus.</div>`);
     }
     lines.push('<div class="wr-sub">Deine Kolonien und befreiten Planeten sind unangetastet.</div>');
   } else {
