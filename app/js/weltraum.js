@@ -701,13 +701,14 @@ const WR_POWER_MAX = 3;
 // ⚠️ Spiegel von _space_yard_stats in migration_2026-07-21d_weltraum_werft.sql.
 // timeCut/costCut = Anteil, der WEGFÄLLT. Der Kosten-Rabatt ist bewusst kleiner als der
 // Zeit-Rabatt: die Werft soll Tempo bringen, nicht die Ökonomie aushebeln.
+// ⚠️ `slots` NEU mit 27u (Hellingen). Spiegel von `_space_yard_slots`.
 const SPACE_YARD = [
-  { level:1, timeCut:0.00, costCut:0.00, cc:0,     erz:0,   kristall:0,
-    desc:'Einfaches Trockendock — baut in Grundgeschwindigkeit.' },
-  { level:2, timeCut:0.25, costCut:0.10, cc:4000,  erz:50,  kristall:0,
-    desc:'Zweite Helling und Roboterarme: 25 % schneller, 10 % billiger.' },
-  { level:3, timeCut:0.45, costCut:0.20, cc:12000, erz:150, kristall:40,
-    desc:'Vollautomatische Fertigung: 45 % schneller, 20 % billiger.' },
+  { level:1, timeCut:0.00, costCut:0.00, slots:2, cc:0,     erz:0,   kristall:0,
+    desc:'Einfaches Trockendock — 2 Hellingen, Grundgeschwindigkeit.' },
+  { level:2, timeCut:0.25, costCut:0.10, slots:3, cc:4000,  erz:50,  kristall:0,
+    desc:'Dritte Helling und Roboterarme: 3 gleichzeitig, 25 % schneller, 10 % billiger.' },
+  { level:3, timeCut:0.45, costCut:0.20, slots:4, cc:12000, erz:150, kristall:40,
+    desc:'Vollautomatische Fertigung: 4 Hellingen, 45 % schneller, 20 % billiger.' },
 ];
 
 // ── KI-Angriffswellen (P2) ───────────────────────────────────────────────────
@@ -5336,20 +5337,31 @@ function wrShipCost(s, m, count) {
 // (Einzelkauf) rechnete voll multiplikativ (× Stück), `build_space_cart` sublinear
 // (+ Stück), obwohl ein Kommentar in 21e das Gegenteil behauptet. Beide Pfade rufen
 // jetzt dieselbe Funktion, und diese hier ist ihr Spiegel.
-const WR_BUILD_STEP1 = 0.10, WR_BUILD_N1 = 10, WR_BUILD_STEP2 = 0.04;
-function wrBuildFactor(count) {
+// 🏗️ 27u HELLINGEN — Spiegel von `_space_ship_build_min_n` / `_space_yard_slots`.
+// ⚠️ JP 2026-08-20: „Es lohnt sich eher kleine Chargen zu produzieren. 50 Jäger > 9 h,
+// 10 Jäger à 5× = < 8 h." Nachgerechnet: 5 × 10 sind 9:45, aber das OPTIMUM lag bei
+// 2 × 25 = 7:00 gegen 9:20 für einen Auftrag. Der Schluss stimmte, die Aufteilung nicht.
+//
+// ⚠️ ÜBERTRAGBARE LEHRE, und sie erledigt drei Anläufe auf einmal: **eine Kostenfunktion,
+// die am AUFTRAG hängt und aufsteigend gekrümmt ist, lässt sich IMMER durch Aufteilen
+// unterlaufen.** Konvex heisst superadditiv. 26u (+2 %), 27r (+4 %) und 27t (Zinseszins)
+// hatten alle dieselbe Schwäche — sie fiel nur erst auf, als die Kurve steil genug wurde,
+// dass sich das Aufteilen lohnt. Keine Prozentzahl der Welt behebt das.
+//
+// Die Werft hat stattdessen HELLINGEN; ein Auftrag über n Rümpfe braucht ceil(n/Hellingen)
+// Durchgänge. `ceil(a/s) + ceil(b/s) ≥ ceil((a+b)/s)` gilt immer — Aufteilen ist nie
+// billiger. Nebenwirkung, die gefällt: bis zur Zahl der Hellingen kostet ein grösserer
+// Auftrag gar nichts extra. Vier Jäger dauern so lang wie einer, die Hellingen wollen
+// gefüllt werden.
+function wrYardSlots(m) { return wrYardDef(wrYardLevel(m)).slots || 2; }
+function wrBuildFactor(count, slots) {
   const n = Math.max(1, parseInt(count, 10) || 1);
-  // ⚠️ Auf 6 Stellen gerundet — GENAU wie die SQL. Ohne feste Nachkommastelle könnten
-  // JS-Fliesskomma und PostgreSQL-`numeric` an einer .5-Grenze verschieden runden, und
-  // die Vorschau läge um eine Minute neben dem echten Auftrag.
-  const f = Math.pow(1 + WR_BUILD_STEP1, Math.min(n - 1, WR_BUILD_N1 - 1))
-          * Math.pow(1 + WR_BUILD_STEP2, Math.max(0, n - WR_BUILD_N1));
-  return Math.round(f * 1e6) / 1e6;
+  return Math.ceil(n / Math.max(1, slots || 2));
 }
 function wrShipBuildMin(s, m, count) {
-  const cut = wrYardDef(wrYardLevel(m)).timeCut;
-  return Math.max(1, Math.round((s.buildMin || 10) * wrBuildFactor(count)
-                                * (1 - cut) * wrTechBuildTime(m)));
+  const def = wrYardDef(wrYardLevel(m));
+  return Math.max(1, Math.round((s.buildMin || 10) * wrBuildFactor(count, def.slots)
+                                * (1 - def.timeCut) * wrTechBuildTime(m)));
 }
 
 // Laufende Aufträge: Objekt { schiffsTyp: {count, doneAt} } — der Schlüssel ist der Typ,
