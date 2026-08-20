@@ -32,9 +32,9 @@
 // WASSERPISTOLE. Auf dem Desktop fällt es nicht auf — auf dem Handy steht dort ein
 // Spielzeug. Jetzt 🗡️: der kleine, schnelle Angreifer neben dem ⚔️ Schlachtschiff.
 const SPACE_SHIPS = [
-  { key:'sonde', buildMin:90, art:'ship_spaeher',   icon:'🛰️', name:'Bohnen-Sonde',   atk:1,  mine:0, cc:750,  erz:0,  kristall:0,
+  { key:'sonde', buildMin:60, art:'ship_spaeher',   icon:'🛰️', name:'Bohnen-Sonde',   atk:1,  mine:0, cc:750,  erz:0,  kristall:0,
     needs:'wt_ionenantrieb', desc:'Deckt den Nebel eines Quadranten auf' },
-  { key:'jaeger', buildMin:150, art:'ship_jaeger',  icon:'🗡️', name:'Jäger',           atk:10, mine:0, cc:1150, erz:0,  kristall:0,
+  { key:'jaeger', buildMin:90, art:'ship_jaeger',  icon:'🗡️', name:'Jäger',           atk:10, mine:0, cc:1150, erz:0,  kristall:0,
     needs:'wt_ionenantrieb', desc:'Billige Kampfkraft — Anzahl entscheidet' },
   // 🛩️ Großer Jäger (JP 2026-07-27): füllt die Lücke zwischen Wegwerf-Jäger und der
   // Fregatte. Bleibt leichte Klasse — Konterbonus gegen Schwärme, kleiner Schild.
@@ -44,17 +44,17 @@ const SPACE_SHIPS = [
   // (statt der Formel-15 aus dem Handover): sonst liegen die beiden bei Kristall/Angriffskraft
   // nur 7 % auseinander und die Invariante „der Große Jäger bleibt sinnvoll" ist zwar formal
   // erfüllt, aber praktisch verfehlt. Siehe Kopf von migration_2026-08-20_27i.
-  { key:'grossjaeger', buildMin:300, art:'ship_grossjaeger', icon:'🛩️', name:'Großer Jäger', atk:20, mine:0, cc:2000, erz:30, kristall:10,
+  { key:'grossjaeger', buildMin:180, art:'ship_grossjaeger', icon:'🛩️', name:'Großer Jäger', atk:20, mine:0, cc:2000, erz:30, kristall:10,
     needs:'wt_frachtmodule', desc:'Schwerer Abfangjäger — doppelte Feuerkraft je Rumpf, leichter Schild' },
-  { key:'kutter', buildMin:240, art:'ship_kutter',  icon:'🚀', name:'Espresso-Kutter', atk:2,  mine:0, cc:1500, erz:0,  kristall:0,
+  { key:'kutter', buildMin:180, art:'ship_kutter',  icon:'🚀', name:'Espresso-Kutter', atk:2,  mine:0, cc:1500, erz:0,  kristall:0,
     needs:'wt_frachtmodule', desc:'Frachter, bringt Ausbeute sicher heim' },
-  { key:'ernter', buildMin:360, art:'ship_ernter',  icon:'⛏️', name:'Röstkomet',       atk:3,  mine:8, cc:1500, erz:30, kristall:0,
+  { key:'ernter', buildMin:240, art:'ship_ernter',  icon:'⛏️', name:'Röstkomet',       atk:3,  mine:8, cc:1500, erz:30, kristall:0,
     needs:'wt_handbohrer',   desc:'Baut Erz und Koffeinkristall ab' },
-  { key:'berger', buildMin:360, art:'ship_berger',  icon:'♻️', name:'Bergungsschiff', atk:1,  mine:0, cc:1900, erz:50, kristall:0,
+  { key:'berger', buildMin:240, art:'ship_berger',  icon:'♻️', name:'Bergungsschiff', atk:1,  mine:0, cc:1900, erz:50, kristall:0,
     needs:'wt_frachtmodule', desc:'Holt mehr aus Wracks — im Kampf und an befreiten Planeten' },
   { key:'kolonie', buildMin:1440, art:'ship_kolonie', icon:'🛸', name:'Kolonieschiff',   atk:0,  mine:0, cc:3750, erz:90, kristall:30,
     needs:'wt_frachtmodule', desc:'Gründet eine Kolonie — bleibt am Zielplaneten' },
-  { key:'fregatte', buildMin:540, art:'ship_fregatte', icon:'🛡️', name:'Fregatte', atk:28, mine:0, cc:2250, erz:70, kristall:30,
+  { key:'fregatte', buildMin:360, art:'ship_fregatte', icon:'🛡️', name:'Fregatte', atk:28, mine:0, cc:2250, erz:70, kristall:30,
     needs:'wt_frachtmodule', desc:'Leichter Begleitschutz — Schild senkt die Verluste des ganzen Verbands' },
   // 🛩️ Trägerschiff (JP 2026-07-29): der Grund, warum es kleine Jäger weiterhin gibt.
   // ⚠️ Spiegel: _space_ship_cost/_stats/_role/_build_min in migration_2026-07-26m.
@@ -5306,20 +5306,49 @@ function wrShipCost(s, m, count) {
 // inkl. A4 Orbitalwerft (_space_tech_buildtime), die hier ebenfalls fehlte.
 // ⚠️ BALANCE 26u (Plan B.1.3): Stückzuschlag war „Grundzeit + 1 Minute je Stück" — bei
 // 7 Tagen Grundzeit bedeutungslos. Dann: +2 % der Grundzeit je ZUSÄTZLICHEM Stück.
-// ⚠️ BALANCE 27r (JP 2026-08-20): +2 % → +4 %, und die KLEINEN Schiffe haben längere
-// Grundzeiten bekommen (Jäger 90 → 150 …). Anlass: „sie werden schneller gebaut, als dass
-// sie fliegen können". Nachgerechnet stimmte das — 50 Jäger dauerten 98 min, ein Flug nach
-// Ring 1 dagegen 240. Jetzt: 150 × (1 + 0,04 × 49) = 444 min, mit Werft 3 also 244 min.
-// ⚠️ Bewusst LINEAR geblieben statt quadratisch: „das Spiel soll ja auch laufen" (JP im
-// selben Satz). Spiegel von `_space_ship_build_min_n` in migration_2026-08-20_27r.
+// ⚠️ BALANCE 27r → **27t ERSETZT SIE** (JP 2026-08-20). 27r hob Grundzeiten UND Zuschlag
+// an; beides ist zurückgenommen bzw. ersetzt.
+//   ⚠️ JPs sechs gemeldete Zeiten (30 Jäger 1:18, 20 Große 2:17, Kutter 2:17, Komet 3:02,
+//   Bergungsschiff 3:02, 1 Fregatte 3:18) beschreiben den Stand VOR 27r — sie passen alle
+//   exakt auf die ALTE Formel. Eindeutiger Beleg ist die Fregatte, weil dort kein
+//   Stückzuschlag mitspielt: 3:18 = 198 min = 360 × 0,55 (mit 27r wären es 297 min).
+//   JP hat 27r danach eingespielt und bestätigt: „gr. Jäger hat nun 2:45" = 300 × 0,55.
+//   ⚠️ ÜBERTRAGBARE LEHRE: Eine Balance-Meldung ist immer auch eine MESSUNG — und sie hat
+//   einen ZEITPUNKT. Erst prüfen, welche Formel die genannten Zahlen erzeugt; das sagt,
+//   GEGEN WELCHEN STAND gemeldet wurde. Ein Einzelstück ohne Zuschlag ist der beste
+//   Prüfstein, denn die Grundzeit darin verrät die Version.
+//
+// 27t (JPs Vorschlag): **Zinseszins statt fester Erhöhung.**
+//     zeit = grundzeit × 1,10^min(n−1, 9) × 1,04^max(0, n−10)
+// JPs Reihe stimmt damit exakt: 100 · 110 · 121 · 133 · 146 …
+// ⚠️ NICHT durchgehend 10 %: 1,10^49 = 106 — 50 Jäger wären 3,7 Tage, eine Dunkle
+// Röstung über vier Monate. `build_space` lässt 50 Stück zu, das ist kein Randfall.
+// ⚠️ NICHT gedeckelt: ein harter Deckel macht Stück 25 und 50 gleich teuer, dann bestellt
+// man immer 50. Die zweite Stufe hält die Kurve MONOTON — jedes Schiff kostet weiter Zeit,
+// nur nicht mehr exponentiell. Und sie hat eine Begründung, die zur Sache passt: eine
+// lange Serie wird ROUTINE, die ersten zehn Rümpfe sind die teuren.
+// ⚠️ Die Grundzeiten sind bewusst wieder die alten: zwei Hebel für eine Wirkung sind einer
+// zu viel, und höhere Grundzeiten treffen das EINZELNE Schiff im frühen Spiel — genau das,
+// was JP geschützt sehen wollte („die ersten Wächter kreuzen zu früh auf"). Einzelstücke
+// kosten deshalb exakt so viel wie heute.
+// Spiegel von `_space_ship_build_min_n` in migration_2026-08-20_27t.
 // ⚠️ Nebenbefund aus 26u: Server und Client hatten hier ZWEI Formeln — `build_space`
 // (Einzelkauf) rechnete voll multiplikativ (× Stück), `build_space_cart` sublinear
 // (+ Stück), obwohl ein Kommentar in 21e das Gegenteil behauptet. Beide Pfade rufen
 // jetzt dieselbe Funktion, und diese hier ist ihr Spiegel.
+const WR_BUILD_STEP1 = 0.10, WR_BUILD_N1 = 10, WR_BUILD_STEP2 = 0.04;
+function wrBuildFactor(count) {
+  const n = Math.max(1, parseInt(count, 10) || 1);
+  // ⚠️ Auf 6 Stellen gerundet — GENAU wie die SQL. Ohne feste Nachkommastelle könnten
+  // JS-Fliesskomma und PostgreSQL-`numeric` an einer .5-Grenze verschieden runden, und
+  // die Vorschau läge um eine Minute neben dem echten Auftrag.
+  const f = Math.pow(1 + WR_BUILD_STEP1, Math.min(n - 1, WR_BUILD_N1 - 1))
+          * Math.pow(1 + WR_BUILD_STEP2, Math.max(0, n - WR_BUILD_N1));
+  return Math.round(f * 1e6) / 1e6;
+}
 function wrShipBuildMin(s, m, count) {
   const cut = wrYardDef(wrYardLevel(m)).timeCut;
-  const n   = Math.max(1, count || 1);
-  return Math.max(1, Math.round((s.buildMin || 10) * (1 + 0.04 * (n - 1))
+  return Math.max(1, Math.round((s.buildMin || 10) * wrBuildFactor(count)
                                 * (1 - cut) * wrTechBuildTime(m)));
 }
 
