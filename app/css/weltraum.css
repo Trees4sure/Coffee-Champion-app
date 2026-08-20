@@ -38,6 +38,9 @@
   background: rgba(13, 18, 36, .82); color: #dce6ff; font-size: 1rem; line-height: 1;
   cursor: pointer; padding: 0; }
 .wr-zoom-btn:active { background: #1a2547; }
+/* 🛰️ 27s: aktiver Kartenfilter „Mitspieler-Flotten". Der EIN-Zustand ist der
+   hervorgehobene — ausgeblendet ist die Ausnahme, und die soll man sehen. */
+.wr-zoom-on { border-color: #d4aa37; color: #ffd15c; }
 .wr-legend { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px;
   font-size: .7rem; color: #8b9ac4; }
 .wr-legend i.wr-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%;
@@ -728,6 +731,11 @@
 .wr-tech-desc, .wr-tech-cost, .wr-tech-act { grid-column: 1 / -1; }
 .wr-tech-desc { line-height: 1.35; }
 .wr-tech-cost { margin-top: 1px; }
+/* ⏱️ 27q: die Forschungsdauer neben den Kosten (JP: „Zeiten werden bei den Forschungen
+   nicht angezeigt — man kann nicht planen"). Abgesetzt, weil sie der ZWEITE Preis ist:
+   das Labor nimmt nur EIN Projekt gleichzeitig an. */
+.wr-tech-dauer { margin-left: 6px; padding: 0 5px; border-radius: 999px;
+  background: #1b2547; color: #d4c07a; white-space: nowrap; }
 /* Der Abstand, den JP wollte — er trennt die Kosten von der Zustandszeile. */
 .wr-tech-act { margin-top: 7px; font-size: .7rem; justify-self: start; }
 .wr-tech-ok   { color: #7ad48a; font-weight: 700; }
@@ -831,6 +839,11 @@
 /* Legenden-Punkte für die neuen Kartenmarkierungen */
 .wr-dot-colony { background: linear-gradient(135deg, #7ad48a, #d47ad4); }
 .wr-dot-risk   { background: transparent; border: 1.5px dashed #ff8c78; }
+/* 🛰️ 27s: Mitspieler-Flotte. Ein RING, kein Punkt — genau das, was auf der Karte um
+   das Leitschiff gezeichnet wird. Die Farbe ist dort spielerabhängig (wrMemberColor),
+   in der Legende steht deshalb ein neutrales Grau: sie erklärt die FORM, nicht eine
+   bestimmte Person. */
+.wr-dot-other  { background: transparent; border: 2px solid #9db4e0; }
 /* 📡 Quadranten-Station: Portrait im Kolonie-Panel (Feature ④, Assets 2026-07-27) */
 .wr-station-art { position: relative; display: inline-block; width: 34px; height: 34px;
   vertical-align: middle; margin-right: 6px; cursor: zoom-in; }
