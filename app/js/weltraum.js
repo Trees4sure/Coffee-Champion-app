@@ -5074,13 +5074,30 @@ function wrWerftHtml(m) {
                <span class="wr-btn-sub">${[`${wrFmt(yNext.cc)} CC`]
                  .concat(yNext.erz ? [`${yNext.erz} ${wrIc('erz')}`] : [])
                  .concat(yNext.kristall ? [`${yNext.kristall} ${wrIc('kri')}`] : []).join(' · ')}
-                 → −${Math.round(yNext.timeCut * 100)} % Bauzeit, −${Math.round(yNext.costCut * 100)} % Kosten</span></button>`
+                 → ${wrYardDef(yl + 1).slots} Hellingen (statt ${wrYardDef(yl).slots}),
+                 −${Math.round(yNext.timeCut * 100)} % Bauzeit, −${Math.round(yNext.costCut * 100)} % Kosten</span></button>`
           : '<div class="wr-slot-max">✅ Werft voll ausgebaut</div>'}
       </span>
     </div>
     ${jobHtml}
-    <div class="wr-sub wr-job-note">Bauzeit = Grundzeit + 1 Minute je Stück. Jeder Schiffstyp
-      bekommt eine eigene Helling und baut <strong>parallel</strong> — Serienbau lohnt sich.</div>
+    ${/* ⚠️ 27u: DIESER SATZ WAR ZWEIMAL FALSCH (JP 2026-08-20: „es steht noch Grundzeit
+          und +1 Minute je Stück").
+          ① Die Formel „+1 Minute je Stück" gilt seit 26u nicht mehr — sie hat drei
+             Regeländerungen (26u, 27r, 27t, 27u) unbemerkt überlebt. Ein Regeltext, der
+             beim Ändern der Regel nicht mitgesucht wird, altert still weiter.
+          ② Schlimmer: „Jeder Schiffstyp bekommt eine eigene HELLING" benutzte dasselbe
+             Wort für etwas anderes — dort waren die parallelen AUFTRÄGE je Schiffstyp
+             gemeint, seit 27u sind Hellingen die parallelen RÜMPFE INNERHALB eines
+             Auftrags. Zwei Dinge unter einem Namen: genau das Muster, das hier schon
+             zwei „Garnisonen" (26v/27k) und zwei Symboltabellen erzeugt hat. Der
+             Schiffstyp bekommt ab jetzt einen eigenen AUFTRAG, nicht eine Helling. */''}
+    <div class="wr-sub wr-job-note">Deine Werft hat
+      <strong>${wrYardSlots(m)} Hellingen</strong> — so viele Rümpfe wachsen gleichzeitig.
+      Der erste kostet die volle Grundzeit, jeder weitere verlängert den Durchgang um
+      <strong>ein ${wrYardSlots(m) === 2 ? 'Halb' : wrYardSlots(m) === 3 ? 'Drittel' : 'Viertel'}</strong>
+      davon. <strong>Aufteilen lohnt nie</strong> — jeder zusätzliche Auftrag kostet eine
+      Anlaufzeit extra, ein einziger ist immer der günstigste Weg.
+      Jeder Schiffstyp läuft als <strong>eigener Auftrag</strong> daneben.</div>
     ${rows}
     ${wrMutterHtml(m)}
     ${items > 0
@@ -5348,15 +5365,32 @@ function wrShipCost(s, m, count) {
 // hatten alle dieselbe Schwäche — sie fiel nur erst auf, als die Kurve steil genug wurde,
 // dass sich das Aufteilen lohnt. Keine Prozentzahl der Welt behebt das.
 //
-// Die Werft hat stattdessen HELLINGEN; ein Auftrag über n Rümpfe braucht ceil(n/Hellingen)
-// Durchgänge. `ceil(a/s) + ceil(b/s) ≥ ceil((a+b)/s)` gilt immer — Aufteilen ist nie
-// billiger. Nebenwirkung, die gefällt: bis zur Zahl der Hellingen kostet ein grösserer
-// Auftrag gar nichts extra. Vier Jäger dauern so lang wie einer, die Hellingen wollen
-// gefüllt werden.
+// Die Werft hat stattdessen HELLINGEN — die Kosten hängen an der STÜCKZAHL, und die
+// ändert das Aufteilen nicht.
+//
+// ⚠️ 27v: aus `ceil(n/Hellingen)` wurde `1 + (n−1)/Hellingen` (JP 2026-08-20: „nach
+// dieser deiner Einteilung trifft man die Entscheidung, lieber 4 statt 5 und lieber 8
+// statt 5, sowie 16 statt 12"). Die Treppe legte Sprungstellen bei jedem Vielfachen der
+// Hellingen an: wer 13 Rümpfe wollte, zahlte vier volle Durchgänge und bestellte deshalb
+// 16. Eine Rechenaufgabe, die das Spiel aufzwingt, ohne interessant zu sein.
+// ⚠️ Und die Treppe war das schlechtere MODELL: sie unterstellt Gleichschritt. Eine echte
+// Werft arbeitet im Fluss — der fünfte Rumpf rückt nach, sobald die erste Helling frei
+// wird, der Auftrag dauert ein Viertel länger statt doppelt so lang.
+// ⚠️ MERKE: Wenn eine Formel dem Spieler eine unangenehme Optimierung aufdrängt, lohnt
+// der Blick auf das Modell dahinter — die Sprungstelle war ein Nebenprodukt der bequemen
+// Rechnung, nicht der Absicht.
+//
+// Aufteilen bleibt verboten, und zwar BEWEISBAR statt gemessen:
+//     f(a) + f(b) − f(a+b) = 1 − 1/Hellingen        (in Grundzeiten)
+// Der Term hängt nicht von a und b ab — es gibt keine Stückzahl, bei der Stückeln lohnt.
 function wrYardSlots(m) { return wrYardDef(wrYardLevel(m)).slots || 2; }
 function wrBuildFactor(count, slots) {
   const n = Math.max(1, parseInt(count, 10) || 1);
-  return Math.ceil(n / Math.max(1, slots || 2));
+  const s = Math.max(1, slots || 2);
+  // ⚠️ Auf 6 Stellen gerundet — GENAU wie die SQL. Unter `ceil` war das unnötig (ganze
+  // Zahlen), hier nicht: 1 + (n−1)/3 ergibt Drittel, und an einer .5-Grenze könnten
+  // JS-Fliesskomma und PostgreSQL-`numeric` sonst verschieden runden.
+  return Math.round((1 + (n - 1) / s) * 1e6) / 1e6;
 }
 function wrShipBuildMin(s, m, count) {
   const def = wrYardDef(wrYardLevel(m));
@@ -8112,7 +8146,15 @@ function wrShipLightbox(shipKey) {
           <span>${wrIc("mine")} Abbau<strong>${s.mine || '—'}</strong></span>
           <span>💰 Kosten<strong>${cost.join(' · ')}</strong></span>
           <span>${wrIc("port")} Im Hafen<strong>${wrFmt(have)}</strong></span>
-          <span>${wrIc("time")} Bauzeit<strong>${wrDur(s.buildMin)}</strong></span>
+          ${/* ⚠️ 27u: hier stand `wrDur(s.buildMin)` — die ROHE Grundzeit aus der Tabelle,
+                ohne Werft-Rabatt und ohne Forschung. Ein Jäger wurde mit „1 Std 30 Min"
+                ausgewiesen, während er bei voller Werft in 50 Minuten fertig ist. Der Wert
+                war seit jeher da und hat alle vier Bauzeit-Regeländerungen überlebt, weil
+                er nie falsch AUSSAH — er war nur nie der Wert, den der Spieler bekommt.
+                ⚠️ Merke: eine Kennzahl aus der Definitionstabelle ist nicht dasselbe wie
+                die Zahl, die für DIESEN Spieler gilt. `wrShipBuildMin(s, m, 1)` rechnet
+                mit seiner Werft. */''}
+          <span>${wrIc("time")} Bauzeit<strong>${wrDur(wrShipBuildMin(s, m, 1))}</strong></span>
           <span>${(SPACE_ROLES[s.key] && SPACE_ROLES[s.key].cls === 'heavy') ? '🔷' : '🔹'} Klasse<strong>${
             (SPACE_ROLES[s.key] && SPACE_ROLES[s.key].cls === 'heavy') ? 'schwer' : 'leicht'}</strong></span>
           <span>🛡️ Schild<strong>${Math.round(((SPACE_ROLES[s.key] || {}).shield || 0) * 100)} %</strong></span>
@@ -8215,9 +8257,14 @@ function wrWerftLightbox() {
   const built = SPACE_SHIPS.reduce((a, s) => a + wrShipCount(m, s.key), 0);
   wrArtLightbox('base_werft_' + wrYardLevel(m), '🏗️', 'Werft am Raumhafen',
     'Das Trockendock deines Hafens. Hier entstehen alle Schiffe; fertige Rümpfe werden '
-  + 'direkt in die Heimatflotte übergeben. Eine ausgebaute Werft baut schneller und günstiger.', [
+  + 'direkt in die Heimatflotte übergeben. Auf jeder Helling wächst ein Rumpf — eine '
+  + 'ausgebaute Werft baut schneller, günstiger und BREITER.', [
     [`${wrIc("fleet")} Gebaut`, wrFmt(built)],
     [`${wrIc("yard")} Werft-Stufe`, wrYardLevel(m)],
+    // ⚠️ 27u: die Hellingen gehören hierher — sie sind seit dieser Migration die Kennzahl,
+    // die über einen Grossauftrag entscheidet. Ohne sie erklärt die Lightbox die Werft
+    // über zwei Rabatte und verschweigt das, was man tatsächlich merkt.
+    ['⚓ Hellingen', `${wrYardSlots(m)} Rümpfe gleichzeitig`],
     [`${wrIc("time")} Bauzeit`, `−${Math.round(wrYardDef(wrYardLevel(m)).timeCut * 100)} %`],
     ['💰 Kosten', `−${Math.round(wrYardDef(wrYardLevel(m)).costCut * 100)} %`],
   ]);
