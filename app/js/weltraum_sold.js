@@ -385,7 +385,7 @@ function wrsSoldPopup(rate) {
           <strong>Reicht das Guthaben nicht</strong>, wird abgebucht, was da ist — und der Rest
           bleibt als Rückstand stehen. Deine Heimatflotte wird dann <strong>eingemottet</strong>:
           die Schiffe sind nicht verloren, aber sie fliegen und verteidigen nicht mehr, bis du
-          den Rückstand begleichst. Das geht jederzeit im 🛩️ Flotten-Tab.
+          den Rückstand begleichst. Das geht jederzeit im ${wrIc('fleet')} Flotten-Tab.
           Eingemottete Schiffe kosten solange keinen Unterhalt.
         </p>
         <button class="btn-primary quiz-cta" id="wrs-sold-ok">Verstanden</button>
@@ -441,7 +441,7 @@ function wrsSoldCardHtml() {
           Kolonien werden progressiv teurer: jede weitere kostet ${Math.round(WRS_KOL_STEIG * 100)} %
           mehr als die vorige. Reicht das Guthaben nicht, wird abgebucht was da ist, der Rest
           bleibt als Rückstand stehen und die Heimatflotte wird eingemottet — auslösen im
-          🛩️ Flotten-Tab.</div>
+          ${wrIc('fleet')} Flotten-Tab.</div>
       </div>`;
   } catch (e) { return ''; }
 }

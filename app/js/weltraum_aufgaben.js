@@ -32,6 +32,22 @@ if (typeof window.wrLive !== 'function' || typeof window.wrStatsOf !== 'function
   return;
 }
 
+// ⚠️ 27p: Rohstoff-Icons in den Auftragskarten (JP 2026-08-20: „die plasmoid assets und
+// erz sowie kristall assets sollst du verwenden").
+// `WRT_TASKS` ist eine Modul-Konstante und wird beim LADEN ausgewertet — `wrIc` muss zu
+// diesem Zeitpunkt schon dastehen. Tut es: index.html laedt weltraum.js VOR dieser Datei
+// (Zeile 364 vs. 366), und `wrIc` ist dort eine Funktions-Deklaration.
+// Der typeof-Guard faengt trotzdem ab, falls die Reihenfolge je kippt — dann steht das
+// Emoji da, statt dass die ganze Auftragsliste beim Laden wegbricht (Regel 3).
+//
+// ⚠️ Zielcontainer geprueft, nicht angenommen: `.wrt-ic` ist flex mit align-items:center
+// (kein stretch) und `.wrt-done-row` hat KEINEN span-Elementselektor. Die
+// „leere Kreise"-Falle vom 2026-07-21 (`.wr-lb-stats span` traf jede Icon-Huelle)
+// greift hier also nicht.
+function _wrtIc(key, fb) {
+  try { return (typeof wrIc === 'function') ? wrIc(key) : fb; } catch (e) { return fb; }
+}
+
 const WRT_SLOTS = 3;          // gleichzeitig offene Karten
 const WRT_DONE_KEEP = 40;     // erfüllte Aufträge im Archiv
 
@@ -88,9 +104,9 @@ const WRT_TASKS = [
     goal:3,    reward:650,  cum:true,  m:(c)=>c.st.quadrantsScouted },
   { id:'k_bau20',   kind:'kurz', icon:'🏗️', title:'Serienfertigung',    text:'Baue 20 Schiffe in der Werft.',
     goal:20,   reward:600,  cum:true,  m:(c)=>c.st.shipsBuilt },
-  { id:'k_erz600',  kind:'kurz', icon:'🪨', title:'Erzlieferung',       text:'Fördere und erbeute 600 Erz.',
+  { id:'k_erz600',  kind:'kurz', icon:_wrtIc('erz', '🪨'), title:'Erzlieferung',       text:'Fördere und erbeute 600 Erz.',
     goal:600,  reward:550,  cum:true,  m:(c)=>c.st.minedErz + c.st.lootErz },
-  { id:'k_kri150',  kind:'kurz', icon:'💎', title:'Kristallschicht',    text:'Fördere und erbeute 150 Koffeinkristall.',
+  { id:'k_kri150',  kind:'kurz', icon:_wrtIc('kri', '💎'), title:'Kristallschicht',    text:'Fördere und erbeute 150 Koffeinkristall.',
     goal:150,  reward:700,  cum:true,  m:(c)=>c.st.minedKri + c.st.lootKri },
   { id:'k_ring2',   kind:'kurz', icon:'🚀', title:'Aufbruch nach außen',text:'Befreie einen Planeten im zweiten Ring.',
     goal:2,    reward:900,  cum:false, m:(c)=>c.live.maxRing },
@@ -131,7 +147,7 @@ const WRT_TASKS = [
     goal:5000, reward:6000,  cum:true,  m:(c)=>c.st.foesDefeated },
   { id:'l_colguns', kind:'lang', icon:'🛡️', title:'Festungswelten',     text:'Baue 5 Geschütze auf deinen Kolonien.',
     goal:5,    reward:6500,  cum:false, m:(c)=>c.colTurrets, min:(c)=>c.live.colonies >= 2 },
-  { id:'l_ringkol', kind:'lang', icon:'🟣', title:'Tiefe Vorposten',    text:'Halte 3 Kolonien jenseits des ersten Rings.',
+  { id:'l_ringkol', kind:'lang', icon:_wrtIc('pla', '🟣'), title:'Tiefe Vorposten',    text:'Halte 3 Kolonien jenseits des ersten Rings.',
     goal:3,    reward:7500,  cum:false, m:(c)=>c.ringColonies, min:(c)=>c.live.maxRing >= 2 },
   { id:'l_hafen',   kind:'lang', icon:'🛰️', title:'Vollausbau',         text:'Bring deinen Raumhafen auf Stufe 3.',
     goal:3,    reward:4000,  cum:false, m:(c)=>c.live.port },

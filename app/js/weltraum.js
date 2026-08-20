@@ -1167,6 +1167,33 @@ function wrIcText(str) {
     .split('🌀').join(wrIc('qua'));
 }
 
+// ── 💰 Preis-/Kostenzeile in HTML (27p) ──────────────────────────────────────
+// JP 2026-08-20: „die plasmoid assets und erz sowie kristall assets sollst du verwenden."
+//
+// ⚠️ BEFUND, der den Auftrag erklärt: `wrIc('pla')`/`wrIc('qua')` standen an diesen
+// Stellen längst — 🪨 und 💎 waren als rohe Emoji danebengeblieben. Eine Zeile zeigte
+// also zwei Bilder und zwei Emoji nebeneinander. Nicht vergessen, sondern HALB gemacht:
+// beim Nachziehen der Ring-Rohstoffe (26o/26p) wurden nur die neuen Posten umgestellt.
+//   ⚠️ ÜBERTRAGBARE LEHRE: Wer eine Darstellung für NEUE Fälle umstellt, muss die alten
+//   im selben Zug mitnehmen — sonst entsteht kein Fortschritt, sondern ein Mischbild,
+//   und das sieht schlechter aus als der Zustand davor.
+//
+// ⚠️ Und es gab FÜNF Beinahe-Kopien dieser Zeile (Kolonie-Bauplätze, Kolonie-Panel,
+// Raumhafen, Kolonie-Kit, Generator-Lightbox) — teils mit `wrFmt`, teils ohne. Genau
+// deshalb konnte die Hälfte davon zurückbleiben. Ab jetzt EINE Funktion.
+//
+// ⚠️ NUR FÜR HTML. Das Ergebnis enthält <span>-Hüllen: niemals in einen Toast, in eine
+// Chat-Meldung, in ein `title="…"`-Attribut oder in `ctx.fillText` geben. Dort bleiben
+// die Emoji stehen (für den Chat gibt es die [[s:key]]-Token).
+function wrPreisTxt(c) {
+  if (!c) return '';
+  return [`${wrFmt(c.cc || 0)} CC`]
+    .concat(c.erz      ? [`${wrFmt(c.erz)} ${wrIc('erz')}`]      : [])
+    .concat(c.kristall ? [`${wrFmt(c.kristall)} ${wrIc('kri')}`] : [])
+    .concat(c.plasmoid ? [`${wrFmt(c.plasmoid)} ${wrIc('pla')}`] : [])
+    .concat(c.quantum  ? [`${wrFmt(c.quantum)} ${wrIc('qua')}`]  : []).join(' · ');
+}
+
 function wrIcArt(art, fb) {
   return `<span class="wr-ic"><img src="assets/space/${art}.png" alt=""
     onerror="this.parentNode.classList.add('wr-art-fail');this.remove()"><span class="wr-ic-fb">${fb || '•'}</span></span>`;
@@ -1552,10 +1579,10 @@ function wrRender() {
         <div class="wr-legend">
           <span><i class="wr-dot wr-dot-home"></i> Raumhafen</span>
           <span><i class="wr-dot wr-dot-fog"></i> Nebel</span>
-          <span><i class="wr-dot wr-dot-erz"></i> 🪨 Erz</span>
-          <span><i class="wr-dot wr-dot-kri"></i> 💎 Kristall</span>
-          <span><i class="wr-dot wr-dot-pla"></i> 🟣 Plasmoid</span>
-          <span><i class="wr-dot wr-dot-qua"></i> 🌀 Quantenschaum</span>
+          <span><i class="wr-dot wr-dot-erz"></i> ${wrIc('erz')} Erz</span>
+          <span><i class="wr-dot wr-dot-kri"></i> ${wrIc('kri')} Kristall</span>
+          <span><i class="wr-dot wr-dot-pla"></i> ${wrIc('pla')} Plasmoid</span>
+          <span><i class="wr-dot wr-dot-qua"></i> ${wrIc('qua')} Quantenschaum</span>
           <span><i class="wr-dot wr-dot-clear"></i> befreit</span>
           <span><i class="wr-dot wr-dot-colony"></i> Kolonie (Spielerfarbe · Ringe = Stufe)</span>
           <span>🛡️ Geschütze · 📡 Station</span>
@@ -1758,7 +1785,7 @@ async function wrLoadHandel() {
         <button class="wr-btn wr-btn-go" id="wr-tr-request" ${afford ? '' : 'disabled'}>📨 Gesuch abschicken</button>
       </div>
       <p class="wr-sub" style="margin:6px 0 0">Die CC werden beim Abschicken gesperrt; Rückzug erstattet.
-        Dein Lager: ${wrFmt(wrErz(m))} 🪨 · ${wrFmt(wrKristall(m))} 💎</p>
+        Dein Lager: ${wrFmt(wrErz(m))} ${wrIc('erz')} · ${wrFmt(wrKristall(m))} ${wrIc('kri')}</p>
     </div>
     <div class="wr-card">
       <div class="wr-card-title">🚀 Schiff anbieten <span class="wr-sub">— zum normalen Kaufpreis, Käufer erhält es sofort (ohne Bauzeit)</span></div>
@@ -1937,7 +1964,7 @@ function wrHudHtml(m) {
       <div class="wr-res" title="Kolonien"><span class="wr-res-ic">🪐</span><span class="wr-res-v">${wrFmt(Object.keys(wrColonies(m)).length)}</span><span class="wr-res-l">Kolonien</span></div>
     </div>`;
 }
-const WR_RES_NOTE = `<div class="wr-note">🪨 Erz und 💎 Koffeinkristall sind <strong>nicht käuflich</strong> — es gibt sie
+const WR_RES_NOTE = `<div class="wr-note">${wrIc('erz')} Erz und ${wrIc('kri')} Koffeinkristall sind <strong>nicht käuflich</strong> — es gibt sie
       ausschließlich im All. Sie zählen nicht zu deinem CoffeeCoin-Vermögen.</div>`;
 
 // ── Laufende Reise ───────────────────────────────────────────────────────────
@@ -2155,7 +2182,12 @@ function wrFlottenHtml(m, trips) {
   return `
     ${wrMothballHtml(m)}
     <div class="wr-card">
-      <div class="wr-card-title">🛩️ Verbände unterwegs
+      ${/* 27p (JP 2026-08-20): „bei Flottenverbänden einfach das Flotten Symbol,
+            was du schon im reiter hast, statt das Kleinflugzeug." 🛩️ ist als
+            Emoji buchstäblich „small airplane" — hier steht jetzt dasselbe Bild wie
+            im Reiter (assets/space/ic_travel.png über wrIc('fleet')), das Emoji
+            bleibt sein Rückfall. */''}
+      <div class="wr-card-title">${wrIc('fleet')} Verbände unterwegs
         <span class="wr-sub">${list.length} von ${WR_MAX_TRIPS} · jeder weitere startet mit
           ${wrFleetGap(m)} Min Vorlauf</span></div>
       ${verbaende}
@@ -2330,9 +2362,9 @@ function wrFleetPickerHtml(m) {
           const ring = _wrSel?.planet?.ring ?? _wrSel?.q?.ring ?? 0;
           if (!ring) return '';
           const fuel = wrTripFuel(wrSyncFleetSel(m), ring);
-          if (fuel <= 0) return `<span>💎 Treibstoff: <strong>frei</strong></span>`;
+          if (fuel <= 0) return `<span>${wrIc('kri')} Treibstoff: <strong>frei</strong></span>`;
           const ok = wrKristall(m) >= fuel;
-          return `<span class="${ok ? '' : 'wr-bad'}">💎 Treibstoff: <strong>${wrFmt(fuel)}</strong>`
+          return `<span class="${ok ? '' : 'wr-bad'}">${wrIc('kri')} Treibstoff: <strong>${wrFmt(fuel)}</strong>`
                + `${ok ? '' : ` <span class="wr-sub">(nur ${wrFmt(wrKristall(m))} auf Lager!)</span>`}</span>`;
         })()}
         ${(() => {
@@ -2392,11 +2424,11 @@ function wrInjectHtml(m) {
   return `
     <div class="wr-inject${geladen > 0 ? ' wr-inject-on' : ''}">
       <div class="wr-fs-head">⚗️ Plasmoid-Injektion
-        <span class="wr-sub">— 🟣 als Munition: 1 Stück = +${String(WR_INJECT_PCT).replace('.', ',')} % Kampfkraft</span></div>
+        <span class="wr-sub">— ${wrIc('pla')} als Munition: 1 Stück = +${String(WR_INJECT_PCT).replace('.', ',')} % Kampfkraft</span></div>
       <div class="wr-fs-sum">
-        <span>Geladen: <strong>${wrFmt(geladen)}</strong> / ${WR_INJECT_MAX} 🟣</span>
+        <span>Geladen: <strong>${wrFmt(geladen)}</strong> / ${WR_INJECT_MAX} ${wrIc('pla')}</span>
         <span>Bonus: <strong class="${geladen > 0 ? 'wr-good' : ''}">+${pct} %</strong></span>
-        <span class="wr-sub">Lager: ${wrFmt(have)} 🟣</span>
+        <span class="wr-sub">Lager: ${wrFmt(have)} ${wrIc('pla')}</span>
       </div>
       <div class="wr-fs-quick">
         ${paket.map(n => `<button class="wr-fs-q" data-wr-inject="${n}">+${n}</button>`).join('')}
@@ -2582,7 +2614,7 @@ function wrHomeDetailHtml(m) {
               vernichtete Flotte. Der Weg zur Handlung steht im 🛩️-Tab (wrMothballHtml). */
           wrMothCount(m) > 0
             ? `<span class="wr-bad">🧊 Eingemottet: <strong>${wrFmt(wrMothCount(m))}</strong>
-                 <span class="wr-sub">— im 🛩️ Flotten-Tab auslösen</span></span>`
+                 <span class="wr-sub">— im ${wrIc('fleet')} Flotten-Tab auslösen</span></span>`
             : ''}
         <span>${wrIc("atk")} Kampfkraft: <strong>${wrFmt(wrFleetPower(ships))}</strong></span>
         <span>${wrIc("def")} Geschütze: <strong>${wrFmt(wrTurretPower(m))}</strong></span>
@@ -2912,13 +2944,13 @@ function wrRefineLightbox() {
   + 'Jede Ausbaustufe im Ast 🏭 Raffinerie & Logistik erhöht Chargengröße, Tempo und Kurs.', [
     ['🔬 Stufe', tier < 1 ? 'nicht erforscht' : `${tier} von 6`],
     [`${wrIc('time')} Laufzeit`, tier < 1 ? '—' : `${def.hours} h je Charge`],
-    ['💰 Kurs', tier < 1 ? '—' : `${def.rErz} CC/🪨 · ${def.rKri} CC/💎`],
-    ['📦 Charge max', tier < 1 ? '—' : `${wrFmt(def.capErz)} 🪨 / ${wrFmt(def.capKri)} 💎`],
+    ['💰 Kurs', tier < 1 ? '—' : `${def.rErz} CC/${wrIc('erz')} · ${def.rKri} CC/${wrIc('kri')}`],
+    ['📦 Charge max', tier < 1 ? '—' : `${wrFmt(def.capErz)} ${wrIc('erz')} / ${wrFmt(def.capKri)} ${wrIc('kri')}`],
     // 26o: die Ring-Rohstoffe als eigene Zeile — sonst fällt gar nicht auf, dass eine
     // höhere Stufe sie freischaltet.
-    ['🟣🌀 Ring-Rohstoffe', tier < 1 ? '—'
-      : [def.ratePla ? `${def.ratePla} CC/🟣 (max ${wrFmt(def.capPla)})` : '🟣 ab Stufe 3',
-         def.rateQua ? `${def.rateQua} CC/🌀 (max ${wrFmt(def.capQua)})` : '🌀 ab Stufe 4'].join(' · ')],
+    [`${wrIc('pla')}${wrIc('qua')} Ring-Rohstoffe`, tier < 1 ? '—'
+      : [def.ratePla ? `${def.ratePla} CC/${wrIc('pla')} (max ${wrFmt(def.capPla)})` : `${wrIc('pla')} ab Stufe 3`,
+         def.rateQua ? `${def.rateQua} CC/${wrIc('qua')} (max ${wrFmt(def.capQua)})` : `${wrIc('qua')} ab Stufe 4`].join(' · ')],
   ]);
 }
 
@@ -2940,9 +2972,9 @@ function wrRaffinerieHtml(m) {
     const ready = new Date(r.readyAt).getTime() <= Date.now();
     // 26o: die Charge kann jetzt vier Rohstoffe enthalten. Nur zeigen, was drin ist —
     // „0 🟣" in jeder Charge wäre Rauschen.
-    const inhalt = [`${wrFmt(r.erz)} 🪨`, `${wrFmt(r.kristall)} 💎`]
-      .concat((r.plasmoid || 0) > 0 ? [`${wrFmt(r.plasmoid)} 🟣`] : [])
-      .concat((r.quantum  || 0) > 0 ? [`${wrFmt(r.quantum)} 🌀`]  : []).join(' · ');
+    const inhalt = [`${wrFmt(r.erz)} ${wrIc('erz')}`, `${wrFmt(r.kristall)} ${wrIc('kri')}`]
+      .concat((r.plasmoid || 0) > 0 ? [`${wrFmt(r.plasmoid)} ${wrIc('pla')}`] : [])
+      .concat((r.quantum  || 0) > 0 ? [`${wrFmt(r.quantum)} ${wrIc('qua')}`]  : []).join(' · ');
     body = ready
       ? `<div class="wr-refine-done">
            <div class="wr-ok">✅ Charge fertig — <strong>${wrFmt(r.cc)} CC</strong> aus ${inhalt}</div>
@@ -2968,7 +3000,7 @@ function wrRaffinerieHtml(m) {
     const canStart = (_wrRefErz + _wrRefKri + _wrRefPla + _wrRefQua) > 0;
     body = `
       <div class="wr-refine-row">
-        <span>🪨 Erz <strong>${wrFmt(_wrRefErz)}</strong> <span class="wr-sub">/ ${wrFmt(maxE)}</span></span>
+        <span>${wrIc('erz')} Erz <strong>${wrFmt(_wrRefErz)}</strong> <span class="wr-sub">/ ${wrFmt(maxE)}</span></span>
         <span class="wr-refine-adj">
           <button class="wr-btn wr-btn-sm" data-wr-refadj="erz:-10" ${_wrRefErz <= 0 ? 'disabled' : ''}>−10</button>
           <button class="wr-btn wr-btn-sm" data-wr-refadj="erz:10" ${_wrRefErz >= maxE ? 'disabled' : ''}>+10</button>
@@ -2976,7 +3008,7 @@ function wrRaffinerieHtml(m) {
         </span>
       </div>
       <div class="wr-refine-row">
-        <span>💎 Kristall <strong>${wrFmt(_wrRefKri)}</strong> <span class="wr-sub">/ ${wrFmt(maxK)}</span></span>
+        <span>${wrIc('kri')} Kristall <strong>${wrFmt(_wrRefKri)}</strong> <span class="wr-sub">/ ${wrFmt(maxK)}</span></span>
         <span class="wr-refine-adj">
           <button class="wr-btn wr-btn-sm" data-wr-refadj="kri:-5" ${_wrRefKri <= 0 ? 'disabled' : ''}>−5</button>
           <button class="wr-btn wr-btn-sm" data-wr-refadj="kri:5" ${_wrRefKri >= maxK ? 'disabled' : ''}>+5</button>
@@ -2988,8 +3020,8 @@ function wrRaffinerieHtml(m) {
         // freigibt (capPla/capQua > 0) — vorher steht stattdessen EIN Hinweis, ab welcher
         // Stufe es losgeht. Ohne den Hinweis wäre nicht erkennbar, dass es das Feature gibt.
         const gesperrt = [];
-        if (def.capPla <= 0) gesperrt.push('🟣 ab Stufe 3');
-        if (def.capQua <= 0) gesperrt.push('🌀 ab Stufe 4');
+        if (def.capPla <= 0) gesperrt.push(wrIc('pla') + ' ab Stufe 3');
+        if (def.capQua <= 0) gesperrt.push(wrIc('qua') + ' ab Stufe 4');
         const zeile = (ic, name, val, max, key, step) => `
           <div class="wr-refine-row">
             <span>${ic} ${name} <strong>${wrFmt(val)}</strong> <span class="wr-sub">/ ${wrFmt(max)}</span></span>
@@ -2999,18 +3031,18 @@ function wrRaffinerieHtml(m) {
               <button class="wr-btn wr-btn-sm" data-wr-refadj="${key}:max" ${val >= max ? 'disabled' : ''}>Max</button>
             </span>
           </div>`;
-        return (def.capPla > 0 ? zeile('🟣', 'Plasmoid', _wrRefPla, maxP, 'pla', 5) : '')
-             + (def.capQua > 0 ? zeile('🌀', 'Quantenschaum', _wrRefQua, maxQ, 'qua', 2) : '')
+        return (def.capPla > 0 ? zeile(wrIc('pla'), 'Plasmoid', _wrRefPla, maxP, 'pla', 5) : '')
+             + (def.capQua > 0 ? zeile(wrIc('qua'), 'Quantenschaum', _wrRefQua, maxQ, 'qua', 2) : '')
              + (gesperrt.length ? `<p class="wr-sub" style="margin:2px 0 0">🔒 Ring-Rohstoffe verwerten: ${gesperrt.join(' · ')} (Ast 🏭 weiter ausbauen)</p>` : '');
       })()}
       <div class="wr-refine-sum">
         <span>Ertrag: <strong>${wrFmt(cc)} CC</strong> in ${def.hours} h</span>
         <button class="wr-btn wr-btn-go" id="wr-refine-start" ${canStart ? '' : 'disabled'}>Verarbeiten starten</button>
       </div>
-      <p class="wr-sub" style="margin:4px 0 0">Stufe ${tier} · Kurs ${def.rErz} CC/🪨 · ${def.rKri} CC/💎${
-        def.ratePla ? ` · ${def.ratePla} CC/🟣` : ''}${def.rateQua ? ` · ${def.rateQua} CC/🌀` : ''
-        } · max ${wrFmt(def.capErz)} 🪨 / ${wrFmt(def.capKri)} 💎${
-        def.capPla ? ` / ${wrFmt(def.capPla)} 🟣` : ''}${def.capQua ? ` / ${wrFmt(def.capQua)} 🌀` : ''} je Charge</p>`;
+      <p class="wr-sub" style="margin:4px 0 0">Stufe ${tier} · Kurs ${def.rErz} CC/${wrIc('erz')} · ${def.rKri} CC/${wrIc('kri')}${
+        def.ratePla ? ` · ${def.ratePla} CC/${wrIc('pla')}` : ''}${def.rateQua ? ` · ${def.rateQua} CC/${wrIc('qua')}` : ''
+        } · max ${wrFmt(def.capErz)} ${wrIc('erz')} / ${wrFmt(def.capKri)} ${wrIc('kri')}${
+        def.capPla ? ` / ${wrFmt(def.capPla)} ${wrIc('pla')}` : ''}${def.capQua ? ` / ${wrFmt(def.capQua)} ${wrIc('qua')}` : ''} je Charge</p>`;
   }
   return `<div class="wr-card wr-refine">
     <div class="wr-card-title">🏭 Raffinerie <span class="wr-sub">— Rohstoffe zu CC (Stufe ${tier})</span></div>
@@ -3305,7 +3337,7 @@ function wrStationLightbox() {
   + `Sie macht Planeten NICHT unverlierbar — wer gar nicht hinsieht, verliert sie trotzdem.`, [
     ['🔬 Freischaltung', `${_wrEsc(wrTechName('wt_f7'))}<br><span class="wr-sub">${_wrEsc(wrTechRef('wt_f7'))}</span>`],
     ['🛡️ Voraussetzung', 'Planeten-Geschütze Stufe 3'],
-    ['💰 Kosten', `${wrFmt(c.cc)} CC · ${c.erz} 🪨 · ${c.kristall} 💎 · ${c.plasmoid} 🟣 · ${c.quantum} 🌀`],
+    ['💰 Kosten', wrPreisTxt(c)],   // 27p
     ['📡 Reichweite', 'ganzer Quadrant, eine Station je Quadrant'],
   ]);
 }
@@ -3323,10 +3355,7 @@ function wrPlanetSlotsHtml(m, p) {
   const canPay = (c) => c && coins >= c.cc && wrErz(m) >= c.erz
                      && wrKristall(m) >= c.kristall && wrPlasmoid(m) >= (c.plasmoid || 0)
                      && wrQuantum(m) >= (c.quantum || 0);
-  const priceTxt = (c) => [`${wrFmt(c.cc)} CC`]
-    .concat(c.erz ? [`${c.erz} 🪨`] : []).concat(c.kristall ? [`${c.kristall} 💎`] : [])
-    .concat(c.plasmoid ? [`${c.plasmoid} ${wrIc('pla')}`] : [])
-    .concat(c.quantum ? [`${c.quantum} ${wrIc('qua')}`] : []).join(' · ');
+  const priceTxt = wrPreisTxt;                       // 27p: eine Fassung fuer alle
 
   let out = '';
   // 27o: freigeschaltet hängt am Quantenschaum-Reaktor, angezeigt wird mindestens das
@@ -3533,11 +3562,7 @@ function wrPlanetDefHtml(m, p) {
   const canPay = (c) => coins >= (c.cc || 0) && wrErz(m) >= (c.erz || 0)
     && wrKristall(m) >= (c.kristall || 0) && wrPlasmoid(m) >= (c.plasmoid || 0)
     && wrQuantum(m) >= (c.quantum || 0);
-  const priceTxt = (c) => [`${wrFmt(c.cc)} CC`]
-    .concat(c.erz ? [`${c.erz} 🪨`] : []).concat(c.kristall ? [`${c.kristall} 💎`] : [])
-    .concat(c.plasmoid ? [`${c.plasmoid} ${wrIc('pla')}`] : [])
-    .concat(c.quantum ? [`${c.quantum} ${wrIc('qua')}`] : [])
-    .join(' · ');
+  const priceTxt = wrPreisTxt;                       // 27p: eine Fassung fuer alle
 
   const clv  = wrColonyLevel(p);
   const dlv  = wrDefLevel(p);
@@ -3831,7 +3856,8 @@ function wrColoniesHtml(m) {
     const tagSide = (typ === 'plasmoid' || typ === 'quantum')
       ? { erz: Math.round(tagBase * 0.5), kri: Math.round(tagBase * 0.5 * 0.25) } : null;
     const proTag = [tagAmt > 0 ? `${wrFmt(tagAmt)} ${meta.icon}` : '']
-      .concat(tagSide ? [`${wrFmt(tagSide.erz)} 🪨`, `${wrFmt(tagSide.kri)} 💎`] : [])
+      .concat(tagSide ? [`${wrFmt(tagSide.erz)} ${wrIc('erz')}`,
+                         `${wrFmt(tagSide.kri)} ${wrIc('kri')}`] : [])
       .filter(Boolean).join(' · ');
     rows += `
       <div class="wr-col-item${offen ? ' wr-col-open' : ''}">
@@ -4426,10 +4452,7 @@ function wrHafenHtml(m) {
   // 26k: Plasmoid ist die vierte Kostenart · 26p: Quantenschaum die fünfte.
   const canPay = (c) => coins >= c.cc && wrErz(m) >= c.erz && wrKristall(m) >= c.kristall
                      && wrPlasmoid(m) >= (c.plasmoid || 0) && wrQuantum(m) >= (c.quantum || 0);
-  const priceTxt = (c) => [`${wrFmt(c.cc)} CC`]
-    .concat(c.erz ? [`${c.erz} 🪨`] : []).concat(c.kristall ? [`${c.kristall} 💎`] : [])
-    .concat(c.plasmoid ? [`${c.plasmoid} ${wrIc('pla')}`] : [])
-    .concat(c.quantum ? [`${c.quantum} ${wrIc('qua')}`] : []).join(' · ');
+  const priceTxt = wrPreisTxt;                       // 27p: eine Fassung fuer alle
 
   // ⚡ Energie (26p) — einmal oben gerechnet, damit Panel, Bauplätze und die
   // Bau-Vorschau garantiert DIESELBE Momentaufnahme zeigen.
@@ -4827,7 +4850,7 @@ function wrRoutesHtml(m) {
         <span>Vorrat reicht: <strong>${reach > 99 ? '99+' : reach} Tage</strong></span>
       </div>
       ${short
-        ? `<div class="wr-warn">💎 Der Kristall reicht nicht für den ganzen Zeitraum — die Routen
+        ? `<div class="wr-warn">${wrIc('kri')} Der Kristall reicht nicht für den ganzen Zeitraum — die Routen
              pausieren, bis wieder Treibstoff da ist. Schiffe gehen dabei nicht verloren.</div>`
         : ''}
       <button class="wr-btn wr-btn-go" data-wr-harvest="1" ${pending < 1 ? 'disabled' : ''}>
@@ -4953,8 +4976,8 @@ function wrWerftHtml(m) {
                ${(coins >= yNext.cc && wrErz(m) >= yNext.erz && wrKristall(m) >= yNext.kristall) ? '' : 'disabled'}
                >Werft auf Stufe ${yl + 1} ausbauen
                <span class="wr-btn-sub">${[`${wrFmt(yNext.cc)} CC`]
-                 .concat(yNext.erz ? [`${yNext.erz} 🪨`] : [])
-                 .concat(yNext.kristall ? [`${yNext.kristall} 💎`] : []).join(' · ')}
+                 .concat(yNext.erz ? [`${yNext.erz} ${wrIc('erz')}`] : [])
+                 .concat(yNext.kristall ? [`${yNext.kristall} ${wrIc('kri')}`] : []).join(' · ')}
                  → −${Math.round(yNext.timeCut * 100)} % Bauzeit, −${Math.round(yNext.costCut * 100)} % Kosten</span></button>`
           : '<div class="wr-slot-max">✅ Werft voll ausgebaut</div>'}
       </span>
@@ -5026,10 +5049,7 @@ function wrMutterHtml(m) {
           <span class="wr-sub">du hast ${wrFmt(n)} · ${wrIc("atk")} ${wrFmt(p.count * (def.atk || 0))}</span></span>
       </div>`;
   }
-  const priceTxt = [`${wrFmt(c.cc)} CC`]
-    .concat(c.erz ? [`${c.erz} 🪨`] : []).concat(c.kristall ? [`${c.kristall} 💎`] : [])
-    .concat(c.plasmoid ? [`${c.plasmoid} ${wrIc('pla')}`] : [])
-    .concat(c.quantum ? [`${c.quantum} ${wrIc('qua')}`] : []).join(' · ');
+  const priceTxt = wrPreisTxt(c);                    // 27p
   const afford = (parseFloat(m?.coins) || 0) >= c.cc && wrErz(m) >= c.erz
     && wrKristall(m) >= c.kristall && wrPlasmoid(m) >= c.plasmoid && wrQuantum(m) >= c.quantum;
 
@@ -7900,10 +7920,7 @@ function wrPowerLightbox(key) {
   if (!g) return;
   const s = [1, 2, 3].map(lv => wrPowerStats(g.key, lv));
   const frei = wrPowerUnlocked(_wrMember, g.key);
-  const kosten = (c) => [`${wrFmt(c.cc)} CC`]
-    .concat(c.erz ? [`${c.erz} 🪨`] : []).concat(c.kristall ? [`${c.kristall} 💎`] : [])
-    .concat(c.plasmoid ? [`${c.plasmoid} ${wrIc('pla')}`] : [])
-    .concat(c.quantum ? [`${c.quantum} ${wrIc('qua')}`] : []).join(' · ');
+  const kosten = wrPreisTxt;                         // 27p
   wrArtLightbox(g.art, g.icon, g.name, g.desc, [
     ['⚡ Ausgabe', `${wrFmt(s[0].output)} / ${wrFmt(s[1].output)} / ${wrFmt(s[2].output)}`],
     ['💰 Neubau', kosten(s[0])],
@@ -7922,11 +7939,7 @@ function wrTechLightbox(key) {
   const stLabel = { owned: '✓ erforscht', soon: 'in Vorbereitung', locked: '🔒 Voraussetzung fehlt',
                     poor: 'Mittel reichen nicht', buy: 'erforschbar' }[st] || '';
   const ast = SPACE_TECH_ASTE.find(a => a.key === t.ast) || {};
-  const cost = [`${wrFmt(t.cc)} CC`]
-    .concat(t.erz ? [`${wrFmt(t.erz)} 🪨`] : [])
-    .concat(t.kristall ? [`${wrFmt(t.kristall)} 💎`] : [])
-    .concat(t.plasmoid ? [`${wrFmt(t.plasmoid)} 🟣`] : [])
-    .concat(t.quantum ? [`${wrFmt(t.quantum)} 🌀`] : []).join(' · ');
+  const cost = wrPreisTxt(t);   // 27p: die Lightbox rendert HTML (wrArtLightbox)
   const rows = [['💰 Kosten', cost], ['📊 Status', stLabel], [`${ast.icon || '🔬'} Ast`, _wrEsc(ast.name || '')]];
   if (t.requires) rows.push(['🔗 Braucht', _wrEsc((SPACE_TECH_BY_KEY[t.requires] || {}).name || t.requires)]);
   wrArtLightbox(t.art, ast.icon || '🔬', t.name, t.wirkung, rows, 'weltraum');
@@ -8160,7 +8173,7 @@ function wrReport(r) {
     // ⚗️ 26s: verbrauchte Injektion ausweisen — sonst wundert man sich über den
     // verschwundenen Vorrat. `inject` steht nur im Bericht eines echten Gefechts.
     if ((r.inject || 0) > 0) {
-      lines.push(`<div class="wr-good">⚗️ Plasmoid-Injektion: ${wrFmt(r.inject)} 🟣 verbrannt `
+      lines.push(`<div class="wr-good">⚗️ Plasmoid-Injektion: ${wrFmt(r.inject)} ${wrIc('pla')} verbrannt `
                 + `(+${wrFmt(r.injectPct || 0)} % Kampfkraft in diesem Gefecht)</div>`);
     }
   } else if (r.intent === 'scout') {

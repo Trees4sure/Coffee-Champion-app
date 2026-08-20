@@ -677,11 +677,15 @@ function wrsSteckbriefHtml() {
 // Dauerernte- UND Bergungsrouten. Feiner geht es nur mit einer Server-Änderung;
 // die Spalte heisst deshalb bewusst „Kolonien & Routen" und nicht „Kolonien".
 function wrsRohstoffTabelleHtml(st) {
+  // 27p: die echten Rohstoff-Bilder statt Emoji (JP 2026-08-20). ⚠️ typeof-Guard, weil
+  // diese Datei auch ohne weltraum.js geladen werden koennte — Regel 3: eine Anzeige
+  // darf nie der Grund sein, dass die Statistik gar nicht erst erscheint.
+  const ic = (k, fb) => (typeof wrIc === 'function') ? wrIc(k) : fb;
   const sorten = [
-    { ic:'🪨', name:'Erz',           m:st.minedErz, f:st.flightErz, l:st.lootErz },
-    { ic:'💎', name:'Kristall',      m:st.minedKri, f:st.flightKri, l:st.lootKri },
-    { ic:'🟣', name:'Plasmoid',      m:st.minedPla, f:st.flightPla, l:st.lootPla },
-    { ic:'🌀', name:'Quantenschaum', m:st.minedQua, f:st.flightQua, l:st.lootQua },
+    { ic:ic('erz', '🪨'), name:'Erz',           m:st.minedErz, f:st.flightErz, l:st.lootErz },
+    { ic:ic('kri', '💎'), name:'Kristall',      m:st.minedKri, f:st.flightKri, l:st.lootKri },
+    { ic:ic('pla', '🟣'), name:'Plasmoid',      m:st.minedPla, f:st.flightPla, l:st.lootPla },
+    { ic:ic('qua', '🌀'), name:'Quantenschaum', m:st.minedQua, f:st.flightQua, l:st.lootQua },
   ];
   if (!sorten.some(s => (s.m + s.f + s.l) > 0)) return '';
   const z = (v) => v > 0 ? _f(v) : '<span class="wrs-res-0">·</span>';
@@ -692,7 +696,7 @@ function wrsRohstoffTabelleHtml(st) {
       <td class="wrs-res-sum">${z(s.m + s.f + s.l)}</td>
     </tr>`).join('');
   return `
-    <div class="wrs-sub-title" style="margin-top:12px">🪨 Rohstoffe nach Herkunft</div>
+    <div class="wrs-sub-title" style="margin-top:12px">${ic('erz', '🪨')} Rohstoffe nach Herkunft</div>
     <div class="wrs-tablewrap"><table class="wrs-res-table">
       <thead><tr><th>Sorte</th><th>🏙️ Kolonien &amp; Routen</th><th>⛏️ Abbau-Flüge</th>
         <th>🏴 Kampfbeute</th><th>Σ</th></tr></thead>
