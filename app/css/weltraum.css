@@ -401,6 +401,35 @@
    Header-Avatar auf schmalen Handys schon einmal aufgetreten ist. */
 .wr-gar .wr-btn-go { margin-top: 8px; }
 
+/* ── 🛡️ Garnisonen im Flotten-Tab (27m) ───────────────────────────────────────
+   Je Kolonie eine abgesetzte Karte, damit auf einen Blick klar ist, WO etwas steht.
+   Bewusst dieselbe Zeilenoptik (.wr-fl-row) wie die Heimatflotte darunter: es sind
+   dieselben Schiffe, nur an einem anderen Ort. */
+.wr-gar-card { margin: 10px 0; padding: 8px 10px; border: 1px solid #24305a;
+  border-radius: 10px; background: #141c36; }
+.wr-gar-head { display: flex; align-items: baseline; justify-content: space-between;
+  gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
+/* min-width:0 wie bei .wr-gar-pn — ein langer Planetenname darf die Kennzahlen
+   rechts nicht aus der Karte drücken. */
+.wr-gar-head > span:first-child { min-width: 0; }
+.wr-gar-acts { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.wr-gar-acts .wr-btn { flex: 1 1 44%; }
+
+/* ── ⚠️ Kolonie-Warnungen (27o) ───────────────────────────────────────────────
+   Zwei Stufen: rot = braucht eine Handlung, gelb = erledigt sich von selbst.
+   Ein Dreieck, das auch für Selbstheilendes rot leuchtet, wird ignoriert. */
+.wr-cwarn { display: inline-block; margin-right: 4px; font-size: .95em; line-height: 1; }
+.wr-cwarn-bad  { filter: drop-shadow(0 0 3px rgba(255, 96, 96, .8)); }
+.wr-cwarn-warn { opacity: .85; }
+.wr-cwarn-list { margin: 4px 0 0; padding-left: 18px; }
+.wr-cwarn-list li { margin: 2px 0; line-height: 1.4; }
+
+/* Gesperrte Kolonie-Bauplätze (27o) — sichtbar, aber klar als „noch nicht" gezeichnet.
+   Sie WEGZULASSEN wäre der Fehler aus 26w/26x: eine Mechanik, die nirgends erscheint,
+   existiert für den Spieler nicht. */
+.wr-pslot-lock { opacity: .72; border-style: dashed; }
+.wr-pslot-lock .wr-slot-name { color: #8fa0c8; }
+
 /* ── 🧊 Eingemottete Flotte (JP 2026-08-20) ───────────────────────────────────
    Eisblau abgesetzt wie .wr-card-call beim Hilferuf: der Zustand ist kein Fehler,
    aber er hält an und soll sich vom Rest des Flotten-Tabs abheben. Die Schiffszeilen
