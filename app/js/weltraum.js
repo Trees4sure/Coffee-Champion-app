@@ -87,10 +87,16 @@ const SPACE_SHIPS = [
   // 27i: zieht bei den +25 % mit (JP 2026-08-20, „ja mitziehen"). Sein `cc` speist
   // Flottensold und Verlustbewertung — bliebe es stehen, würde das Flaggschiff relativ
   // billiger, und der Plasmoid-Anker für §1.4 würde nach unten kippen.
+  // ⚠️ EXOTEN 100/250 → 180/400 (JP 2026-08-20, nach eigener Beobachtung): „mutterschiff
+  // ist günstiger bei plasmoid und quantenschaum als röstung". Stimmte je Kampfkraft —
+  // und die 71 Rümpfe retten es NICHT: sie enthalten zusammen 20 🟣 und NULL 🌀.
+  // Gerechnet mit Rümpfen war es beim Quantenschaum 2,9× sparsamer je atk als die
+  // Dunkle Röstung. Jetzt absolut klar teurer; je Kampfkraft bleibt es günstiger, und das
+  // ist gewollt — das ist der Lohn für 71 eingelöste Rümpfe und 7 Tage Bauzeit.
   // ⚠️ Spiegel: _space_flagship_cost() in migration_2026-08-20_27i (NICHT _space_ship_cost —
   // das Mutterschiff darf nie über den Warenkorb kaufbar sein).
   { key:'mutterschiff', buildMin:10080, art:'ship_mutterschiff', icon:'🛸', name:'Mutterschiff', atk:1170, mine:0,
-    cc:37500, erz:750, kristall:310, plasmoid:100, quantum:250, special:'flagship',
+    cc:37500, erz:750, kristall:310, plasmoid:180, quantum:400, special:'flagship',
     needs:'wt_frachtmodule', desc:'Flaggschiff aus eingelösten Rümpfen — hebt die Kampfkraft des ganzen Verbands' },
 ];
 const SPACE_SHIP_BY_KEY = SPACE_SHIPS.reduce((m, s) => (m[s.key] = s, m), {});
@@ -3893,6 +3899,21 @@ function wrColonyAlertHtml(m) {
     const ok   = def >= str;
     const mc   = wrMerc(m);
     const wacht = mc && mc.guard === a.planetId;
+    // 🛡️ 27k: Garnison im Angriffspanel. ⚠️ JP 2026-08-20: „aktuell bei angriff einer
+    // kolonie gibt es nur die Schaltfläche ‚zur Kolonie' und ‚Söldner hin'."
+    // Der Kommentar zwei Blöcke tiefer beschreibt genau diesen Fehler — ich habe die
+    // Garnison gebaut und das Panel, das sie am dringendsten braucht, nicht angefasst.
+    //
+    // ⚠️ ABER: EIN KNOPF WÄRE HIER EINE FALLE. „Söldner hin" ist eine ZUWEISUNG und wirkt
+    // sofort; eine Garnison muss FLIEGEN (Ring × 240 min). Wer 30 Minuten vor dem
+    // Einschlag Schiffe losschickt, verliert sie an eine Kolonie, die vorher fällt.
+    // Deshalb steht hier die ehrliche Auskunft statt eines Knopfes: was schon dort steht,
+    // und ob eine Verlegung überhaupt noch ankäme.
+    const garN   = wrGarrisonCount(m, a.planetId);
+    const garPow = wrGarrisonPower(m, a.planetId);
+    const flugMin = Math.max(1, Math.round(wrTripMin(a.ring, a.quadrant, m)
+                                           * (100 - (wrSpeedPct(m) || 0)) / 100));
+    const schafftEs = rest > 0 && min > flugMin;
     return `
       <div class="wr-calert-row">
         <span class="wr-calert-txt">
@@ -3901,6 +3922,22 @@ function wrColonyAlertHtml(m) {
           <span class="wr-sub">🛡️ ${wrFmt(def)} gegen 👾 ${wrFmt(str)} —
             ${ok ? '<span class="wr-good">wird gehalten</span>'
                  : '<span class="wr-bad">zu schwach!</span>'}</span>
+          ${/* Der Verteidigungswert oben ENTHÄLT die Garnison bereits (der Server rechnet
+                sie seit 27k in _space_colony_defense mit). Diese Zeile schlüsselt nur auf,
+                damit erkennbar ist, welcher Teil aus stationierten Schiffen kommt. */''}
+          ${garN > 0
+            ? `<span class="wr-sub">🛡️ Garnison: <strong>${wrFmt(garN)}</strong> Schiffe
+                 (${wrFmt(garPow)} davon)${wrMothCount(m) > 0
+                   ? ' — <span class="wr-bad">eingemottet, zählt 0!</span>' : ''}</span>`
+            : ''}
+          ${rest > 0 && !ok
+            ? (schafftEs
+                ? `<span class="wr-sub">🛡️ Eine Verlegung bräuchte <strong>${wrDur(flugMin)}</strong>
+                     — käme rechtzeitig an. Über „Zur Kolonie".</span>`
+                : `<span class="wr-sub">🛡️ Eine Verlegung bräuchte <strong>${wrDur(flugMin)}</strong>
+                     — <span class="wr-bad">zu spät</span>.${mercFrei && !wacht
+                       ? ' Söldner wirken dagegen sofort.' : ''}</span>`)
+            : ''}
         </span>
         <span class="wr-calert-act">
           <strong class="${rest <= 0 ? 'wr-bad' : ''}">⏳ ${zeit}</strong>
