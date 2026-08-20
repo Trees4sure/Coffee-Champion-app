@@ -134,11 +134,8 @@ async function wrxStartpaket() {
 
 function wrxModalOffen() {
   try {
-    // ⚠️ 'wrx-ann' gehört mit in die Liste: sonst legt sich der Wochenbericht über die
-    // gerade geöffnete Ankündigung. Wer ein neues Modal einführt, muss es HIER eintragen —
-    // die Prüfung kennt nur, was aufgezählt ist.
     for (const id of ['quiz-modal', 'survey-modal', 'whats-new-modal', 'loan-modal',
-                      'wr-help-modal', 'wrt-intro', 'wrx-start', 'wrx-ann']) {
+                      'wr-help-modal', 'wrt-intro', 'wrx-start']) {
       const el = document.getElementById(id);
       if (el && !el.classList.contains('hidden') && (el.innerHTML || '').trim()) return true;
     }
@@ -174,80 +171,6 @@ function wrxStartPopup(betrag) {
     document.body.appendChild(m);
     m.querySelector('#wrx-start-ok').onclick = () => m.remove();
   } catch (e) { wrxToast(`🚀 +${_f(betrag)} CC Startkapital für den Weltraum-Einstieg!`, 'success'); }
-}
-
-// ═══ 1b. 📣 Ankündigungen (CLAUDE.md Regel 4) ══════════════════════════════
-// „Größere Neuerungen/Freischaltungen bekommen ein Ankündigungs-Popup beim ersten Login
-// danach." Der Handover §7 nannte dafür `js/announcements.js` mit `cosmetics.seenAnnouncements`
-// — beides gibt es nicht, und dafür eine neue Datei plus ein neues Speicherfeld anzulegen,
-// wäre ein zweiter Mechanismus neben dem, der hier schon funktioniert (wrt-intro, wrx-start).
-// ⚠️ Also dasselbe Muster, gemerkt in `map_data.wrSeen` — additiv, keine Migration.
-//
-// ⚠️ NUR für Spieler mit freigeschaltetem Weltraum (Handover §7): Wer das Modul nie
-// gesehen hat, soll nicht über Schiffspreise informiert werden, die er nicht kennt.
-// Deshalb hängt der Aufruf am Betreten des 🚀-Tabs — dort ist die Freischaltung bereits
-// geprüft, und ein Spieler ohne Weltraum kommt gar nicht erst hin.
-const WRX_ANN_KEY = 'wr_garnison_preise_2026_08';
-
-function wrxSeen(u) {
-  const s = u?.map_data?.wrSeen;
-  return (s && typeof s === 'object' && !Array.isArray(s)) ? s : {};
-}
-
-let _wrxAnnBusy = false;
-async function wrxAnnouncement() {
-  if (_wrxAnnBusy) return;
-  const me = wrxMe();
-  if (!me?.id) return;
-  if (wrxSeen(me)[WRX_ANN_KEY]) return;
-  if (wrxModalOffen()) return;                      // nicht über andere Modals legen
-  if (document.getElementById('wrx-ann')) return;
-  _wrxAnnBusy = true;
-  try {
-    const m = document.createElement('div');
-    m.id = 'wrx-ann';
-    m.innerHTML = `
-      <div class="quiz-backdrop"></div>
-      <div class="quiz-box"><div class="quiz-card" style="text-align:center">
-        <div class="quiz-emoji">🛰️</div>
-        <h2>Die Werft rechnet neu</h2>
-        <p style="font-size:.84rem;line-height:1.5;color:var(--muted);text-align:left">
-          <strong>Neu: Garnisonen.</strong> Du kannst jetzt eigene Schiffe dauerhaft auf deinen
-          Kolonien stationieren — zusätzlich zu den Geschützen und zusätzlich zu Söldnern. Wer
-          seine Geschütze voll ausgebaut hat, kommt so weiter. Der Preis: stationierte Schiffe
-          kosten <strong>vollen Sold</strong> und verteidigen die Heimat nicht mehr. Pro Kolonie
-          passen 10 Schiffe je Ausbaustufe. Verlegen und Zurückholen dauert die normale
-          Flugzeit; fällt die Kolonie, fällt die Garnison mit.<br><br>
-          <strong>Schiffe sind teurer geworden.</strong> Alle Baukosten +25 %. Außerdem brauchen
-          Fregatten jetzt 💎 Kristall, Kreuzer und Schlachtschiffe 🟣 Plasmoid, und die Dunkle
-          Röstung zusätzlich 🌀 Quantenschaum. Größere Schiffe verlangen ab sofort auch die
-          selteneren Rohstoffe — Erz allein reicht nicht mehr.<br><br>
-          Bereits gebaute Schiffe und laufende Bauaufträge bleiben unberührt. Der
-          <strong>Flottensold steigt entsprechend mit</strong> (er ist 1 % des Bauwerts pro Tag)
-          — ein Blick aufs Konto lohnt sich. Auch die Bewertung deiner bisherigen Verluste im
-          Profil steigt dadurch rückwirkend; verloren hast du deswegen nichts Zusätzliches.<br><br>
-          <strong>Und falls deine Flotte einmal eingemottet ist:</strong> sie ist nicht verloren.
-          Im 🛩️ Flotten-Tab steht jetzt, was stillliegt und was das Auslösen kostet.
-        </p>
-        <button class="btn-primary quiz-cta" id="wrx-ann-ok">Verstanden</button>
-      </div></div>`;
-    document.body.appendChild(m);
-    m.querySelector('#wrx-ann-ok').onclick = async () => {
-      m.remove();
-      // ⚠️ Frisch laden statt die lokale Kopie zu schreiben: map_data ist ein Blob, und
-      // ein Schreibvorgang auf veralteter Grundlage überschreibt fremde Felder
-      // (die Tagesbilanz-Lehre vom 2026-07-22).
-      try {
-        let md = {};
-        try { md = await DB.fetchMemberMapData(me.id); } catch (e) { md = me.map_data || {}; }
-        const seen = Object.assign({}, (md && md.wrSeen) || {}, { [WRX_ANN_KEY]: true });
-        const next = Object.assign({}, md || {}, { wrSeen: seen });
-        await DB.updateMapData(me.id, next);
-        me.map_data = next;
-      } catch (e) { /* im Zweifel kommt es nochmal — besser als nie */ }
-    };
-  } catch (e) { console.warn('[wr-extras] Ankündigung:', e.message);
-  } finally { _wrxAnnBusy = false; }
 }
 
 // ═══ 2. 📈 Score-Verlauf ═══════════════════════════════════════════════════
@@ -681,13 +604,11 @@ function wrxVerlustWert(st) {
     // Neuling zuerst sein Startkapital sieht, und VOR dem Wochenbericht (5000).
     // `wrxModalOffen()` fängt Überschneidungen ohnehin ab — die Reihenfolge entscheidet
     // nur, was zuerst kommt, wenn beides fällig wäre.
-    setTimeout(() => { wrxAnnouncement(); }, 3400);
     setTimeout(() => { wrxWochenbericht(); }, 5000);
     return r;
   };
 })();
 
-window.wrxAnnouncement = wrxAnnouncement;
 window.wrxStartpaket   = wrxStartpaket;
 window.wrxWochenbericht = wrxWochenbericht;
 window.wrxSnapshot     = wrxSnapshot;
