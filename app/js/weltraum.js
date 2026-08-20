@@ -32,33 +32,38 @@
 // WASSERPISTOLE. Auf dem Desktop fällt es nicht auf — auf dem Handy steht dort ein
 // Spielzeug. Jetzt 🗡️: der kleine, schnelle Angreifer neben dem ⚔️ Schlachtschiff.
 const SPACE_SHIPS = [
-  { key:'sonde', buildMin:60, art:'ship_spaeher',   icon:'🛰️', name:'Bohnen-Sonde',   atk:1,  mine:0, cc:600,  erz:0,  kristall:0,
+  { key:'sonde', buildMin:60, art:'ship_spaeher',   icon:'🛰️', name:'Bohnen-Sonde',   atk:1,  mine:0, cc:750,  erz:0,  kristall:0,
     needs:'wt_ionenantrieb', desc:'Deckt den Nebel eines Quadranten auf' },
-  { key:'jaeger', buildMin:90, art:'ship_jaeger',  icon:'🗡️', name:'Jäger',           atk:10, mine:0, cc:900,  erz:0,  kristall:0,
+  { key:'jaeger', buildMin:90, art:'ship_jaeger',  icon:'🗡️', name:'Jäger',           atk:10, mine:0, cc:1150, erz:0,  kristall:0,
     needs:'wt_ionenantrieb', desc:'Billige Kampfkraft — Anzahl entscheidet' },
   // 🛩️ Großer Jäger (JP 2026-07-27): füllt die Lücke zwischen Wegwerf-Jäger und der
   // Fregatte. Bleibt leichte Klasse — Konterbonus gegen Schwärme, kleiner Schild.
   // ⚠️ Spiegel: _space_ship_cost/_stats/_role/_build_min in migration_2026-07-26i.
-  { key:'grossjaeger', buildMin:180, art:'ship_grossjaeger', icon:'🛩️', name:'Großer Jäger', atk:20, mine:0, cc:1400, erz:20, kristall:0,
+  // ⚠️ 27i (JP 2026-08-20): Kristall-Posten NEU. Der Große Jäger hatte keinen, dadurch war
+  // die Fregatte das strikt bessere Schiff bei EINFACHEREM Rohstoffprofil. Bewusst nur 10
+  // (statt der Formel-15 aus dem Handover): sonst liegen die beiden bei Kristall/Angriffskraft
+  // nur 7 % auseinander und die Invariante „der Große Jäger bleibt sinnvoll" ist zwar formal
+  // erfüllt, aber praktisch verfehlt. Siehe Kopf von migration_2026-08-20_27i.
+  { key:'grossjaeger', buildMin:180, art:'ship_grossjaeger', icon:'🛩️', name:'Großer Jäger', atk:20, mine:0, cc:2000, erz:30, kristall:10,
     needs:'wt_frachtmodule', desc:'Schwerer Abfangjäger — doppelte Feuerkraft je Rumpf, leichter Schild' },
-  { key:'kutter', buildMin:180, art:'ship_kutter',  icon:'🚀', name:'Espresso-Kutter', atk:2,  mine:0, cc:1200, erz:0,  kristall:0,
+  { key:'kutter', buildMin:180, art:'ship_kutter',  icon:'🚀', name:'Espresso-Kutter', atk:2,  mine:0, cc:1500, erz:0,  kristall:0,
     needs:'wt_frachtmodule', desc:'Frachter, bringt Ausbeute sicher heim' },
-  { key:'ernter', buildMin:240, art:'ship_ernter',  icon:'⛏️', name:'Röstkomet',       atk:3,  mine:8, cc:1200, erz:20, kristall:0,
+  { key:'ernter', buildMin:240, art:'ship_ernter',  icon:'⛏️', name:'Röstkomet',       atk:3,  mine:8, cc:1500, erz:30, kristall:0,
     needs:'wt_handbohrer',   desc:'Baut Erz und Koffeinkristall ab' },
-  { key:'berger', buildMin:240, art:'ship_berger',  icon:'♻️', name:'Bergungsschiff', atk:1,  mine:0, cc:1500, erz:40, kristall:0,
+  { key:'berger', buildMin:240, art:'ship_berger',  icon:'♻️', name:'Bergungsschiff', atk:1,  mine:0, cc:1900, erz:50, kristall:0,
     needs:'wt_frachtmodule', desc:'Holt mehr aus Wracks — im Kampf und an befreiten Planeten' },
-  { key:'kolonie', buildMin:1440, art:'ship_kolonie', icon:'🛸', name:'Kolonieschiff',   atk:0,  mine:0, cc:3000, erz:70, kristall:20,
+  { key:'kolonie', buildMin:1440, art:'ship_kolonie', icon:'🛸', name:'Kolonieschiff',   atk:0,  mine:0, cc:3750, erz:90, kristall:30,
     needs:'wt_frachtmodule', desc:'Gründet eine Kolonie — bleibt am Zielplaneten' },
-  { key:'fregatte', buildMin:360, art:'ship_fregatte', icon:'🛡️', name:'Fregatte', atk:28, mine:0, cc:1800, erz:55, kristall:0,
+  { key:'fregatte', buildMin:360, art:'ship_fregatte', icon:'🛡️', name:'Fregatte', atk:28, mine:0, cc:2250, erz:70, kristall:30,
     needs:'wt_frachtmodule', desc:'Leichter Begleitschutz — Schild senkt die Verluste des ganzen Verbands' },
   // 🛩️ Trägerschiff (JP 2026-07-29): der Grund, warum es kleine Jäger weiterhin gibt.
   // ⚠️ Spiegel: _space_ship_cost/_stats/_role/_build_min in migration_2026-07-26m.
-  // ⚠️ KEIN Plasmoid im Preis, obwohl der Plan 30 🟣 vorsah — _space_ship_cost liefert nur
-  // (cc, erz, kristall); eine vierte Spalte hätte den ganzen Warenkorb-Pfad mitgerissen
-  // (42P13). Steht so auch im Kopf der Migration.
+  // ⚠️ Der alte Hinweis „KEIN Plasmoid im Preis, obwohl der Plan 30 🟣 vorsah" ist mit 27i
+  // ERLEDIGT: _space_ship_cost liefert jetzt fünf Spalten. Der Träger bleibt trotzdem
+  // bewusst ohne Exoten — er ist ein Transporter, und §1.4 nennt nur Kreuzer/Schlachtschiff.
   // Die Kapazität gehört in den desc-Text: es gibt bewusst KEIN What's-New-Popup (JP),
   // also muss die Regel dort stehen, wo man das Schiff kauft.
-  { key:'traeger', buildMin:2880, art:'ship_traeger', icon:'🛩️', name:'Trägerschiff', atk:40, mine:0, cc:18000, erz:500, kristall:180,
+  { key:'traeger', buildMin:2880, art:'ship_traeger', icon:'🛩️', name:'Trägerschiff', atk:40, mine:0, cc:22500, erz:630, kristall:230,
     needs:'wt_frachtmodule', desc:'Nimmt 20 Jäger auf: nur so kommen kleine Jäger nach Ring 2/3. Schützt sie mit seinem Schild und gibt +5 % Kampfkraft auf den ganzen Verband (max. +15 %)' },
   // ⚠️ JP 2026-07-22: Bomber ↔ Kreuzer haben NAME/BILD/ICON getauscht — der Kreuzer
   // ist optisch größer und soll daher das stärkere, teurere Schiff sein. Die KEYS,
@@ -66,19 +71,26 @@ const SPACE_SHIPS = [
   // _space_ship_stats/loss_order UND in den Flottenbeständen der Spieler — ein
   // Key-Tausch hätte bestehende Flotten still umbewertet. CHAT_ART (app.js) ist
   // spiegelbildlich mitgetauscht, sonst zeigte der Chat das alte Bild zum neuen Namen.
-  { key:'kreuzer', buildMin:720, art:'ship_bomber', icon:'💣', name:'Bomber', atk:65, mine:0, cc:3600, erz:140, kristall:20,
+  // ⚠️ ANZEIGENAME ≠ KEY (siehe Block darüber). 27i-Vorgaben lauten auf den ANZEIGENAMEN:
+  // „Kreuzer bekommt Plasmoid" trifft deshalb `bomber`, NICHT `kreuzer`.
+  { key:'kreuzer', buildMin:720, art:'ship_bomber', icon:'💣', name:'Bomber', atk:65, mine:0, cc:4500, erz:180, kristall:30,
     needs:'wt_frachtmodule', desc:'Kapitalschiff-Jäger: stark gegen schwere Gegner, träge gegen Schwärme' },
-  { key:'bomber', buildMin:1440, art:'ship_kreuzer', icon:'🚨', name:'Kreuzer', atk:90, mine:0, cc:5500, erz:210, kristall:45,
-    needs:'wt_frachtmodule', desc:'Überall stark, gegen Geschütze verheerend' },
-  { key:'schlachtschiff', buildMin:2880, art:'ship_schlachtschiff', icon:'⚔️', name:'Schlachtschiff', atk:180, mine:0, cc:11000, erz:440, kristall:110,
-    needs:'wt_frachtmodule', desc:'Überall stark, hoher Schild — das Rückgrat einer großen Flotte' },
-  { key:'dunkle_roestung', buildMin:5760, art:'ship_dunkle_roestung', icon:'🌑', name:'Dunkle Röstung', atk:320, mine:0, cc:21000, erz:850, kristall:260,
-    needs:'wt_frachtmodule', desc:'Elite-Kapitalschiff: überall stark, höchster Schild, enormer Preis' },
+  { key:'bomber', buildMin:1440, art:'ship_kreuzer', icon:'🚨', name:'Kreuzer', atk:90, mine:0, cc:6900, erz:260, kristall:60, plasmoid:20,
+    needs:'wt_frachtmodule', desc:'Überall stark, gegen Geschütze verheerend — braucht 🟣 Plasmoiden-Staub' },
+  { key:'schlachtschiff', buildMin:2880, art:'ship_schlachtschiff', icon:'⚔️', name:'Schlachtschiff', atk:180, mine:0, cc:13800, erz:550, kristall:140, plasmoid:40,
+    needs:'wt_frachtmodule', desc:'Überall stark, hoher Schild — das Rückgrat einer großen Flotte, braucht 🟣 Plasmoiden-Staub' },
+  { key:'dunkle_roestung', buildMin:5760, art:'ship_dunkle_roestung', icon:'🌑', name:'Dunkle Röstung', atk:320, mine:0, cc:26300, erz:1060, kristall:330, plasmoid:75, quantum:200,
+    needs:'wt_frachtmodule', desc:'Elite-Kapitalschiff: überall stark, höchster Schild — verlangt als einziges Kaufschiff 🟣 Plasmoid UND 🌀 Quantenschaum' },
   // 🛸 Flaggschiff (JP 2026-07-27). `special:'flagship'` heißt: NICHT über den Warenkorb
   // kaufbar — es entsteht nur in build_mutterschiff aus eingelösten Rümpfen. Die Werft
   // überspringt solche Schiffe deshalb in beiden Schleifen und zeigt ein eigenes Panel.
+  // 27i: zieht bei den +25 % mit (JP 2026-08-20, „ja mitziehen"). Sein `cc` speist
+  // Flottensold und Verlustbewertung — bliebe es stehen, würde das Flaggschiff relativ
+  // billiger, und der Plasmoid-Anker für §1.4 würde nach unten kippen.
+  // ⚠️ Spiegel: _space_flagship_cost() in migration_2026-08-20_27i (NICHT _space_ship_cost —
+  // das Mutterschiff darf nie über den Warenkorb kaufbar sein).
   { key:'mutterschiff', buildMin:10080, art:'ship_mutterschiff', icon:'🛸', name:'Mutterschiff', atk:1170, mine:0,
-    cc:30000, erz:600, kristall:250, plasmoid:80, quantum:40, special:'flagship',
+    cc:37500, erz:750, kristall:310, plasmoid:100, quantum:250, special:'flagship',
     needs:'wt_frachtmodule', desc:'Flaggschiff aus eingelösten Rümpfen — hebt die Kampfkraft des ganzen Verbands' },
 ];
 const SPACE_SHIP_BY_KEY = SPACE_SHIPS.reduce((m, s) => (m[s.key] = s, m), {});
@@ -902,6 +914,15 @@ let _wrCart      = null;  // geplanter Werftauftrag { schiffsTyp: anzahl }
                           //  ausschließlich „Werftauftrag", JP: „bloß kein Einkaufskorb")
 let _wrRouteSel  = null;  // Vorauswahl im Dauerernte-Panel { planetId: anzahl }
 
+// 🛡️ 27k: Auswahl im Garnison-Panel. Wie _wrSelFleet nur Sitzungszustand — es muss das
+// Neurendern überleben, aber nicht den Reload (der Server hält die Wahrheit).
+let _wrGarSel  = null;         // { planetId, ships:{key:n} }
+let _wrGarMode = 'garrison';   // 'garrison' = hinschicken · 'recall' = zurückholen
+// ⚠️ In-Flight-Sperre für den Sekundentakt. Ohne sie feuert der Loop die Einlöse-RPC
+// jede Sekunde erneut, solange die Antwort noch unterwegs ist — dasselbe Muster wie
+// `_passiveBusy` in db.js und `_wrsBusy` beim Flottensold.
+let _wrGarBusy = false;
+
 let _wrBuySession = null;   // { name, ships:{key:n}, cc:0 }
 let _wrBuyTimer   = null;
 const WR_BUY_FLUSH_MS = 60000;
@@ -933,6 +954,28 @@ const WR_INJECT_MAX = 100, WR_INJECT_PCT = 0.4;   // 100 🟣 = +40 % Kampfkraft
 function wrInject(m)      { return Math.max(0, Math.min(WR_INJECT_MAX, Math.floor(parseFloat(wrSpace(m).inject) || 0))); }
 function wrInjectFactor(m) { return 1 + wrInject(m) * WR_INJECT_PCT / 100; }
 function wrHomeShips(m) { return wrSpace(m).fleets?.home?.ships || {}; }
+// 🧊 Eingemottete Flotte (26w). Bei Soldrückstand VERSCHIEBT der Server die Heimatflotte
+// nach `fleets.mothballed` — die Schiffe sind nicht zerstört, nur wirkungslos.
+// ⚠️ JP 2026-08-20: „wo sind die vermotteten schiffe und es gibt bisher keine Meldung
+// dass sie wieder frei liegen". Genau das war der Fehler: dieser Schlüssel wurde im
+// ganzen Client NIRGENDS gelesen. Die Heimatflotte stand danach auf 0, und der einzige
+// Hinweis war ein Toast, der nach ein paar Sekunden fort war. `wrsUnmothball()` gab es
+// zwar, aber KEIN Knopf rief sie auf — der Weg zurück führte nur über die Browser-Konsole.
+// ⚠️ Merke (Teil 31, dritter Fall): eine Anzeige, die einen Zustand meldet, muss den Weg
+// zur Handlung mitliefern. Ein Zustand ohne Ausweg liest sich wie ein Defekt.
+function wrMothballed(m) {
+  const o = wrSpace(m).fleets?.mothballed;
+  return (o && typeof o === 'object' && !Array.isArray(o)) ? o : {};
+}
+function wrMothCount(m) {
+  const o = wrMothballed(m);
+  return SPACE_SHIPS.reduce((a, s) => a + (parseInt(o[s.key], 10) || 0), 0);
+}
+// Offener Rückstand in CC. Liegt serverseitig in `space.sold.due` und wird beim Auslösen
+// vollständig fällig — Teilzahlung gibt es bewusst nicht (26w).
+function wrSoldDue(m) {
+  return Math.max(0, Math.round(parseFloat(wrSpace(m).sold?.due) || 0));
+}
 function wrAway(m)      { return wrSpace(m).fleets?.away || null; }
 // 🚀 Multi-Flotte (26b): away = { trips: [ {id, ships, …} ] }. Legacy-Einzeltrip
 // { trip, ships } wird on the fly zu einem Ein-Element-Array normalisiert; jeder
@@ -1093,6 +1136,10 @@ function wrDrawImg(ctx, name, x, y, box) {
 // dort wird kein HTML gerendert (dafür gäbe es die [[s:key]]-Token).
 const WR_IC = { atk:'⚔️', def:'🛡️', mine:'🔨', time:'⏱️', erz:'🪨', kri:'💎',
   pla:'🟣', qua:'🌀',
+  // ⚠️ HIER BLEIBT ✈️ — bewusst. Das sind die EMOJI-RÜCKFÄLLE der Kennzahl-Icons, und
+  // die zeigen weiterhin das flache `ic_travel.png`. JP 2026-08-20: den Jäger-Render nur
+  // in die zwei Fließtext-Stellen. Grund steht bei wrIcArt: ein 256²-Render matscht bei
+  // 16 px — genau deshalb wurde er am 2026-07-29 hier schon einmal wieder entfernt.
   fleet:'✈️', travel:'✈️', colony:'🪐', yard:'🏗️', salvage:'♻️', wreck:'💀',
   help:'🤝', yield:'📥', port:'🛰️' };
 // Beliebiges Asset in Icon-Größe — für Dinge, die kein ic_*-Symbol haben, aber ein
@@ -1208,8 +1255,14 @@ function wrBuyFlush() {
   // s.cc/erz/kri mit res.*), nicht die unrabattierten Basispreise (JP 2026-07-23).
   const cost = [`${wrFmt(s.cc)} CC`]
     .concat(s.erz ? [`${wrFmt(s.erz)} 🪨`] : [])
-    .concat(s.kri ? [`${wrFmt(s.kri)} 💎`] : []).join(' · ');
-  wrChat(`🏗️ ${_wrEsc(s.name)} hat in der Werft gebaut: ${parts.join(' · ')} (${cost}).`, s.name);
+    .concat(s.kri ? [`${wrFmt(s.kri)} 💎`] : [])
+    .concat(s.pla ? [`${wrFmt(s.pla)} 🟣`] : [])
+    .concat(s.qua ? [`${wrFmt(s.qua)} 🌀`] : []).join(' · ');
+  // ⏱️ Bauzeit mitnennen (JP 2026-08-20). Nur wenn sie bekannt ist: wrBuyTrack kann auch
+  // ohne Warenkorb-Antwort laufen, dann bleibt `min` leer — und eine erfundene Zahl wäre
+  // schlimmer als keine.
+  const zeit = s.min > 0 ? ` — fertig in ${wrDur(s.min)}` : '';
+  wrChat(`🏗️ ${_wrEsc(s.name)} hat in der Werft gebaut: ${parts.join(' · ')} (${cost})${zeit}.`, s.name);
 }
 
 // ── Quadranten / Hex-Geometrie ───────────────────────────────────────────────
@@ -1368,6 +1421,10 @@ async function _buildWeltraum(member, el) {
   await wrClaimTech(true);        // ⏳ 26u: fertige Forschung
   await wrClaimTurrets(true);     // ⏳ 26u: fertige Bauplätze auf Kolonien
   await wrSyncAttacks(true);      // 🚨 26v: Kolonie-Angriffe auswerten und planen
+  // 🛡️ 27k: NACH wrSyncAttacks — fällt in dieser Runde eine Kolonie, hat der Trigger den
+  // Garnisonsverlust schon abgelegt und wir melden ihn in derselben Sitzung. Umgekehrt
+  // erführe der Spieler erst beim nächsten Öffnen, dass seine Schiffe mit gefallen sind.
+  await wrClaimGarrison(false);
   try { await DB.spaceMercSweep(_wrMember.id); } catch (e) {}   // 🎖️ 26x: abgelaufene Söldner
   await wrAutoHarvest();
   await wrAutoRefineClaim();
@@ -1625,13 +1682,26 @@ async function wrLoadHandel() {
     if (o.kind === 'ship') {
       const sd = SPACE_SHIP_BY_KEY[o.resource_type];
       if (!sd) return '';
-      const cc = sd.cc * o.amount, erz = sd.erz * o.amount, kri = sd.kristall * o.amount;
-      const afford = (parseFloat(m?.coins) || 0) >= cc && wrErz(m) >= erz && wrKristall(m) >= kri;
+      // ⚠️ 27i: Der Zuschlag zahlt den NORMALEN Kaufpreis (SQL 22i) — seit die schweren
+      // Schiffe Exoten kosten, gehören die hier mit hinein. Ohne das zeigt die Zeile einen
+      // Preis an, den der Server so nie abbucht, und der Knopf wäre freigeschaltet, obwohl
+      // 🟣/🌀 fehlen. `|| 0` überall: die leichten Schiffe haben diese Felder gar nicht.
+      const cc  = (sd.cc || 0) * o.amount, erz = (sd.erz || 0) * o.amount;
+      const kri = (sd.kristall || 0) * o.amount;
+      const pla = (sd.plasmoid || 0) * o.amount, qua = (sd.quantum || 0) * o.amount;
+      const afford = (parseFloat(m?.coins) || 0) >= cc && wrErz(m) >= erz && wrKristall(m) >= kri
+                  && wrPlasmoid(m) >= pla && wrQuantum(m) >= qua;
       const kost = [`${wrFmt(cc)} CC`];
-      if (erz > 0) kost.push(`${wrFmt(erz)} 🪨`);
-      if (kri > 0) kost.push(`${wrFmt(kri)} 💎`);
+      if (erz > 0) kost.push(`${wrFmt(erz)} ${wrIc('erz')}`);
+      if (kri > 0) kost.push(`${wrFmt(kri)} ${wrIc('kri')}`);
+      if (pla > 0) kost.push(`${wrFmt(pla)} ${wrIc('pla')}`);
+      if (qua > 0) kost.push(`${wrFmt(qua)} ${wrIc('qua')}`);
+      // ⚠️ JP 2026-08-20: „Bei den angebotenen Schiffen die man verkauft fehlen ebenfalls
+      // die korrekten Assets." Hier stand `sd.icon` — das ROHE Emoji —, während die
+      // Anbieten-Knöpfe zwanzig Zeilen tiefer längst wrShipArt() benutzen. Eine Zeile,
+      // die dasselbe Schiff anders darstellt als die daneben.
       return `<div class="wr-trade-row${own ? ' is-own' : ''}">
-        <span class="wr-trade-what">${sd.icon} <strong>${o.amount}×</strong> ${_wrEsc(sd.name)}</span>
+        <span class="wr-trade-what">${wrShipArt(sd.key, 'wr-mini')} <strong>${o.amount}×</strong> ${_wrEsc(sd.name)}</span>
         <span class="wr-trade-who">${own ? 'dein Angebot' : _wrEsc(o.seller_name || 'Clan-Mitglied') + ' bietet'}</span>
         <span class="wr-trade-price"><strong>${kost.join(' + ')}</strong></span>
         ${own
@@ -1639,7 +1709,7 @@ async function wrLoadHandel() {
           : `<button class="wr-btn wr-btn-sm wr-btn-go" data-wr-trade-shipbuy="${o.id}" ${afford ? '' : 'disabled'}>⚡ Zuschlag</button>`}
       </div>`;
     }
-    const icon = o.resource_type === 'erz' ? '🪨' : '💎';
+    const icon = wrIc(o.resource_type === 'erz' ? 'erz' : 'kri');
     const isReq = o.kind === 'request';
     const have = o.resource_type === 'erz' ? wrErz(m) : wrKristall(m);
     const canFill = !own && have >= o.amount;
@@ -1669,8 +1739,8 @@ async function wrLoadHandel() {
     <div class="wr-card">
       <div class="wr-card-title">🤝 Kaufgesuch aufgeben <span class="wr-sub">— der Clan liefert, du zahlst den Festpreis</span></div>
       <div class="wr-tr-btnrow">
-        <button class="wr-tr-btn${_wrTrType === 'erz' ? ' active' : ''}" data-wr-tr-type="erz">🪨 Erz <span class="wr-sub">${WR_TRADE_PRICE.erz} CC/Stk</span></button>
-        <button class="wr-tr-btn${_wrTrType === 'kristall' ? ' active' : ''}" data-wr-tr-type="kristall">💎 Kristall <span class="wr-sub">${WR_TRADE_PRICE.kristall} CC/Stk</span></button>
+        <button class="wr-tr-btn${_wrTrType === 'erz' ? ' active' : ''}" data-wr-tr-type="erz">${wrIc('erz')} Erz <span class="wr-sub">${WR_TRADE_PRICE.erz} CC/Stk</span></button>
+        <button class="wr-tr-btn${_wrTrType === 'kristall' ? ' active' : ''}" data-wr-tr-type="kristall">${wrIc('kri')} Kristall <span class="wr-sub">${WR_TRADE_PRICE.kristall} CC/Stk</span></button>
       </div>
       <div class="wr-tr-btnrow">
         ${WR_TRADE_AMOUNTS.map(a =>
@@ -1920,6 +1990,49 @@ function wrTripStripHtml(m, trips) {
 }
 
 // ── 🛩️ Flotten-Tab ──────────────────────────────────────────────────────────
+// ── 🧊 Eingemottete Flotte (JP 2026-08-20) ──────────────────────────────────
+// Der Ort, an den man zurückkehren kann. Ein Toast taugt für Vollzugsmeldungen, nicht
+// für einen Dauerzustand — und dieser hier hält an, bis der Rückstand bezahlt ist.
+// Steht bewusst GANZ OBEN im Flotten-Tab: solange die Flotte eingemottet ist, ist alles
+// andere auf dieser Seite nachrangig.
+function wrMothballHtml(m) {
+  const moth = wrMothballed(m);
+  const n    = wrMothCount(m);
+  if (n < 1) return '';
+  const due   = wrSoldDue(m);
+  const coins = Math.floor(parseFloat(m?.coins) || 0);
+  const kann  = coins >= due;
+  const rows  = SPACE_SHIPS
+    .filter(s => (parseInt(moth[s.key], 10) || 0) > 0)
+    .map(s => `<div class="wr-fl-row">
+        <span class="wr-fl-art wr-ship-zoom" data-wr-info="${s.key}" title="Groß ansehen"
+          ><img src="assets/space/${s.art}.png" alt="" onerror="this.parentNode.classList.add('wr-art-fail');this.remove()"
+          ><span class="wr-fl-fb">${s.icon}</span></span>
+        <span class="wr-fl-name">${_wrEsc(s.name)}</span>
+        <span class="wr-fl-n">${wrFmt(parseInt(moth[s.key], 10) || 0)}</span>
+        <span class="wr-fl-atk">🧊 stillgelegt</span>
+      </div>`).join('');
+  return `
+    <div class="wr-card wr-moth">
+      <div class="wr-card-title">🧊 Eingemottete Flotte
+        <span class="wr-sub">— ${wrFmt(n)} Schiffe stillgelegt, nicht verloren</span></div>
+      <div class="wr-warn">Der Flottensold war nicht gedeckt. Diese Schiffe liegen im Hafen
+        fest: sie fliegen nicht, verteidigen nicht und zählen nirgends mit — sie kosten aber
+        auch <strong>keinen Unterhalt</strong>, solange sie hier stehen.</div>
+      ${rows}
+      <div class="wr-facts">
+        <span>💰 Rückstand: <strong>${wrFmt(due)} CC</strong></span>
+        <span>👛 Guthaben: <strong>${wrFmt(coins)} CC</strong></span>
+      </div>
+      <button class="wr-btn${kann ? ' wr-btn-go' : ''}" data-wr-unmothball="1" ${kann ? '' : 'disabled'}>
+        ⚓ Flotte auslösen
+        <span class="wr-btn-sub">${kann
+          ? `−${wrFmt(due)} CC, danach ist sie sofort wieder einsatzbereit`
+          : `es fehlen noch ${wrFmt(due - coins)} CC — Teilzahlung ist nicht möglich`}</span>
+      </button>
+    </div>`;
+}
+
 function wrFlottenHtml(m, trips) {
   const list = trips || wrTrips(m);
   const verbaende = list.length
@@ -1927,6 +2040,7 @@ function wrFlottenHtml(m, trips) {
     : `<div class="wr-sub" style="padding:6px 0">Kein Verband unterwegs — wähle auf der
          🌌 Sternkarte ein Ziel und stelle deine Flotte zusammen.</div>`;
   return `
+    ${wrMothballHtml(m)}
     <div class="wr-card">
       <div class="wr-card-title">🛩️ Verbände unterwegs
         <span class="wr-sub">${list.length} von ${WR_MAX_TRIPS} · jeder weitere startet mit
@@ -2350,6 +2464,12 @@ function wrHomeDetailHtml(m) {
       <div class="wr-facts">
         <span>${wrIc("port")} Im Hafen: <strong>${wrFmt(inPort)}</strong></span>
         ${out > 0 ? `<span>${wrIc("travel")} Unterwegs: <strong>${wrFmt(out)}</strong></span>` : ''}
+        ${/* 🧊 JP 2026-08-20: ohne diese Zeile sieht ein leerer Hafen aus wie eine
+              vernichtete Flotte. Der Weg zur Handlung steht im 🛩️-Tab (wrMothballHtml). */
+          wrMothCount(m) > 0
+            ? `<span class="wr-bad">🧊 Eingemottet: <strong>${wrFmt(wrMothCount(m))}</strong>
+                 <span class="wr-sub">— im 🛩️ Flotten-Tab auslösen</span></span>`
+            : ''}
         <span>${wrIc("atk")} Kampfkraft: <strong>${wrFmt(wrFleetPower(ships))}</strong></span>
         <span>${wrIc("def")} Geschütze: <strong>${wrFmt(wrTurretPower(m))}</strong></span>
         ${/* ⚡ 26p (Regel 1): Die Geschütz-Zahl links ist gedrosselt. Sie hier ohne die
@@ -2364,7 +2484,7 @@ function wrHomeDetailHtml(m) {
         ? `<div class="wr-fl-list">${rows}</div>`
         : '<div class="wr-warn">Noch kein Schiff gebaut — schau in der Werft weiter unten.</div>'}
       ${nTrips
-        ? `<div class="wr-ok">✈️ ${nTrips === 1 ? 'Ein Verband ist' : nTrips + ' Verbände sind'} unterwegs (max. ${WR_MAX_TRIPS} gleichzeitig) — Details bei den Verbänden.</div>`
+        ? `<div class="wr-ok">${wrShipArt('jaeger', 'wr-mini')} ${nTrips === 1 ? 'Ein Verband ist' : nTrips + ' Verbände sind'} unterwegs (max. ${WR_MAX_TRIPS} gleichzeitig) — Details bei den Verbänden.</div>`
         : '<div class="wr-sub">Wähle einen Quadranten auf der Sternkarte, um eine Flotte auszusenden.</div>'}
     </div>`;
 }
@@ -2598,14 +2718,28 @@ async function wrBuyTech(key) {
     const res = await DB.buySpaceTech(_wrMember.id, key);
     if (!res || res.error) { wrToast(wrErrText(res.error), 'error'); return; }
     if (res.space) wrApplySpace(res.space);
-    wrToast(`🔬 ${t.name} erforscht — ${t.wirkung}`, 'success');
+    // ⏱️ JP 2026-08-20: Forschungszeit gehört in die Meldung.
+    // ⚠️ Und dabei fiel auf: seit 26u ist Forschung KEIN Sofortvorgang mehr — buy_space_tech
+    // liefert `queued: true` mit `minutes`/`doneAt`. Toast und Chat sagten trotzdem „hat
+    // erforscht", also den Abschluss, den claim_space_tech erst Stunden später meldet.
+    // Genau das Muster aus Teil 31: wer einen Vorgang von SOFORT auf DAUERT umstellt, macht
+    // jede Meldung unvollständig, die vorher richtig war — und zwar stillschweigend.
+    const min  = parseFloat(res.minutes) || 0;
+    const dauer = min > 0 ? wrDur(min) : '';
+    wrToast(min > 0
+      ? `🔬 ${t.name} in Arbeit — fertig in ${dauer}`
+      : `🔬 ${t.name} erforscht — ${t.wirkung}`, 'success');
     // JP 2026-07-22: Kosten gehören mit in die Meldung (wie beim Werft-Bau)
     const kost = [`${wrFmt(t.cc)} CC`];
     if (t.erz > 0)      kost.push(`${wrFmt(t.erz)} ${wrArtTok('erz')}`);
     if (t.kristall > 0) kost.push(`${wrFmt(t.kristall)} ${wrArtTok('kristall')}`);
     // KEIN **Markdown** — der Chat rendert das nicht (JP sah die rohen Sterne).
     // Das Technik-Icon kommt als [[s:art]]-Token (Präfix-Erkennung in _chatArt).
-    wrChat(`🔬 ${_wrEsc(_wrMember.name)} hat ${wrArtTok(t.art)} ${_wrEsc(t.name)} erforscht (${_wrEsc(t.wirkung)}) — ${kost.join(' · ')}.`);
+    wrChat(min > 0
+      ? `🔬 ${_wrEsc(_wrMember.name)} erforscht ${wrArtTok(t.art)} ${_wrEsc(t.name)} `
+        + `(${_wrEsc(t.wirkung)}) — ${kost.join(' · ')}, fertig in ${dauer}.`
+      : `🔬 ${_wrEsc(_wrMember.name)} hat ${wrArtTok(t.art)} ${_wrEsc(t.name)} erforscht `
+        + `(${_wrEsc(t.wirkung)}) — ${kost.join(' · ')}.`);
     wrRender();
   } catch (e) {
     wrToast('Forschung fehlgeschlagen: ' + e.message, 'error');
@@ -2921,7 +3055,11 @@ function wrDetailHtml(m) {
           <div class="wr-sub">${cleared
             ? (wrWreckLeft(p) > 0
                 ? `${wrIc("wreck")} Wrackfeld: <strong>${wrFmt(wrWreckLeft(p))}</strong> Einheiten bergbar`
-                : `${wrIc("wreck")} Das Wrackfeld ist vollständig abgetragen.`)
+                // ⚠️ 27l: Die Abgetragen-Meldung nur, wenn es hier WIRKLICH ein Feld gab.
+                // Vorher stand sie auf jedem befreiten Planeten — auch auf denen ohne Feld.
+                : wrHadWreck(p)
+                  ? `${wrIc("wreck")} Das Wrackfeld ist vollständig abgetragen.`
+                  : '✅ Befreit — hier liegt nichts mehr.')
             : `${wrFoeFor(p).name} · Stärke ${wrFmt(p.enemy_strength)}`}</div>
         </div>
       </div>
@@ -2997,7 +3135,7 @@ function wrDetailHtml(m) {
             genau dann, wenn alles richtig gemacht wurde. */ ''}
       ${busy
         ? '<div class="wr-warn">Maximal 5 Flotten gleichzeitig unterwegs — warte, bis eine zurückkehrt.</div>'
-        : `${nAway > 0 ? `<div class="wr-sub">✈️ ${nAway} unterwegs — diese Flotte fliegt +${wrFleetGap(m) * nAway} min länger.</div>` : ''}
+        : `${nAway > 0 ? `<div class="wr-sub">${wrShipArt('jaeger', 'wr-mini')} ${nAway} unterwegs — diese Flotte fliegt +${wrFleetGap(m) * nAway} min länger.</div>` : ''}
            ${!cleared && jaeger < 1 ? '<div class="wr-warn">Nimm kampffähige Schiffe in den Verband — ohne Kampfkraft kein Angriff.</div>' : ''}
            ${cleared && ernter < 1 ? `<div class="wr-warn">Für einen EINMAL-Flug „🔨 Abbauen" müssen Röstkometen im Verband sein.${
              wrRouteBound(m, 'ernter') > 0
@@ -3333,6 +3471,101 @@ function wrPlanetDefHtml(m, p) {
 
       <div class="wr-sub">Geschütze decken den Anflug auf diesen Planeten, schießen zu 50 %
         gegen Angriffswellen auf deinen Hafen mit — und halten den Planeten dauerhaft in deiner Hand.</div>
+
+      ${wrGarrisonHtml(m, p)}
+    </div>`;
+}
+
+// ── 🛡️ Garnison-Panel (27k) ─────────────────────────────────────────────────
+// JPs Anlass: „durch Vollausbau der Geschütze ist natürlich eine gewisse Grenze erreicht,
+// was als Verteidigung möglich ist." Die Garnison hebt die Decke — gegen laufende Kosten.
+// ⚠️ Die Obergrenze MUSS vor dem Absenden sichtbar sein (Handover §2.2). Sie steht
+// deshalb in der Kopfzeile UND am Knopf, nicht erst in der Fehlermeldung des Servers.
+function wrGarrisonHtml(m, p) {
+  const pid   = p.id;
+  const stand = wrGarrisonCount(m, pid);
+  const cap   = wrGarrisonCap(p);
+  const pow   = wrGarrisonPower(m, pid);
+  const trip  = wrGarrisonTripFor(m, pid);
+  const ships = wrGarrisonShips(m, pid);
+  const home  = wrHomeShips(m);
+  const moth  = wrMothCount(m) > 0;
+  const sel   = (_wrGarSel && _wrGarSel.planetId === pid) ? _wrGarSel.ships : {};
+  const selN  = SPACE_SHIPS.reduce((a, s) => a + (parseInt(sel[s.key], 10) || 0), 0);
+  const frei  = Math.max(0, cap - stand);
+
+  // Stationierte Schiffe einzeln.
+  const rows = SPACE_SHIPS
+    .filter(s => (parseInt(ships[s.key], 10) || 0) > 0)
+    .map(s => `<div class="wr-fl-row">
+        ${wrShipArt(s.key, 'wr-fl-art')}
+        <span class="wr-fl-name">${_wrEsc(s.name)}</span>
+        <span class="wr-fl-n">${wrFmt(parseInt(ships[s.key], 10) || 0)}</span>
+        <span class="wr-fl-atk">${wrIc('atk')} ${wrFmt((s.atk || 0) * (parseInt(ships[s.key], 10) || 0))}</span>
+      </div>`).join('');
+
+  // Auswahl-Stepper: beim Verlegen aus dem Hafen, beim Rückholen aus der Garnison.
+  const quelle = _wrGarMode === 'recall' ? ships : home;
+  const picker = SPACE_SHIPS
+    .filter(s => !s.special && (parseInt(quelle[s.key], 10) || 0) > 0)
+    .map(s => {
+      const max = parseInt(quelle[s.key], 10) || 0;
+      const n   = parseInt(sel[s.key], 10) || 0;
+      return `<div class="wr-gar-pick">
+          <span class="wr-gar-pn">${wrShipArt(s.key, 'wr-mini')} ${_wrEsc(s.name)}
+            <span class="wr-sub">${max} da</span></span>
+          <span class="wr-fs-stepper">
+            <button class="wr-fs-btn" data-wr-gar="${pid}:${s.key}:-1" ${n < 1 ? 'disabled' : ''}>−</button>
+            <span class="wr-fs-n">${n}</span>
+            <button class="wr-fs-btn" data-wr-gar="${pid}:${s.key}:1" ${n >= max ? 'disabled' : ''}>+</button>
+          </span>
+        </div>`;
+    }).join('');
+
+  // ⚠️ Die Grenze wird HIER geprüft, nicht erst vom Server — der Handover verlangt
+  // ausdrücklich, dass sie vor dem Absenden sichtbar ist.
+  const zuViel = _wrGarMode === 'garrison' && (stand + selN) > cap;
+
+  return `
+    <div class="wr-gar">
+      <div class="wr-card-title">🛡️ Garnison
+        <span class="wr-sub">— ${wrFmt(stand)} von ${wrFmt(cap)} Plätzen belegt${
+          pow ? ` · ${wrFmt(pow)} Feuerkraft` : ''}</span></div>
+
+      <div class="wr-sub">Eigene Schiffe, die hier dauerhaft stehen. Sie verteidigen diese
+        Kolonie mit voller Kampfkraft — dafür verteidigen sie den Raumhafen nicht mehr und
+        können von hier keine Angriffe fliegen. <strong>Sie zahlen vollen Flottensold</strong>,
+        weil sie nichts erwirtschaften. Platz: ${WR_GARRISON_PER_LEVEL} Schiffe je Kolonie-Stufe.</div>
+
+      ${moth ? `<div class="wr-warn">🧊 Deine Flotte ist eingemottet — die Garnison zählt
+        solange mit 0 und kostet auch nichts. Erst auslösen, dann verteidigt sie wieder.</div>` : ''}
+      ${rows || '<div class="wr-sub" style="padding:4px 0">Noch keine Schiffe stationiert.</div>'}
+
+      ${trip
+        ? `<div class="wr-ok">🚚 Transport unterwegs (${trip.kind === 'recall' ? 'Rückholung' : 'Verlegung'})
+             — Ankunft in <strong data-wr-gareta="${_wrEsc(trip.id || '')}"
+             >${wrCountdown(Date.parse(trip.arriveAt) - Date.now())}</strong>.
+             <span class="wr-sub">Je Kolonie läuft immer nur ein Transport.</span></div>`
+        : `<div class="wr-gar-mode">
+             <button class="wr-btn wr-btn-sm${_wrGarMode === 'garrison' ? ' wr-btn-on' : ''}"
+                     data-wr-garmode="garrison">➡️ Hinschicken</button>
+             <button class="wr-btn wr-btn-sm${_wrGarMode === 'recall' ? ' wr-btn-on' : ''}"
+                     data-wr-garmode="recall" ${stand < 1 ? 'disabled' : ''}>⬅️ Zurückholen</button>
+           </div>
+           ${picker || `<div class="wr-sub" style="padding:4px 0">${_wrGarMode === 'recall'
+              ? 'Hier steht nichts, was sich zurückholen ließe.'
+              : 'Keine Schiffe im Hafen.'}</div>`}
+           ${selN > 0 ? `
+             <button class="wr-btn wr-btn-go" data-wr-garsend="${pid}" ${(zuViel || moth) ? 'disabled' : ''}>
+               ${_wrGarMode === 'recall' ? '⬅️ Zurückholen' : '➡️ Verlegen'} · ${wrFmt(selN)} Schiffe
+               <span class="wr-btn-sub">${moth
+                 ? 'erst die eingemottete Flotte auslösen'
+                 : zuViel
+                   ? `zu viel — hier ist nur noch für ${wrFmt(frei)} Schiffe Platz`
+                   : `volle Flugzeit · ${_wrGarMode === 'recall'
+                       ? 'kommt in den Hafen zurück'
+                       : `danach ${wrFmt(stand + selN)} von ${wrFmt(cap)} Plätzen belegt`}`}</span></button>`
+             : ''}`}
     </div>`;
 }
 
@@ -4400,17 +4633,28 @@ function wrWerftHtml(m) {
 
   // Warenkorb-Summe. Je Typ ein eigener Auftrag, alle laufen PARALLEL — die Wartezeit
   // ist deshalb die längste Einzelzeit, nicht die Summe.
-  let sumCc = 0, sumErz = 0, sumKri = 0, maxMin = 0, items = 0;
+  let sumCc = 0, sumErz = 0, sumKri = 0, sumPla = 0, sumQua = 0, maxMin = 0, items = 0;
   for (const sp of SPACE_SHIPS) {
     if (sp.special) continue;                 // 🛸 Flaggschiff: eigener Bauweg, nie im Korb
     const n = parseInt(cart[sp.key], 10) || 0;
     if (n < 1) continue;
     const c = wrShipCost(sp, m, n);
     sumCc += c.cc; sumErz += c.erz; sumKri += c.kristall;
+    sumPla += c.plasmoid; sumQua += c.quantum;
     maxMin = Math.max(maxMin, wrShipBuildMin(sp, m, n));
     items += n;
   }
-  const affordCart = coins >= sumCc && wrErz(m) >= sumErz && wrKristall(m) >= sumKri;
+  const affordCart = coins >= sumCc && wrErz(m) >= sumErz && wrKristall(m) >= sumKri
+                  && wrPlasmoid(m) >= sumPla && wrQuantum(m) >= sumQua;
+  // Handover §8: „fehlt ein Rohstoff, wird BENANNT welcher und wie viel fehlt" — kein
+  // generisches „nicht genug Ressourcen". Der Server meldet nur `insufficient_<art>`;
+  // die Menge kennt an dieser Stelle ohnehin nur der Client.
+  const fehlt = [];
+  if (coins < sumCc)            fehlt.push(`${wrFmt(sumCc - coins)} CC`);
+  if (wrErz(m) < sumErz)        fehlt.push(`${wrFmt(sumErz - wrErz(m))} ${wrIc('erz')}`);
+  if (wrKristall(m) < sumKri)   fehlt.push(`${wrFmt(sumKri - wrKristall(m))} ${wrIc('kri')}`);
+  if (wrPlasmoid(m) < sumPla)   fehlt.push(`${wrFmt(sumPla - wrPlasmoid(m))} ${wrIc('pla')}`);
+  if (wrQuantum(m) < sumQua)    fehlt.push(`${wrFmt(sumQua - wrQuantum(m))} ${wrIc('qua')}`);
 
   let rows = '';
   for (const s of SPACE_SHIPS) {
@@ -4420,9 +4664,14 @@ function wrWerftHtml(m) {
     const busy  = wrYardHasJob(m, s.key);
     const n     = parseInt(cart[s.key], 10) || 0;
     const unit  = wrShipCost(s, m, 1);
+    // §3.1: echte Assets statt 🪨/💎 in der Kostenzeile. wrIc() liefert das Bild mit
+    // Emoji-Rückfall — bewusst KEIN neuer Helfer (der existierende kann das seit 26c,
+    // und eine zweite Symboltabelle hat zuletzt die Wasserpistole zurückgebracht).
     const price = [`${wrFmt(unit.cc)} CC`]
-      .concat(unit.erz ? [`${unit.erz} 🪨`] : [])
-      .concat(unit.kristall ? [`${unit.kristall} 💎`] : []).join(' · ');
+      .concat(unit.erz      ? [`${unit.erz} ${wrIc('erz')}`] : [])
+      .concat(unit.kristall ? [`${unit.kristall} ${wrIc('kri')}`] : [])
+      .concat(unit.plasmoid ? [`${unit.plasmoid} ${wrIc('pla')}`] : [])
+      .concat(unit.quantum  ? [`${unit.quantum} ${wrIc('qua')}`] : []).join(' · ');
     rows += `
       <div class="wr-ship ${unlocked ? '' : 'wr-ship-locked'}${busy ? ' wr-ship-busy' : ''}">
         <div class="wr-ship-ic wr-ship-zoom" data-wr-info="${s.key}" title="Groß ansehen">${s.art
@@ -4506,8 +4755,10 @@ function wrWerftHtml(m) {
            <div class="wr-cart-sum">
              <span>${wrIc("yard")} <strong>${wrFmt(items)}</strong> Schiff(e) eingeplant</span>
              <span>${[`${wrFmt(sumCc)} CC`]
-               .concat(sumErz ? [`${wrFmt(sumErz)} 🪨`] : [])
-               .concat(sumKri ? [`${wrFmt(sumKri)} 💎`] : []).join(' · ')}</span>
+               .concat(sumErz ? [`${wrFmt(sumErz)} ${wrIc('erz')}`] : [])
+               .concat(sumKri ? [`${wrFmt(sumKri)} ${wrIc('kri')}`] : [])
+               .concat(sumPla ? [`${wrFmt(sumPla)} ${wrIc('pla')}`] : [])
+               .concat(sumQua ? [`${wrFmt(sumQua)} ${wrIc('qua')}`] : []).join(' · ')}</span>
              <span>⏱️ ${wrDur(maxMin)}</span>
            </div>
            <div class="wr-cart-act">
@@ -4515,7 +4766,7 @@ function wrWerftHtml(m) {
                🏗️ Bauauftrag erteilen</button>
              <button class="wr-btn wr-btn-sm" id="wr-cart-clear">Verwerfen</button>
            </div>
-           ${affordCart ? '' : '<div class="wr-warn">Dafür reichen deine Mittel nicht.</div>'}
+           ${affordCart ? '' : `<div class="wr-warn">Es fehlt: ${fehlt.join(' · ')}.</div>`}
          </div>`
       : '<div class="wr-sub">Wähle oben Stückzahlen — sie sammeln sich zum Werftauftrag.</div>'}
   </div>`;
@@ -4624,6 +4875,16 @@ function wrBergerBonus(fleet) {
 }
 function wrWreckRate(count) { return Math.max(0, count || 0) * WR_WRECK_RATE; }
 function wrWreckLeft(p) { return Math.max(0, Math.round(parseFloat(p?.wreck_left) || 0)); }
+// ⚠️ 27l: „Gab es hier je ein Wrackfeld?" ist NICHT dasselbe wie „liegt noch etwas da?".
+// `wrWreckLeft` klemmt beides auf 0 — ein Planet ohne Feld (`wreck_left` = null) und ein
+// leergeräumtes Feld (`wreck_left` = 0) sind danach ununterscheidbar. Genau deshalb stand
+// im Planeten-Kopf auf JEDEM befreiten Planeten „Das Wrackfeld ist vollständig abgetragen",
+// auch auf solchen, die nie eines hatten — eine Behauptung über einen Ertrag, den es nie gab.
+// Handover §4 verlangt ausdrücklich Toleranz gegen null/undefined; hier ist sie.
+function wrHadWreck(p) {
+  return p != null && p.wreck_left !== null && p.wreck_left !== undefined
+      && !Number.isNaN(parseFloat(p.wreck_left));
+}
 
 // ── Dauerernte-Routen ────────────────────────────────────────────────────────
 // ⚠️ Spiegel von _space_route_rate/_space_route_fuel in
@@ -4694,6 +4955,11 @@ function wrYardDef(level) { return SPACE_YARD[Math.max(1, Math.min(3, level || 1
 // D1 Raffinerie −20 % Rohstoffkosten: wirkt NUR auf Erz/Kristall, nie auf CC —
 // exakt wie _space_tech_rescost in build_space/-_cart. Fehlte hier zunächst:
 // der Server rechnete rabattiert, die Anzeige nicht (JP-Fund 2026-07-23).
+// ⚠️ SPIEGEL von build_space_cart (27i). Weicht eine Zahl ab, zeigt die Vorschau etwas
+// anderes an, als der Server abbucht. Plasmoid/Quantenschaum laufen über denselben
+// Rabatt- und rescost-Pfad wie Erz/Kristall — genau wie in build_mutterschiff (26j),
+// das dieses Fünf-Rohstoff-Muster seit Juli vormacht.
+// `|| 0` auf allen Posten: ein Schiff ohne `plasmoid`-Feld darf nichts werfen (Regel 3).
 function wrShipCost(s, m, count) {
   const cut = wrYardDef(wrYardLevel(m)).costCut, n = count || 1;
   const res = wrTechResCost(m);
@@ -4701,6 +4967,8 @@ function wrShipCost(s, m, count) {
     cc:       Math.round((s.cc || 0)       * (1 - cut) * n),
     erz:      Math.round((s.erz || 0)      * (1 - cut) * n * res),
     kristall: Math.round((s.kristall || 0) * (1 - cut) * n * res),
+    plasmoid: Math.round((s.plasmoid || 0) * (1 - cut) * n * res),
+    quantum:  Math.round((s.quantum || 0)  * (1 - cut) * n * res),
   };
 }
 // ⚠️ JP-Formel: Grundzeit + 1 Minute JE STÜCK — nicht Grundzeit × Stück.
@@ -5221,6 +5489,46 @@ function wrColonyPowerExpected(p) {
   return Math.round(raw * wrColonyFactor(p));
 }
 function wrColonyLevel(p) { return Math.max(1, Math.min(3, parseInt(p?.colony_level, 10) || 1)); }
+
+// ── 🛡️ 27k: Kolonie-Garnison ────────────────────────────────────────────────
+// ⚠️ SPIEGEL von _space_garrison_power / _space_garrison_count (SQL 27k). Der Server ist
+// autoritativ; das hier ist reine Vorschau. Weicht eine Zahl ab, verspricht das Panel
+// eine Verteidigung, die im Kampf nicht antritt.
+// ⚠️ Die Garnison liegt bewusst NICHT in `fleets` — dadurch zählt sie nirgends doppelt
+// (Heimatsumme, Angriffs-Picker, Warenkorb sehen sie strukturell nicht).
+const WR_GARRISON_PER_LEVEL = 10;            // R11: 10 Schiffe je Kolonie-Stufe
+function wrGarrisonAll(m) {
+  const g = wrSpace(m).garrison;
+  return (g && typeof g === 'object' && !Array.isArray(g)) ? g : {};
+}
+function wrGarrisonShips(m, planetId) {
+  const s = wrGarrisonAll(m)[planetId]?.ships;
+  return (s && typeof s === 'object') ? s : {};
+}
+function wrGarrisonCount(m, planetId) {
+  const s = wrGarrisonShips(m, planetId);
+  return SPACE_SHIPS.reduce((a, x) => a + (parseInt(s[x.key], 10) || 0), 0);
+}
+function wrGarrisonCap(p) { return WR_GARRISON_PER_LEVEL * wrColonyLevel(p); }
+// Kampfkraft der Garnison. ⚠️ Eingemottet ⇒ 0, genau wie serverseitig: wer den Sold
+// nicht zahlt, verteidigt nicht — sonst wäre die Kolonie ein Weg, das Einmotten zu umgehen.
+function wrGarrisonPower(m, planetId) {
+  if (wrMothCount(m) > 0) return 0;
+  const s = wrGarrisonShips(m, planetId);
+  return SPACE_SHIPS.reduce((a, x) => a + (x.atk || 0) * (parseInt(s[x.key], 10) || 0), 0);
+}
+function wrGarrisonTrips(m) {
+  const t = wrSpace(m).garrisonTrips;
+  return Array.isArray(t) ? t : [];
+}
+// Läuft gerade ein Transport zu dieser Kolonie? (Ein Transport je Kolonie, 27e-Regel.)
+// ⚠️ Abgelaufene zählen NICHT als laufend — sonst sperrt ein nie abgeholter Flug die
+// Kolonie für immer. Dieselbe Bedingung wie im Server.
+function wrGarrisonTripFor(m, planetId) {
+  const now = Date.now();
+  return wrGarrisonTrips(m).find(t => t && t.planetId === planetId
+    && Date.parse(t.arriveAt) > now) || null;
+}
 function wrIsStation(p)   { return !!(p && p.station); }
 // 📡 27h: Eine Station wirkt nur, solange sie STEHT — ihr Planet muss kolonisiert sein
 // und mindestens ein intaktes Geschütz tragen. JP 2026-08-17: „sie kann ja dennoch
@@ -6077,6 +6385,38 @@ function wrBindEvents() {
     if (e.target.closest('#wr-refine-start')) { await wrRefineStart(); return; }
     if (e.target.closest('#wr-refine-claim')) { await wrRefineClaim(); return; }
 
+    // 🛡️ 27k: Garnison — Modus, Stückzahlen, Absenden.
+    const garMode = e.target.closest('[data-wr-garmode]');
+    if (garMode) {
+      _wrGarMode = garMode.dataset.wrGarmode === 'recall' ? 'recall' : 'garrison';
+      _wrGarSel = null;                 // Auswahl gehört zum Modus, nicht zum Planeten
+      wrRender(); return;
+    }
+    const garStep = e.target.closest('[data-wr-gar]');
+    if (garStep && !garStep.disabled) {
+      const [pid, key, d] = garStep.dataset.wrGar.split(':');
+      if (!_wrGarSel || _wrGarSel.planetId !== pid) _wrGarSel = { planetId: pid, ships: {} };
+      // Obergrenze der QUELLE (Hafen bzw. Garnison) — der Stepper darf nie mehr anbieten,
+      // als tatsächlich da ist, sonst läuft man in einen Serverfehler.
+      const quelle = _wrGarMode === 'recall'
+        ? wrGarrisonShips(_wrMember, pid) : wrHomeShips(_wrMember);
+      const max = parseInt(quelle[key], 10) || 0;
+      const cur = parseInt(_wrGarSel.ships[key], 10) || 0;
+      _wrGarSel.ships[key] = Math.max(0, Math.min(max, cur + parseInt(d, 10)));
+      wrRender(); return;
+    }
+    const garSend = e.target.closest('[data-wr-garsend]');
+    if (garSend && !garSend.disabled) { await wrGarrisonSend(garSend.dataset.wrGarsend); return; }
+
+    // 🧊 Eingemottete Flotte auslösen (JP 2026-08-20). wrsUnmothball() gab es seit 26w,
+    // aber KEIN Knopf rief sie auf — der Weg zurück war nur über die Konsole erreichbar.
+    // typeof-geguarded: weltraum_sold.js kann fehlen, ohne dass der Tab bricht (Regel 3).
+    if (e.target.closest('[data-wr-unmothball]')) {
+      if (typeof wrsUnmothball === 'function') await wrsUnmothball();
+      else wrToast('Flottensold-Modul nicht geladen — bitte Seite neu laden.', 'error');
+      return;
+    }
+
     const recallBtn = e.target.closest('[data-wr-recall]');
     if (recallBtn) { await wrRecall(recallBtn.dataset.wrRecall); return; }
     if (e.target.closest('[data-wr-claim]')) { await wrTryClaim(false); return; }
@@ -6220,8 +6560,15 @@ async function wrSend(intent) {
     wrBuyFlush();
     const list = Object.entries(fleet)
       .map(([k, n]) => `${wrArtTok(k)} ${n}`).join(' · ');
+    // ⏱️ Flugzeit stand hier schon — aber IMMER als „zurück in", auch bei einer
+    // Kolonie-Mission, von der nichts zurückkommt (der Verband geht seit 26y im Rumpf auf).
+    // ⚠️ Texte veralten mit Regeländerungen (Lehre aus Teil 32, Punkt 10): die Meldung
+    // beschrieb eine Rückkehr, die es nicht mehr gibt. Jetzt Ankunft statt Rückkehr.
+    const ankunft = wrCountdown(Date.parse(res.trip.arriveAt) - Date.now());
     wrChat(`${info.icon || '🚀'} ${_wrEsc(m.name)} schickt einen Verband (${list}) zum ${_wrEsc(planet.name)} — `
-         + `Auftrag: ${_wrEsc(info.name || intent)}, zurück in ${wrCountdown(Date.parse(res.trip.returnAt) - Date.now())}.`);
+         + `Auftrag: ${_wrEsc(info.name || intent)}, ` + (intent === 'colonize'
+            ? `Ankunft in ${ankunft}, der Verband kehrt nicht zurück.`
+            : `Ankunft in ${ankunft}, zurück in ${wrCountdown(Date.parse(res.trip.returnAt) - Date.now())}.`));
     wrRender();
   } catch (e) {
     wrToast('Start fehlgeschlagen: ' + e.message, 'error');
@@ -6248,10 +6595,32 @@ async function wrBuildCart() {
     const longest = lines.reduce((a, l) => Math.max(a, l.minutes || 0), 0);
     // Abgebuchte Kosten im Toast — der Server liefert die ECHTEN Beträge (inkl.
     // Werft-Rabatt + Raffinerie), damit sieht JP sofort, was wirklich abging.
+    // Toast rendert KEIN HTML → hier bleiben es bewusst Emoji (die Regel steht an WR_IC).
     const paid = [`${wrFmt(res.cc || 0)} CC`]
       .concat(res.erz ? [`${wrFmt(res.erz)} 🪨`] : [])
-      .concat(res.kristall ? [`${wrFmt(res.kristall)} 💎`] : []).join(' · ');
+      .concat(res.kristall ? [`${wrFmt(res.kristall)} 💎`] : [])
+      .concat(res.plasmoid ? [`${wrFmt(res.plasmoid)} 🟣`] : [])
+      .concat(res.quantum ? [`${wrFmt(res.quantum)} 🌀`] : []).join(' · ');
     wrToast(`🏗️ ${wrFmt(total)} Schiff(e) in Bau — fertig in ${wrDur(longest)} (${paid})`, 'success');
+
+    // 📒 Handover §6 / CLAUDE.md Regel 1: Schiffbau ist die grösste laufende CC-Ausgabe
+    // im Weltraum und fehlte im Tages-Log komplett — im Profil war nicht zu sehen, wohin
+    // das Geld ging. Rohstoffe stehen in der Detailzeile, weil das Log nur CC beziffert.
+    // ⚠️ Die Beträge kommen aus der SERVER-Antwort (Werft-Rabatt + Raffinerie sind darin
+    // schon berücksichtigt), nicht aus den Basispreisen — sonst weicht das Log von der
+    // echten Abbuchung ab. try/catch: ein Log-Eintrag darf einen Bauauftrag nie kippen.
+    try {
+      const roh = [];
+      if (res.erz)      roh.push(`${wrFmt(res.erz)} Erz`);
+      if (res.kristall) roh.push(`${wrFmt(res.kristall)} Kristall`);
+      if (res.plasmoid) roh.push(`${wrFmt(res.plasmoid)} Plasmoid`);
+      if (res.quantum)  roh.push(`${wrFmt(res.quantum)} Quantenschaum`);
+      const was = lines.map(l => `${l.count}× ${SPACE_SHIP_BY_KEY[l.ship]?.name || l.ship}`).join(', ');
+      await DB.appendTodayLogFresh(_wrMember.id, [{
+        label: '🛠️ Schiffbau', amount: -(res.cc || 0), cat: 'weltraum',
+        detail: was + (roh.length ? ` · ${roh.join(' · ')}` : ''),
+        aggKey: 'space_build', aggBase: '🛠️ Schiffbau' }]);
+    } catch (e) {}
     for (const l of lines) {
       const sd = SPACE_SHIP_BY_KEY[l.ship];
       if (sd) for (let i = 0; i < (l.count || 0); i++) wrBuyTrack(sd);
@@ -6263,12 +6632,113 @@ async function wrBuildCart() {
       _wrBuySession.cc  = res.cc || 0;
       _wrBuySession.erz = res.erz || 0;
       _wrBuySession.kri = res.kristall || 0;
+      _wrBuySession.pla = res.plasmoid || 0;
+      _wrBuySession.qua = res.quantum || 0;
+      // ⏱️ JP 2026-08-20: „Zeiten von Schiffbau … sollen auch im Chat genannt werden."
+      // `longest`, nicht die Summe: die Aufträge laufen PARALLEL (Kommentar bei
+      // wrBuyFlush), fertig ist der Korb also mit der längsten Einzelzeit.
+      _wrBuySession.min = longest;
     }
     wrBuyFlush();
     wrRender();
   } catch (e) {
     wrToast('Bau fehlgeschlagen: ' + e.message, 'error');
   } finally { _wrBusy = false; }
+}
+
+// ── 🛡️ 27k: Garnison verlegen / zurückholen ────────────────────────────────
+async function wrGarrisonSend(planetId) {
+  if (_wrBusy) return;
+  const sel = (_wrGarSel && _wrGarSel.planetId === planetId) ? _wrGarSel.ships : {};
+  const ships = {};
+  for (const [k, n] of Object.entries(sel)) if (n > 0) ships[k] = n;
+  if (!Object.keys(ships).length) { wrToast('Es ist kein Schiff ausgewählt.', 'error'); return; }
+  const p = (_wrGalaxy?.planets || []).find(x => x.id === planetId);
+  _wrBusy = true;
+  try {
+    const res = await DB.startSpaceGarrison(_wrMember.id, planetId, _wrGarMode, ships);
+    if (!res || res.error) {
+      // ⚠️ Der Server liefert bei `garrison_full` die Zahlen mit. Sie wegzuwerfen und nur
+      // „voll" zu melden, war 2026-08-17 gleich zweimal der Fehler (Kolonie-Kit, Forschung).
+      wrToast(res?.error === 'garrison_full'
+        ? `🛡️ Kein Platz: ${wrFmt(res.have)} von ${wrFmt(res.cap)} Plätzen belegt, `
+          + `du willst ${wrFmt(res.want)} schicken.`
+        : res?.error === 'not_enough_ships'
+          ? `Von ${SPACE_SHIP_BY_KEY[res.ship]?.name || res.ship} sind nur ${wrFmt(res.have)} da `
+            + `(gewählt: ${wrFmt(res.want)}).`
+          : wrErrText(res?.error), 'error');
+      return;
+    }
+    if (res.space) wrApplySpace(res.space);
+    _wrGarSel = null;
+    const n   = res.count || 0;
+    const min = parseFloat(res.minutes) || 0;
+    const hin = _wrGarMode !== 'recall';
+    wrToast(`🛡️ ${wrFmt(n)} Schiff(e) ${hin ? 'unterwegs zur Kolonie' : 'auf dem Rückweg'} — `
+          + `Ankunft in ${wrDur(min)}`, 'success');
+    // ⏱️ Zeiten gehören in den Chat (JP 2026-08-20) — hier von Anfang an.
+    try {
+      const list = Object.entries(ships).map(([k, x]) => `${wrArtTok(k)} ${x}`).join(' · ');
+      wrChat(`🛡️ ${_wrEsc(_wrMember.name)} ${hin ? 'verlegt' : 'holt'} ${list} `
+           + `${hin ? 'auf die Kolonie' : 'von der Kolonie'} ${_wrEsc(p?.name || 'unbekannt')} `
+           + `${hin ? 'zurück' : ''}— Ankunft in ${wrDur(min)}.`.replace(' zurück—', ' —'));
+    } catch (e) {}
+    wrRender();
+  } catch (e) {
+    wrToast('Verlegen fehlgeschlagen: ' + e.message, 'error');
+  } finally { _wrBusy = false; }
+}
+
+// Fällige Transporte und verlorene Garnisonen einlösen. Zeitbasiert wie alles hier,
+// kein Cron. ⚠️ `silent`: beim Poll soll nichts aufpoppen, nur beim Tab-Öffnen.
+async function wrClaimGarrison(silent) {
+  if (!_wrMember?.id || typeof DB.claimSpaceGarrison !== 'function') return false;
+  let etwas = false;
+  try {
+    // 1) Ankünfte
+    if (wrGarrisonTrips(_wrMember).some(t => Date.parse(t.arriveAt) <= Date.now())) {
+      const res = await DB.claimSpaceGarrison(_wrMember.id);
+      if (res && !res.error && res.count > 0) {
+        if (res.space) wrApplySpace(res.space);
+        etwas = true;
+        for (const t of (res.done || [])) {
+          const p = (_wrGalaxy?.planets || []).find(x => x.id === t.planetId);
+          const n = Object.values(t.ships || {}).reduce((a, b) => a + (parseInt(b, 10) || 0), 0);
+          if (!silent) {
+            wrToast(t.kind === 'recall'
+              ? `🛡️ ${wrFmt(n)} Schiff(e) sind aus der Garnison zurück im Hafen.`
+              : `🛡️ ${wrFmt(n)} Schiff(e) haben auf ${p?.name || 'der Kolonie'} Stellung bezogen.`,
+              'success');
+          }
+        }
+      }
+    }
+    // 2) ⚠️ Verlorene Garnisonen. Der Trigger (27k) legt sie beim Kolonieverlust ab —
+    // ohne dieses Abholen erführe der Spieler NIE, dass seine Schiffe mit gefallen sind.
+    if (typeof DB.claimSpaceGarrisonLost === 'function') {
+      const lost = await DB.claimSpaceGarrisonLost(_wrMember.id);
+      if (lost && !lost.error && Array.isArray(lost.lost) && lost.lost.length) {
+        if (lost.space) wrApplySpace(lost.space);
+        etwas = true;
+        for (const ev of lost.lost) {
+          // In die Verlust-Statistik verbuchen. ⚠️ `wrBumpLost` (weltraum_stats.js) ist die
+          // EINZIGE Schreibstelle für lostByType — sie nimmt genau die `{key: n}`-Map, die
+          // auch `res.lost` aus claim_space_arrival liefert. Keine zweite Buchführung.
+          try {
+            if (typeof wrBumpLost === 'function') wrBumpLost(ev.ships);
+          } catch (e) {}
+          wrToast(`💥 Die Garnison auf ${ev.planet || 'einer Kolonie'} ist mit der Kolonie `
+                + `gefallen — ${wrFmt(ev.count || 0)} Schiffe verloren.`, 'error');
+          try {
+            wrChat(`💥 Die Garnison von ${_wrEsc(_wrMember.name)} auf `
+                 + `${_wrEsc(ev.planet || 'einer Kolonie')} ist mit der Kolonie gefallen — `
+                 + `${wrFmt(ev.count || 0)} Schiffe verloren.`);
+          } catch (e) {}
+        }
+      }
+    }
+  } catch (e) { console.warn('wrClaimGarrison:', e.message); }
+  return etwas;
 }
 
 // ── 🚨 26v: Angriffe auf Kolonien ───────────────────────────────────────────
@@ -7362,6 +7832,24 @@ function wrStartLoop() {
   _wrTimer = setInterval(async () => {
     // Tab verlassen → Loop beenden (Muster kmStartLoop)
     if (!document.getElementById('wr-canvas')) { clearInterval(_wrTimer); _wrTimer = null; return; }
+
+    // 🛡️ 27k: Garnisonstransporte. ⚠️ VOR dem `return` unten — der greift, sobald keine
+    // normale Flotte unterwegs ist, und hätte eine ankommende Garnison bis zum nächsten
+    // Tab-Wechsel liegen lassen. Die Countdowns laufen sichtbar mit; die RPC feuert nur
+    // bei tatsächlicher Fälligkeit, nicht jede Sekunde.
+    let garDue = false;
+    for (const g of wrGarrisonTrips(_wrMember)) {
+      const rem = Date.parse(g.arriveAt) - Date.now();
+      for (const eta of document.querySelectorAll(`[data-wr-gareta="${g.id}"]`)) {
+        eta.textContent = wrCountdown(rem);
+      }
+      if (rem <= 0) garDue = true;
+    }
+    if (garDue && !_wrGarBusy) {
+      _wrGarBusy = true;
+      try { if (await wrClaimGarrison(false)) wrRender(); } finally { _wrGarBusy = false; }
+    }
+
     const trips = wrTrips(_wrMember);
     if (!trips.length) return;
     let due = false;
@@ -7487,6 +7975,18 @@ function wrErrText(err) {
     insufficient_coins:    'Nicht genug CoffeeCoins.',
     insufficient_erz:      'Nicht genug 🪨 Erz.',
     insufficient_kristall: 'Nicht genug 💎 Koffeinkristall.',
+    // 27i: seit die schweren Schiffe Exoten kosten, kann der Warenkorb auch daran
+    // scheitern. build_mutterschiff wirft diese beiden Codes seit 26j — sie fehlten hier
+    // trotzdem und wären als roher Code durchgeschlagen.
+    insufficient_plasmoid: 'Nicht genug 🟣 Plasmoiden-Staub.',
+    insufficient_quantum:  'Nicht genug 🌀 Quantenschaum.',
+    // 🛡️ 27k Garnison. `garrison_full` und `not_enough_ships` werden in wrGarrisonSend
+    // mit den Server-Zahlen ausformuliert — hier steht nur der Rückfall.
+    garrison_busy:    'Zu dieser Kolonie ist bereits ein Transport unterwegs. Es läuft immer nur einer.',
+    garrison_full:    'Auf dieser Kolonie ist kein Platz mehr für weitere Schiffe.',
+    not_your_colony:  'Das ist nicht deine Kolonie.',
+    not_enough_ships: 'So viele Schiffe sind nicht da.',
+    fleet_mothballed: 'Deine Flotte ist eingemottet — erst den Soldrückstand begleichen.',
     no_colony_ship:        'Kein Kolonieschiff dabei.',
     already_colonized:     'Dieser Planet ist bereits kolonisiert.',
     still_traveling:       'Die Flotte ist noch unterwegs.',

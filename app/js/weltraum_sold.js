@@ -57,8 +57,9 @@ function wrsPlanets() { return (typeof _wrGalaxy !== 'undefined' && _wrGalaxy?.p
 // Liefert eine vollständige Aufschlüsselung — dieselbe Funktion speist die
 // Abbuchung UND die Anzeige, damit beide nie auseinanderlaufen.
 function wrsSoldRate(u) {
-  const o = { fleet: 0, routes: 0, colonies: 0, defense: 0, power: 0, total: 0,
-              nShips: 0, nRoute: 0, nCol: 0, nTur: 0, nGen: 0, nStat: 0, station: 0, detail: [] };
+  const o = { fleet: 0, routes: 0, colonies: 0, defense: 0, power: 0, total: 0, garrison: 0,
+              nShips: 0, nRoute: 0, nCol: 0, nTur: 0, nGen: 0, nStat: 0, nGarrison: 0,
+              station: 0, detail: [] };
   try {
     const sp = u?.space || {};
     const shipDef = (k) => (typeof SPACE_SHIPS !== 'undefined')
@@ -84,6 +85,27 @@ function wrsSoldRate(u) {
       if (!d) continue;
       o.routes += n * (d.cc || 0) * WRS_SOLD_ROUTE;
       o.nRoute += n;
+    }
+
+    // ②b 🛡️ Garnison auf Kolonien — VOLLER Satz (27k, R10). Sie erwirtschaftet nichts,
+    // deshalb kein Routen-Rabatt. Transporte zählen mit: sie sind im Dienst.
+    // ⚠️ Eingemottet ⇒ 0, spiegelbildlich zu `_space_garrison_power` und zum Server.
+    // Sonst zeigte die Kostenkarte einen Posten, den der Server gar nicht abbucht.
+    const eingemottet = !!(sp.fleets?.mothballed
+      && Object.values(sp.fleets.mothballed).some(v => (parseInt(v, 10) || 0) > 0));
+    if (!eingemottet) {
+      const garQuellen = Object.values(sp.garrison || {}).map(g => g?.ships || {})
+        .concat((Array.isArray(sp.garrisonTrips) ? sp.garrisonTrips : []).map(t => t?.ships || {}));
+      for (const ships of garQuellen) {
+        for (const [k, v] of Object.entries(ships)) {
+          const n = parseInt(v, 10) || 0;
+          if (n <= 0) continue;
+          const d = shipDef(k);
+          if (!d) continue;
+          o.garrison  += n * (d.cc || 0) * WRS_SOLD_SHIP;
+          o.nGarrison += n;
+        }
+      }
     }
 
     // ③ Kolonie-Verwaltung, PROGRESSIV: die n-te Kolonie kostet das
@@ -148,7 +170,8 @@ function wrsSoldRate(u) {
     o.fleet = Math.round(o.fleet); o.routes = Math.round(o.routes);
     o.colonies = Math.round(o.colonies); o.defense = Math.round(o.defense);
     o.power = Math.round(o.power); o.station = Math.round(o.station);
-    o.total = o.fleet + o.routes + o.colonies + o.defense + o.power + o.station;
+    o.garrison = Math.round(o.garrison);
+    o.total = o.fleet + o.routes + o.colonies + o.defense + o.power + o.station + o.garrison;
   } catch (e) { console.warn('[wr-sold] Satz:', e.message); }
   return o;
 }
@@ -225,6 +248,18 @@ async function wrsSoldAbbuchen() {
         detail: `${_f(cnt.nShips)} Schiffe${cnt.nRoute ? ` + ${_f(cnt.nRoute)} stationiert` : ''}`
               + ` · ${Math.round(tage * 10) / 10} Tage`,
         aggKey: 'space_sold', aggBase: '⚓ Flottensold' });
+      // 🛡️ 27k / Handover §6: Der Garnisonsanteil MUSS getrennt ausgewiesen werden.
+      // ⚠️ Nicht in den Flottensold addiert: Garnison zahlt 100 %, Routen 50 % — wer die
+      // Posten zusammenwirft, kann hinterher nicht sehen, was das Parken auf den Kolonien
+      // wirklich kostet, und genau das ist die Entscheidung, die man treffen soll.
+      // `sr.garrison` liefert _space_sold_rate seit 27k; ältere Server liefern es nicht,
+      // dann bleibt der Posten schlicht weg (kein Absturz, Regel 3).
+      const garn = parseFloat(sr.garrison) || 0;
+      if (garn > 0) posten.push({
+        label: '🛡️ Garnisonssold', amount: -anteil(garn), cat: 'weltraum',
+        detail: `${_f(sr.nGarrison || 0)} Schiffe auf Kolonien · voller Satz`
+              + ` · ${Math.round(tage * 10) / 10} Tage`,
+        aggKey: 'space_sold_gar', aggBase: '🛡️ Garnisonssold' });
       if ((parseFloat(sr.colonies) || 0) > 0) posten.push({
         label: '🏛️ Kolonie-Verwaltung', amount: -anteil(sr.colonies), cat: 'weltraum',
         detail: `${sr.colonyCount || cnt.nCol} Kolonien (progressiv)`,
@@ -247,6 +282,17 @@ async function wrsSoldAbbuchen() {
         showToast(`⚓ Sold nicht gedeckt — die Heimatflotte ist eingemottet. `
                 + `Rückstand ${_f(res.due)} CC begleichen, dann fliegt sie wieder.`, 'error');
       }
+      // ⚠️ JP 2026-08-20: Ein Toast ist nach Sekunden fort — für einen Zustand, der TAGE
+      // anhält, ist er der falsche Ort. Der Chat bleibt und ist im Clan nachlesbar; das
+      // Panel im 🛩️-Tab (wrMothballHtml) ist der Ort, an den man zurückkehren kann.
+      // try/catch: eine fehlgeschlagene Meldung darf die Abbuchung nie nachträglich kippen.
+      try {
+        if (typeof wrChat === 'function') {
+          wrChat(`🧊 Die Heimatflotte von ${me.name || 'einem Clan-Mitglied'} ist eingemottet — `
+               + `der Flottensold war nicht gedeckt (Rückstand ${_f(res.due)} CC). `
+               + `Die Schiffe sind nicht verloren: im 🛩️ Flotten-Tab auslösen.`);
+        }
+      } catch (e) {}
     } else if (typeof showToast === 'function') {
       showToast(`⚓ Unterhalt für ${Math.round((parseFloat(res.days) || 0) * 10) / 10} Tage: `
               + `−${_f(res.charged)} CC`, 'info');
@@ -272,9 +318,32 @@ async function wrsUnmothball() {
     }
     if (res.released) {
       if (typeof res.space === 'object' && res.space) me.space = res.space;
+      // ⚠️ Zustandsübernahme ist Pflicht (Lehre aus 26w): der Server hat `coins` bereits
+      // um `paid` gesenkt. Ohne das Nachziehen zeigt der Header bis zum nächsten Poll
+      // den alten Stand, und der Spieler hält die Abbuchung für ausgeblieben.
+      try {
+        const neu = Math.max(0, (parseFloat(me.coins) || 0) - (parseFloat(res.paid) || 0));
+        me.coins = neu;
+        if (typeof appData !== 'undefined' && appData?.users) {
+          const u = appData.users.find(x => x.id === me.id);
+          if (u) { u.coins = neu; if (res.space) u.space = res.space; }
+        }
+        if (typeof _updateHeaderCoins === 'function') _updateHeaderCoins({ coins: neu });
+      } catch (e) {}
+      const n = (() => { try {
+        return Object.values(res.ships || {}).reduce((a, b) => a + (parseInt(b, 10) || 0), 0);
+      } catch (e) { return 0; } })();
       if (typeof showToast === 'function') {
-        showToast(`⚓ Flotte ausgelöst (−${_f(res.paid)} CC) — sie ist wieder einsatzbereit.`, 'success');
+        showToast(`⚓ Flotte ausgelöst (−${_f(res.paid)} CC)${n ? ` — ${_f(n)} Schiffe` : ''} `
+                + `wieder einsatzbereit.`, 'success');
       }
+      // Die Meldung, die JP gefehlt hat: „sie liegen wieder frei".
+      try {
+        if (typeof wrChat === 'function') {
+          wrChat(`⚓ ${me.name || 'Ein Clan-Mitglied'} hat den Soldrückstand beglichen `
+               + `(−${_f(res.paid)} CC)${n ? ` — ${_f(n)} Schiffe` : ''} sind wieder einsatzbereit.`);
+        }
+      } catch (e) {}
       try { if (typeof wrRender === 'function') wrRender(); } catch (e) {}
     }
   } catch (e) { console.warn('[wr-sold] Auslösen:', e.message); }
@@ -311,9 +380,13 @@ function wrsSoldPopup(rate) {
           mehr als die vorige. Abgerechnet wird beim Öffnen der App für die verstrichene Zeit —
           spiegelbildlich zum passiven Einkommen, das genauso läuft.<br><br>
           <strong>Die ersten ${WRS_GRACE_TAGE} Tage sind frei.</strong> Der Sold wird berechnet
-          und angezeigt, aber noch nicht abgebucht — Zeit, deine Flotte zu sortieren.
-          Reicht das Guthaben später nicht, wird nur abgebucht, was da ist; ein Rest verfällt.
-          Es gibt keine Schulden und keine Sperre.
+          und angezeigt, aber nicht abgebucht — Zeit, deine Flotte zu sortieren. Diese Tage
+          werden auch später nicht nachgefordert.<br><br>
+          <strong>Reicht das Guthaben nicht</strong>, wird abgebucht, was da ist — und der Rest
+          bleibt als Rückstand stehen. Deine Heimatflotte wird dann <strong>eingemottet</strong>:
+          die Schiffe sind nicht verloren, aber sie fliegen und verteidigen nicht mehr, bis du
+          den Rückstand begleichst. Das geht jederzeit im 🛩️ Flotten-Tab.
+          Eingemottete Schiffe kosten solange keinen Unterhalt.
         </p>
         <button class="btn-primary quiz-cta" id="wrs-sold-ok">Verstanden</button>
       </div></div>`;
@@ -346,6 +419,7 @@ function wrsSoldCardHtml() {
         <div class="wrs-grid">
           ${kpi('⚓ Flotte', `${_f(rate.fleet)}<br><span class="wr-sub">${_f(rate.nShips)} Schiffe</span>`)}
           ${rate.routes ? kpi('🛰️ Stationiert', `${_f(rate.routes)}<br><span class="wr-sub">${_f(rate.nRoute)} Schiffe</span>`) : ''}
+          ${rate.garrison ? kpi('🛡️ Garnison', `${_f(rate.garrison)}<br><span class="wr-sub">${_f(rate.nGarrison)} Schiffe · voller Satz</span>`) : ''}
           ${kpi('🏛️ Kolonien', `${_f(rate.colonies)}<br><span class="wr-sub">${rate.nCol} Stück</span>`)}
           ${kpi('⚡ Anlagen', `${_f(rate.defense + rate.power)}<br><span class="wr-sub">${rate.nTur} Geschütze · ${rate.nGen} Reaktoren</span>`)}
           ${rate.nStat ? kpi('📡 Stationen', `${_f(rate.station)}<br><span class="wr-sub">${rate.nStat} Stück</span>`) : ''}
@@ -354,13 +428,20 @@ function wrsSoldCardHtml() {
         </div>
         ${inGrace
           ? `<div class="wr-ok" style="margin-top:8px">🕊️ Schonfrist: noch ${restTage} Tag${restTage === 1 ? '' : 'e'}.
-               Der Sold wird berechnet und angezeigt, aber noch nicht abgebucht.</div>`
+               Der Sold wird berechnet und angezeigt, aber nicht abgebucht — diese Tage
+               werden auch später nicht nachgefordert.</div>`
           : ''}
+        ${/* ⚠️ 27j: Hier stand „ein Rest verfällt" — die Regel von VOR 26w. Seit 26w
+              bleibt der Rest als `sold.due` stehen und die Heimatflotte wird eingemottet.
+              Dieselbe falsche Behauptung stand auch im Erklär-Popup weiter unten; beim
+              Korrigieren fiel nur die eine auf, den Rest fand der Prüfstand.
+              ⚠️ Merke: eine veraltete Aussage steht selten nur an EINER Stelle. */ ''}
         <div class="wrs-note">Abgerechnet wird beim Öffnen der App für die verstrichene Zeit
           (höchstens ${WRS_CAP_TAGE} Tage auf einmal) — spiegelbildlich zum passiven Einkommen.
           Kolonien werden progressiv teurer: jede weitere kostet ${Math.round(WRS_KOL_STEIG * 100)} %
-          mehr als die vorige. Reicht das Guthaben nicht, wird nur abgebucht, was da ist;
-          ein Rest verfällt.</div>
+          mehr als die vorige. Reicht das Guthaben nicht, wird abgebucht was da ist, der Rest
+          bleibt als Rückstand stehen und die Heimatflotte wird eingemottet — auslösen im
+          🛩️ Flotten-Tab.</div>
       </div>`;
   } catch (e) { return ''; }
 }

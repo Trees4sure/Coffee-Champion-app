@@ -2944,6 +2944,40 @@ const DB = (() => {
     } catch (e) { return { error: e.message }; }
   }
 
+  // ── 🛡️ 27k: Kolonie-Garnison ───────────────────────────────────────────
+  // Verlegen (Hafen → eigene Kolonie) bzw. Rückholen. `kind` ist 'garrison' oder
+  // 'recall'; der Server prüft Besitz, Obergrenze und Kollision.
+  // ⚠️ Die Gruppe kommt aus `_groupId`, NICHT vom Aufrufer — genau wie bei
+  // startSpaceTrip. `_wrMember.group_id` gibt es auf dem Member-Objekt im Client nicht
+  // zuverlässig; wer sie durchreicht, schickt irgendwann `undefined` an den Server.
+  async function startSpaceGarrison(memberId, planetId, kind, ships) {
+    try {
+      if (!_groupId) return { error: 'no_group' };
+      const { data, error } = await _sb.rpc('start_space_garrison', {
+        p_member_id: memberId, p_group_id: _groupId, p_planet_id: planetId,
+        p_kind: kind, p_ships: ships });
+      if (error) return { error: error.message };
+      return data || {};
+    } catch (e) { return { error: e.message }; }
+  }
+  // Fällige Transporte einlösen — alle auf einmal, damit man bei mehreren Kolonien
+  // nicht nur den ersten ankommen sieht.
+  async function claimSpaceGarrison(memberId) {
+    try {
+      const { data, error } = await _sb.rpc('claim_space_garrison', { p_member_id: memberId });
+      if (error) return { error: error.message };
+      return data || {};
+    } catch (e) { return { error: e.message }; }
+  }
+  // Verlorene Garnisonen abholen (der Trigger legt sie beim Kolonieverlust ab).
+  async function claimSpaceGarrisonLost(memberId) {
+    try {
+      const { data, error } = await _sb.rpc('claim_space_garrison_lost', { p_member_id: memberId });
+      if (error) return { error: error.message };
+      return data || {};
+    } catch (e) { return { error: e.message }; }
+  }
+
   // Nur lesen: Tagessatz, Zustand, eingemottete Schiffe (für die Kostenkarte).
   async function spaceSoldInfo(memberId) {
     try {
@@ -3249,6 +3283,7 @@ const DB = (() => {
     claimSpaceTech, claimSpaceTurrets,        // ⏳ 26u
     ensureColonyAttacks, fetchColonyAttacks, resolveColonyAttack, repairPlanetTurret,  // 🚨 26v
     chargeSpaceSold, unmothballSpace, spaceSoldInfo,   // ⚓ 26w
+    startSpaceGarrison, claimSpaceGarrison, claimSpaceGarrisonLost,   // 🛡️ 27k
     hireSpaceMerc, setSpaceMercGuard, spaceMercSweep,  // 🎖️ 26x
     refineStart, refineClaim, spaceTransmute, spacePowerRefuel, spaceInjectLoad,
     buySpaceTech, ensureSpaceWave, fetchSpaceWaves, fetchSpaceHelp,
