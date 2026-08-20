@@ -3876,8 +3876,23 @@ function wrColoniesHtml(m) {
           <span class="wr-col-caret">${offen ? '▾' : '▸'}</span>
           <span>${meta.icon} ${wrColonyWarnBadge(m, pl)}${_wrEsc(c.name || 'Kolonie')}
             <span class="wr-sub">Ring ${pl ? pl.ring : '?'}${pl ? ` · ${_wrEsc(pl.quadrant)}` : ''}</span></span>
+          ${/* ⚠️ 27q (JP 2026-08-20): „man könnte die Garnisonsfeuerkraft noch in der
+                Kolonieübersicht je Kolonie aufzeigen mit Schwertern. das Schild sind ja
+                die Geschütze." — Zwei GETRENNTE Posten, absichtlich nicht addiert:
+                🛡️ ist `planet_defense` (nur die Geschütze, serverseitig materialisiert),
+                ⚔️ die Garnison. Eine Summe hier wäre eine dritte Zahl, die es
+                serverseitig nicht gibt — `_space_colony_defense` addiert ausserdem noch
+                Routen, Söldner und Station. Wer zusammenzählt, was der Server getrennt
+                führt, erfindet eine Kennzahl (dieselbe Falle wie die zwei „Garnisonen"
+                in 26v/27k).
+                ⚠️ Angezeigt wird, sobald SCHIFFE dastehen — nicht erst ab Feuerkraft > 0.
+                Eingemottet liefert `wrGarrisonPower` bewusst 0 (wie der Server), und
+                genau dann MUSS „⚔️ 0" sichtbar sein: sonst verschwände die Garnison
+                stillschweigend aus der Übersicht, statt ihren Zustand zu zeigen. */''}
           <span class="wr-sub">Stufe ${c.level || 1} · ${'★'.repeat(c.richness || 1)}${
-            wrDefLevel(pl) ? ` · 🛡️ ${wrFmt(wrPlanetDef(pl))}` : ' · 🛡️ —'}${wrIsStation(pl) ? ' · 📡' : ''}
+            wrDefLevel(pl) ? ` · 🛡️ ${wrFmt(wrPlanetDef(pl))}` : ' · 🛡️ —'}${
+            wrGarrisonCount(m, id) > 0
+              ? ` · ${wrIc('atk')} ${wrFmt(wrGarrisonPower(m, id))}` : ''}${wrIsStation(pl) ? ' · 📡' : ''}
             <span class="wr-col-day">${proTag ? `📥 ${proTag} /Tag` : ''}${
               (!wrResMinable(m, typ) && tagAmt === 0) ? ` 🔒 ${meta.icon} braucht die Abbau-Technik` : ''}</span></span>
           <strong>+${wrFmt(amt + (side ? side.erz + side.kri : 0))}</strong>
@@ -3970,7 +3985,7 @@ function wrColoniesHtml(m) {
     ${rows ? wrSecCard('colonies',
       `${wrIc("colony")} Kolonien`,
       `${keys.length} · +${wrFmt(pending)} bereit`,
-      `${rows}<div class="wr-sub">Ertrag sammelt sich max. ${wrTechCapDays(m)} Tage an.</div>`,
+      `${rows}<div class="wr-sub">🛡️ Geschütze der Kolonie · ${wrIc('atk')} Garnison (deine dort stationierten Schiffe) — zwei getrennte Posten, der Server führt sie auch getrennt. Ertrag sammelt sich max. ${wrTechCapDays(m)} Tage an.</div>`,
       `<button class="wr-btn wr-btn-go" data-wr-harvest="1" ${pending < 1 ? 'disabled' : ''}>
         ${wrIc("yield")} Ertrag einsammeln${pending > 0 ? ` (${wrFmt(pending)})` : ''}</button>`) : ''}
     ${secRisk.length ? wrSecCard('risk',
@@ -5621,6 +5636,15 @@ function wrColonyWarnings(m, p) {
         items.push(`⛽ Treibstoff reicht nur noch ${tage < 1
           ? `${Math.max(0, Math.round(tage * 24))} h` : `${Math.floor(tage)} Tage`}.`);
       }
+    }
+
+    // 🧊 27q: Die Übersicht zeigt „⚔️ 0", sobald die Flotte eingemottet ist — der GRUND
+    // dafür stand bisher nur im Flotten-Tab. Eine Zahl, die ohne erkennbaren Anlass auf
+    // null steht, sieht aus wie ein Fehler.
+    if (wrGarrisonCount(m, p.id) > 0 && wrMothCount(m) > 0) {
+      bad = true;
+      items.push(`🧊 Deine Flotte ist eingemottet — die ${wrFmt(wrGarrisonCount(m, p.id))} `
+               + `Schiffe der Garnison verteidigen hier mit 0. Im Flotten-Tab auslösen.`);
     }
 
     // 🚨 Angriff unterwegs (26v). `_wrAttacks` ist Serverzustand dieser Sitzung.
