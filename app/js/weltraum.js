@@ -2039,6 +2039,113 @@ function wrMothballHtml(m) {
     </div>`;
 }
 
+// ── 🛡️ Garnisonen im Flotten-Tab (27m, JP 2026-08-20) ──────────────────────
+// JP: „Ich möchte unter Flotten auch die geschickten Garnisonen, wo sie stationiert
+// sind, angezeigt bekommen, um sie evtl. zurückbeordern zu können."
+//
+// ⚠️ DIESELBE LÜCKE WIE BEIM EINMOTT-PANEL, UND ZWAR AUS DEMSELBEN GRUND.
+// Die Garnison liegt bewusst NICHT in `fleets` (27k: „unmöglich" schlägt „verboten") —
+// dadurch sieht sie aber auch keine der Anzeigen, die aus `fleets` gespeist werden.
+// Der Entwurf war richtig, die Folge für die Oberfläche war nicht mitgedacht:
+//   ⚠️ Wer einen Bestand ABSICHTLICH aus der gemeinsamen Struktur heraushält, muss ihm
+//      eine EIGENE Anzeige geben. Sonst ist er nicht nur unerreichbar für den Code,
+//      sondern auch für den Spieler.
+// Zum dritten Mal in diesem Modul (mothballed 26w, merc 26x, garrison 27k).
+//
+// Der Rückhol-Knopf holt ALLES von einer Kolonie. Für Teilmengen bleibt der Stepper im
+// Kolonie-Panel zuständig — bewusst kein zweiter Picker: zwei Auswahlwege für dieselbe
+// Sache sind der Weg zu zwei Auffassungen davon, was ausgewählt ist.
+function wrGarrisonFleetHtml(m) {
+  const all   = wrGarrisonAll(m);
+  const trips = wrGarrisonTrips(m);
+  const moth  = wrMothCount(m) > 0;
+  // Alle Kolonien, die etwas stehen haben ODER auf etwas warten.
+  const ids = Array.from(new Set(
+    Object.keys(all).filter(id => wrGarrisonCount(m, id) > 0)
+      .concat(trips.map(t => t && t.planetId).filter(Boolean))));
+  if (!ids.length) return '';
+
+  const satz = (typeof WRS_SOLD_SHIP === 'number') ? WRS_SOLD_SHIP : 0.01;
+  let gesN = 0, gesPow = 0, gesSold = 0;
+  const karten = ids.map(pid => {
+    const p     = wrPlanetById(pid);
+    const ships = wrGarrisonShips(m, pid);
+    const n     = wrGarrisonCount(m, pid);
+    const pow   = wrGarrisonPower(m, pid);
+    const trip  = wrGarrisonTripFor(m, pid);
+    // ⚠️ Sold auch für Schiffe im Transport — sie sind im Dienst (wrsSoldRate zählt sie
+    // ebenso). Eine Anzeige, die weniger nennt als die Abbuchung, wirkt wie ein Fehler.
+    const quellen = [ships].concat(trip ? [trip.ships || {}] : []);
+    let sold = 0, unterwegsN = 0;
+    for (const q of quellen) {
+      for (const [k, v] of Object.entries(q)) {
+        const x = parseInt(v, 10) || 0;
+        if (x <= 0) continue;
+        sold += x * ((SPACE_SHIP_BY_KEY[k]?.cc || 0) * satz);
+      }
+    }
+    if (trip) unterwegsN = Object.values(trip.ships || {})
+      .reduce((a, b) => a + (parseInt(b, 10) || 0), 0);
+    gesN += n; gesPow += pow; gesSold += sold;
+
+    const rows = SPACE_SHIPS
+      .filter(s => (parseInt(ships[s.key], 10) || 0) > 0)
+      .map(s => {
+        const x = parseInt(ships[s.key], 10) || 0;
+        return `<div class="wr-fl-row">
+            ${wrShipArt(s.key, 'wr-fl-art')}
+            <span class="wr-fl-name">${_wrEsc(s.name)}</span>
+            <span class="wr-fl-n">${wrFmt(x)}</span>
+            <span class="wr-fl-atk">${wrIc('atk')} ${wrFmt((s.atk || 0) * x)}</span>
+          </div>`;
+      }).join('');
+
+    return `
+      <div class="wr-gar-card">
+        <div class="wr-gar-head">
+          <span>🏙️ <strong>${_wrEsc(p?.name || 'Kolonie')}</strong>
+            <span class="wr-sub">${p ? `Ring ${p.ring} · ${_wrEsc(p.quadrant)} · Stufe ${wrColonyLevel(p)}` : 'Planet noch nicht geladen'}</span></span>
+          <span class="wr-sub">${wrFmt(n)}${p ? ` von ${wrFmt(wrGarrisonCap(p))}` : ''} Plätze${
+            pow ? ` · ${wrIc('atk')} ${wrFmt(pow)}` : ''} · ⚓ ${wrFmt(Math.round(sold))} CC/Tag</span>
+        </div>
+        ${rows || '<div class="wr-sub" style="padding:4px 0">Noch nichts stationiert.</div>'}
+        ${trip
+          ? `<div class="wr-ok">🚚 ${trip.kind === 'recall' ? 'Rückholung' : 'Verlegung'} unterwegs
+               (${wrFmt(unterwegsN)} Schiffe) — Ankunft in
+               <strong data-wr-gareta="${_wrEsc(trip.id || '')}"
+               >${wrCountdown(Date.parse(trip.arriveAt) - Date.now())}</strong>.</div>`
+          : ''}
+        <div class="wr-gar-acts">
+          <button class="wr-btn wr-btn-sm" data-wr-goto-colony="${_wrEsc(pid)}"
+            >🏙️ Zur Kolonie<span class="wr-btn-sub">einzeln verlegen oder abziehen</span></button>
+          <button class="wr-btn wr-btn-sm" data-wr-garpull="${_wrEsc(pid)}"
+            ${(trip || n < 1 || moth) ? 'disabled' : ''}>⬅️ Alles zurückholen
+            <span class="wr-btn-sub">${moth
+              ? 'erst die eingemottete Flotte auslösen'
+              : trip ? 'erst den laufenden Transport abwarten'
+                     : n < 1 ? 'hier steht nichts'
+                             : `${wrFmt(n)} Schiffe · volle Flugzeit zurück`}</span></button>
+        </div>
+      </div>`;
+  }).join('');
+
+  return `
+    <div class="wr-card">
+      <div class="wr-card-title">🛡️ Garnisonen auf Kolonien
+        <span class="wr-sub">— ${wrFmt(gesN)} Schiffe auf ${ids.length} Kolonie(n)${
+          gesPow ? ` · ${wrFmt(gesPow)} Feuerkraft` : ''} · ⚓ ${wrFmt(Math.round(gesSold))} CC/Tag</span></div>
+      <div class="wr-sub">Diese Schiffe stehen dauerhaft auf deinen Kolonien und verteidigen
+        sie mit voller Kampfkraft. Sie verteidigen den Raumhafen <strong>nicht</strong>, fliegen
+        von dort keine Angriffe und zählen nicht zur Heimatflotte — sie zahlen aber vollen
+        Flottensold, weil sie nichts erwirtschaften. Zurückgeholte Schiffe brauchen die volle
+        Flugzeit; je Kolonie läuft immer nur ein Transport.</div>
+      ${moth ? `<div class="wr-warn">🧊 Deine Flotte ist eingemottet — die Garnison zählt
+        solange mit 0 Feuerkraft und kostet nichts. Verlegen und Zurückholen sind gesperrt,
+        bis die Flotte ausgelöst ist.</div>` : ''}
+      ${karten}
+    </div>`;
+}
+
 function wrFlottenHtml(m, trips) {
   const list = trips || wrTrips(m);
   const verbaende = list.length
@@ -2053,6 +2160,7 @@ function wrFlottenHtml(m, trips) {
           ${wrFleetGap(m)} Min Vorlauf</span></div>
       ${verbaende}
     </div>
+    ${wrGarrisonFleetHtml(m)}
     ${wrFleetTemplatesHtml(m)}
     ${wrHomeDetailHtml(m)}
     ${wrRoutesHtml(m)}`;
@@ -3221,9 +3329,20 @@ function wrPlanetSlotsHtml(m, p) {
     .concat(c.quantum ? [`${c.quantum} ${wrIc('qua')}`] : []).join(' · ');
 
   let out = '';
-  for (let i = 0; i < WR_PLANET_SLOTS; i++) {
+  // 27o: freigeschaltet hängt am Quantenschaum-Reaktor, angezeigt wird mindestens das
+  // Belegte (Bestandsschutz — siehe wrPlanetSlotsShown).
+  // ⚠️ NICHT `frei` nennen: weiter unten in derselben Funktion heisst `frei`, ob ein
+  // GESCHÜTZTYP erforscht ist. Zwei Bedeutungen unter einem Namen in einem Rumpf sind
+  // genau das Muster, das hier schon zwei Garnisonen und zwei Symboltabellen erzeugt hat.
+  const freigeschaltet = wrPlanetSlotsFree(p);
+  const zeigen = wrPlanetSlotsShown(p);
+  for (let i = 0; i < zeigen; i++) {
     const key = 'g' + i;
     const cur = tur[key];
+    // ⚠️ Ein Bauplatz oberhalb der Freischaltung, der LEER ist, wird nicht als „bauen"
+    // angeboten — sonst liefe der Spieler in die Server-Sperre. Regel 4: der Grund steht
+    // dort, wo er auf die Regel trifft, nicht in einer Fehlermeldung danach.
+    if (i >= freigeschaltet && !(cur && typeof cur === 'object')) continue;
     if (cur && typeof cur === 'object' && SPACE_TURRET_BY_KEY[cur.type]) {
       const t   = SPACE_TURRET_BY_KEY[cur.type];
       const clv = Math.max(1, Math.min(WR_TURRET_MAX, parseInt(cur.level, 10) || 1));
@@ -3295,6 +3414,24 @@ function wrPlanetSlotsHtml(m, p) {
         </div>`;
     }
   }
+  // ⚠️ 27o, Regel 4: die gesperrten Bauplätze werden GEZEIGT, mit dem Grund. Sie
+  // wegzulassen wäre der Fehler, den es hier schon zweimal gab — eine Mechanik, die
+  // nirgends erklärt ist, existiert für den Spieler nicht (mothballed 26w, merc 26x).
+  if (freigeschaltet < WR_PLANET_SLOTS_QUA) {
+    const qua = SPACE_POWER_BY_KEY['quanten'];
+    const konv = wrGenConverting(wrPlanetPower(p));
+    out += `
+      <div class="wr-pslot wr-pslot-lock">
+        <div class="wr-slot-name">🔒 Bauplätze ${freigeschaltet + 1}–${WR_PLANET_SLOTS_QUA}</div>
+        <div class="wr-sub">Diese Kolonie hat ${freigeschaltet} Bauplätze. Die restlichen
+          ${WR_PLANET_SLOTS_QUA - freigeschaltet} schaltet ein fertiger
+          <strong>${_wrEsc(qua?.name || 'Quantenschaum-Reaktor')}</strong> auf diesem Planeten frei.${
+          konv ? ' Die Umrüstung läuft bereits — sobald sie steht, sind es sechs.' : ''}
+          <br>Ein voller Ausbau mit ${WR_PLANET_SLOTS_QUA} Quanten-Geschützen auf Stufe 3
+          braucht ${wrFmt(Math.round(WR_PLANET_SLOTS_QUA * wrTurretEnergy('quantenlanze', 3)))} Energie —
+          das trägt allein dieser Reaktor.</div>
+      </div>`;
+  }
   return `<div class="wr-pslots">${out}</div>`;
 }
 
@@ -3311,7 +3448,10 @@ function wrColonyPowerHtml(m, p, canPay, priceTxt) {
   let body;
   if (gen && def) {
     const glv = wrPlanetGenLevel(p);
-    const st  = wrPgenStats(def.key, glv);
+    // ⚡ 27n: siehe wrPowerHtml — Ausgabe vom LAUFENDEN, Baumarke vom BESTELLTEN Reaktor.
+    const live = wrGenLive(gen);
+    const lDef = live ? SPACE_POWER_BY_KEY[live.type] : null;
+    const st   = live ? wrPgenStats(live.type, live.level) : null;
     const up  = glv < WR_POWER_MAX ? wrPgenStats(def.key, glv + 1) : null;
     const zie = SPACE_POWER.filter(g => g.out[1] > def.out[1] && wrPowerUnlocked(m, g.key));
     body = `
@@ -3321,8 +3461,10 @@ function wrColonyPowerHtml(m, p, canPay, priceTxt) {
             onerror="this.parentNode.classList.add('wr-art-fail');this.remove()"
           ><span class="wr-gen-fb">${def.icon}</span><span class="wr-zoom-hint">🔍</span></div>
         <div class="wr-gen-info">
-          <div class="wr-gen-name">${_wrEsc(def.name)} <span class="wr-sub">Stufe ${glv}</span></div>
-          <div class="wr-gen-out">⚡ ${wrFmt(st.output)}
+          <div class="wr-gen-name">${_wrEsc((lDef || def).name)}
+            <span class="wr-sub">Stufe ${live ? live.level : glv}${
+              (live && live.type !== def.key) ? ` · 🔧 Umrüstung auf ${_wrEsc(def.name)} läuft` : ''}</span></div>
+          <div class="wr-gen-out">⚡ ${wrFmt(st ? st.output : 0)}
             <span class="wr-sub">+ ${wrFmt(wrColonyLevel(p) * WR_COLONY_PER_LEVEL)} aus der Kolonie-Stufe</span></div>
           ${wrFuelHtml(m, gen, pid)}
           ${wrSlotBuilding(gen) ? wrBuildBadgeHtml(gen) : (up
@@ -3422,6 +3564,15 @@ function wrPlanetDefHtml(m, p) {
       <div class="wr-card-title">🏙️ Kolonie & Verteidigung
         <span class="wr-sub">Stufe ${clv} · ${dlv ? `🛡️ ${wrFmt(wrPlanetDef(p))} Feuerkraft` : 'ohne Geschütze'}${
           stationHere ? ' · 📡 Quadranten-Station' : ''}</span></div>
+      ${/* ⚠️ 27o: dieselbe Quelle wie das Dreieck in der Liste — hier ausgeschrieben.
+            Das Dreieck sagt DASS etwas ist, dieser Block sagt WAS und was zu tun ist. */''}
+      ${(() => {
+        const w = wrColonyWarnings(m, p);
+        if (!w.level) return '';
+        return `<div class="${w.level === 'bad' ? 'wr-warn' : 'wr-nrg-msg wr-sub'}">
+          ${w.level === 'bad' ? '⚠️ Diese Kolonie braucht Aufmerksamkeit:' : 'Hinweise:'}
+          <ul class="wr-cwarn-list">${w.items.map(t => `<li>${t}</li>`).join('')}</ul></div>`;
+      })()}
 
       <div class="wr-pdef-row">
         <div class="wr-pdef-lbl">🏙️ Kolonie-Ausbau <span class="wr-sub">Stufe ${clv} von 3</span></div>
@@ -3435,7 +3586,7 @@ function wrPlanetDefHtml(m, p) {
 
       <div class="wr-pdef-row">
         <div class="wr-pdef-lbl">🛡️ Geschütz-Bauplätze
-          <span class="wr-sub">${dlv} von ${WR_PLANET_SLOTS} belegt · Preise ×${String(WR_PTURRET_MULT).replace('.', ',')} (Transport)</span></div>
+          <span class="wr-sub">${dlv} von ${wrPlanetSlotsFree(p)} belegt · Preise ×${String(WR_PTURRET_MULT).replace('.', ',')} (Transport)</span></div>
         <div class="wr-pdef-val">${dlv ? `🛡️ ${wrFmt(wrPlanetDef(p))}` : '—'}</div>
         ${!hasE10
           ? `<div class="wr-warn">🔒 Braucht die Forschung ${wrIc('pla')} <strong>${_wrEsc(wrTechName('wt_e10'))}</strong>
@@ -3686,7 +3837,7 @@ function wrColoniesHtml(m) {
       <div class="wr-col-item${offen ? ' wr-col-open' : ''}">
         <button type="button" class="wr-col-row" data-wr-coltoggle="${_wrEsc(id)}">
           <span class="wr-col-caret">${offen ? '▾' : '▸'}</span>
-          <span>${meta.icon} ${_wrEsc(c.name || 'Kolonie')}
+          <span>${meta.icon} ${wrColonyWarnBadge(m, pl)}${_wrEsc(c.name || 'Kolonie')}
             <span class="wr-sub">Ring ${pl ? pl.ring : '?'}${pl ? ` · ${_wrEsc(pl.quadrant)}` : ''}</span></span>
           <span class="wr-sub">Stufe ${c.level || 1} · ${'★'.repeat(c.richness || 1)}${
             wrDefLevel(pl) ? ` · 🛡️ ${wrFmt(wrPlanetDef(pl))}` : ' · 🛡️ —'}${wrIsStation(pl) ? ' · 📡' : ''}
@@ -4111,14 +4262,26 @@ function wrMemberName(id) {
 // einer Zahl, die dann nicht ankommt, wirkt wie ein Fehler.
 function wrFuelHtml(m, pw, planetId) {
   if (!pw || typeof pw !== 'object' || !pw.type) return '';
-  const lv   = Math.max(1, Math.min(WR_POWER_MAX, parseInt(pw.level, 10) || 1));
-  const rate = wrGenFuelRate(pw.type, lv);
+  // ⚡ 27n: getankt wird der LAUFENDE Reaktor. Bei einer Umrüstung ist das der
+  // Vorgänger — in SEINER Sorte. Vorher stand hier `pw.type`/`pw.level`, also der
+  // bestellte Reaktor: der Knopf bot 🌀 an, wo 🟣 gebraucht wurde, und der Vorrat
+  // verschwand in eine Baustelle.
+  const live = wrGenLive(pw);
+  if (!live) {
+    // Echter Neubau: es gibt noch nichts zu betanken. Ohne diese Zeile stünde hier
+    // ein Tank auf 0 mit aktiven Knöpfen — genau die Falle aus JPs Meldung.
+    return `<div class="wr-nrg-msg wr-sub">⛽ Noch kein Tank — der Reaktor wird gerade
+      erst gebaut. Betankt werden kann er, sobald er steht.</div>`;
+  }
+  const konv = wrGenConverting(pw);
+  const lv   = live.level;
+  const rate = wrGenFuelRate(live.type, lv);
   if (rate <= 0) {
     return `<div class="wr-nrg-msg wr-sub">⛽ Wartungsfrei — dieser Reaktortyp braucht keinen Treibstoff.</div>`;
   }
-  const res  = wrGenFuelRes(pw.type);
+  const res  = wrGenFuelRes(live.type);
   const ic   = res === 'quantum' ? wrIc('qua') : wrIc('pla');
-  const left = wrGenFuelLeft(pw), max = wrGenFuelMax(pw.type, lv);
+  const left = wrGenFuelLeft(pw), max = wrGenFuelMax(live.type, lv);
   const days = left / rate;
   const have = res === 'quantum' ? wrQuantum(m) : wrPlasmoid(m);
   const room = Math.max(0, Math.floor(max - left));
@@ -4127,6 +4290,12 @@ function wrFuelHtml(m, pw, planetId) {
   const dTxt = days >= 1 ? `${Math.floor(days)} Tage` : `${Math.max(0, Math.round(days * 24))} h`;
   return `
     <div class="wr-fuel ${left <= 0 ? 'wr-fuel-dry' : days < 3 ? 'wr-fuel-low' : ''}">
+      ${/* ⚠️ Regel 4 (kein What's-New-Popup): die neue Regel steht dort, wo der Spieler
+            auf sie trifft — im Panel, das die Kosten verursacht. */''}
+      ${konv ? `<div class="wr-nrg-msg wr-sub">🔧 Umrüstung läuft — solange versorgt dich
+        weiter der <strong>${_wrEsc(SPACE_POWER_BY_KEY[live.type]?.name || live.type)}</strong>
+        auf Stufe ${lv}. Getankt wird deshalb ${ic} ${res === 'quantum' ? 'Quantenschaum' : 'Plasmoiden-Staub'},
+        nicht die Sorte des neuen Reaktors. Sein Restvorrat verfällt, sobald der neue steht.</div>` : ''}
       <div class="wr-fuel-head">⛽ Tank: <strong>${wrFmt(Math.round(left))}</strong> ${ic}
         <span class="wr-sub">von ${wrFmt(max)} · Verbrauch ${wrFmt(rate)} / Tag · reicht ${dTxt}</span></div>
       <div class="wr-fuel-bar"><div class="wr-fuel-fill" style="width:${max > 0 ? Math.min(100, Math.round(left / max * 100)) : 0}%"></div></div>
@@ -4158,7 +4327,13 @@ function wrPowerHtml(m, canPay, priceTxt) {
   // Der bestehende Generator: Ausbau bis Stufe 3, danach Umrüsten auf den nächsten Typ.
   let genHtml;
   if (gen && def) {
-    const st  = wrPowerStats(def.key, glv);
+    // ⚡ 27n: die Ausgabe gehört zum LAUFENDEN Reaktor. Während einer Umrüstung ist das
+    // der Vorgänger — `def` bleibt der bestellte, damit die Baumarke sagt, WORAUF
+    // umgerüstet wird. Zwei Rollen, zwei Variablen: genau die Lehre aus 26u
+    // („was der Bauplatz KANN" gegen „was bestellt ist").
+    const live  = wrGenLive(gen);
+    const lDef  = live ? SPACE_POWER_BY_KEY[live.type] : null;
+    const st    = live ? wrPowerStats(live.type, live.level) : null;
     const up  = glv < WR_POWER_MAX ? wrPowerStats(def.key, glv + 1) : null;
     const zie = SPACE_POWER.filter(g => g.out[1] > def.out[1] && wrPowerUnlocked(m, g.key));
     genHtml = `
@@ -4168,8 +4343,10 @@ function wrPowerHtml(m, canPay, priceTxt) {
             onerror="this.parentNode.classList.add('wr-art-fail');this.remove()"
           ><span class="wr-gen-fb">${def.icon}</span><span class="wr-zoom-hint">🔍</span></div>
         <div class="wr-gen-info">
-          <div class="wr-gen-name">${_wrEsc(def.name)} <span class="wr-sub">Stufe ${glv}</span></div>
-          <div class="wr-gen-out">⚡ ${wrFmt(st.output)} Ausgabe
+          <div class="wr-gen-name">${_wrEsc((lDef || def).name)}
+            <span class="wr-sub">Stufe ${live ? live.level : glv}${
+              (live && live.type !== def.key) ? ` · 🔧 Umrüstung auf ${_wrEsc(def.name)} läuft` : ''}</span></div>
+          <div class="wr-gen-out">⚡ ${wrFmt(st ? st.output : 0)} Ausgabe
             <span class="wr-sub">+ ${wrFmt(WR_POWER_BASE_SUPPLY + lv * WR_POWER_PER_LEVEL)} Grundversorgung des Hafens</span></div>
           ${wrFuelHtml(m, gen, null)}
           ${wrSlotBuilding(gen) ? wrBuildBadgeHtml(gen) : (up
@@ -5204,30 +5381,73 @@ function wrBuildBadgeHtml(slot) {
   if (ms <= 0) return '';
   const neu  = slot.lvlFrom === undefined || slot.lvlFrom === null;
   const ziel = Math.max(1, Math.min(WR_TURRET_MAX, parseInt(slot.level, 10) || 1));
+  // ⚡ 27n: bei einer Reaktor-UMRÜSTUNG steht der Vorgänger in `prev` und liefert weiter.
+  // Der Zusatz gehört hierher, weil dies die Stelle ist, an der der Spieler den Zustand
+  // sieht — Regel 4: keine Popups, die Erklärung zieht an den Ort der Wirkung.
+  const alt = (slot.prev && typeof slot.prev === 'object' && slot.prev.type)
+    ? (SPACE_POWER_BY_KEY[slot.prev.type]?.name || slot.prev.type) : null;
   return `<div class="wr-slot-build">🔧 ${neu
     ? 'wird gebaut' : `wird auf Stufe ${ziel} ausgebaut`}
-    <span class="wr-sub">noch ${wrCountdown(ms)}${neu ? '' : ' — solange zählt die alte Stufe'}</span></div>`;
+    <span class="wr-sub">noch ${wrCountdown(ms)}${alt
+      ? ` — solange liefert weiter der ${_wrEsc(alt)}`
+      : (neu ? '' : ' — solange zählt die alte Stufe')}</span></div>`;
 }
 
+// ── ⚡ 27n: WELCHER Reaktor läuft gerade? ────────────────────────────────────
+// ⚠️ CLIENT-SYNC-PFLICHT: Spiegel von `_space_gen_live` / `_space_gen_converting` in
+// migration_2026-08-20_27n_reaktor_umruestung.sql. Der Server ist autoritativ.
+//
+// JP 2026-08-20: „Der Quantenschaum-Reaktor kann befüllt werden … obwohl er noch im Bau
+// ist — die Energie ist = 0, sollte doch aber eigentlich vom Reaktor davor vorhanden
+// sein." Genau das leistet `prev`: bei einer UMRÜSTUNG läuft der alte Reaktor weiter,
+// mit seinem eigenen Tank und seiner eigenen Treibstoffsorte.
+//
+// ⚠️ Diese eine Funktion beantwortet ab jetzt jede Frage nach dem Reaktor — Ausgabe,
+// Tank, Sorte, online. Vorher standen `pw.type` (der BESTELLTE Typ) und `wrSlotLevel(pw)`
+// (die alte Stufe) nebeneinander: zwei Halbwahrheiten, die sich nur deshalb nicht
+// widersprachen, weil `null` vorher alles abgeschaltet hat.
+function wrGenLive(pw) {
+  if (!pw || typeof pw !== 'object' || !pw.type) return null;
+  const clamp = (v) => Math.max(1, Math.min(WR_POWER_MAX, parseInt(v, 10) || 1));
+  const ready = pw.readyAt ? Date.parse(pw.readyAt) : NaN;
+  // Unlesbarer Zeitstempel gilt als „fertig" — wie in wrSlotLevel: ein kaputtes Feld
+  // darf kein Kraftwerk dauerhaft abschalten.
+  if (!isFinite(ready) || ready <= Date.now()) {
+    return { type: pw.type, level: clamp(pw.level), fuel: pw.fuel, since: pw.since };
+  }
+  const prev = pw.prev;
+  if (prev && typeof prev === 'object' && prev.type) {
+    return { type: prev.type, level: clamp(prev.level), fuel: prev.fuel, since: prev.since };
+  }
+  if (pw.lvlFrom !== undefined && pw.lvlFrom !== null) {
+    return { type: pw.type, level: clamp(pw.lvlFrom), fuel: pw.fuel, since: pw.since };
+  }
+  return null;                                   // echter Neubau: es läuft nichts
+}
+// Läuft gerade eine Umrüstung, bei der noch der Vorgänger trägt?
+function wrGenConverting(pw) {
+  if (!pw || typeof pw !== 'object' || !pw.prev || typeof pw.prev !== 'object') return false;
+  const ready = pw.readyAt ? Date.parse(pw.readyAt) : NaN;
+  return isFinite(ready) && ready > Date.now();
+}
 function wrGenFuelLeft(pw) {
-  if (!pw || typeof pw !== 'object') return 0;
-  const lv = wrSlotLevel(pw);
-  if (lv === null) return 0;                     // 26u: noch im Bau
-  const rate = wrGenFuelRate(pw.type, lv);
+  const live = wrGenLive(pw);
+  if (!live) return 0;                           // 26u: echter Neubau
+  const rate = wrGenFuelRate(live.type, live.level);
   if (rate <= 0) return 0;
-  const fuel = Math.max(0, parseFloat(pw.fuel) || 0);
-  const since = pw.since ? Date.parse(pw.since) : NaN;
+  const fuel = Math.max(0, parseFloat(live.fuel) || 0);
+  const since = live.since ? Date.parse(live.since) : NaN;
   if (!isFinite(since)) return fuel;
   return Math.max(0, fuel - (Date.now() - since) / 86400000 * rate);
 }
 function wrGenOnline(pw) {
-  if (!pw || typeof pw !== 'object') return false;
-  const lv = wrSlotLevel(pw);
-  if (lv === null) return false;                 // 26u: im Bau = offline
-  return wrGenFuelRate(pw.type, lv) <= 0 || wrGenFuelLeft(pw) > 0;
+  const live = wrGenLive(pw);
+  if (!live) return false;                       // 26u: im Bau = offline
+  return wrGenFuelRate(live.type, live.level) <= 0 || wrGenFuelLeft(pw) > 0;
 }
 function wrGenFuelDaysLeft(pw) {
-  const rate = wrGenFuelRate(pw?.type, wrSlotLevel(pw) || 1);
+  const live = wrGenLive(pw);
+  const rate = live ? wrGenFuelRate(live.type, live.level) : 0;
   return rate > 0 ? wrGenFuelLeft(pw) / rate : Infinity;
 }
 
@@ -5236,7 +5456,10 @@ function wrPowerSupply(m) {
   let sup = WR_POWER_BASE_SUPPLY + lv * WR_POWER_PER_LEVEL;
   const g = wrPowerGen(m);
   // ⛽ 26s: ein trockener Reaktor liefert nichts — es bleibt die Grundversorgung.
-  if (g && wrGenOnline(g)) sup += wrPowerStats(g.type, wrPowerGenLevel(m))?.output || 0;
+  // ⚡ 27n: Typ UND Stufe kommen aus demselben Objekt (dem LAUFENDEN Reaktor). Vorher
+  // stand hier `g.type` (der bestellte) neben `wrPowerGenLevel` (der alten Stufe).
+  const live = wrGenLive(g);
+  if (live && wrGenOnline(g)) sup += wrPowerStats(live.type, live.level)?.output || 0;
   return sup;
 }
 // ⚠️ BESCHÄDIGTE GESCHÜTZE ZIEHEN KEINE ENERGIE — dieselbe dmg-Prüfung wie in
@@ -5293,8 +5516,114 @@ const WR_PDEF = [ null,
   { level: 3, atk: 320, cc: 26000, erz: 450, kristall: 160, plasmoid: 25 },
 ];
 // 🏙️ Kolonie-Bauplätze (26l) — Spiegel von _space_planet_slots/_space_pturret_mult.
-const WR_PLANET_SLOTS = 3;
+// ⚠️ 27o: die Zahl ist nicht mehr fest. Spiegel von `_space_planet_slots_for`.
+// JP 2026-08-20: „Man könnte ja machen, dass erst, wenn ein Quantenreaktor vorhanden ist,
+// 6 Slots zur Verfügung stehen." — Damit ist der Quantenschaum-Reaktor auf Kolonien nicht
+// mehr die FOLGE des Ausbaus (ein Plasmoid St. 3 trug den 3-Platz-Vollausbau mit Reserve),
+// sondern seine VORAUSSETZUNG.
+const WR_PLANET_SLOTS = 3;          // Sockel
+const WR_PLANET_SLOTS_QUA = 6;      // mit fertigem Quantenschaum-Reaktor
 const WR_PTURRET_MULT = 1.5;   // Kolonie-Aufschlag auf alle Geschützkosten
+// Freigeschaltete Bauplätze dieser Kolonie.
+// ⚠️ `wrGenLive` (27n): ein Reaktor IM BAU zählt nicht — sonst brächte schon das Starten
+// einer Umrüstung drei Bauplätze, und ein Abbruch liesse Geschütze ohne Kraftwerk zurück.
+function wrPlanetSlotsFree(p) {
+  return wrGenLive(wrPlanetPower(p))?.type === 'quanten' ? WR_PLANET_SLOTS_QUA : WR_PLANET_SLOTS;
+}
+// Wie viele Bauplätze werden ANGEZEIGT? Mindestens so viele, wie belegt sind.
+// ⚠️ BESTANDSSCHUTZ, und er ist kein Randfall: `resolve_colony_attack` (26v) setzt bei
+// einem verlorenen Angriff `power = NULL`. Eine Kolonie mit 6 belegten Bauplätzen fällt
+// dann auf „3 freigeschaltet" zurück — die drei bezahlten Geschütze in g3..g5 müssen
+// trotzdem sichtbar, reparierbar und ausbaubar bleiben. Der Server sieht das genauso
+// (`_space_slot_guard` prüft nur NEU hinzugekommene Bauplätze).
+// ── ⚠️ 27o: Was stimmt mit dieser Kolonie nicht? ────────────────────────────
+// JP 2026-08-20: „Beschädigte Kolonien könnten evtl. mit einem Achtungs-Dreieck versehen
+// werden, auch solche, die z. B. Energie-Lacks haben."
+//
+// ⚠️ EINE Quelle für alle Anzeigestellen — Liste, Panel und (später) Karte fragen
+// dieselbe Funktion. Zwei Listen von Missständen wären zwei Auffassungen davon, wann
+// eine Kolonie „in Ordnung" ist; genau so sind in diesem Modul schon zwei Garnisonen
+// und zwei Symboltabellen entstanden.
+//
+// ⚠️ ZWEI STUFEN, und die Trennlinie ist „heilt das von selbst?":
+//   bad  = braucht eine Handlung (Wrack bezahlen, Energie beschaffen, tanken, abwehren)
+//   warn = erledigt sich (dmg heilt nach 12 h, Tank reicht noch ein paar Tage)
+// Ein Dreieck, das auch für Selbstheilendes rot leuchtet, wird ignoriert — und dann
+// sieht man das echte nicht mehr.
+function wrColonyWarnings(m, p) {
+  const items = [];
+  let bad = false;
+  try {
+    if (!p || p.colonized_by !== m?.id) return { level: null, items };
+
+    const slots = Object.values(wrPlanetTurrets(p));
+    const wracks = slots.filter(s => s && typeof s === 'object' && s.wreck).length;
+    const dmg    = slots.filter(s => s && typeof s === 'object' && !s.wreck && wrTurretDamaged(s)).length;
+    if (wracks > 0) {
+      bad = true;
+      items.push(`🛠️ ${wrFmt(wracks)} Geschütz-Wrack${wracks > 1 ? 'e' : ''} — sie zählen `
+               + `erst wieder, wenn die Reparatur bezahlt ist.`);
+    }
+    if (dmg > 0) {
+      items.push(`💥 ${wrFmt(dmg)} Geschütz${dmg > 1 ? 'e' : ''} beschädigt — heilt von selbst.`);
+    }
+
+    // ⚡ Unterversorgung. Der Faktor ist dieselbe Rechnung wie im Energie-Panel.
+    const fac = wrColonyFactor(p);
+    if (fac < 1) {
+      bad = true;
+      const fehlt = Math.max(0, wrColonyDemand(p) - wrColonySupply(p));
+      items.push(`⚡ Unterversorgt — die Geschütze feuern mit ${Math.round(fac * 100)} %, `
+               + `es fehlen ${wrFmt(fehlt)} Energie.`);
+    }
+
+    // ⛽ Tank. Ein leerer Tank IST die Unterversorgung von morgen — er gehört hierher,
+    // auch wenn der Faktor heute noch 100 % zeigt.
+    const gen  = wrPlanetPower(p);
+    const live = wrGenLive(gen);
+    if (live && wrGenFuelRate(live.type, live.level) > 0) {
+      const tage = wrGenFuelDaysLeft(gen);
+      if (wrGenFuelLeft(gen) <= 0) {
+        bad = true;
+        items.push('⛽ Reaktor-Tank leer — er liefert nichts, es zählt nur die Grundversorgung.');
+      } else if (tage < 3) {
+        items.push(`⛽ Treibstoff reicht nur noch ${tage < 1
+          ? `${Math.max(0, Math.round(tage * 24))} h` : `${Math.floor(tage)} Tage`}.`);
+      }
+    }
+
+    // 🚨 Angriff unterwegs (26v). `_wrAttacks` ist Serverzustand dieser Sitzung.
+    try {
+      const a = (typeof _wrAttacks !== 'undefined' ? _wrAttacks : [])
+        .find(x => x && x.planetId === p.id && Date.parse(x.arriveAt) > Date.now());
+      if (a) {
+        bad = true;
+        items.push(`🚨 Angriff im Anflug (Stärke ${wrFmt(a.strength)}) — Einschlag in `
+                 + `${wrCountdown(Date.parse(a.arriveAt) - Date.now())}.`);
+      }
+    } catch (e) {}
+  } catch (e) { /* Regel 3: eine Warnung darf die Kolonie-Liste nie zerlegen */ }
+  return { level: items.length ? (bad ? 'bad' : 'warn') : null, items };
+}
+// Kompaktes Zeichen für die Kolonie-Liste. Leerstring, wenn alles in Ordnung ist —
+// ein Symbol, das immer da ist, sagt nichts.
+function wrColonyWarnBadge(m, p) {
+  const w = wrColonyWarnings(m, p);
+  if (!w.level) return '';
+  // ⚠️ `title` statt eines eigenen Tooltips: der Text muss auch auf dem Handy
+  // erreichbar sein, und dort steht er ausgeschrieben im aufgeklappten Panel.
+  return `<span class="wr-cwarn wr-cwarn-${w.level}" title="${_wrEsc(w.items.join(' · '))}"
+    >${w.level === 'bad' ? '⚠️' : '⚡'}</span>`;
+}
+
+function wrPlanetSlotsShown(p) {
+  let hoechster = -1;
+  for (const key of Object.keys(wrPlanetTurrets(p))) {
+    const i = parseInt(String(key).replace(/^g/, ''), 10);
+    if (Number.isFinite(i) && i > hoechster) hoechster = i;
+  }
+  return Math.min(WR_PLANET_SLOTS_QUA, Math.max(wrPlanetSlotsFree(p), hoechster + 1));
+}
 // ── 🗺️ 26z: Regionen-Effekte ────────────────────────────────────────────────
 // ⚠️ Spiegel von `_space_region_rates` in migration_2026-08-17_26z_regionen.sql.
 const WR_REGION_RATES = {
@@ -5445,7 +5774,9 @@ function wrColonySupply(p) {
   let sup = wrColonyLevel(p) * WR_COLONY_PER_LEVEL;
   const g = wrPlanetPower(p);
   // ⛽ 26s: gleiche Regel wie am Hafen — ohne Treibstoff keine Generator-Ausgabe.
-  if (g && wrGenOnline(g)) sup += wrPgenStats(g.type, wrPlanetGenLevel(p))?.output || 0;
+  // ⚡ 27n: der LAUFENDE Reaktor (bei einer Umrüstung ist das der Vorgänger).
+  const live = wrGenLive(g);
+  if (live && wrGenOnline(g)) sup += wrPgenStats(live.type, live.level)?.output || 0;
   return sup;
 }
 // Bedarf aller einsatzbereiten Kolonie-Geschütze — dieselbe dmg-Regel wie am Hafen.
@@ -6445,6 +6776,26 @@ function wrBindEvents() {
     const garSend = e.target.closest('[data-wr-garsend]');
     if (garSend && !garSend.disabled) { await wrGarrisonSend(garSend.dataset.wrGarsend); return; }
 
+    // ⬅️ 27m: alles von einer Kolonie zurückholen (Flotten-Tab). Setzt dieselbe Auswahl,
+    // die der Stepper im Kolonie-Panel füllen würde, und ruft denselben Weg — KEIN
+    // zweiter Absendepfad. Ein eigener wäre die Gelegenheit, eine der Prüfungen
+    // (Transport läuft, eingemottet, Bestand) genau hier zu vergessen.
+    const garPull = e.target.closest('[data-wr-garpull]');
+    if (garPull && !garPull.disabled) {
+      const pid   = garPull.dataset.wrGarpull;
+      const ships = wrGarrisonShips(_wrMember, pid);
+      const alle  = {};
+      for (const [k, v] of Object.entries(ships)) {
+        const n = parseInt(v, 10) || 0;
+        if (n > 0) alle[k] = n;
+      }
+      if (!Object.keys(alle).length) { wrToast('Auf dieser Kolonie steht nichts.', 'error'); return; }
+      _wrGarMode = 'recall';
+      _wrGarSel  = { planetId: pid, ships: alle };
+      await wrGarrisonSend(pid);
+      return;
+    }
+
     // 🧊 Eingemottete Flotte auslösen (JP 2026-08-20). wrsUnmothball() gab es seit 26w,
     // aber KEIN Knopf rief sie auf — der Weg zurück war nur über die Konsole erreichbar.
     // typeof-geguarded: weltraum_sold.js kann fehlen, ohne dass der Tab bricht (Regel 3).
@@ -6747,6 +7098,34 @@ async function wrClaimGarrison(silent) {
               : `🛡️ ${wrFmt(n)} Schiff(e) haben auf ${p?.name || 'der Kolonie'} Stellung bezogen.`,
               'success');
           }
+          // ⚠️ 27m (JP: „Die Benachrichtigung kam nur über ein Popup, aber nicht im
+          // Ereignis-Protokoll."). Ein Toast ist weg, sobald man wegsieht — der Start
+          // stand seit 27k im Chat, die Ankunft nicht. Ein Vorgang, dessen Anfang
+          // protokolliert wird und dessen Ende nicht, sieht aus wie ein verschollener.
+          // ⚠️ Auch bei `silent`: der Poll soll nicht aufpoppen, aber das Protokoll
+          // darf keine Lücke bekommen, nur weil der Tab gerade offen lag.
+          try {
+            const list = Object.entries(t.ships || {})
+              .filter(([, x]) => (parseInt(x, 10) || 0) > 0)
+              .map(([k, x]) => `${wrArtTok(k)} ${x}`).join(' · ');
+            wrChat(t.kind === 'recall'
+              ? `🛡️ ${_wrEsc(_wrMember.name)} hat ${list} aus der Garnison von `
+                + `${_wrEsc(p?.name || 'einer Kolonie')} zurück in den Hafen geholt.`
+              : `🛡️ ${list} von ${_wrEsc(_wrMember.name)} haben auf `
+                + `${_wrEsc(p?.name || 'einer Kolonie')} Stellung bezogen.`);
+          } catch (e) {}
+        }
+        // ⚠️ 27m: der Server liefert seit dieser Migration den BESTAND mit zurück, nicht
+        // nur die Zahl der abgearbeiteten Transporte. Genau dieser Unterschied war der
+        // Bug: `count > 0` meldete Erfolg, während `garrison` leer blieb (jsonb_set legt
+        // nur die letzte Ebene an). Bleibt der Bestand leer, obwohl eine Verlegung
+        // ankam, läuft eine Fassung vor 27m — dann lieber laut sein als still verlieren.
+        if (res.garrison && (res.done || []).some(t => t.kind !== 'recall')
+            && !Object.values(res.garrison).some(g => Object.values(g?.ships || {})
+                 .some(v => (parseInt(v, 10) || 0) > 0))) {
+          console.warn('claim_space_garrison: Transport eingelöst, Bestand leer — 27m fehlt?');
+          wrToast('⚠️ Die Garnison ist angekommen, steht aber nicht im Bestand. '
+                + 'Bitte melde das — die Migration 27m fehlt vermutlich.', 'error');
         }
       }
     }
@@ -7287,7 +7666,8 @@ async function wrPlanetBuild(planetId, action, slot, type) {
       wrToast(`${t.icon || '🛡️'} ${t.name || 'Geschütz'} auf ${pl} ${verb}`, 'success');
       wrChat(`[[s:${res.type}]] ${_wrEsc(name)} hat auf der Kolonie ${_wrEsc(pl)} `
            + `${_wrEsc(t.name || 'ein Geschütz')} ${_wrEsc(verb)} (${wrFmt(res.cc)} CC) — `
-           + `🛡️ ${wrFmt(res.defense)} Feuerkraft, ${res.slots || 0} von ${WR_PLANET_SLOTS} Bauplätzen belegt.`);
+           + `🛡️ ${wrFmt(res.defense)} Feuerkraft, ${res.slots || 0} von `
+           + `${wrPlanetSlotsFree(wrPlanetById(planetId))} Bauplätzen belegt.`);
     }
     try { if (typeof checkSpaceAchievements === 'function') await checkSpaceAchievements(_wrMember, res); } catch (e) {}
     // Die Planetenzeile hat sich geändert (Stufe/Geschütz/Station) → Galaxie neu holen,
@@ -8104,6 +8484,9 @@ function wrErrText(err) {
     power_exists:          'Es steht schon ein Generator. Baue ihn aus oder rüste ihn um.',
     // ⛽🟣 Plasmoid-Kreislauf (26s)
     no_fuel_needed:        'Dieser Reaktortyp ist wartungsfrei — er braucht keinen Treibstoff.',
+    // ⚡ 27n: vorher wurde hier stillschweigend gebucht und der Vorrat verbrannte.
+    power_building:        'Der Reaktor wird noch gebaut — betankt werden kann er erst, '
+                         + 'wenn er steht. Es wurde nichts abgebucht.',
     tank_full:             'Der Tank ist voll.',
     inject_full:           'Mehr als 100 🟣 lassen sich nicht injizieren (+40 % ist der Deckel).',
     power_max:             'Dieser Generator ist bereits auf der höchsten Stufe.',
