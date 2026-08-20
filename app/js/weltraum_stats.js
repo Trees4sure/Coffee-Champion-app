@@ -1293,6 +1293,14 @@ window.wrRegionStand = wrRegionStand;
 window.wrRegionsOf   = wrRegionsOf;
 window.wrStatsOf     = wrStatsOf;
 window.wrLive        = wrLive;
+// ⚠️ 27s NACHGETRAGEN: `wrAllUsers` lag in der IIFE und war von aussen NICHT
+// erreichbar — `typeof wrAllUsers === 'function'` in weltraum.js war immer false.
+// Der Prüfstand hat es gefunden, bevor es jemand im Browser gemerkt hätte: das
+// Feature hätte einfach nichts gezeichnet, ohne Fehler, ohne Hinweis.
+// ⚠️ Dasselbe Muster steckte in `wrMemberName` (weltraum.js): sie fragt nach einem
+// globalen `allMembers`, das es NIRGENDS gibt — deshalb stand in jeder Hilferuf-
+// Meldung „Ein Clan-Mitglied" statt eines Namens. Mit diesem Export ist auch das weg.
+window.wrAllUsers    = wrAllUsers;
 window.wrScore       = wrScore;
 window.wrFlushStats  = wrFlushStats;
 

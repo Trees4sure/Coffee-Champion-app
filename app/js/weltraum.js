@@ -32,9 +32,9 @@
 // WASSERPISTOLE. Auf dem Desktop fällt es nicht auf — auf dem Handy steht dort ein
 // Spielzeug. Jetzt 🗡️: der kleine, schnelle Angreifer neben dem ⚔️ Schlachtschiff.
 const SPACE_SHIPS = [
-  { key:'sonde', buildMin:60, art:'ship_spaeher',   icon:'🛰️', name:'Bohnen-Sonde',   atk:1,  mine:0, cc:750,  erz:0,  kristall:0,
+  { key:'sonde', buildMin:90, art:'ship_spaeher',   icon:'🛰️', name:'Bohnen-Sonde',   atk:1,  mine:0, cc:750,  erz:0,  kristall:0,
     needs:'wt_ionenantrieb', desc:'Deckt den Nebel eines Quadranten auf' },
-  { key:'jaeger', buildMin:90, art:'ship_jaeger',  icon:'🗡️', name:'Jäger',           atk:10, mine:0, cc:1150, erz:0,  kristall:0,
+  { key:'jaeger', buildMin:150, art:'ship_jaeger',  icon:'🗡️', name:'Jäger',           atk:10, mine:0, cc:1150, erz:0,  kristall:0,
     needs:'wt_ionenantrieb', desc:'Billige Kampfkraft — Anzahl entscheidet' },
   // 🛩️ Großer Jäger (JP 2026-07-27): füllt die Lücke zwischen Wegwerf-Jäger und der
   // Fregatte. Bleibt leichte Klasse — Konterbonus gegen Schwärme, kleiner Schild.
@@ -44,17 +44,17 @@ const SPACE_SHIPS = [
   // (statt der Formel-15 aus dem Handover): sonst liegen die beiden bei Kristall/Angriffskraft
   // nur 7 % auseinander und die Invariante „der Große Jäger bleibt sinnvoll" ist zwar formal
   // erfüllt, aber praktisch verfehlt. Siehe Kopf von migration_2026-08-20_27i.
-  { key:'grossjaeger', buildMin:180, art:'ship_grossjaeger', icon:'🛩️', name:'Großer Jäger', atk:20, mine:0, cc:2000, erz:30, kristall:10,
+  { key:'grossjaeger', buildMin:300, art:'ship_grossjaeger', icon:'🛩️', name:'Großer Jäger', atk:20, mine:0, cc:2000, erz:30, kristall:10,
     needs:'wt_frachtmodule', desc:'Schwerer Abfangjäger — doppelte Feuerkraft je Rumpf, leichter Schild' },
-  { key:'kutter', buildMin:180, art:'ship_kutter',  icon:'🚀', name:'Espresso-Kutter', atk:2,  mine:0, cc:1500, erz:0,  kristall:0,
+  { key:'kutter', buildMin:240, art:'ship_kutter',  icon:'🚀', name:'Espresso-Kutter', atk:2,  mine:0, cc:1500, erz:0,  kristall:0,
     needs:'wt_frachtmodule', desc:'Frachter, bringt Ausbeute sicher heim' },
-  { key:'ernter', buildMin:240, art:'ship_ernter',  icon:'⛏️', name:'Röstkomet',       atk:3,  mine:8, cc:1500, erz:30, kristall:0,
+  { key:'ernter', buildMin:360, art:'ship_ernter',  icon:'⛏️', name:'Röstkomet',       atk:3,  mine:8, cc:1500, erz:30, kristall:0,
     needs:'wt_handbohrer',   desc:'Baut Erz und Koffeinkristall ab' },
-  { key:'berger', buildMin:240, art:'ship_berger',  icon:'♻️', name:'Bergungsschiff', atk:1,  mine:0, cc:1900, erz:50, kristall:0,
+  { key:'berger', buildMin:360, art:'ship_berger',  icon:'♻️', name:'Bergungsschiff', atk:1,  mine:0, cc:1900, erz:50, kristall:0,
     needs:'wt_frachtmodule', desc:'Holt mehr aus Wracks — im Kampf und an befreiten Planeten' },
   { key:'kolonie', buildMin:1440, art:'ship_kolonie', icon:'🛸', name:'Kolonieschiff',   atk:0,  mine:0, cc:3750, erz:90, kristall:30,
     needs:'wt_frachtmodule', desc:'Gründet eine Kolonie — bleibt am Zielplaneten' },
-  { key:'fregatte', buildMin:360, art:'ship_fregatte', icon:'🛡️', name:'Fregatte', atk:28, mine:0, cc:2250, erz:70, kristall:30,
+  { key:'fregatte', buildMin:540, art:'ship_fregatte', icon:'🛡️', name:'Fregatte', atk:28, mine:0, cc:2250, erz:70, kristall:30,
     needs:'wt_frachtmodule', desc:'Leichter Begleitschutz — Schild senkt die Verluste des ganzen Verbands' },
   // 🛩️ Trägerschiff (JP 2026-07-29): der Grund, warum es kleine Jäger weiterhin gibt.
   // ⚠️ Spiegel: _space_ship_cost/_stats/_role/_build_min in migration_2026-07-26m.
@@ -263,6 +263,29 @@ function wrTechWreck(m)    { return (wrHasTech(m,'wt_d5') ? 1.3 : 1.0) * (wrHasT
 // ⚠️ ÜBERTRAGBARE LEHRE: Wer einen Vorgang von SOFORT auf DAUERT umstellt, führt einen
 // dritten Zustand ein. Jede Anzeige, die vorher mit zwei Zuständen auskam, ist damit
 // unvollständig — und zwar stillschweigend, weil sie weiterhin etwas Plausibles zeigt.
+// ⏱️ 27q: Wie lange dauert diese Forschung? (JP 2026-08-20: „Zeiten werden bei den
+// Forschungen nicht angezeigt — man kann nicht planen.")
+//
+// ⚠️ CLIENT-SYNC-PFLICHT: Spiegel von `_space_tech_min(stufe)` aus
+// migration_2026-08-17_26u_tempo.sql. Die Laufzeit hängt allein an der STUFE im Ast.
+// ⚠️ Und sie hängt an NICHTS sonst: wt_a4/wt_e14 verkürzen die WERFT, nicht das Labor
+// (ausdrücklich in 26u). Wer hier `wrTechBuildTime` einrechnet, zeigt eine Zahl an,
+// die der Server nie verwendet — genau die Sorte Fehler, die 26u beim Flugzeit-Tempo
+// schon einmal erzeugt hat.
+//
+// ⚠️ DIESELBE LÜCKE ZUM DRITTEN MAL IN DIESEM MODUL: 26u hat den Vorgang von SOFORT auf
+// DAUERT umgestellt, danach fehlte erst die Anzeige des LAUFENDEN Projekts (nachgereicht)
+// — und jetzt fiel auf, dass die Dauer VOR dem Kauf nie irgendwo stand. Ein Vorgang, der
+// Zeit kostet, braucht beides: den Zustand währenddessen UND den Preis in Zeit davor.
+const WR_TECH_MIN = [0, 120, 360, 720, 1440, 2880];   // Stufe 1..5
+const WR_TECH_MIN_MID = 4320;    // Stufe 6–8: 3 Tage
+const WR_TECH_MIN_TOP = 7200;    // ab Stufe 9: 5 Tage
+function wrTechMinFor(t) {
+  const st = Math.max(1, parseInt(t && t.stufe, 10) || 1);
+  if (st <= 5) return WR_TECH_MIN[st];
+  return st <= 8 ? WR_TECH_MIN_MID : WR_TECH_MIN_TOP;
+}
+
 function wrTechJob(m) {
   const j = wrSpace(m).techJob;
   return (j && typeof j === 'object' && j.key) ? j : null;
@@ -1093,6 +1116,17 @@ function wrDur(min) {
   const m = Math.max(0, Math.round(min || 0));
   if (m < 60) return m + ' Min';
   const h = Math.floor(m / 60), r = m % 60;
+  // ⚠️ 27q: ab zwei Tagen in TAGEN. Anlass war die Forschungsdauer (JP: „man kann nicht
+  // planen") — die oberste Stufe sind 7 200 Minuten, und „120 Std" ist keine Zahl, mit der
+  // jemand plant. Betrifft ebenso die grossen Schiffe: das Mutterschiff stand mit
+  // „168 Std" da statt „7 Tage".
+  // ⚠️ Bewusst in DIESER Funktion und nicht in einer zweiten daneben: zwei Zeitformate
+  // nebeneinander wären genau die Doppeldeutigkeit, die in diesem Modul schon zwei
+  // „Garnisonen" und zwei Symboltabellen erzeugt hat. Unter 48 h ändert sich nichts.
+  if (h >= 48) {
+    const d = Math.floor(h / 24), hr = h % 24;
+    return hr ? `${d} Tage ${hr} Std` : `${d} Tage`;
+  }
   return r ? `${h} Std ${r} Min` : `${h} Std`;
 }
 // Zeitpunkt in der Zukunft benennen („Fr, 01.08., 14:10"). Eine reine Restdauer reicht
@@ -1297,11 +1331,19 @@ function wrBuyFlush() {
   if (!parts.length) return;
   // Kosten inkl. Rohstoffe — die ECHTE Server-Abbuchung (wrBuildCart überschreibt
   // s.cc/erz/kri mit res.*), nicht die unrabattierten Basispreise (JP 2026-07-23).
+  // ⚠️ 27q (JP 2026-08-20): „im Chat bei Bau von Flugzeugen werden nicht die Erz und
+  // Kristall assets angezeigt — was ist mit plasmoid und quantenschaum?"
+  // Die SCHIFFE standen hier längst als `wrArtTok(k)` (= `[[s:key]]`, das `_chatArt()` in
+  // app.js gegen das echte Bild tauscht) — die ROHSTOFFE daneben als rohes Emoji.
+  // Dieselbe Halbheit wie in den Preiszeilen, nur im Chat: ein Bild und drei Emoji in
+  // EINER Meldung. CHAT_ART kennt alle vier Sorten seit 26c.
+  // ⚠️ Und ja, Plasmoid/Quantenschaum stehen hier: `wrBuildCart` füllt `s.pla`/`s.qua`
+  // aus der Server-Antwort (27i-Kosten). Sie fehlten nicht — sie sahen nur nicht so aus.
   const cost = [`${wrFmt(s.cc)} CC`]
-    .concat(s.erz ? [`${wrFmt(s.erz)} 🪨`] : [])
-    .concat(s.kri ? [`${wrFmt(s.kri)} 💎`] : [])
-    .concat(s.pla ? [`${wrFmt(s.pla)} 🟣`] : [])
-    .concat(s.qua ? [`${wrFmt(s.qua)} 🌀`] : []).join(' · ');
+    .concat(s.erz ? [`${wrFmt(s.erz)} ${wrArtTok('erz')}`] : [])
+    .concat(s.kri ? [`${wrFmt(s.kri)} ${wrArtTok('kristall')}`] : [])
+    .concat(s.pla ? [`${wrFmt(s.pla)} ${wrArtTok('plasmoid')}`] : [])
+    .concat(s.qua ? [`${wrFmt(s.qua)} ${wrArtTok('quantum')}`] : []).join(' · ');
   // ⏱️ Bauzeit mitnennen (JP 2026-08-20). Nur wenn sie bekannt ist: wrBuyTrack kann auch
   // ohne Warenkorb-Antwort laufen, dann bleibt `min` leer — und eine erfundene Zahl wäre
   // schlimmer als keine.
@@ -1585,6 +1627,12 @@ function wrRender() {
           <div class="wr-zoom">
             <button type="button" class="wr-zoom-btn" data-wr-zoom="in" title="Vergrößern">➕</button>
             <button type="button" class="wr-zoom-btn" data-wr-zoom="out" title="Verkleinern">➖</button>
+            ${/* 🛰️ 27s: JP wollte die Ansicht abschaltbar („der Übersicht halber").
+                  Der Knopf sitzt bei den Zoom-Knöpfen, weil beides dasselbe ist: eine
+                  Einstellung der KARTE, keine Spielhandlung. */''}
+            <button type="button" class="wr-zoom-btn${_wrShowOthers ? ' wr-zoom-on' : ''}"
+              data-wr-others="1" title="Flotten der Mitspieler ${_wrShowOthers ? 'ausblenden' : 'einblenden'}"
+              >${_wrShowOthers ? '👥' : '👤'}</button>
           </div>
         </div>
         <div class="wr-legend">
@@ -1598,6 +1646,14 @@ function wrRender() {
           <span><i class="wr-dot wr-dot-colony"></i> Kolonie (Spielerfarbe · Ringe = Stufe)</span>
           <span>🛡️ Geschütze · 📡 Station</span>
           <span><i class="wr-dot wr-dot-risk"></i> ungeschützt — Rückfall droht</span>
+          ${(() => {
+            // Die Legende nennt den Zustand des Schalters, nicht nur die Bedeutung —
+            // sonst sucht man ausgeblendete Flotten auf der Karte statt am Knopf.
+            const n = wrOtherTrips().length;
+            return `<span><i class="wr-dot wr-dot-other"></i> ${_wrShowOthers
+              ? `Flotten der Mitspieler (Spielerfarbe)${n ? ` — ${n} unterwegs` : ' — gerade keine'}`
+              : 'Mitspieler-Flotten ausgeblendet — 👤 schaltet sie ein'}</span>`;
+          })()}
         </div>
       </div>
       <div id="wr-detail"${_wrTab === 'karte' ? '' : ' hidden'}>${wrDetailHtml(m)}</div>
@@ -2702,10 +2758,15 @@ function wrTechHtml(m) {
               ><span class="wr-fl-fb">${a.icon}</span><span class="wr-zoom-hint">🔍</span></span>
             <strong class="wr-tech-name">${_wrEsc(t.name)}</strong>
             <span class="wr-tech-desc wr-sub">${wrIcText(t.wirkung)}</span>
+            ${/* ⏱️ 27q: die Dauer gehört NEBEN die Kosten — sie ist der zweite Preis.
+                  Ohne sie liess sich nicht planen (JP), obwohl das Labor immer nur EIN
+                  Projekt gleichzeitig annimmt: wer die Laufzeit nicht kennt, weiss auch
+                  nicht, wie lange er damit alles andere blockiert. */''}
             <span class="wr-tech-cost wr-sub">${wrFmt(t.cc)} CC${t.erz ? ` · ${wrFmt(t.erz)} ${wrIc('erz')}` : ''}${
               t.kristall ? ` · ${wrFmt(t.kristall)} ${wrIc('kri')}` : ''}${
               t.plasmoid ? ` · ${wrFmt(t.plasmoid)} ${wrIc('pla')}` : ''}${
-              t.quantum ? ` · ${wrFmt(t.quantum)} ${wrIc('qua')}` : ''}</span>
+              t.quantum ? ` · ${wrFmt(t.quantum)} ${wrIc('qua')}` : ''}
+              <span class="wr-tech-dauer">${wrIc('time')} ${wrDur(wrTechMinFor(t))}</span></span>
             <span class="wr-tech-act">${aktion}</span>
           </div>`;
       }).join('');
@@ -2721,7 +2782,8 @@ function wrTechHtml(m) {
   const sp = wrTechSpeed(m), bt = Math.round((1 - wrTechBuildTime(m)) * 100);
   return `${wrTransmuterHtml(m)}<div class="wr-card">
       <div class="wr-card-title">🔬 Weltraum-Technik
-        <span class="wr-sub">verstärkt, was du schon hast</span></div>
+        <span class="wr-sub">verstärkt, was du schon hast · ein Projekt gleichzeitig,
+          Dauer nach Stufe (2 h → 5 Tage)</span></div>
       ${/* ⏳ 26u: das laufende Projekt ganz oben. Ohne diese Zeile musste man den
             richtigen Ast suchen, um überhaupt zu sehen, DASS etwas läuft — und die
             Fehlermeldung „es läuft bereits eine Forschung" blieb unerklärlich. */''}
@@ -4294,7 +4356,14 @@ function wrHelpCallsHtml(m) {
 // Namensauflösung über die bereits geladene Mitgliederliste der App
 function wrMemberName(id) {
   try {
-    const list = (typeof allMembers !== 'undefined' && allMembers) ? allMembers : [];
+    // ⚠️ 27s: hier stand `typeof allMembers !== 'undefined'` — ein globales `allMembers`
+    // gibt es in dieser App NIRGENDS (nur eine lokale Variable gleichen Namens in
+    // db.js: registerUser). Die Bedingung war also immer falsch, und JEDE Hilferuf- und
+    // Angriffsmeldung nannte „Ein Clan-Mitglied" statt eines Namens.
+    // ⚠️ ÜBERTRAGBARE LEHRE: `typeof x !== 'undefined'` als Absicherung verwandelt einen
+    // falschen Namen in einen stillen Rückfall. Der Code sieht robust aus und ist nur
+    // dauerhaft wirkungslos — dieselbe Falle wie `wrAllUsers` in der IIFE (27s).
+    const list = (typeof wrAllUsers === 'function') ? wrAllUsers() : [];
     return (list.find(x => x.id === id) || {}).name || 'Ein Clan-Mitglied';
   } catch (e) { return 'Ein Clan-Mitglied'; }
 }
@@ -5236,8 +5305,13 @@ function wrShipCost(s, m, count) {
 // sind die Kosten, nicht die Uhr. Spiegel von build_space_cart —
 // inkl. A4 Orbitalwerft (_space_tech_buildtime), die hier ebenfalls fehlte.
 // ⚠️ BALANCE 26u (Plan B.1.3): Stückzuschlag war „Grundzeit + 1 Minute je Stück" — bei
-// 7 Tagen Grundzeit bedeutungslos. Neu: +2 % der Grundzeit je ZUSÄTZLICHEM Stück.
-// 50 Jäger = 90 × (1 + 0,02 × 49) = 178 min. Spiegel von `_space_ship_build_min_n`.
+// 7 Tagen Grundzeit bedeutungslos. Dann: +2 % der Grundzeit je ZUSÄTZLICHEM Stück.
+// ⚠️ BALANCE 27r (JP 2026-08-20): +2 % → +4 %, und die KLEINEN Schiffe haben längere
+// Grundzeiten bekommen (Jäger 90 → 150 …). Anlass: „sie werden schneller gebaut, als dass
+// sie fliegen können". Nachgerechnet stimmte das — 50 Jäger dauerten 98 min, ein Flug nach
+// Ring 1 dagegen 240. Jetzt: 150 × (1 + 0,04 × 49) = 444 min, mit Werft 3 also 244 min.
+// ⚠️ Bewusst LINEAR geblieben statt quadratisch: „das Spiel soll ja auch laufen" (JP im
+// selben Satz). Spiegel von `_space_ship_build_min_n` in migration_2026-08-20_27r.
 // ⚠️ Nebenbefund aus 26u: Server und Client hatten hier ZWEI Formeln — `build_space`
 // (Einzelkauf) rechnete voll multiplikativ (× Stück), `build_space_cart` sublinear
 // (+ Stück), obwohl ein Kommentar in 21e das Gegenteil behauptet. Beide Pfade rufen
@@ -5245,7 +5319,7 @@ function wrShipCost(s, m, count) {
 function wrShipBuildMin(s, m, count) {
   const cut = wrYardDef(wrYardLevel(m)).timeCut;
   const n   = Math.max(1, count || 1);
-  return Math.max(1, Math.round((s.buildMin || 10) * (1 + 0.02 * (n - 1))
+  return Math.max(1, Math.round((s.buildMin || 10) * (1 + 0.04 * (n - 1))
                                 * (1 - cut) * wrTechBuildTime(m)));
 }
 
@@ -6029,6 +6103,63 @@ function wrFallbackAt(p, m) {
 }
 // Spielerfarbe, deterministisch aus der member_id (kein Durchnummerieren — bei
 // Neuzugängen bliebe sonst keine Farbe stabil). Gleiche Quelle wie _wrHash.
+// ── 🛰️ 27s: Flotten der Mitspieler auf der Karte ───────────────────────────
+// JP 2026-08-20: „Ich fänds cool, wenn man die Flotten der Mitspieler auch auf der Karte
+// fliegen sehen kann … wieder mit einem farbigen Rand wie bei Kaffee-Mobil? Wäre sonst
+// auch, der Übersicht halber, gut, wenn man die Ansicht an- und abschalten könnte."
+//
+// ⚠️ KEINE SQL NÖTIG, UND DAS WAR DIE ERSTE PRÜFUNG: `fetchData` in db.js liest
+// `members.select('*')` für die ganze Gruppe, `normalizeUser` behält die Spalte `space`.
+// Die Flüge der anderen liegen also längst im Client — ein neuer Endpunkt hätte dieselben
+// Daten ein zweites Mal geholt. (Und die Egress-Notiz aus [[coffee-champion-egress]] wäre
+// dadurch schlechter geworden, nicht besser.)
+//
+// ⚠️ Der Startpunkt stimmt ohne Zusatzdaten: der Raumhafen liegt für ALLE im Ring-0-Hex
+// in der Canvas-Mitte („der Quadrant 0,0 ist trotzdem für alle derselbe Startpunkt",
+// wrDrawMap). Die Flugbahn ist also dieselbe Interpolation wie bei der eigenen Flotte.
+//
+// ⚠️ Farbe = `wrMemberColor(id)` — dieselbe Funktion, die schon die Kolonie-Punkte färbt.
+// Eine zweite Farbtabelle „für Flotten" wäre genau das Muster, das hier zweimal zwei
+// Garnisonen und zwei Symboltabellen erzeugt hat.
+let _wrShowOthers = true;
+const _WR_OTHERS_KEY = 'wr_show_others';
+try {
+  const v = localStorage.getItem(_WR_OTHERS_KEY);
+  if (v !== null) _wrShowOthers = v === '1';
+} catch (e) { /* privater Modus: Vorgabe bleibt an */ }
+
+// Alle laufenden Flüge der ANDEREN — {id, name, color, trip}.
+// ⚠️ typeof-Guard auf `wrAllUsers`: das lebt in weltraum_stats.js, und die Karte darf
+// nicht davon abhängen, dass diese Datei geladen ist (Regel 3).
+function wrOtherTrips() {
+  const out = [];
+  try {
+    if (!_wrShowOthers) return out;
+    const users = (typeof wrAllUsers === 'function') ? wrAllUsers() : [];
+    const now = Date.now();
+    for (const u of users) {
+      if (!u || u.id === _wrMember?.id) continue;
+      const trips = _space_trips_of(u);
+      for (const t of trips) {
+        // Abgelaufene Flüge nicht zeichnen: der Besitzer holt sie beim nächsten Öffnen
+        // ab, bis dahin stünde sonst ein Geisterschiff auf dem Zielplaneten.
+        const r = Date.parse(t.returnAt);
+        if (isFinite(r) && r <= now) continue;
+        out.push({ id: u.id, name: u.name || 'Clan-Mitglied', color: wrMemberColor(u.id), trip: t });
+      }
+    }
+  } catch (e) { /* eine fremde Flotte darf die Karte nie zerlegen */ }
+  return out;
+}
+// Reisen eines BELIEBIGEN Mitglieds. `wrTrips(m)` tut dasselbe, liest aber implizit den
+// eigenen Zustand mit — deshalb hier eine Fassung ohne Nebenwirkungen.
+function _space_trips_of(u) {
+  const away = u?.space?.fleets?.away;
+  if (!away || typeof away !== 'object') return [];
+  if (Array.isArray(away.trips)) return away.trips.filter(t => t && t.planetId);
+  return (away.planetId && away.startAt) ? [away] : [];
+}
+
 function wrMemberColor(id) {
   if (!id) return '#8aa0c0';
   return `hsl(${_wrHash(String(id)) % 360}, 72%, 58%)`;
@@ -6366,6 +6497,45 @@ function wrDrawMap() {
     }
   }
 
+  // 🛰️ 27s: die Flotten der anderen — dünner, farbiger, mit Namen. Bewusst NACH der
+  // eigenen gezeichnet? Nein: DAVOR wäre falsch herum. Sie liegen UNTER der eigenen,
+  // damit die eigene Flotte im Gedränge immer obenauf bleibt — deshalb steht dieser
+  // Block direkt hier, nach der eigenen Schleife, mit kleinerem Radius und Alpha.
+  for (const o of wrOtherTrips()) {
+    const tp = (_wrGalaxy?.planets || []).find(p => p.id === o.trip.planetId);
+    if (!tp) continue;
+    const tc = wrPlanetPos(tp, cx, cy, size);
+    const st = Date.parse(o.trip.startAt), ar = Date.parse(o.trip.arriveAt),
+          rt = Date.parse(o.trip.returnAt), now = Date.now();
+    let f = (now <= ar) ? ((ar > st) ? (now - st) / (ar - st) : 1)
+                        : ((rt > ar) ? 1 - (now - ar) / (rt - ar) : 0);
+    f = Math.max(0, Math.min(1, f));
+    const fx = cx + (tc.x - cx) * f, fy = cy + (tc.y - cy) * f;
+
+    ctx.save();
+    ctx.globalAlpha = 0.62;
+    ctx.setLineDash([2, 7]);
+    ctx.strokeStyle = o.color; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(tc.x, tc.y); ctx.stroke();
+    ctx.setLineDash([]);
+    // Der „farbige Rand" (JP, Muster Kaffee-Mobil): ein Ring in der Spielerfarbe um das
+    // Leitschiff. Ohne ihn wäre auf einer Karte mit mehreren Flotten nicht erkennbar,
+    // wem welche gehört — das Schiffsbild allein sagt nur die Klasse.
+    ctx.beginPath(); ctx.arc(fx, fy, 13, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(8,11,24,.75)'; ctx.fill();
+    ctx.lineWidth = 2.2; ctx.strokeStyle = o.color; ctx.stroke();
+    ctx.globalAlpha = 1;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const lead = wrLeadShip(o.trip.ships || {});
+    if (!(lead && wrDrawImg(ctx, lead.art, fx, fy, 22))) {
+      ctx.font = '12px system-ui'; ctx.fillStyle = '#fff';
+      ctx.fillText(lead?.icon || '🚀', fx, fy);
+    }
+    ctx.font = '9px system-ui'; ctx.fillStyle = o.color;
+    ctx.fillText(o.name, fx, fy + 20);
+    ctx.restore();
+  }
+
   ctx.restore();   // 🔍 Ende der Zoom/Pan-Transformation
 }
 
@@ -6542,6 +6712,21 @@ function wrBindEvents() {
     if (tripCard && !e.target.closest('[data-wr-claim]') && !e.target.closest('[data-wr-recall]')) { wrFleetLightbox(tripCard.dataset.wrTripcard); return; }
 
     // Raumhafen: Ausbau + Geschütze
+    // 🛰️ 27s: Mitspieler-Flotten ein/aus. Nur Karte neu zeichnen, kein wrRender() —
+    // ein voller Neuaufbau würde offene Akkordeons und Auswahlen mit zurücksetzen.
+    // ⚠️ Der KNOPF selbst muss trotzdem neu, sonst zeigt er weiter das alte Symbol;
+    // deshalb wird er hier direkt umgeschrieben statt über einen Render-Umweg.
+    const othBtn = e.target.closest('[data-wr-others]');
+    if (othBtn) {
+      _wrShowOthers = !_wrShowOthers;
+      try { localStorage.setItem(_WR_OTHERS_KEY, _wrShowOthers ? '1' : '0'); } catch (err) {}
+      othBtn.textContent = _wrShowOthers ? '👥' : '👤';
+      othBtn.title = `Flotten der Mitspieler ${_wrShowOthers ? 'ausblenden' : 'einblenden'}`;
+      othBtn.classList[_wrShowOthers ? 'add' : 'remove']('wr-zoom-on');
+      wrDrawMap();
+      wrRender();      // die Legende nennt Zustand und Anzahl — die muss mit
+      return;
+    }
     if (e.target.closest('#wr-port-up')) { await wrDefense('port_upgrade', null, null); return; }
     if (e.target.closest('#wr-yard-up'))  { await wrDefense('yard_upgrade', null, null); return; }
     if (e.target.closest('#wr-job-claim')) { await wrClaimBuild(false); return; }
@@ -7975,7 +8160,11 @@ function wrTechLightbox(key) {
                     poor: 'Mittel reichen nicht', buy: 'erforschbar' }[st] || '';
   const ast = SPACE_TECH_ASTE.find(a => a.key === t.ast) || {};
   const cost = wrPreisTxt(t);   // 27p: die Lightbox rendert HTML (wrArtLightbox)
-  const rows = [['💰 Kosten', cost], ['📊 Status', stLabel], [`${ast.icon || '🔬'} Ast`, _wrEsc(ast.name || '')]];
+  const rows = [['💰 Kosten', cost],
+                // ⏱️ 27q: auch hier — die Lightbox ist der Ort, an dem man ein Projekt
+                // vor dem Kauf ansieht.
+                [`${wrIc('time')} Dauer`, wrDur(wrTechMinFor(t))],
+                ['📊 Status', stLabel], [`${ast.icon || '🔬'} Ast`, _wrEsc(ast.name || '')]];
   if (t.requires) rows.push(['🔗 Braucht', _wrEsc((SPACE_TECH_BY_KEY[t.requires] || {}).name || t.requires)]);
   wrArtLightbox(t.art, ast.icon || '🔬', t.name, t.wirkung, rows, 'weltraum');
 }
