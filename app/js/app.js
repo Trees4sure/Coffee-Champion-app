@@ -789,6 +789,17 @@ function _showWhatsNewModal(items) {
 }
 
 // ── Regelwerk / Spickzettel (unten in der Rangliste, einmal injiziert) ──────────
+// ⚠️ 27q: Rohstoff-Bilder im Regelwerk-Popup (JP 2026-08-20: „die plasmoid assets und
+// erz sowie kristall assets sollst du verwenden").
+// `wrIc` lebt in weltraum.js, das laut index.html VOR app.js geladen wird (364 vs. 373).
+// Der Guard faengt eine spaetere Umsortierung ab: dann steht das Emoji da, statt dass
+// das ganze Regelwerk beim Oeffnen wegbricht (Regel 3).
+// ⚠️ NUR fuer HTML — das Ergebnis ist eine <span>-Huelle. In Toasts und Chat-Meldungen
+// bleiben die Emoji (dort wird kein HTML gerendert).
+function _ccIc(key, fb) {
+  try { return (typeof wrIc === 'function') ? wrIc(key) : fb; } catch (e) { return fb; }
+}
+
 function ensureRegelwerk() {
   const host = document.getElementById('view-rangliste');
   if (!host || document.getElementById('cc-regelwerk')) return;
@@ -913,8 +924,8 @@ function ensureRegelwerk() {
       anfangs im Nebel. Was einer mit einer 🛰️ Bohnen-Sonde aufklärt, sehen <b>alle</b> —
       ihr seid ein Kaffee-Clan gegen die Wächter, kein PvP. Flotten, Rohstoffe und Kolonien
       gehören dagegen dir allein.<br>
-      <span class="cc-rw-hl">Zwei Rohstoffe, nicht käuflich:</span> 🪨 <b>Erz</b> und
-      💎 <b>Koffeinkristall</b> gibt es <b>ausschließlich</b> im All — kein Markt, kein CC-Umtausch.
+      <span class="cc-rw-hl">Zwei Rohstoffe, nicht käuflich:</span> ${_ccIc('erz', '🪨')} <b>Erz</b> und
+      ${_ccIc('kri', '💎')} <b>Koffeinkristall</b> gibt es <b>ausschließlich</b> im All — kein Markt, kein CC-Umtausch.
       Sie zählen auch nicht zu deinem CC-Vermögen. Reich sein allein reicht hier nicht mehr.<br>
       <span class="cc-rw-hl">Kampf ist immer teuer:</span> Der Verlustanteil ist
       <b>Gegnerstärke ÷ (eigene + Gegnerstärke)</b> — und gilt <b>bei Sieg wie bei Niederlage</b>

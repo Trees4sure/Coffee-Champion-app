@@ -63,6 +63,12 @@ const SPACE_SHIPS = [
   // bewusst ohne Exoten — er ist ein Transporter, und §1.4 nennt nur Kreuzer/Schlachtschiff.
   // Die Kapazität gehört in den desc-Text: es gibt bewusst KEIN What's-New-Popup (JP),
   // also muss die Regel dort stehen, wo man das Schiff kauft.
+  // ⚠️ 27q ABGRENZUNG (JP 2026-08-20): das gilt für REGELN, nicht für KOSTEN.
+  // Kreuzer/Schlachtschiff/Dunkle Röstung trugen seit 27i ein „— braucht 🟣
+  // Plasmoiden-Staub" im desc. JP: „das kann eigentlich komplett weg der Satz, weil
+  // die Kosten ja klar sind!" — die Preiszeile daneben nennt jeden Posten mit Bild
+  // und Menge. Ein desc, der sie in Worten wiederholt, sagt WENIGER und kostet Platz.
+  // Die Kapazität des Trägers bleibt: sie steht in KEINER Kostenzeile.
   { key:'traeger', buildMin:2880, art:'ship_traeger', icon:'🛩️', name:'Trägerschiff', atk:40, mine:0, cc:22500, erz:630, kristall:230,
     needs:'wt_frachtmodule', desc:'Nimmt 20 Jäger auf: nur so kommen kleine Jäger nach Ring 2/3. Schützt sie mit seinem Schild und gibt +5 % Kampfkraft auf den ganzen Verband (max. +15 %)' },
   // ⚠️ JP 2026-07-22: Bomber ↔ Kreuzer haben NAME/BILD/ICON getauscht — der Kreuzer
@@ -76,11 +82,11 @@ const SPACE_SHIPS = [
   { key:'kreuzer', buildMin:720, art:'ship_bomber', icon:'💣', name:'Bomber', atk:65, mine:0, cc:4500, erz:180, kristall:30,
     needs:'wt_frachtmodule', desc:'Kapitalschiff-Jäger: stark gegen schwere Gegner, träge gegen Schwärme' },
   { key:'bomber', buildMin:1440, art:'ship_kreuzer', icon:'🚨', name:'Kreuzer', atk:90, mine:0, cc:6900, erz:260, kristall:60, plasmoid:20,
-    needs:'wt_frachtmodule', desc:'Überall stark, gegen Geschütze verheerend — braucht 🟣 Plasmoiden-Staub' },
+    needs:'wt_frachtmodule', desc:'Überall stark, gegen Geschütze verheerend' },
   { key:'schlachtschiff', buildMin:2880, art:'ship_schlachtschiff', icon:'⚔️', name:'Schlachtschiff', atk:180, mine:0, cc:13800, erz:550, kristall:140, plasmoid:40,
-    needs:'wt_frachtmodule', desc:'Überall stark, hoher Schild — das Rückgrat einer großen Flotte, braucht 🟣 Plasmoiden-Staub' },
+    needs:'wt_frachtmodule', desc:'Überall stark, hoher Schild — das Rückgrat einer großen Flotte' },
   { key:'dunkle_roestung', buildMin:5760, art:'ship_dunkle_roestung', icon:'🌑', name:'Dunkle Röstung', atk:320, mine:0, cc:26300, erz:1060, kristall:330, plasmoid:75, quantum:200,
-    needs:'wt_frachtmodule', desc:'Elite-Kapitalschiff: überall stark, höchster Schild — verlangt als einziges Kaufschiff 🟣 Plasmoid UND 🌀 Quantenschaum' },
+    needs:'wt_frachtmodule', desc:'Elite-Kapitalschiff: überall stark, höchster Schild' },
   // 🛸 Flaggschiff (JP 2026-07-27). `special:'flagship'` heißt: NICHT über den Warenkorb
   // kaufbar — es entsteht nur in build_mutterschiff aus eingelösten Rümpfen. Die Werft
   // überspringt solche Schiffe deshalb in beiden Schleifen und zeigt ein eigenes Panel.
@@ -811,7 +817,12 @@ function wrKitLabelHtml(k) {
   const sh = SPACE_SHIP_BY_KEY[k];
   if (sh) return `${wrShipArt(k)} ${_wrEsc(sh.name)}`;
   const r = WR_KIT_RES[k];
-  return r ? `${r[0]} ${r[1]}` : _wrEsc(k);
+  if (!r) return _wrEsc(k);
+  // ⚠️ 27q: die HTML-Schwester gab Schiffe als BILD (wrShipArt), Rohstoffe aber als
+  // rohes Emoji zurück — dieselbe Halbheit wie bei den Preiszeilen. `WR_KIT_RES[k][0]`
+  // bleibt der Emoji-Rückfall für `wrKitLabel` (Text, für Toasts).
+  const ic = { erz:'erz', kristall:'kri', plasmoid:'pla', quantum:'qua' }[k];
+  return `${ic ? wrIc(ic) : r[0]} ${r[1]}`;
 }
 
 // Die Anforderung als Block unter dem Kolonisieren-Knopf. Fehlendes rot.
@@ -8076,8 +8087,8 @@ function wrWaveReport(r) {
   }
   if (!r.won) {
     const pl = [];
-    if (r.plunderErz > 0)      pl.push(`${wrFmt(r.plunderErz)} 🪨`);
-    if (r.plunderKristall > 0) pl.push(`${wrFmt(r.plunderKristall)} 💎`);
+    if (r.plunderErz > 0)      pl.push(`${wrFmt(r.plunderErz)} ${wrIc('erz')}`);
+    if (r.plunderKristall > 0) pl.push(`${wrFmt(r.plunderKristall)} ${wrIc('kri')}`);
     if (pl.length) lines.push(`<div class="wr-bad">Geplündert: ${pl.join(' · ')}</div>`);
     if (r.turretsDamaged > 0) {
       lines.push(`<div class="wr-bad">${wrFmt(r.turretsDamaged)} Geschütz(e) beschädigt —
