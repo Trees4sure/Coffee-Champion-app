@@ -1170,6 +1170,40 @@ function wrTripFuel(fleet, ring) {
   }
   return tot * Math.max(0, (parseInt(ring, 10) || 0) - 1);
 }
+
+// 🟣🌀 EXOTEN-TREIBSTOFF (27aa, JP 2026-08-21: „kann man noch einführen, dass die
+// Schiffe, die plasmoid und die schiffe die quantenschaum kosten diese ebenfalls als
+// Flugkosten verbrauchen?")
+// Ein Schiff verbrennt je Reise 20 % SEINER EIGENEN Exoten-Baukosten je Ring-Stufe
+// über 1 — Ring 1 frei, Ring 2 = 20 %, Ring 3 = 40 %.
+//
+// ⚠️ ANTEILIG statt pauschal, anders als die Kristall-Regel darüber. Flach wäre hier
+// falsch: dann kosteten 20 billige Kreuzer mehr Flug-Plasmoid als die gesamte
+// Elite-Flotte. Anteilig trägt sich die Regel selbst — was teuer zu bauen war, ist
+// teuer zu bewegen — und sie braucht keine eigene Tabelle: SPACE_SHIPS hat die Zahlen.
+// ⚠️ HÖHE VON JP, nicht hergeleitet: „mache je Schiff und Ring diese Berechnung …
+// gemäss der Baukosten für 10, also 1 Schlachter 16" — sein Plasmoid-Ertrag liegt über
+// 1.500/Tag, gegen den gemessen war mein erster Vorschlag (2 %) Rauschen.
+// ⚠️ SPIEGEL von `_space_trip_exo_fuel` (SQL 27aa). Weicht eine Zahl ab, verspricht die
+// Vorschau etwas anderes, als der Server abbucht (die Lehre aus 22e/27i).
+// ⚠️ AUFRUNDEN GENAU EINMAL, auf die FLOTTENSUMME — je Schiff aufgerundet würde aus
+// 0,4 eine ganze Einheit und bestrafte kleine Verbände. Weil jede Reise ihre eigene
+// Aufrundung zahlt, ist Aufteilen nie billiger (die Bauzeiten-Lehre 27u/27v).
+const WR_EXO_FUEL_PCT = 0.20;   // je Ring-Stufe über 1
+function wrTripExoFuel(fleet, ring) {
+  const pct = WR_EXO_FUEL_PCT * Math.max(0, (parseInt(ring, 10) || 0) - 1);
+  if (pct <= 0) return { pla: 0, qua: 0 };
+  let pla = 0, qua = 0;
+  for (const [k, n] of Object.entries(fleet || {})) {
+    const cnt = parseInt(n, 10) || 0;
+    if (cnt <= 0) continue;
+    const s = SPACE_SHIP_BY_KEY[k];
+    if (!s) continue;                       // unbekannter Schlüssel: still überspringen
+    pla += (s.plasmoid || 0) * cnt * pct;
+    qua += (s.quantum  || 0) * cnt * pct;
+  }
+  return { pla: Math.ceil(pla), qua: Math.ceil(qua) };
+}
 function _wrEsc(s) { return (typeof _esc === 'function') ? _esc(s) : String(s == null ? '' : s); }
 function wrFmt(n) { return Math.round(n || 0).toLocaleString('de-DE'); }
 // Minutenangabe menschenlesbar (Bauzeiten/Flugzeiten)
@@ -1301,16 +1335,11 @@ function wrResListe(o, suffix) {
     .filter(([, n]) => n > 0)
     .map(([k, n]) => `+${wrFmt(n)} ${wrIc(k)}${sfx}`).join(' · ');
 }
-// Gleiche Liste als REINER TEXT — `showToast` setzt `textContent`, dort wäre eine
-// wrIc-Bildhülle nur sichtbarer Markup-Müll.
-const WR_RES_EMOJI = { erz:'🪨', kri:'💎', pla:'🟣', qua:'🌀' };
-function wrResListeTxt(o, suffix) {
-  const sfx = suffix || '';
-  return [['erz', o.erz], ['kri', o.kri], ['pla', o.pla], ['qua', o.qua]]
-    .map(([k, v]) => [k, Math.round(v || 0)])
-    .filter(([, n]) => n > 0)
-    .map(([k, n]) => `+${wrFmt(n)} ${WR_RES_EMOJI[k]}${sfx}`).join(' · ');
-}
+// ⚠️ Hier stand bis 27z eine zweite Fassung `wrResListeTxt` mit Emoji — für Toasts,
+// weil `showToast` `textContent` setzte. Seit `showToast(msg, type, {html:true})`
+// braucht es die nicht mehr, und eine ungenutzte Zwillingsfunktion, die „für Toasts"
+// im Kommentar trägt, wäre ab sofort eine Fehlleitung. Fliesstext-Emoji ersetzt
+// weiterhin `wrIcText`, Chat-Bilder das `[[s:key]]`-Token.
 
 // ── 💰 Preis-/Kostenzeile in HTML (27p) ──────────────────────────────────────
 // JP 2026-08-20: „die plasmoid assets und erz sowie kristall assets sollst du verwenden."
@@ -1636,13 +1665,15 @@ async function wrAutoHarvest() {
     // seit 26c auch `plasmoid`/`quantum` und seit 21p `cc` zurück — die Meldung nannte
     // aber nur Erz und Kristall. Wieder „Server-Mechanik gebaut, Anzeige vergessen":
     // die Rohstoffe kamen an, nur sagte es niemand.
-    // ⚠️ EMOJI, KEINE ASSETS: `showToast` setzt `textContent`. Eine wrIc-Bildhülle käme
-    // hier als sichtbares `<span …>` heraus, nicht als Bild — deshalb wrResListeTxt.
+    // ⚠️ 27z: JETZT MIT BILDERN. `showToast` kann seit heute Markup (Opt-in
+    // `{html:true}`) — vorher ging jede Meldung über `textContent`, und genau deshalb
+    // standen hier Emoji. Der reine Text bleibt als Rückfall für die Konsole.
+    wrErnteLogAdd(res, true);
     const parts = [];
-    const resTxt = wrResListeTxt({ erz: res.erz, kri: res.kristall, pla: res.plasmoid, qua: res.quantum });
-    if (resTxt) parts.push(resTxt);
+    const resHtml = wrResListe({ erz: res.erz, kri: res.kristall, pla: res.plasmoid, qua: res.quantum });
+    if (resHtml) parts.push(resHtml);
     if (res.cc > 0) parts.push(`+${wrFmt(res.cc)} CC`);
-    if (parts.length) wrToast(`📥 Automatisch eingesammelt: ${parts.join(' · ')}`, 'success');
+    if (parts.length) wrToast(`📥 Automatisch eingesammelt: ${parts.join(' · ')}`, 'success', true);
     if (res.paused > 0) wrToast(`⚠️ ${wrFmt(res.paused)} Route(n) pausieren — der Kristall reicht nicht als Treibstoff.`, 'error');
   } catch (e) { /* Auto-Ernte darf das Laden des Tabs nie blockieren */ }
 }
@@ -2078,6 +2109,66 @@ async function wrTradeCancel(tradeId) {
   } finally { _wrBusy = false; }
 }
 
+// ── 📥 Ernte-Protokoll (27z) ───────────────────────────────────────
+// JP 2026-08-21: „automatisch eingesammelt kommt lediglich als popup — kann es auch in
+// das protokoll?" Ja — aber NICHT über `wrChat`.
+//
+// ⚠️ BEGRÜNDUNG, warum hier ausnahmsweise KEIN Chat-Eintrag entsteht: die Auto-Ernte
+// läuft bei jedem Öffnen des 🚀-Tabs (gedrosselt auf 10 Minuten). Im Gruppen-Chat wäre
+// das für JEDEN Mitspieler mehrmals täglich eine Zeile — genau der Spam, den die
+// Krieger-Sitzungszusammenfassung (2026-07-16) schon einmal abstellen musste. Eine Ernte
+// ist ein PRIVATES Ereignis; sie gehört neben das Clan-Protokoll, nicht hinein.
+//   ⚠️ ÜBERTRAGBARE LEHRE: „ins Protokoll" heißt nicht automatisch „in den geteilten
+//   Kanal". Vor dem Eintragen fragen, WIE OFT das Ereignis eintritt und WEN es angeht.
+//
+// ⚠️ Speicher: `localStorage`, also geräte-lokal. Das steht auch in der Karte — ein
+// Protokoll, das auf dem Telefon anders aussieht als am Rechner, muss das sagen.
+// ⚠️ Jeder Zugriff in try/catch (Regel 3): `localStorage` wirft in privaten Fenstern
+// und bei gesperrten Seitendaten, und eine Ernte darf daran nie scheitern.
+const WR_ERNTE_LOG_MAX = 40;
+function _wrErnteKey() { return 'wr_ernte_' + (_wrMember?.id || 'x'); }
+function wrErnteLog() {
+  try {
+    const r = JSON.parse(localStorage.getItem(_wrErnteKey()) || '[]');
+    return Array.isArray(r) ? r : [];
+  } catch (e) { return []; }
+}
+function wrErnteLogAdd(res, auto) {
+  try {
+    const n = (v) => Math.round(parseFloat(v) || 0);
+    const eintrag = { t: Date.now(), auto: !!auto,
+      erz: n(res?.erz), kri: n(res?.kristall), pla: n(res?.plasmoid), qua: n(res?.quantum),
+      cc:  n(res?.cc),  fuel: n(res?.fuel) };
+    // Eine Ernte ohne Ertrag ist kein Ereignis — sonst füllt sich die Liste mit Nullen,
+    // und genau die waren JPs Ausgangsbeschwerde an der Dauerernte-Karte.
+    if (!(eintrag.erz || eintrag.kri || eintrag.pla || eintrag.qua || eintrag.cc)) return;
+    const list = wrErnteLog();
+    list.push(eintrag);
+    localStorage.setItem(_wrErnteKey(), JSON.stringify(list.slice(-WR_ERNTE_LOG_MAX)));
+  } catch (e) { /* Regel 3: darf das Einsammeln nie stören */ }
+}
+function wrErnteLogHtml() {
+  const list = wrErnteLog().slice().reverse();
+  if (!list.length) return '';
+  const sum = list.reduce((a, x) => ({ erz: a.erz + x.erz, kri: a.kri + x.kri,
+    pla: a.pla + x.pla, qua: a.qua + x.qua, cc: a.cc + x.cc }), { erz:0, kri:0, pla:0, qua:0, cc:0 });
+  const zeile = (x) => `${wrResListe(x) || '—'}${x.cc > 0 ? ` · +${wrFmt(x.cc)} CC` : ''}`;
+  const rows = list.map(x => `
+    <div class="wr-log-row"><span class="wr-log-t">${wrWhen(x.t)}</span>
+      <span class="wr-log-msg">${x.auto ? '📥' : '✋'} ${zeile(x)}${
+        x.fuel > 0 ? ` <span class="wr-sub">−${wrFmt(x.fuel)} ${wrIc('kri')} Treibstoff</span>` : ''}</span></div>`).join('');
+  return `<div class="wr-card">
+      <div class="wr-card-title">📥 Deine letzten Ernten
+        <span class="wr-sub">— Kolonien, Dauerernte und Bergung</span></div>
+      <div class="wr-facts"><span>Summe dieser ${list.length}: <strong>${zeile(sum)}</strong></span></div>
+      <div class="wr-log-list">${rows}</div>
+      <div class="wr-sub">📥 automatisch beim Öffnen des 🚀-Tabs · ✋ per Knopf.
+        Die letzten ${WR_ERNTE_LOG_MAX} Einträge, gespeichert in DIESEM Browser — auf einem
+        anderen Gerät steht hier eine andere Liste. Bewusst nicht im Gruppen-Chat: dort
+        stünde sonst mehrmals täglich eine Zeile von jedem Mitspieler.</div>
+    </div>`;
+}
+
 // ── 📜 Ereignis-Protokoll (JP 2026-07-22) ────────────────────────────────────
 // Alle Weltraum-Meldungen laufen bereits durch wrChat → Gruppen-Chat; der Marker
 // [[wr]] macht sie dort verlässlich herausfilterbar. Kein eigenes Backend nötig.
@@ -2092,8 +2183,9 @@ async function wrLoadProtokoll() {
     .filter(x => typeof x.message === 'string' && x.message.indexOf(WR_CHAT_MARK) !== -1)
     .slice(-80).reverse();
   if (!document.getElementById('wr-log')) return;   // Tab inzwischen gewechselt
+  const ernte = wrErnteLogHtml();
   if (!rows.length) {
-    el.innerHTML = `<div class="wr-card"><div class="wr-card-title">📜 Ereignis-Protokoll</div>
+    el.innerHTML = ernte + `<div class="wr-card"><div class="wr-card-title">📜 Ereignis-Protokoll</div>
       <p class="wr-sub" style="padding:4px 0 8px">Noch keine Einträge — das Protokoll sammelt ab jetzt
       alle Weltraum-Meldungen des Clans (Kämpfe, Wellen, Bauten, Forschung, Kolonien).</p></div>`;
     return;
@@ -2105,7 +2197,7 @@ async function wrLoadProtokoll() {
            + d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
     } catch (e) { return ''; }
   };
-  el.innerHTML = `<div class="wr-card"><div class="wr-card-title">📜 Ereignis-Protokoll
+  el.innerHTML = ernte + `<div class="wr-card"><div class="wr-card-title">📜 Ereignis-Protokoll
       <span class="wr-sub">— alle Weltraum-Meldungen des Clans</span></div>
     <div class="wr-log-list">${rows.map(x => `
       <div class="wr-log-row"><span class="wr-log-t">${fmtT(x.created_at)}</span>
@@ -2537,11 +2629,23 @@ function wrFleetPickerHtml(m) {
           // 💎 Treibstoff der aktuellen Auswahl zum gewählten Ziel (Ring aus der Auswahl)
           const ring = _wrSel?.planet?.ring ?? _wrSel?.q?.ring ?? 0;
           if (!ring) return '';
-          const fuel = wrTripFuel(wrSyncFleetSel(m), ring);
-          if (fuel <= 0) return `<span>${wrIc('kri')} Treibstoff: <strong>frei</strong></span>`;
-          const ok = wrKristall(m) >= fuel;
-          return `<span class="${ok ? '' : 'wr-bad'}">${wrIc('kri')} Treibstoff: <strong>${wrFmt(fuel)}</strong>`
-               + `${ok ? '' : ` <span class="wr-sub">(nur ${wrFmt(wrKristall(m))} auf Lager!)</span>`}</span>`;
+          const sel  = wrSyncFleetSel(m);
+          const fuel = wrTripFuel(sel, ring);
+          // 🟣🌀 27aa: Exoten gehören in DIESELBE Zeile wie der Kristall — sie sind
+          // derselbe Posten. Eine zweite Treibstoff-Zeile wäre der fünfte Fall von
+          // „zwei Dinge, ein Name".
+          const exo  = wrTripExoFuel(sel, ring);
+          const teile = [];
+          if (fuel > 0)    teile.push({ n: fuel,    ic: wrIc('kri'), have: wrKristall(m) });
+          if (exo.pla > 0) teile.push({ n: exo.pla, ic: wrIc('pla'), have: wrPlasmoid(m) });
+          if (exo.qua > 0) teile.push({ n: exo.qua, ic: wrIc('qua'), have: wrQuantum(m) });
+          if (!teile.length) return `<span>${wrIc('kri')} Treibstoff: <strong>frei</strong></span>`;
+          const knapp = teile.filter(t => t.have < t.n);
+          return `<span class="${knapp.length ? 'wr-bad' : ''}">Treibstoff: <strong>`
+               + teile.map(t => `${wrFmt(t.n)} ${t.ic}`).join(' · ') + '</strong>'
+               + (knapp.length
+                   ? ` <span class="wr-sub">(nur ${knapp.map(t => `${wrFmt(t.have)} ${t.ic}`).join(' · ')} auf Lager!)</span>`
+                   : '') + '</span>';
         })()}
         ${(() => {
           // JP 2026-07-22 (#33): Kutter & Co. im Kampfverband sind Kanonenfutter —
@@ -7413,11 +7517,25 @@ async function wrSend(intent) {
   if (intent === 'harvest'  && wrFleetMine(fleet) < 1) { wrToast('Ohne ⛏️ Röstkometen gibt es nichts abzubauen.', 'error'); return; }
   if (intent === 'attack'   && wrFleetPower(fleet) < 1) { wrToast('Dieser Verband hat keine Kampfkraft.', 'error'); return; }
 
-  // 💎 Treibstoff-Vorabcheck (Server prüft autoritativ nochmal — 22h)
+  // 💎 Treibstoff-Vorabcheck (Server prüft autoritativ nochmal — 22h/27aa)
   const fuel = wrTripFuel(fleet, planet.ring);
   if (fuel > 0 && wrKristall(m) < fuel) {
     wrToast(`Nicht genug 💎 Kristall als Treibstoff: Reise braucht ${wrFmt(fuel)}, du hast ${wrFmt(wrKristall(m))}.`, 'error');
     return;
+  }
+  // 🟣🌀 27aa: Exoten-Treibstoff. JP-Entscheidung: Start verweigern wie beim Kristall
+  // — eine Regel, kein Sonderfall. Die Meldung nennt den Rohstoff, sonst steht der
+  // Spieler vor einem „geht nicht" ohne Grund.
+  {
+    const exo = wrTripExoFuel(fleet, planet.ring);
+    if (exo.pla > 0 && wrPlasmoid(m) < exo.pla) {
+      wrToast(`Nicht genug 🟣 Plasmoiden-Staub als Treibstoff: Reise braucht ${wrFmt(exo.pla)}, du hast ${wrFmt(wrPlasmoid(m))}.`, 'error');
+      return;
+    }
+    if (exo.qua > 0 && wrQuantum(m) < exo.qua) {
+      wrToast(`Nicht genug 🌀 Quantenschaum als Treibstoff: Reise braucht ${wrFmt(exo.qua)}, du hast ${wrFmt(wrQuantum(m))}.`, 'error');
+      return;
+    }
   }
 
   _wrBusy = true;
@@ -7431,6 +7549,13 @@ async function wrSend(intent) {
         wrToast(`Ring ${res.ring}: es fehlen `
           + res.missing.map(x => `${wrKitLabel(x.what)} ${wrFmt(x.have)}/${wrFmt(x.need)}`).join(' · '),
           'error');
+      } else if (res?.error === 'not_enough_exo') {
+        // ⚠️ Wie bei `colony_kit_incomplete`: die Antwort auf „warum nicht?" liegt in
+        // der Serverantwort. Sie zu verwerfen und nur den Code zu zeigen war genau der
+        // Ärger, den 26u/27e schon einmal behoben haben.
+        const rm = wrResMeta(res.what);
+        wrToast(`Nicht genug ${rm.icon} ${rm.name} als Treibstoff: Reise braucht `
+              + `${wrFmt(res.need)}, du hast ${wrFmt(res.have)}.`, 'error');
       } else if (res?.error === 'region_too_strong') {
         wrToast(`Diese Region gehört jemand anderem — dein Verband bringt ⚔️ ${wrFmt(res.have)}, `
               + `nötig sind ${wrFmt(res.need)} (das 1,15-fache der Regionsverteidigung).`, 'error');
@@ -7448,7 +7573,15 @@ async function wrSend(intent) {
     // Text beschrieb also weiter die Welt vor der Regeländerung, und der Spieler hätte
     // seine 30 Jäger zurückerwartet. Genau die Sorte Text, die wie ein Fehler aussieht,
     // wenn die Schiffe dann nicht kommen.
-    const fuelTxt = (res.fuel > 0) ? ` · 💎 −${wrFmt(res.fuel)} Treibstoff` : '';
+    // ⚠️ 27aa: Die Meldung nannte nur den Kristall. Der Exoten-Treibstoff wäre sonst
+    // die zweite stille Abbuchung des Tages gewesen — Rohstoffe, die verschwinden, ohne
+    // dass irgendwo steht, wohin (Regel 4: die Regel dort, wo man auf sie trifft).
+    // Emoji, kein wrIc: dieser Text geht in einen Toast UND in den Chat.
+    const fuelTeile = [];
+    if (res.fuel    > 0) fuelTeile.push(`−${wrFmt(res.fuel)} 💎`);
+    if (res.fuelPla > 0) fuelTeile.push(`−${wrFmt(res.fuelPla)} 🟣`);
+    if (res.fuelQua > 0) fuelTeile.push(`−${wrFmt(res.fuelQua)} 🌀`);
+    const fuelTxt = fuelTeile.length ? ` · ${fuelTeile.join(' ')} Treibstoff` : '';
     wrToast(intent === 'colonize'
       ? `🛸 Kolonie-Mission gestartet — Gründung bei Ankunft in ${wrCountdown(Date.parse(res.trip.arriveAt) - Date.now())}. `
         + `Der Verband geht bei der Gründung im Rumpf auf und kehrt NICHT zurück`
@@ -8235,13 +8368,14 @@ async function wrHarvest() {
     const res = await DB.harvestSpace(_wrMember.id);
     if (!res || res.error) { wrToast(wrErrText(res?.error), 'error'); return; }
     if (res.space) wrApplySpace(res.space);
+    wrErnteLogAdd(res, false);
     const parts = [];
-    const resTxt = wrResListeTxt({ erz: res.erz, kri: res.kristall, pla: res.plasmoid, qua: res.quantum });
-    if (resTxt) parts.push(resTxt);
+    const resHtml = wrResListe({ erz: res.erz, kri: res.kristall, pla: res.plasmoid, qua: res.quantum });
+    if (resHtml) parts.push(resHtml);
     if (res.cc > 0)   parts.push(`+${wrFmt(res.cc)} CC`);
-    if (res.fuel > 0) parts.push(`−${wrFmt(res.fuel)} 💎 Treibstoff`);
+    if (res.fuel > 0) parts.push(`−${wrFmt(res.fuel)} ${wrIc('kri')} Treibstoff`);
     wrToast(parts.length ? `📥 Eingesammelt: ${parts.join(' · ')}` : 'Noch nichts zu holen.',
-            parts.length ? 'success' : 'info');
+            parts.length ? 'success' : 'info', parts.length > 0);
     if (Array.isArray(res.emptied) && res.emptied.length) {
       for (const e of res.emptied) {
         wrToast(`♻️ Wrackfeld bei ${e.name} vollständig abgetragen — `
@@ -8885,8 +9019,12 @@ function wrApplyCoins(coins) {
     if (typeof _updateHeaderCoins === 'function') _updateHeaderCoins({ coins });
   } catch (e) { /* non-critical */ }
 }
-function wrToast(msg, kind) {
-  if (typeof showToast === 'function') { try { showToast(msg, kind || 'info'); return; } catch (e) {} }
+// `html = true` gibt das Markup durch (Rohstoff-Bilder aus wrIc). Nur für selbst
+// erzeugte Zeichenketten verwenden — nie für Servertexte oder Spielernamen.
+function wrToast(msg, kind, html) {
+  if (typeof showToast === 'function') {
+    try { showToast(msg, kind || 'info', html ? { html: true } : undefined); return; } catch (e) {}
+  }
   console.log('[weltraum]', msg);
 }
 function wrErrText(err) {
@@ -8961,6 +9099,9 @@ function wrErrText(err) {
     still_building:        'Das Schiff ist noch nicht fertig.',
     // 💎 Treibstoff (22h)
     not_enough_fuel:       'Nicht genug 💎 Kristall als Treibstoff für diese Reise.',
+    // 27aa — der Server liefert `what/need/have` mit; wrTripStart wertet das aus und
+    // zeigt die Zahlen. Dieser Text ist nur der Rückfall, falls die Angaben fehlen.
+    not_enough_exo:        'Nicht genug Ring-Rohstoffe als Treibstoff für diese Reise.',
     fleet_limit:           'Maximal 5 Flotten gleichzeitig unterwegs.',
     no_plasmoid:           'Nicht genug 🟣 Plasmoiden-Staub.',
     no_quantum:            'Nicht genug 🌀 Quantenschaum.',

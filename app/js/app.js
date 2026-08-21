@@ -2,9 +2,19 @@ function _esc(str) {
   return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
-function showToast(msg, type = 'info') {
+// `opts.html === true` erlaubt Markup im Toast — gebraucht für die Rohstoff-Bilder aus
+// `wrIc()` (JP 2026-08-21: „die assets werden dort nicht korrekt angezeigt, sondern
+// weiterhin die emojis"). Bis dahin ging JEDE Meldung über `textContent`, und eine
+// Bildhülle wäre dort als roher `<span …>`-Text erschienen — genau deshalb standen in
+// Toasts bewusst Emoji.
+// ⚠️ OPT-IN, nicht Standard: `textContent` bleibt der Normalfall. Nur Aufrufer, die ihr
+// Markup selbst erzeugen, dürfen `{html:true}` setzen. Alles, was Spielernamen oder
+// Servertexte enthält, bleibt bei `textContent` — sonst wäre jeder Toast eine
+// Einfallstür für fremdes Markup.
+function showToast(msg, type = 'info', opts) {
   const t = document.createElement('div');
-  t.className = `toast toast-${type}`; t.textContent = msg;
+  t.className = `toast toast-${type}`;
+  if (opts && opts.html) t.innerHTML = msg; else t.textContent = msg;
   document.getElementById('toast-container').appendChild(t);
   setTimeout(() => t.classList.add('show'), 10);
   setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 400); }, 3200);

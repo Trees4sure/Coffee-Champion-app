@@ -498,6 +498,42 @@ function _kaEnemyAbility(enemy) {
   return list[i] || null;
 }
 
+// ── Namen für den Bericht (27z) ─────────────────────────────────────────────
+// JP 2026-08-21: „wie viel man von was besiegt hat … welche Ausrüstung verwendet bzw.
+// Kultur und woran man gescheitert ist — Stärke, Level der Kreaturen auch rein."
+// ⚠️ Der Bericht nannte bisher nur das TIER („Röster-Horde: 7"). Das Tier ist aber nur
+// die Gruppe; gekämpft wird gegen eine SIGNATUR (🔥 Röstkammer-Zwerg ×0,7 gegen
+// 🐍 Crema-Hydra ×1,4 — Faktor DREI im Schaden). Wer nur das Tier meldet, verschweigt
+// genau den Unterschied, der über Sieg und Niederlage entscheidet.
+function _kaEnemyName(tier, flavorIdx) {
+  const d = (typeof kriegerEnemyDef === 'function') ? kriegerEnemyDef(tier) : null;
+  if (!d) return String(tier || '?');
+  const f = Array.isArray(d.flavor) ? d.flavor[Math.max(0, Math.min(d.flavor.length - 1, flavorIdx | 0))] : null;
+  return f || d.name || String(tier);
+}
+// Ausgerüstete Gegenstände als lesbare Liste + der aktive Set-Bonus.
+function _kaGearText(equipped) {
+  const teile = ['weapon', 'armor', 'talisman'].map(sl => {
+    const k = equipped ? equipped[sl] : null;
+    const it = (k && typeof kriegerItemByKey === 'function') ? kriegerItemByKey(k) : null;
+    return it ? `${it.icon || ''} ${it.name}` : null;
+  }).filter(Boolean);
+  return teile.length ? teile.join(' · ') : 'nichts angelegt';
+}
+// Lesbarer Name einer Gegner-Signatur („Aufschäumen", „Stampfer" …). Ohne ihn stünde
+// im Bericht der rohe Schlüssel — und der sagt niemandem, WARUM der Kampf schiefging.
+function _kaAbilityName(key) {
+  if (!key) return '';
+  const a = (typeof kriegerEnemyAbility === 'function') ? kriegerEnemyAbility(key) : null;
+  return a ? `${a.icon || ''} ${a.name}` : String(key);
+}
+function _kaSetText(equipped) {
+  const c = _kaSetCulture(equipped || {});
+  if (!c) return '';
+  const b = (typeof KRIEGER_SET_BONUSES !== 'undefined') ? KRIEGER_SET_BONUSES[c] : null;
+  return b ? `✨ ${b.name}` : `✨ ${c}`;
+}
+
 // Geschätzte Siegchance (0..1) gegen ein Gegner-Tier.
 // Verfahren: Runden-Vergleich. rSurv = Runden, die ich überlebe; rNeed = Runden,
 // die ich zum Töten brauche. Gleichstand ≈ 50 %, 20 % Vorsprung ≈ 60 %.
@@ -773,6 +809,84 @@ function kriegerAutoFindPendingFight(dd, skip, lossCount, seed, maxDetour) {
   return null;
 }
 
+// ── 27z: Was bleibt stehen, und WARUM? ──────────────────────────────────────
+// JP 2026-08-21: „woran man gescheitert ist — Stärke, Level der Kreaturen auch rein."
+//
+// Der Lauf wusste das bisher nirgends: `kriegerAutoFindPendingFight` liefert entweder
+// ein Ziel oder `null` — WELCHE Gegner es verworfen hat, verschwand in der Suche.
+// Deshalb hier eine eigene Erhebung EINMAL am Laufende: derselbe BFS über die
+// erkundeten Felder, aber statt des ersten Treffers werden die ABLEHNUNGEN gesammelt.
+//
+// ⚠️ Gerechnet wird mit VOLLEN HP, nicht mit dem Reststand. Sonst stünde im Bericht
+// „zu stark" über Gegner, die nur deshalb liegen blieben, weil der Krieger am Ende
+// müde war — und JP würde daraus die falsche Lehre ziehen (Ausrüstung kaufen statt
+// heilen). Die Frage, die diese Liste beantwortet, ist: „Was schaffe ich mit dieser
+// Ausrüstung grundsätzlich nicht?"
+// ⚠️ Gedeckelt: die Karte hat bis zu 22.500 Felder. `LIMIT` bricht nach genug
+// Stichproben ab — ein Bericht darf die Oberfläche nie sekundenlang blockieren.
+function kriegerAutoSurveyTooStrong(dd, seed, maxDetour, limit) {
+  const out = {};
+  try {
+    const enc = dd?.encounters || {};
+    if (!Object.keys(enc).length) return [];
+    const max = _kaMaxHp(dd);
+    // Kopie mit vollen HP — die Erhebung fragt nach der AUSRÜSTUNG, nicht nach der Müdigkeit.
+    const ddFull = { ...dd, hp: max,
+      hpDate: (typeof _kriegerTodayKey === 'function') ? _kriegerTodayKey() : dd?.hpDate };
+    const start = (typeof kriegerPos === 'function') ? kriegerPos(dd) : { x: 0, y: 0 };
+    const explored = dd?.explored || {};
+    const bossX = (typeof KRIEGER_BOSS_POS !== 'undefined') ? KRIEGER_BOSS_POS.x : -1;
+    const bossY = (typeof KRIEGER_BOSS_POS !== 'undefined') ? KRIEGER_BOSS_POS.y : -1;
+    const N = (typeof KRIEGER_WORLD !== 'undefined') ? KRIEGER_WORLD : 150;
+    const NB = [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
+    const seen = new Set([`${start.x},${start.y}`]);
+    const depth = new Map([[`${start.x},${start.y}`, 0]]);
+    const queue = [start];
+    let head = 0, geprueft = 0;
+    const LIMIT = limit || 400;
+
+    while (head < queue.length && geprueft < LIMIT) {
+      const cur = queue[head++];
+      const k = `${cur.x},${cur.y}`;
+      const tier = enc[k];
+      const istBoss = (cur.x === bossX && cur.y === bossY) || tier === 'boss';
+      if (tier && !istBoss
+          && !(typeof kriegerEnemyActive === 'function' && !kriegerEnemyActive(dd, k))) {
+        geprueft++;
+        const feind = _kaEnemyAt(tier, cur.x, cur.y, ddFull, seed);
+        if (feind) {
+          // Bestes Loadout aus dem BESITZ, mit Cold Brew — also die beste Chance,
+          // die überhaupt zur Verfügung steht.
+          const best = kriegerAutoBestLoadout(ddFull, feind, ddFull.equipped, true);
+          const pct = best ? best.est.pct : 0;
+          if (pct < KRIEGER_AUTO_MIN_WINPCT) {
+            const ek = `${tier}|${feind.flavorIdx}`;
+            const o = out[ek] || (out[ek] = { name: _kaEnemyName(tier, feind.flavorIdx), tier,
+              n: 0, lvMin: Infinity, lvMax: 0, bestPct: 0, atk: 0, def: 0, hp: 0,
+              capped: false, ability: _kaEnemyAbility(feind) });
+            o.n++;
+            o.lvMin = Math.min(o.lvMin, feind.level); o.lvMax = Math.max(o.lvMax, feind.level);
+            if (pct >= o.bestPct) {
+              o.bestPct = pct; o.atk = feind.atk; o.def = feind.def; o.hp = feind.hp;
+              o.capped = !!(best && best.est.capped);
+            }
+          }
+        }
+      }
+      const d = depth.get(k) || 0;
+      if (d >= (maxDetour || KRIEGER_AUTO_MAX_DETOUR)) continue;
+      for (const [dx, dy] of NB) {
+        const nx = cur.x + dx, ny = cur.y + dy;
+        if (nx < 0 || ny < 0 || nx >= N || ny >= N) continue;
+        const nk = `${nx},${ny}`;
+        if (seen.has(nk) || !explored[nk]) continue;
+        seen.add(nk); depth.set(nk, d + 1); queue.push({ x: nx, y: ny });
+      }
+    }
+  } catch (e) { return []; }   // Regel 3: ein Bericht darf nie der Grund für einen Absturz sein
+  return Object.values(out).sort((a, b) => b.n - a.n).slice(0, 8);
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // 4) Der Lauf
 // ═══════════════════════════════════════════════════════════════════════════
@@ -831,6 +945,11 @@ async function kriegerAutoRun(member, state, seed, COLS, ROWS, MARGIN) {
     // CC → rep.ccFind → DB.addCoins) — nur nannte das Protokoll bloss die ANZAHL.
     // ⚠️ Eine blosse Zahl ist nicht prüfbar. Ab jetzt steht da, WAS gefunden wurde.
     potionKinds: {}, voucherSlots: [],
+    // 27z — nach Gegner-SIGNATUR statt nur nach Tier, mit Stufenband und CC/EP.
+    kills: {},      // `tier|flavorIdx` → { tier, flavorIdx, n, cc, ep, lvMin, lvMax }
+    defeats: [],    // jede Niederlage einzeln: gegen WEN, mit welchen Werten
+    gear: {},       // welche Ausrüstung wie oft — samt Set-Bonus
+    tooStrong: [],  // am Laufende erhoben: was bleibt stehen, und warum
     hpStart: 0, hpEnd: 0, hpMax: 0,
     loadouts: {}, endReason: 'budget',
   };
@@ -969,6 +1088,17 @@ async function kriegerAutoRun(member, state, seed, COLS, ROWS, MARGIN) {
       rep.ep += result.ep_awarded || 0;
       rep.loadouts[tier] = plan.best.equipped;
 
+      // 27z: Ausrüstung mitschreiben. Der Optimierer wechselt je Gegner — ohne diese
+      // Zählung stand im Bericht nur das Loadout des LETZTEN Kampfes je Tier, und das
+      // sagt nichts darüber, womit die Arbeit tatsächlich gemacht wurde.
+      try {
+        const gk = ['weapon', 'armor', 'talisman'].map(sl => plan.best.equipped?.[sl] || '-').join('|');
+        const g  = rep.gear[gk] || (rep.gear[gk] = {
+          n: 0, wins: 0, text: _kaGearText(plan.best.equipped), set: _kaSetText(plan.best.equipped) });
+        g.n++;
+        if (result.won) g.wins++;
+      } catch (err) { /* Regel 3: eine Statistik darf den Kampf nie stören */ }
+
       state.dd = result.new_dungeon_data || { ...state.dd, level: result.new_level };
       // ❤️ Die RPC liefert den echten HP-Stand zurück — verlässlicher als jede Schätzung.
       if (typeof result.hp === 'number')     _kaHpLive.cur = Math.max(0, result.hp);
@@ -982,6 +1112,30 @@ async function kriegerAutoRun(member, state, seed, COLS, ROWS, MARGIN) {
         if (typeof _updateHeaderCoins === 'function') _updateHeaderCoins({ coins: state.memberCoins });
       }
       if (result.leveled_up) rep.levelUps.push(result.new_level);
+
+      // 27z: Gegner-Signatur samt Stufenband — gewonnen wie verloren.
+      try {
+        const ek = `${tier}|${e.flavorIdx ?? 0}`;
+        if (result.won) {
+          const k = rep.kills[ek] || (rep.kills[ek] = { tier, flavorIdx: e.flavorIdx ?? 0,
+            name: _kaEnemyName(tier, e.flavorIdx), n: 0, cc: 0, ep: 0, lvMin: Infinity, lvMax: 0 });
+          k.n++;
+          k.cc += result.cc_awarded || 0;
+          k.ep += result.ep_awarded || 0;
+          const lv = result.enemy_level || e.level || 0;
+          k.lvMin = Math.min(k.lvMin, lv); k.lvMax = Math.max(k.lvMax, lv);
+        } else {
+          // ⚠️ Eine Niederlage ist die WERTVOLLSTE Zeile des Berichts: sie sagt, wo die
+          // Schätzung danebenlag. Deshalb einzeln — mit der Chance, die ihr zugetraut
+          // wurde, und den Werten, gegen die sie antrat.
+          rep.defeats.push({ name: _kaEnemyName(tier, e.flavorIdx), tier,
+            level: result.enemy_level || e.level || 0,
+            atk: e.atk || 0, def: e.def || 0, hp: e.hp || 0,
+            pct: Math.round((plan.best?.est?.pct || 0) * 100),
+            rounds: result.rounds || 0,
+            ability: _kaEnemyAbility(e), coldbrew: !!plan.potionKey });
+        }
+      } catch (err) { /* Regel 3 */ }
 
       let status;
       if (result.won) {
@@ -1160,6 +1314,10 @@ async function kriegerAutoRun(member, state, seed, COLS, ROWS, MARGIN) {
   _kriegerAutoRunning = false;
   _kriegerAutoStop    = false;
 
+  // 27z: erst die Erhebung (sie braucht den Zustand von JETZT), dann die HP-Momentaufnahme
+  // freigeben — die Reihenfolge ist wichtig, sonst rechnet die Erhebung mit einem
+  // frisch geleerten Cache und einer anderen HP-Quelle.
+  rep.tooStrong = kriegerAutoSurveyTooStrong(state.dd, seed, KRIEGER_AUTO_MAX_DETOUR, 400);
   rep.hpEnd = _kaCurHp(state.dd);
   // ⚠️ 27y — JP 2026-08-21: „Auch wird komischerweise 0HP teilweise angegeben, auch nach
   // HP-Auffüllen."
@@ -1411,10 +1569,48 @@ function _kriegerAutoShowReport(rep, state) {
   const popup = document.getElementById('krieger-popup');
   if (!popup) return;
   const net = Math.round(rep.ccFight + rep.ccFind + rep.refund - rep.cost - rep.healCost);
-  const tierLine = Object.keys(rep.byTier).map(t => {
-    const d = (typeof kriegerEnemyDef === 'function') ? kriegerEnemyDef(t) : null;
-    return `${_kaEsc(d?.name || t)}: ${rep.byTier[t]}`;
-  }).join(' · ') || '—';
+  // 27z — die vier Blöcke, die JP wollte: was besiegt, was verloren, was gemieden,
+  // womit gekämpft. Bewusst nach dem Vorbild des Karten-Autolaufs: eine ZEILE JE
+  // GEGNERART mit Anzahl und Ertrag, nicht eine Sammelzahl.
+  const lvTxt = (a, b) => (a === b || !Number.isFinite(a)) ? `Stufe ${b}` : `Stufe ${a}–${b}`;
+  const zeile = (links, rechts) => `<div style="display:flex;justify-content:space-between;gap:8px;font-size:12px">
+    <span>${links}</span><span style="opacity:.75;text-align:right;white-space:nowrap">${rechts}</span></div>`;
+  const trenner = '<div style="border-top:1px solid rgba(255,255,255,.12);margin:4px 0;padding-top:4px"></div>';
+  const kopf = (t) => `<div style="font-size:11px;opacity:.6;margin-top:2px">${t}</div>`;
+
+  const kills = Object.values(rep.kills || {}).sort((a, b) => b.n - a.n);
+  const killListe = kills.length
+    ? kills.map(k => zeile(`${k.n}× ${_kaEsc(k.name)} <span style="opacity:.6">${lvTxt(k.lvMin, k.lvMax)}</span>`,
+                           `+${Math.round(k.cc)} 🫘 · ${Math.round(k.ep)} EP`)).join('')
+    : '<div style="font-size:12px;opacity:.6">Kein Gegner gefallen.</div>';
+
+  // ⚠️ Die Niederlagen sind die wertvollsten Zeilen: sie sagen, wo die Schätzung
+  // danebenlag. Deshalb einzeln, mit der zugetrauten Chance NEBEN den echten Werten.
+  const defeatListe = (rep.defeats || []).length
+    ? (rep.defeats || []).slice(-6).map(d => zeile(
+        `${_kaEsc(d.name)} <span style="opacity:.6">${lvTxt(d.level, d.level)}</span>`
+        + (d.ability ? ` <span style="opacity:.55">· ${_kaEsc(_kaAbilityName(d.ability))}</span>` : '')
+        + (d.coldbrew ? ' <span style="opacity:.55">· 🧊</span>' : ''),
+        `⚔️ ${d.atk} · 🛡️ ${d.def} · ❤️ ${d.hp}`)
+        + `<div style="font-size:11px;opacity:.55;margin:-2px 0 3px">`
+        + `geschätzt ${d.pct} % Siegchance, verloren nach ${d.rounds || '?'} Runden</div>`).join('')
+    : '';
+
+  // Was in Reichweite stehen bleibt — mit Stärke und Stufe, bei VOLLEN HP gerechnet.
+  const stark = rep.tooStrong || [];
+  const starkListe = stark.length
+    ? stark.map(s => zeile(
+        `${s.n}× ${_kaEsc(s.name)} <span style="opacity:.6">${lvTxt(s.lvMin, s.lvMax)}</span>`,
+        `⚔️ ${s.atk} · 🛡️ ${s.def} · ❤️ ${s.hp}`)
+        + `<div style="font-size:11px;opacity:.55;margin:-2px 0 3px">beste Chance mit deiner Ausrüstung: `
+        + `${Math.round(s.bestPct * 100)} %${s.capped ? ' — der Kampf reisst den 40-Runden-Deckel' : ''}</div>`).join('')
+    : '';
+
+  const gears = Object.values(rep.gear || {}).sort((a, b) => b.n - a.n).slice(0, 4);
+  const gearListe = gears.length
+    ? gears.map(g => zeile(`${_kaEsc(g.text)}${g.set ? ` <span style="opacity:.7">${_kaEsc(g.set)}</span>` : ''}`,
+                           `${g.n} Kämpfe · ${g.wins} Siege`)).join('')
+    : '';
   const endMsg = {
     budget:     'Alle Tagesschritte verbraucht.',
     nofights:   'Schritte aufgebraucht und kein schaffbarer Gegner mehr in Reichweite.',
@@ -1445,7 +1641,12 @@ function _kriegerAutoShowReport(rep, state) {
         <div class="cc-karte-popup-body" style="flex-direction:column;align-items:stretch;gap:5px">
           ${row('Schritte / Felder', `${rep.steps} von ${rep.budget}`)}
           ${row('Kämpfe', `🏆 ${rep.wins} · 💀 ${rep.losses} · 🚫 ${rep.skipped} gemieden`)}
-          ${row('Gegner', tierLine)}
+          ${trenner}${kopf('⚔️ Besiegt')}
+          ${killListe}
+          ${defeatListe ? `${trenner}${kopf('💀 Daran gescheitert')}${defeatListe}` : ''}
+          ${starkListe ? `${trenner}${kopf('🚫 Bleibt in Reichweite stehen — bei vollen HP gerechnet')}${starkListe}` : ''}
+          ${gearListe ? `${trenner}${kopf('🧥 Womit gekämpft wurde')}${gearListe}` : ''}
+          ${trenner}
           ${rep.revisits ? row('Alte Felder geräumt', `♻️ ${rep.revisits}`) : ''}
           ${row('Kampfgewinne', `+${Math.round(rep.ccFight)} 🫘`)}
           ${row('Funde', `+${Math.round(rep.ccFind)} 🫘${rep.vouchers ? ` · 🎁 ${rep.vouchers}` : ''}${rep.potions ? ` · 🧪 ${rep.potions}` : ''}`)}
