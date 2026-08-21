@@ -258,6 +258,10 @@
 .wr-fl-beute { margin-top: 10px; font-size: .74rem; color: #8b9ac4; text-align: left;
   background: #101733; border: 1px solid #24305a; border-radius: 8px; padding: 7px 9px; }
 .wr-fl-risk { margin-top: 8px; font-size: .72rem; text-align: left; line-height: 1.45; }
+/* ⛽ 27ab: Treibstoff der laufenden Reise — dieselbe Zeilenform wie die Beute daneben,
+   nur in Wärmeton statt Blau, weil es eine AUSGABE ist und keine Einnahme. */
+.wr-fl-kosten { margin-top: 6px; font-size: .74rem; color: #c9a26b; text-align: left;
+  line-height: 1.5; }
 
 /* ── Flottenverband zusammenstellen ──────────────────────────────────────── */
 .wr-fleetsel { margin: 12px 0; padding: 10px 11px; border-radius: 10px;
