@@ -1328,12 +1328,16 @@ function wrResIc(t) {
 }
 // Rohstoff-Liste `{erz,kri,pla,qua}` als HTML-Zeile. Nullposten fallen weg — sonst stünde
 // dort dauerhaft „0 · 0 · 0 · 0". `suffix` z. B. „/Tag".
-function wrResListe(o, suffix) {
-  const sfx = suffix || '';
+// `vz` ist das Vorzeichen ('+' oder '−'), Standard '+'.
+// ⚠️ 27ab: Vorher habe ich das Minus per Regex ins FERTIGE HTML gepatcht — auf einer
+// Zeichenkette, die Bild-Hüllen enthält. Das funktionierte, war aber genau die Sorte
+// Griff, die beim nächsten Umbau bricht. Ein Parameter kostet eine Zeile und hält.
+function wrResListe(o, suffix, vz) {
+  const sfx = suffix || '', s = vz || '+';
   return [['erz', o.erz], ['kri', o.kri], ['pla', o.pla], ['qua', o.qua]]
     .map(([k, v]) => [k, Math.round(v || 0)])
     .filter(([, n]) => n > 0)
-    .map(([k, n]) => `+${wrFmt(n)} ${wrIc(k)}${sfx}`).join(' · ');
+    .map(([k, n]) => `${s}${wrFmt(n)} ${wrIc(k)}${sfx}`).join(' · ');
 }
 // ⚠️ Hier stand bis 27z eine zweite Fassung `wrResListeTxt` mit Emoji — für Toasts,
 // weil `showToast` `textContent` setzte. Seit `showToast(msg, type, {html:true})`
@@ -7574,20 +7578,32 @@ async function wrSend(intent) {
     // seine 30 Jäger zurückerwartet. Genau die Sorte Text, die wie ein Fehler aussieht,
     // wenn die Schiffe dann nicht kommen.
     // ⚠️ 27aa: Die Meldung nannte nur den Kristall. Der Exoten-Treibstoff wäre sonst
-    // die zweite stille Abbuchung des Tages gewesen — Rohstoffe, die verschwinden, ohne
-    // dass irgendwo steht, wohin (Regel 4: die Regel dort, wo man auf sie trifft).
-    // Emoji, kein wrIc: dieser Text geht in einen Toast UND in den Chat.
-    const fuelTeile = [];
-    if (res.fuel    > 0) fuelTeile.push(`−${wrFmt(res.fuel)} 💎`);
-    if (res.fuelPla > 0) fuelTeile.push(`−${wrFmt(res.fuelPla)} 🟣`);
-    if (res.fuelQua > 0) fuelTeile.push(`−${wrFmt(res.fuelQua)} 🌀`);
-    const fuelTxt = fuelTeile.length ? ` · ${fuelTeile.join(' ')} Treibstoff` : '';
+    // eine stille Abbuchung — Rohstoffe, die verschwinden, ohne dass irgendwo steht,
+    // wohin (Regel 4: die Regel dort, wo man auf sie trifft).
+    //
+    // ⚠️ 27ab (JP: „beim Losschicken einer Flotte werden nicht die Kosten angezeigt mit
+    // den assets"): DREI Darstellungen desselben Postens, weil drei Ziele drei Formate
+    // verlangen — und das ist kein Wildwuchs, sondern eine Eigenschaft der Ziele:
+    //   • Toast    → HTML mit Bild-Hüllen (`showToast` kann das seit 27z per Opt-in)
+    //   • Chat     → `[[s:key]]`-Token, die `_chatArt` in app.js zu Bildern macht
+    //   • Konsole  → keiner von beiden; der Toast-Text ist dort der Rückfall
+    // Gebaut aus EINEM Objekt, damit die Zahlen nicht auseinanderlaufen können.
+    const fuelObj  = { kri: res.fuel, pla: res.fuelPla, qua: res.fuelQua };
+    const fuelHtml = wrResListe(fuelObj, '', '−');
+    const fuelTxt  = fuelHtml ? ` · ⛽ ${fuelHtml}` : '';
+    // Chat-Fassung: dieselben Zahlen, aber als Token — im Chat wird kein HTML gerendert.
+    const fuelTok = [['kristall', res.fuel], ['plasmoid', res.fuelPla], ['quantum', res.fuelQua]]
+      .filter(([, n]) => (n || 0) > 0)
+      .map(([k, n]) => `−${wrFmt(n)} ${wrArtTok(k)}`).join(' · ');
     wrToast(intent === 'colonize'
       ? `🛸 Kolonie-Mission gestartet — Gründung bei Ankunft in ${wrCountdown(Date.parse(res.trip.arriveAt) - Date.now())}. `
         + `Der Verband geht bei der Gründung im Rumpf auf und kehrt NICHT zurück`
         + `${res.colonyCc ? ` · 💰 −${wrFmt(res.colonyCc)} CC` : ''}${fuelTxt}`
       : `${info.icon || '🚀'} Flotte gestartet — zurück in ${wrCountdown(Date.parse(res.trip.returnAt) - Date.now())}${fuelTxt}`,
-      'success');
+      // ⚠️ `true` = HTML erlaubt. Zulässig, weil in dieser Zeichenkette KEIN fremder
+      // Text steckt — nur Zahlen, feste Wörter und selbst erzeugte Bild-Hüllen.
+      // Planeten- und Spielernamen stehen bewusst nur in der Chat-Fassung unten.
+      'success', true);
 
     // Chat: offene Werft-Käufe zuerst rausschreiben, damit die Reihenfolge stimmt
     wrBuyFlush();
@@ -7598,10 +7614,18 @@ async function wrSend(intent) {
     // ⚠️ Texte veralten mit Regeländerungen (Lehre aus Teil 32, Punkt 10): die Meldung
     // beschrieb eine Rückkehr, die es nicht mehr gibt. Jetzt Ankunft statt Rückkehr.
     const ankunft = wrCountdown(Date.parse(res.trip.arriveAt) - Date.now());
+    // ⛽ 27ab (JP: „die Flugkosten sollen ebenfalls im chat oder im protokoll aufgeführt
+    // werden"). Anders als bei der Ernte ist der Chat hier der RICHTIGE Ort: ein Start
+    // ist eine bewusste, seltene Handlung (höchstens 5 Verbände gleichzeitig) und geht
+    // den Clan an — die Ernte lief dagegen bei jedem Tab-Öffnen und hätte gespammt.
+    //   ⚠️ Dieselbe Frage, zwei gegensätzliche Antworten: „ins Protokoll" entscheidet
+    //   sich an der HÄUFIGKEIT des Ereignisses, nicht am Ereignistyp.
+    // Über `wrChat` landet die Zeile automatisch auch im 📜-Protokoll (Marker [[wr]]).
     wrChat(`${info.icon || '🚀'} ${_wrEsc(m.name)} schickt einen Verband (${list}) zum ${_wrEsc(planet.name)} — `
          + `Auftrag: ${_wrEsc(info.name || intent)}, ` + (intent === 'colonize'
             ? `Ankunft in ${ankunft}, der Verband kehrt nicht zurück.`
-            : `Ankunft in ${ankunft}, zurück in ${wrCountdown(Date.parse(res.trip.returnAt) - Date.now())}.`));
+            : `Ankunft in ${ankunft}, zurück in ${wrCountdown(Date.parse(res.trip.returnAt) - Date.now())}.`)
+         + (fuelTok ? ` ⛽ Treibstoff: ${fuelTok}` : ''));
     wrRender();
   } catch (e) {
     wrToast('Start fehlgeschlagen: ' + e.message, 'error');
@@ -8659,18 +8683,26 @@ function wrFleetLightbox(tripId) {
       { const rm = wrResMeta(target.resource_type);
         beute.push(wrResMinable(m, target.resource_type)
           ? `${wrFmt(Math.round(target.richness * rm.loot))} ${wrResIc(target.resource_type)} ${_wrEsc(rm.name)}`
-          : `🔒 ${rm.name} (Abbau-Tech fehlt)`); }
+          : `🔒 ${_wrEsc(rm.name)} (Abbau-Tech fehlt)`); }
     } else if (trip.intent === 'harvest') {
       const rm = wrResMeta(target.resource_type);
       beute.push(wrResMinable(m, target.resource_type)
         ? `${wrFmt(Math.round(mine * target.richness * rm.mine))} ${wrResIc(target.resource_type)} ${_wrEsc(rm.name)}`
-        : `🔒 ${rm.name} (Abbau-Tech fehlt)`);
+        : `🔒 ${_wrEsc(rm.name)} (Abbau-Tech fehlt)`);
     } else if (trip.intent === 'scout') {
       beute.push('Quadrant wird für den ganzen Clan aufgedeckt');
     } else if (trip.intent === 'colonize') {
       beute.push('Dauerhafte Kolonie (Ertrag sammelt sich an)');
     }
   }
+  // 🟣🌀💎 27ab: Was die Reise GEKOSTET hat, gehört neben das, was sie einbringt.
+  // Der Treibstoff wurde beim Start abgebucht und stand danach nirgends mehr — man sah
+  // nur den kurzen Toast. `trip.fuel/fuelPla/fuelQua` schreibt der Server seit 22h/27aa
+  // in den Reise-Datensatz; gelesen hat sie bisher niemand.
+  //   ⚠️ Wieder „Server-Mechanik gebaut, Anzeige vergessen" — diesmal im eigenen Feature
+  //   vom selben Tag. Ein Feld in den Datensatz zu schreiben ist NICHT dasselbe wie es
+  //   anzuzeigen, und der Abstand dazwischen betrug hier eine Stunde.
+  const kosten = wrResListe({ kri: trip.fuel, pla: trip.fuelPla, qua: trip.fuelQua }, '', '−');
 
   const risk = wrAmbushHint(target?.ring || 0, power, wrTurretPower(m));
 
@@ -8691,7 +8723,19 @@ function wrFleetLightbox(tripId) {
           <span>🚩 Status<strong>${phase}</strong></span>
           <span>${wrIc("time")} Rückkehr<strong>${now >= ret ? 'jetzt' : wrCountdown(ret - now)}</strong></span>
         </div>
-        ${beute.length ? `<div class="wr-fl-beute">🎁 Erwartet: ${beute.map(_wrEsc).join(' · ')}</div>` : ''}
+        ${/* ⚠️ 27ab — REGRESSION AUS 27y, VON JP GEMELDET („beim Losschicken einer Flotte
+              werden nicht die Kosten angezeigt mit den assets"):
+              Seit 27y enthalten die `beute`-Einträge Bild-Hüllen aus `wrResIc()`. Hier
+              lief weiter `beute.map(_wrEsc)` darüber — und escapte damit das eigene
+              Markup, das dann als roher `<span …>`-Text im Kasten stand.
+              ⚠️ ÜBERTRAGBARE LEHRE: Wer einen Wert von TEXT auf HTML umstellt, muss JEDE
+              Stelle mitnehmen, die ihn ausgibt. Ein `_wrEsc` an der Ausgabe ist bis dahin
+              richtig und danach genau falsch — und es sieht an beiden Tagen gleich aus.
+              Genau davor warnt der Kommentar bei `wrIcText` seit Juli: erst escapen,
+              dann Bilder einsetzen — nie andersherum.
+              Jeder Eintrag escapt seine Textteile jetzt beim BAUEN (siehe oben). */''}
+        ${beute.length ? `<div class="wr-fl-beute">🎁 Erwartet: ${beute.join(' · ')}</div>` : ''}
+        ${kosten ? `<div class="wr-fl-kosten">⛽ Treibstoff dieser Reise: ${kosten}</div>` : ''}
         ${risk ? `<div class="wr-fl-risk">${risk}</div>` : ''}
         <button class="wr-btn wr-btn-go" id="wr-lb-ok">Schließen</button>
       </div>`;
@@ -8974,23 +9018,28 @@ async function wrMaybeArrive() {
     if (!u || !u.id) return false;
     // 🚀 Multi-Flotte: ist irgendein Trip fällig? Dann alle fälligen in Schleife abrechnen.
     if (!wrTrips(u).some(t => Date.now() >= Date.parse(t.returnAt))) return false;
-    let cc = 0, erz = 0, kri = 0, n = 0, guard = 0, last = null;
+    // 🟣🌀 27ab: Plasmoid und Quantenschaum fehlten hier — wer die App geschlossen
+    // hatte, bekam beim nächsten Start eine Beute-Meldung ohne die Ring-Rohstoffe.
+    let cc = 0, erz = 0, kri = 0, pla = 0, qua = 0, n = 0, guard = 0, last = null;
     while (guard++ < 6) {
       const res = await DB.claimSpaceArrival(u.id);
       if (!res || res.error || res.nothing) { if (res && res.space) wrApplySpace(res.space); if (!res || !res.more) break; else continue; }
       wrApplySpace(res.space);
       if (_wrMember && _wrMember.id === u.id) _wrMember.space = res.space;
-      cc += res.cc || 0; erz += res.erz || 0; kri += res.kristall || 0; n++; last = res;
+      cc += res.cc || 0; erz += res.erz || 0; kri += res.kristall || 0;
+      pla += res.plasmoid || 0; qua += res.quantum || 0; n++; last = res;
       wrChatReport(res, u.name);
       try { if (typeof checkSpaceAchievements === 'function') await checkSpaceAchievements(u, res); } catch (e) {}
       if (!res.more) break;
     }
     if (n === 0) return false;
+    // ⚠️ 27ab: jetzt mit echten Bildern und allen vier Rohstoffen. Zulässig als HTML,
+    // weil in dieser Zeichenkette kein fremder Text steckt — nur Zahlen und feste Wörter.
     const beute = [];
-    if (cc > 0)  beute.push(`${wrFmt(cc)} CC`);
-    if (erz > 0) beute.push(`${wrFmt(erz)} 🪨`);
-    if (kri > 0) beute.push(`${wrFmt(kri)} 💎`);
-    wrToast(`🚀 ${n === 1 ? 'Deine Flotte ist' : n + ' Flotten sind'} zurück${beute.length ? ' — ' + beute.join(' · ') : ''}`, 'success');
+    const resTxt = wrResListe({ erz, kri, pla, qua });
+    if (resTxt) beute.push(resTxt);
+    if (cc > 0) beute.push(`+${wrFmt(cc)} CC`);
+    wrToast(`🚀 ${n === 1 ? 'Deine Flotte ist' : n + ' Flotten sind'} zurück${beute.length ? ' — ' + beute.join(' · ') : ''}`, 'success', beute.length > 0);
     return true;
   } catch (e) { console.warn('wrMaybeArrive:', e.message); return false; }
 }
