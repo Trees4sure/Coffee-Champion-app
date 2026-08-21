@@ -1273,6 +1273,45 @@ function wrIcText(str) {
     .split('🌀').join(wrIc('qua'));
 }
 
+// 🪨💎🟣🌀 Rohstoff-SYMBOL zu einem Rohstoff-TYP — als Bild, nicht als Emoji.
+// ⚠️ 27y (JP 2026-08-21): „Bei Sieg weiterhin Plasmoid Symbol statt Assets … bei den
+// Kolonie-Abbau-Grundlagen ist es dasselbe."
+// BEFUND: `wrIc()` kennt die KURZ-Schlüssel erz/kri/pla/qua. Die Rohstoff-TYPEN aus den
+// Planetendaten heissen aber erz/kristall/plasmoid/quantum — und überall, wo ein TYP
+// herkam, stand deshalb weiter `meta.icon` (das rohe Emoji). 27p hat genau die Stellen
+// umgestellt, an denen der Schlüssel schon kurz war; die Typ-Stellen blieben zurück.
+//   ⚠️ ÜBERTRAGBARE LEHRE (zweiter Fall nach 27p): Ein Mischbild entsteht nicht dadurch,
+//   dass man eine Stelle VERGISST, sondern dadurch, dass zwei SCHREIBWEISEN desselben
+//   Dings existieren und nur die eine umgestellt wird. Ab jetzt EINE Funktion, die
+//   beide Schreibweisen versteht.
+// ⚠️ NUR FÜR HTML — das Ergebnis ist eine <span>-Hülle. In Toast/Chat/title/fillText
+// bleibt `wrResMeta(t).icon`.
+const WR_RES_IC_KEY = { erz:'erz', kri:'kri', kristall:'kri', pla:'pla', plasmoid:'pla',
+                        qua:'qua', quantum:'qua' };
+function wrResIc(t) {
+  const k = WR_RES_IC_KEY[t];
+  return k ? wrIc(k) : wrResMeta(t).icon;
+}
+// Rohstoff-Liste `{erz,kri,pla,qua}` als HTML-Zeile. Nullposten fallen weg — sonst stünde
+// dort dauerhaft „0 · 0 · 0 · 0". `suffix` z. B. „/Tag".
+function wrResListe(o, suffix) {
+  const sfx = suffix || '';
+  return [['erz', o.erz], ['kri', o.kri], ['pla', o.pla], ['qua', o.qua]]
+    .map(([k, v]) => [k, Math.round(v || 0)])
+    .filter(([, n]) => n > 0)
+    .map(([k, n]) => `+${wrFmt(n)} ${wrIc(k)}${sfx}`).join(' · ');
+}
+// Gleiche Liste als REINER TEXT — `showToast` setzt `textContent`, dort wäre eine
+// wrIc-Bildhülle nur sichtbarer Markup-Müll.
+const WR_RES_EMOJI = { erz:'🪨', kri:'💎', pla:'🟣', qua:'🌀' };
+function wrResListeTxt(o, suffix) {
+  const sfx = suffix || '';
+  return [['erz', o.erz], ['kri', o.kri], ['pla', o.pla], ['qua', o.qua]]
+    .map(([k, v]) => [k, Math.round(v || 0)])
+    .filter(([, n]) => n > 0)
+    .map(([k, n]) => `+${wrFmt(n)} ${WR_RES_EMOJI[k]}${sfx}`).join(' · ');
+}
+
 // ── 💰 Preis-/Kostenzeile in HTML (27p) ──────────────────────────────────────
 // JP 2026-08-20: „die plasmoid assets und erz sowie kristall assets sollst du verwenden."
 //
@@ -1593,9 +1632,16 @@ async function wrAutoHarvest() {
     const res = await DB.harvestSpace(_wrMember.id);
     if (!res || res.error) return;                 // still — Fehler zeigt der manuelle Weg
     if (res.space) wrApplySpace(res.space);
+    // ⚠️ 27y (JP 2026-08-21, zu „automatisch eingesammelt"): `harvest_space` liefert
+    // seit 26c auch `plasmoid`/`quantum` und seit 21p `cc` zurück — die Meldung nannte
+    // aber nur Erz und Kristall. Wieder „Server-Mechanik gebaut, Anzeige vergessen":
+    // die Rohstoffe kamen an, nur sagte es niemand.
+    // ⚠️ EMOJI, KEINE ASSETS: `showToast` setzt `textContent`. Eine wrIc-Bildhülle käme
+    // hier als sichtbares `<span …>` heraus, nicht als Bild — deshalb wrResListeTxt.
     const parts = [];
-    if (res.erz > 0)      parts.push(`${wrFmt(res.erz)} 🪨`);
-    if (res.kristall > 0) parts.push(`${wrFmt(res.kristall)} 💎`);
+    const resTxt = wrResListeTxt({ erz: res.erz, kri: res.kristall, pla: res.plasmoid, qua: res.quantum });
+    if (resTxt) parts.push(resTxt);
+    if (res.cc > 0) parts.push(`+${wrFmt(res.cc)} CC`);
     if (parts.length) wrToast(`📥 Automatisch eingesammelt: ${parts.join(' · ')}`, 'success');
     if (res.paused > 0) wrToast(`⚠️ ${wrFmt(res.paused)} Route(n) pausieren — der Kristall reicht nicht als Treibstoff.`, 'error');
   } catch (e) { /* Auto-Ernte darf das Laden des Tabs nie blockieren */ }
@@ -3306,7 +3352,7 @@ function wrDetailHtml(m) {
   const mine    = p.cleared_by === m?.id;
   const colon   = !!p.colonized_by;
   const resMeta = wrResMeta(p.resource_type);
-  const resIcon = resMeta.icon;
+  const resIcon = wrResIc(p.resource_type);
   const resName = resMeta.name;
   const resGated = !wrResMinable(m, p.resource_type);   // Ring-Rohstoff ohne Abbau-Tech
   const min     = wrTripMin(p.ring, p.quadrant, m);   // 🗺️ 26z
@@ -3741,11 +3787,11 @@ function wrPlanetDefHtml(m, p) {
 
       <div class="wr-pdef-row">
         <div class="wr-pdef-lbl">🏙️ Kolonie-Ausbau <span class="wr-sub">Stufe ${clv} von 3</span></div>
-        <div class="wr-pdef-val">${resMeta.icon} ${wrFmt(yieldFor(clv))}/Tag</div>
+        <div class="wr-pdef-val">${wrResIc(p.resource_type)} ${wrFmt(yieldFor(clv))}/Tag</div>
         ${cUp
           ? `<button class="wr-btn wr-btn-sm" data-wr-pbuild="${p.id}:colony_upgrade" ${canPay(cUp) ? '' : 'disabled'}
                >Auf Stufe ${cUp.level} ausbauen
-               <span class="wr-btn-sub">${priceTxt(cUp)} → ${resMeta.icon} ${wrFmt(yieldFor(cUp.level))}/Tag</span></button>`
+               <span class="wr-btn-sub">${priceTxt(cUp)} → ${wrResIc(p.resource_type)} ${wrFmt(yieldFor(cUp.level))}/Tag</span></button>`
           : '<div class="wr-slot-max">✅ Vollausbau</div>'}
       </div>
 
@@ -4015,7 +4061,7 @@ function wrColoniesHtml(m) {
     // garrison 27k, wrAllUsers 27s). Diesmal war es Geld, das jeden Tag floss, ohne dass
     // irgendwo stand, woher. Ein Einkommen, das niemand sieht, ist kein Anreiz.
     const ccTag = wrColonyCcDay(m, pl);
-    const proTag = [tagAmt > 0 ? `${wrFmt(tagAmt)} ${meta.icon}` : '']
+    const proTag = [tagAmt > 0 ? `${wrFmt(tagAmt)} ${wrResIc(typ)}` : '']
       .concat(tagSide ? [`${wrFmt(tagSide.erz)} ${wrIc('erz')}`,
                          `${wrFmt(tagSide.kri)} ${wrIc('kri')}`] : [])
       .concat(ccTag > 0 ? [`${wrFmt(ccTag)} CC`] : [])
@@ -4024,7 +4070,7 @@ function wrColoniesHtml(m) {
       <div class="wr-col-item${offen ? ' wr-col-open' : ''}">
         <button type="button" class="wr-col-row" data-wr-coltoggle="${_wrEsc(id)}">
           <span class="wr-col-caret">${offen ? '▾' : '▸'}</span>
-          <span>${meta.icon} ${wrColonyWarnBadge(m, pl)}${_wrEsc(c.name || 'Kolonie')}
+          <span>${wrResIc(typ)} ${wrColonyWarnBadge(m, pl)}${_wrEsc(c.name || 'Kolonie')}
             <span class="wr-sub">Ring ${pl ? pl.ring : '?'}${pl ? ` · ${_wrEsc(pl.quadrant)}` : ''}</span></span>
           ${/* ⚠️ 27q (JP 2026-08-20): „man könnte die Garnisonsfeuerkraft noch in der
                 Kolonieübersicht je Kolonie aufzeigen mit Schwertern. das Schild sind ja
@@ -4044,7 +4090,7 @@ function wrColoniesHtml(m) {
             wrGarrisonCount(m, id) > 0
               ? ` · ${wrIc('atk')} ${wrFmt(wrGarrisonPower(m, id))}` : ''}${wrIsStation(pl) ? ' · 📡' : ''}
             <span class="wr-col-day">${proTag ? `📥 ${proTag} /Tag` : ''}${
-              (!wrResMinable(m, typ) && tagAmt === 0) ? ` 🔒 ${meta.icon} braucht die Abbau-Technik` : ''}</span></span>
+              (!wrResMinable(m, typ) && tagAmt === 0) ? ` 🔒 ${wrResIc(typ)} braucht die Abbau-Technik` : ''}</span></span>
           <strong>+${wrFmt(amt + (side ? side.erz + side.kri : 0))}</strong>
         </button>
         ${/* 🏙️ VOLLSTÄNDIGE Steuerung im Akkordeon (JP 2026-07-30: „Ich wollte doch, dass
@@ -4102,12 +4148,12 @@ function wrColoniesHtml(m) {
       <div class="wr-col-item${offen ? ' wr-col-open' : ''}">
         <button type="button" class="wr-col-row" data-wr-coltoggle="${_wrEsc(id)}">
           <span class="wr-col-caret">${offen ? '▾' : '▸'}</span>
-          <span>${meta.icon} ${_wrEsc(pl.name || 'Planet')}
+          <span>${wrResIc(pl.resource_type)} ${_wrEsc(pl.name || 'Planet')}
             <span class="wr-sub">Ring ${pl.ring} · ${_wrEsc(pl.quadrant)}</span></span>
           <span class="wr-sub">${'★'.repeat(Math.max(1, pl.richness || 1))} ${_wrEsc(meta.name)}${
             wrDefLevel(pl) ? ` · 🛡️ ${wrFmt(wrPlanetDef(pl))}` : ''}${wrIsStation(pl) ? ' · 📡' : ''}
             <span class="wr-col-day">${wreck > 0 ? `${wrIc('salvage')} ${wrFmt(wreck)} Wrackteile` : ''}${
-              !wrResMinable(m, pl.resource_type) ? ` 🔒 ${meta.icon} braucht die Abbau-Technik` : ''}</span></span>
+              !wrResMinable(m, pl.resource_type) ? ` 🔒 ${wrResIc(pl.resource_type)} braucht die Abbau-Technik` : ''}</span></span>
           ${/* Der fette Wert rechts ist die SORTIERGRÖSSE des Abschnitts — sonst steht dort
                 eine Zahl, nach der die Liste gar nicht geordnet ist, und die Reihenfolge
                 wirkt willkürlich. */''}
@@ -4153,7 +4199,7 @@ function wrColoniesHtml(m) {
            den du in die Garnison einer Kolonie stellst — er belegt dort einen der
            ${WR_GARRISON_PER_LEVEL} Plätze je Stufe, den sonst ein Kampfschiff hätte.
            Alles wird beim Ernten ausgezahlt.</div>`;
-       })()}       })()}<div class="wr-sub">🛡️ Geschütze der Kolonie · ${wrIc('atk')} Garnison (deine dort stationierten Schiffe) — zwei getrennte Posten, der Server führt sie auch getrennt. Ertrag sammelt sich max. ${wrTechCapDays(m)} Tage an.</div>`,
+       })()}<div class="wr-sub">🛡️ Geschütze der Kolonie · ${wrIc('atk')} Garnison (deine dort stationierten Schiffe) — zwei getrennte Posten, der Server führt sie auch getrennt. Ertrag sammelt sich max. ${wrTechCapDays(m)} Tage an.</div>`,
       `<button class="wr-btn wr-btn-go" data-wr-harvest="1" ${pending < 1 ? 'disabled' : ''}>
         ${wrIc("yield")} Ertrag einsammeln${pending > 0 ? ` (${wrFmt(pending)})` : ''}</button>`) : ''}
     ${secRisk.length ? wrSecCard('risk',
@@ -4964,7 +5010,12 @@ function wrRoutesHtml(m) {
   const keys = Object.keys(routes).filter(k => routes[k] && typeof routes[k] === 'object');
   if (!keys.length) return '';
   const stock = wrKristall(m);
-  let rows = '', pendErz = 0, pendKri = 0, fuelSum = 0, perDayFuel = 0;
+  // ⚠️ 27y: VIER Töpfe statt zwei. Eine 🟣/🌀-Route buchte ihren Ertrag bisher auf
+  // `pendKri` — der Einsammeln-Knopf zählte Plasmoiden als Kristall —, und die
+  // Ring-Boni pla/qua einer Bergungsroute (die `wrRoutePending` seit 26o mitliefert)
+  // fielen in der Summe ganz unter den Tisch.
+  let rows = '', pendErz = 0, pendKri = 0, pendPla = 0, pendQua = 0, fuelSum = 0, perDayFuel = 0;
+  let dayErz = 0, dayKri = 0, dayPla = 0, dayQua = 0;   // Tagesleistung aller Routen
   for (const rk of keys) {
     const r = routes[rk];
     const wreck = r.mode === 'wreck';
@@ -4973,24 +5024,53 @@ function wrRoutesHtml(m) {
     const cnt = parseInt(r.count, 10) || 0;
     perDayFuel += wrRouteFuel(cnt);
     fuelSum += pd.fuel;
+    // ⚠️ 27y — JP 2026-08-21: „bei der Übersicht Dauerernte-Bergung werden immer +0
+    // Rohstoffe angezeigt, warum?"
+    // BEFUND: Die Zahl war RICHTIG und trotzdem wertlos. `wrAutoHarvest()` sammelt seit
+    // 2026-07-22 bei JEDEM Öffnen des 🚀-Tabs automatisch ein (gedrosselt auf 10 Min)
+    // und rückt dabei `lastClaim` auf jetzt. Wer diese Karte ansieht, liest den Stand
+    // von Sekunden nach dem Einsammeln — also 0. Immer.
+    //   ⚠️ ÜBERTRAGBARE LEHRE: Wenn eine AUTOMATIK eine Größe genau in dem Moment
+    //   zurücksetzt, in dem der Spieler sie liest, ist nicht der Wert kaputt, sondern
+    //   die WAHL DER KENNZAHL. Anzeigen, was sich durch das Einsammeln nicht ändert.
+    // Rechts steht deshalb jetzt die TAGESLEISTUNG; das Aufgelaufene kommt als Zusatz
+    // nur dazu, wenn wirklich etwas liegt.
+    const day = { erz:0, kri:0, pla:0, qua:0 };
     let amtTxt;
     if (wreck) {
       pendErz += pd.erz; pendKri += pd.kri;
-      amtTxt = `+${wrFmt(pd.erz)} ${wrIc('erz')} · +${wrFmt(pd.kri)} ${wrIc('kri')}`;
+      pendPla += pd.pla || 0; pendQua += pd.qua || 0;
+      const wrate = wrWreckRate(cnt);
+      const wRing = parseInt(planet?.ring, 10) || 0;
+      day.erz = wrate * WR_WRECK_ERZ;
+      day.kri = wrate * WR_WRECK_KRI;
+      day.pla = wRing >= WR_RING_LOOT.plaRing ? wrate * WR_RING_LOOT.wreckPla : 0;
+      day.qua = wRing >= WR_RING_LOOT.quaRing ? wrate * WR_RING_LOOT.wreckQua : 0;
     } else {
-      const meta = wrResMeta(r.type);
-      if (r.type === 'erz') pendErz += pd.amount; else pendKri += pd.amount;
+      const t = r.type;
+      if      (t === 'erz')      pendErz += pd.amount;
+      else if (t === 'plasmoid') pendPla += pd.amount;
+      else if (t === 'quantum')  pendQua += pd.amount;
+      else                       pendKri += pd.amount;
       pendErz += pd.sideErz || 0;
       pendKri += pd.sideKri || 0;
-      // ⚠️ wrIc kennt nur erz/kri — für 🟣/🌀 das Emoji aus WR_RES_META nehmen,
-      // sonst stünde auf einer Plasmoid-Route fälschlich das Kristall-Bild.
-      const ic = r.type === 'erz' ? wrIc('erz') : r.type === 'kristall' ? wrIc('kri')
-               : r.type === 'plasmoid' ? wrIc('pla') : r.type === 'quantum' ? wrIc('qua') : meta.icon;
-      amtTxt = `+${wrFmt(pd.amount)} ${ic}`
-             + ((pd.sideErz || pd.sideKri)
-                 ? `<span class="wr-sub">+${wrFmt(pd.sideErz)} ${wrIc('erz')} · +${wrFmt(pd.sideKri)} ${wrIc('kri')}</span>`
-                 : '');
+      // Spiegel von wrRoutePending: Ring-Routen werfen zusätzlich 50 % Erz und
+      // 25 % davon als Kristall ab.
+      const rate = wrRouteRate(t, r.richness, cnt);
+      const ring = (t === 'plasmoid' || t === 'quantum');
+      day.erz = (t === 'erz' ? rate : 0) + (ring ? rate * 0.5 : 0);
+      day.kri = (t === 'kristall' ? rate : 0) + (ring ? rate * 0.5 * 0.25 : 0);
+      day.pla = t === 'plasmoid' ? rate : 0;
+      day.qua = t === 'quantum'  ? rate : 0;
     }
+    dayErz += day.erz; dayKri += day.kri; dayPla += day.pla; dayQua += day.qua;
+    const bereit = wreck
+      ? (pd.erz + pd.kri + (pd.pla || 0) + (pd.qua || 0))
+      : (pd.amount + (pd.sideErz || 0) + (pd.sideKri || 0));
+    amtTxt = (wrResListe(day, '/Tag') || '—')
+           + (bereit > 0
+                ? `<span class="wr-sub">${wrFmt(bereit)} liegen bereit</span>`
+                : '<span class="wr-sub">gerade eingesammelt</span>');
     const sub = wreck
       ? `${cnt}× Bergungsschiff · ${wrFmt(wrWreckRate(cnt))}/Tag · noch `
         + `${wrFmt(planet ? wrWreckLeft(planet) : 0)} im Feld`
@@ -5037,7 +5117,8 @@ function wrRoutesHtml(m) {
   }
   const short = fuelSum > stock + pendKri;
   const reach = perDayFuel > 0 ? Math.floor(stock / perDayFuel) : 999;
-  const pending = pendErz + pendKri;
+  const pending = pendErz + pendKri + pendPla + pendQua;
+  const tagTxt  = wrResListe({ erz: dayErz, kri: dayKri, pla: dayPla, qua: dayQua }, '/Tag');
   return `
     <div class="wr-card">
       <div class="wr-card-title">🛰️ Dauerernte &amp; Bergung
@@ -5047,9 +5128,13 @@ function wrRoutesHtml(m) {
         prognostiziert.</div>
       ${rows}
       <div class="wr-facts">
+        <span>Ertrag: <strong>${tagTxt || '—'}</strong></span>
         <span>Treibstoff: <strong>${wrFmt(perDayFuel)} ${wrIc('kri')}/Tag</strong></span>
         <span>Vorrat reicht: <strong>${reach > 99 ? '99+' : reach} Tage</strong></span>
       </div>
+      <div class="wr-sub">Beim Öffnen des 🚀-Tabs wird automatisch eingesammelt (höchstens
+        alle 10 Minuten). Rechts steht deshalb die <strong>Tagesleistung</strong> — der
+        aufgelaufene Rest ist meist längst abgeholt und stünde sonst dauerhaft auf 0.</div>
       ${short
         ? `<div class="wr-warn">${wrIc('kri')} Der Kristall reicht nicht für den ganzen Zeitraum — die Routen
              pausieren, bis wieder Treibstoff da ist. Schiffe gehen dabei nicht verloren.</div>`
@@ -8151,9 +8236,10 @@ async function wrHarvest() {
     if (!res || res.error) { wrToast(wrErrText(res?.error), 'error'); return; }
     if (res.space) wrApplySpace(res.space);
     const parts = [];
-    if (res.erz > 0)      parts.push(`${wrFmt(res.erz)} 🪨`);
-    if (res.kristall > 0) parts.push(`${wrFmt(res.kristall)} 💎`);
-    if (res.fuel > 0)     parts.push(`−${wrFmt(res.fuel)} 💎 Treibstoff`);
+    const resTxt = wrResListeTxt({ erz: res.erz, kri: res.kristall, pla: res.plasmoid, qua: res.quantum });
+    if (resTxt) parts.push(resTxt);
+    if (res.cc > 0)   parts.push(`+${wrFmt(res.cc)} CC`);
+    if (res.fuel > 0) parts.push(`−${wrFmt(res.fuel)} 💎 Treibstoff`);
     wrToast(parts.length ? `📥 Eingesammelt: ${parts.join(' · ')}` : 'Noch nichts zu holen.',
             parts.length ? 'success' : 'info');
     if (Array.isArray(res.emptied) && res.emptied.length) {
@@ -8438,12 +8524,12 @@ function wrFleetLightbox(tripId) {
       beute.push(`${wrFmt(Math.max(2000, target.enemy_strength * 50 + target.richness * 400))} CC bei Sieg`);
       { const rm = wrResMeta(target.resource_type);
         beute.push(wrResMinable(m, target.resource_type)
-          ? `${wrFmt(Math.round(target.richness * rm.loot))} ${rm.icon} ${rm.name}`
+          ? `${wrFmt(Math.round(target.richness * rm.loot))} ${wrResIc(target.resource_type)} ${_wrEsc(rm.name)}`
           : `🔒 ${rm.name} (Abbau-Tech fehlt)`); }
     } else if (trip.intent === 'harvest') {
       const rm = wrResMeta(target.resource_type);
       beute.push(wrResMinable(m, target.resource_type)
-        ? `${wrFmt(Math.round(mine * target.richness * rm.mine))} ${rm.icon} ${rm.name}`
+        ? `${wrFmt(Math.round(mine * target.richness * rm.mine))} ${wrResIc(target.resource_type)} ${_wrEsc(rm.name)}`
         : `🔒 ${rm.name} (Abbau-Tech fehlt)`);
     } else if (trip.intent === 'scout') {
       beute.push('Quadrant wird für den ganzen Clan aufgedeckt');

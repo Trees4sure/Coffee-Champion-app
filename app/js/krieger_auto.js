@@ -56,13 +56,35 @@ const KRIEGER_AUTO_MAX_LOSSES   = 3;     // danach: nur noch erkunden
 // Tagesschritte aufgebraucht, kostet Laufen nichts mehr außer Zeit: dann darf der
 // Krieger weit ausholen, denn Aufräumen ist alles, was noch geht (JP 2026-08-05:
 // „er soll enden, wenn er keine Gegner mehr findet, nicht wenn die Schritte vorbei sind").
-const KRIEGER_AUTO_MAX_DETOUR      = 20;   // mit Schritten übrig
-const KRIEGER_AUTO_MAX_DETOUR_LATE = 70;   // nach Schrittende — praktisch die halbe Karte
-const KRIEGER_AUTO_MAX_REVISITS    = 200;  // Obergrenze alter Felder pro Lauf (Sicherung)
+// ⚠️ 27y — JP 2026-08-21: „Es werden die Felder eher gesucht, als gekämpft, obwohl
+// kampffähig … ich würde gerne alle offenen Kämpfe absuchen, wenn keine auffindbar
+// Karte ergründen."
+// Damit ist die Abwechslung vom 2026-08-05 (nach jedem Altlasten-Kampf zwingend ein
+// Erkundungsschritt, und dabei nur 20 Felder Umkreis) wieder AUFGEHOBEN. Ihr Anlass war
+// ein anderer Fehler: ein besiegtes Feld behielt seinen Encounter-Eintrag, der Krieger
+// fand es sofort wieder und drehte sich im Kreis. Das ist seit demselben Tag behoben
+// (der Eintrag wird nach einem Sieg gelöscht) — die Abwechslung hat seither nur noch
+// erreichbare Kämpfe liegen lassen.
+//   ⚠️ ÜBERTRAGBARE LEHRE: Eine Notmassnahme gegen ein Symptom überlebt die Behebung
+//   der Ursache und wirkt dann als reine Bremse. Wer ein Symptom dämpft, muss den
+//   Dämpfer beim Beheben der Ursache mit aufräumen.
+const KRIEGER_AUTO_MAX_DETOUR      = 70;   // einheitlich — vorher 20, solange Schritte übrig
+const KRIEGER_AUTO_MAX_DETOUR_LATE = 70;   // gleicher Wert, Name bleibt für die Rückfallsuche
+const KRIEGER_AUTO_MAX_REVISITS    = 400;  // Obergrenze alter Felder pro Lauf (Sicherung)
+// 🛌 AUTO-HEILUNG (JP 2026-08-21: „Es sollte eh neben cold brew automatik auch HP
+// auffüllen automatik geben.")
+// BEFUND, der das dringend macht: Der Chip-Schaden beträgt 2 % der Max-HP JE RUNDE —
+// auf Stufe 171 sind das ~18 HP pro Runde, auch gegen den schwächsten Gegner. Nach
+// zwei Dutzend Kämpfen ist der Krieger unten, `rSurv` fällt, und ab da meidet der Lauf
+// ALLES. Genau das ist JPs „sehr viele Gegner weggelassen, die eigentlich überhaupt
+// kein Problem darstellen". Ohne Heilung ist ein langer Lauf nicht möglich.
+const KRIEGER_AUTO_HEAL_AT     = 0.45;  // unter 45 % Max-HP wird aufgefüllt
+const KRIEGER_AUTO_HEAL_MAX    = 6;     // höchstens so viele Erholungen je Lauf
+const KRIEGER_AUTO_HEAL_KEEP_CC = 150;  // dieser CC-Rest bleibt immer stehen
 const KRIEGER_AUTO_REFUND_UNDER = 0.50;  // R9 — anteilige Erstattung unter dieser Nutzung
 const KRIEGER_AUTO_STEP_DELAY   = 110;   // ms Pause je Schritt (UI bleibt bedienbar)
 const KRIEGER_AUTO_WALK_DELAY   = 35;    // ms Pause je Feld beim kostenlosen Zurücklaufen
-const KRIEGER_AUTO_MAX_ACTIONS  = 1200;  // harte Not-Obergrenze gegen Endlosschleifen
+const KRIEGER_AUTO_MAX_ACTIONS  = 2500;  // harte Not-Obergrenze gegen Endlosschleifen
 // 🧊 Cold Brew: heilt laut Trankbeschreibung „+50 % Max-HP vor Kampfbeginn".
 // Wird eingesetzt, wenn der Kampf NUR damit über die 60-%-Schwelle kommt — nie vorsorglich.
 const KRIEGER_AUTO_COLDBREW_KEY  = 'coldbrew';
@@ -72,9 +94,19 @@ const KRIEGER_AUTO_COLDBREW_CAP  = true; // true = Heilung wird bei Max-HP gedec
 // (Spiegel von KRIEGER_POTION_KEEP — das ist JPs Burgkampf-Reserve).
 const KRIEGER_AUTO_POTION_KEEP  = (typeof KRIEGER_POTION_KEEP !== 'undefined') ? KRIEGER_POTION_KEEP : 5;
 
+// Preis der 🛌 Vollen Erholung — Spiegel von KRIEGER_FULL_HEAL_COST aus krieger.js.
+// ⚠️ typeof-Prüfung mit dem RICHTIGEN Namen (die Adapter-Lehre von 2026-08-17: ein
+// falsch geratener Name wird von `typeof` in einen stillen Rückfall verwandelt).
+const KRIEGER_AUTO_HEAL_COST = (typeof KRIEGER_FULL_HEAL_COST !== 'undefined')
+  ? KRIEGER_FULL_HEAL_COST : 60;
+
 function kriegerAutoCost(level) {
   return Math.max(1, (level || 1) * KRIEGER_AUTO_COST_PER_LV);
 }
+
+// 🛌 Wird die Auto-Heilung für den nächsten Lauf verwendet? Im Start-Dialog umschaltbar,
+// überlebt (wie _kriegerSubTab) Re-Renders innerhalb der Sitzung.
+let _kriegerAutoHeal = true;
 
 // Laufzeit-Flags (überleben Re-Renders innerhalb der Session, analog _kriegerSubTab)
 let _kriegerAutoRunning = false;
@@ -294,21 +326,103 @@ function _kaEnemyAt(tier, tx, ty, dd, seed) {
 // Fehler 2 ist der schwerere: er wirkt genau dort, wo der Auto-Lauf seinen Zweck hat —
 // bei vielen kleinen Kämpfen hintereinander.
 //
-// Spielerschaden. `setCulture` ist der aktive Set-Bonus (kriegerActiveSetCulture).
-function _kaPlayerDmg(atk, enemyDef, crit, setCulture) {
+// Spielerschaden. `setCulture` ist der aktive Set-Bonus (kriegerActiveSetCulture),
+// `wmech` die Sonder-Mechanik der getragenen Waffe, `ability` die Gegner-Signatur.
+//
+// ⚠️ 27y — DER GRUND, WARUM DER LAUF ZU VIEL LIEGEN LIESS (JP 2026-08-21: „mir scheint
+// da die Berechnung der Siegchancen noch falsch zu sein, also zu pessimistisch").
+// Die vier T3-Waffen haben eine `mech`, die dungeon_fight seit dem 15.07. anwendet —
+// der Schätzer kannte KEINE davon:
+//   streitkolben  ignoriert 50 % der (schon durchschlagenen) Gegner-DEF
+//   kriegsbogen   +40 % Schaden gegen DEF ≥ 15
+//   wurfmesser    DREI zusätzliche CRIT-Würfe je Runde, jeder +60 % Grundschaden
+//   armbrust      Bonus-Erstschlag (steckt in _kaFirstStrike, nicht hier)
+// Ein Wurfmesser-Träger mit 40 CRIT schlägt damit real 1,72× so hart wie geschätzt.
+//   ⚠️ ÜBERTRAGBARE LEHRE, dieselbe wie beim Adapter: Ein Schätzer, der nur die
+//   ADDITIVEN Werte einer Ausrüstung liest (atk/def/crit), übersieht jede Mechanik —
+//   und Mechaniken sind genau das, was hochstufige Gegenstände ausmacht.
+function _kaPlayerDmg(atk, enemyDef, crit, setCulture, wmech, ability) {
+  const a    = atk || 0;
+  const eDef = enemyDef || 0;
   // Mittelalter-Set „Rüstungsdurchschlag": ROUND(v_edef_eff * 0.6) — 40 % der Gegner-DEF
   // werden ignoriert.
-  const pen  = (setCulture === 'mittelalter')
-    ? Math.round((enemyDef || 0) * 0.6) : (enemyDef || 0);
-  const base = Math.max(1, (atk || 0) - pen);
-  const c    = Math.max(0, Math.min(100, crit || 0));
-  // ×2 normal, ×2,5 mit Wüstensturm (orient). Die +10 CRIT des Sets stecken bereits in
-  // `crit` (kriegerAutoStatsFor) — hier kommt nur der Multiplikator dazu, keine Dopplung.
-  const critMul = (setCulture === 'orient') ? 2.5 : 2;
-  let dmg = base * (1 + (c / 100) * (critMul - 1));
+  const pen = (setCulture === 'mittelalter') ? Math.round(eDef * 0.6) : eDef;
+  // Streitkolben halbiert danach nochmals (Spiegel: v_wmech = 'streitkolben').
+  let base = (wmech === 'streitkolben')
+    ? Math.max(1, a - Math.round(pen * 0.5))
+    : Math.max(1, a - pen);
+  // Kriegsbogen: +40 % gegen gut gepanzerte Gegner.
+  if (wmech === 'kriegsbogen' && pen >= 15) base += Math.round(base * 0.40);
+  const c = Math.max(0, Math.min(100, crit || 0)) / 100;
+  let dmg;
+  if (wmech === 'wurfmesser') {
+    // DREI unabhängige CRIT-Würfe, jeder +60 % vom Grundschaden. Ersetzt den normalen
+    // CRIT-Zweig (die SQL macht ELSIF) — kein Doppelzählen.
+    dmg = base * (1 + 3 * c * 0.6);
+  } else {
+    // ×2 normal, ×2,5 mit Wüstensturm (orient). Die +10 CRIT des Sets stecken bereits in
+    // `crit` (kriegerAutoStatsFor) — hier kommt nur der Multiplikator dazu.
+    dmg = base * (1 + c * ((setCulture === 'orient') ? 2.5 : 2) - c);
+  }
   // Europa-Set „Doppelter Espresso": 25 % Chance auf einen zweiten Schlag je Runde.
-  if (setCulture === 'europa') dmg *= 1.25;
-  return dmg;
+  // ⚠️ Der Zweitschlag ist in der SQL der GRUNDSCHADEN (v_patk − v_edef_eff), OHNE CRIT
+  // und ohne Waffen-Mechanik. Der alte `dmg *= 1.25` hat den CRIT mitvervielfacht und
+  // damit zu viel versprochen — hier nun exakt.
+  if (setCulture === 'europa') dmg += 0.25 * Math.max(1, a - eDef);
+  // Gegner-Signatur: 'durchsichtig' weicht 20 % aus, 'bitterkern' schluckt 25 %.
+  if (ability === 'durchsichtig') dmg *= 0.80;
+  if (ability === 'bitterkern')   dmg *= 0.75;
+  return Math.max(0.01, dmg);
+}
+
+// Einmaliger Schaden VOR Runde 1 (Armbrust, Talent „Ristretto", Steppe-Salve).
+// Wird in kriegerAutoWinChance von den Gegner-HP abgezogen, genau wie es die SQL tut.
+function _kaFirstStrike(dd, atk, wmech, setCulture) {
+  const t = dd?.talents || {};
+  const mult = t.meisterroester ? 1.5 : 1;
+  let fs = 0;
+  if (wmech === 'armbrust') fs += Math.round((atk || 0) * 0.7);
+  if (t.ristretto)          fs += Math.round((atk || 0) * 0.5 * mult);
+  // Steppe-Set „Eröffnungssalve": ein kostenloser Fernschuss (0,8 × ATK) VOR Runde 1.
+  if (setCulture === 'steppe') fs += Math.max(1, Math.round((atk || 0) * 0.8));
+  return fs;
+}
+
+// Heilung je Runde, die der Krieger im Kampf selbst erzeugt — Spiegel des Blocks am
+// Ende der WHILE-Schleife in dungeon_fight.
+// ⚠️ 27y: Diese drei Quellen fehlten in der Schätzung vollständig. Wer Sonnenkraft-Set
+// UND Anden-Lama trägt, regeneriert 5 HP je Runde — bei 18 Chip-Schaden ein knappes
+// Drittel des Gegnerschadens. Ein Krieger, der real 70 Runden durchhält, wurde auf 47
+// geschätzt und liess deshalb Gegner stehen.
+function _kaSustain(dd, setCulture, crit) {
+  let hps = 0;
+  if (setCulture === 'suedamerika') hps += 3;
+  if (dd?.companion === 'lama_suedamerika' && dd?.owned?.lama_suedamerika) hps += 2;
+  // Orient-Set „Krit-Lebensraub": +4 HP je CRIT → Erwartungswert je Runde.
+  if (setCulture === 'orient') hps += 4 * Math.max(0, Math.min(100, crit || 0)) / 100;
+  return hps;
+}
+
+// Erwartungswert-Spiegel der Gegner-Signatur auf den GEGNERSCHADEN und die Gegner-HP.
+// ⚠️ Bewusst als Faktoren, nicht als Rundenlogik: die Schätzung braucht einen Mittelwert,
+// keinen Kampfverlauf. Ohne diesen Block war die Schätzung bei Burst-Gegnern zu MUTIG —
+// die Korrektur zieht also nicht nur in eine Richtung.
+function _kaAbilityMod(ability, dd) {
+  const kalte = !!dd?.talents?.kalte_nerven;   // schluckt genau EINEN Burst
+  const damp  = kalte ? 0.85 : 1;              // grobe Abschätzung dieses einen Mals
+  switch (ability) {
+    case 'aufschaeumen':   return { eDmg: 1 + (0.20 / 3) * damp, eHp: 1, regen: 0 };
+    case 'stampfer':       return { eDmg: 1 + (1.00 / 4) * damp, eHp: 1, regen: 0 };
+    case 'roestfeuer':     return { eDmg: 1 + (0.80 / 5) * damp, eHp: 1, regen: 0 };
+    case 'flammenatem':    return { eDmg: 1 + (1.50 / 5) * damp, eHp: 1, regen: 0 };
+    case 'adrenalinschub': return { eDmg: 1.30, eHp: 1, regen: 0 };   // Mittel über den Kampf
+    case 'bitterkern':     return { eDmg: 0.85, eHp: 1, regen: 0 };   // ATK ×0,85 (Zeile 287)
+    case 'aetzend':        return { eDmg: 1.15, eHp: 1, regen: 0 };   // eigene DEF bröckelt
+    case 'geistform':      return { eDmg: 1, eHp: 1, regen: 0, lostRound: 1 };
+    case 'zaeh':           return { eDmg: 1, eHp: 1.03, regen: 0 };
+    case 'regeneration':   return { eDmg: 1, eHp: 1, regen: 1 };
+    default:               return { eDmg: 1, eHp: 1, regen: 0 };
+  }
 }
 
 // Gegnerschaden. ⚠️ `hpMax` ist Pflicht — ohne die eigenen Max-HP lässt sich der
@@ -345,6 +459,15 @@ function kriegerAutoStatsFor(dd, equipped) {
       : (it.def || 0);
   }
 
+  // 🐴 REITTIER — ⚠️ 27y: fehlte seit jeher. `dungeon_fight` addiert
+  // `_krieger_mount_stats(dd.mount)` auf ATK/DEF/CRIT (Zeile 211–216 der Migration),
+  // sofern das Tier im Besitz ist. Der Ur-Saurier gibt +14 ATK, der Pegasus +12 DEF,
+  // der Greif +8 CRIT — in JEDER Siegchance fehlten die.
+  //   ⚠️ ÜBERTRAGBARE LEHRE: Ein Spiegel der Server-Formel muss die ganze
+  //   AUSRÜSTUNGSLISTE spiegeln, nicht nur die drei Slots, an die man zuerst denkt.
+  const mnt = (typeof kriegerActiveMount === 'function') ? kriegerActiveMount(dd) : null;
+  if (mnt && dd?.owned?.[mnt.key]) { atk += mnt.atk || 0; def += mnt.def || 0; crit += mnt.crit || 0; }
+
   // Dauerhafte Talent-Boni (Adapter — siehe oben)
   const tal = _kaTalentBonus(dd);
   atk += tal.atk; def += tal.def; crit += tal.crit;
@@ -352,9 +475,27 @@ function kriegerAutoStatsFor(dd, equipped) {
   const setCulture = _kaSetCulture(equipped || {});
   if (setCulture === 'orient') crit += 10; // Wüstensturm
 
+  // Sonder-Mechanik der getragenen Waffe (nur die vier T3-Waffen haben eine).
+  const wKey = equipped ? equipped.weapon : null;
+  const wIt  = (wKey && dd?.owned?.[wKey] && typeof kriegerItemByKey === 'function')
+    ? kriegerItemByKey(wKey) : null;
+  const wmech = wIt?.mech || null;
+
   // ❤️ AKTUELLE HP, nicht maximale — der Krieger geht mit dem in den Kampf,
   // was von den vorherigen Kämpfen übrig ist.
-  return { atk, def, crit, hp: _kaCurHp(dd), hpMax: _kaMaxHp(dd), setCulture };
+  return { atk, def, crit, hp: _kaCurHp(dd), hpMax: _kaMaxHp(dd), setCulture, wmech };
+}
+
+// Signatur-Fähigkeit eines Gegners (aus tier + flavorIdx, Spiegel von
+// _krieger_enemy_ability). KRIEGER_ENEMIES trägt sie als `abilities`-Array in derselben
+// Reihenfolge wie `flavor`.
+function _kaEnemyAbility(enemy) {
+  if (!enemy) return null;
+  const def = (typeof kriegerEnemyDef === 'function') ? kriegerEnemyDef(enemy.tier) : null;
+  const list = def && def.abilities;
+  if (!Array.isArray(list) || !list.length) return null;
+  const i = Math.max(0, Math.min(list.length - 1, enemy.flavorIdx | 0));
+  return list[i] || null;
 }
 
 // Geschätzte Siegchance (0..1) gegen ein Gegner-Tier.
@@ -365,8 +506,13 @@ function kriegerAutoWinChance(dd, equipped, enemy, withColdbrew) {
   if (!enemy) return { pct: 0, rNeed: 99, rSurv: 0 };
 
   const own   = kriegerAutoStatsFor(dd, equipped);
-  const pDmg  = _kaPlayerDmg(own.atk, enemy.def, own.crit, own.setCulture);
-  const eDmg  = _kaEnemyDmg(enemy.atk, own.def, own.hpMax, own.setCulture);
+  // Gegner-Signatur (aufschäumen/stampfer/durchsichtig …) — Erwartungswert, siehe _kaAbilityMod.
+  const ab    = _kaEnemyAbility(enemy);
+  const am    = _kaAbilityMod(ab, dd);
+  const pDmg  = _kaPlayerDmg(own.atk, enemy.def, own.crit, own.setCulture, own.wmech, ab);
+  const eDmg  = _kaEnemyDmg(enemy.atk * am.eDmg, own.def, own.hpMax, own.setCulture);
+  // Eigene Heilung je Runde (Sonnenkraft, Anden-Lama, Krit-Lebensraub).
+  const hps   = _kaSustain(dd, own.setCulture, own.crit);
 
   // 🧊 Cold Brew heilt 50 % der Max-HP, gedeckelt bei Max — gegen die SQL bestätigt:
   // `v_php := LEAST(v_php_max, GREATEST(0, v_php) + ROUND(v_php_max * 0.5))`.
@@ -379,14 +525,26 @@ function kriegerAutoWinChance(dd, equipped, enemy, withColdbrew) {
   // gesparter voller Treffer. (Die dauerhafte ×0,9 danach steckt schon in eDmg.)
   if (own.setCulture === 'mittelalter') effHp += eDmg;
 
-  // Steppe-Set „Eröffnungssalve": ein kostenloser Fernschuss (0,8 × ATK) VOR Runde 1.
-  // ⚠️ Handover §9.2 fragte, ob eine der Utility-Kulturen doch kampfwirksam ist — genau
-  // diese ist es. Gegen schwache Gegner entscheidet sie den Kampf, bevor er beginnt.
-  let eHp = enemy.hp;
-  if (own.setCulture === 'steppe') eHp = Math.max(0, eHp - Math.max(1, Math.round(own.atk * 0.8)));
+  // Talent „Kaffeepause": einmalig +15 % Max-HP, sobald die Hälfte unterschritten ist.
+  // Wirkt wie zusätzliche Trefferpunkte und fehlte in der Schätzung komplett.
+  if (dd?.talents?.kaffeepause) {
+    effHp += Math.round(own.hpMax * 0.15 * (dd.talents.meisterroester ? 1.5 : 1));
+  }
 
-  const rNeed = Math.ceil(eHp   / Math.max(0.01, pDmg));
-  const rSurv = Math.ceil(effHp / Math.max(0.01, eDmg));
+  // Erstschlag VOR Runde 1: Armbrust, Talent „Ristretto", Steppe-„Eröffnungssalve".
+  // ⚠️ Handover §9.2 fragte, ob eine der Utility-Kulturen doch kampfwirksam ist — die
+  // Steppe ist es. Gegen schwache Gegner entscheidet sie den Kampf, bevor er beginnt.
+  let eHp = Math.max(0, enemy.hp * am.eHp - _kaFirstStrike(dd, own.atk, own.wmech, own.setCulture));
+
+  // 🐍 Regeneration: der Gegner heilt sich je Runde und verlängert den Kampf.
+  // Spiegel: LEAST(15, GREATEST(4, floor(ep/12))) — ohne die EP zur Hand konservativ 8.
+  const pNet  = am.regen ? Math.max(0.01, pDmg - 8) : pDmg;
+  // 👻 Geistform: der erste Treffer ist wirkungslos → eine Runde geht verloren.
+  const rNeed = Math.ceil(eHp / pNet) + (am.lostRound || 0);
+  // ⚠️ Die eigene Heilung wird vom Gegnerschaden ABGEZOGEN, nicht auf die HP addiert —
+  // so wie es die SQL Runde für Runde tut. Boden 1: unsterblich soll die Schätzung
+  // niemanden machen, dafür gibt es den Rundendeckel weiter unten.
+  const rSurv = Math.ceil(effHp / Math.max(1, eDmg - hps));
 
   // ⚠️ DIE ZWEITE ART ZU VERLIEREN: Die SQL-Schleife läuft `WHILE v_round < v_max_rounds`.
   // Wer bis dahin nicht durch ist, verliert — `v_won` bleibt false, egal wie viel Leben
@@ -516,24 +674,34 @@ function _kaPlanFight(dd, tier, tx, ty, seed, lossCount) {
   const enemy = _kaEnemyAt(tier, tx, ty, dd, seed);
   if (!enemy) return null;
 
+  // 🧊 Ist Cold Brew verfügbar (über der Reserve), und ist der Krieger angeschlagen?
+  // ⚠️ 27y: Cold Brew wurde bisher NUR eingesetzt, wenn ein Kampf sonst unter die
+  // Schwelle fiel. Das ist zu sparsam: Trankfunde kommen schneller herein, als man sie
+  // verbraucht (JP hatte über 30 Stück je Sorte), und ein Trank aus einem überlaufenden
+  // Bestand ist der BILLIGERE Weg zurück auf volle HP als 60 CC für die Erholung.
+  // Deshalb jetzt auch vorsorglich, sobald die HP unter dieselbe Schwelle fallen, ab
+  // der geheilt würde — dann bleibt die bezahlte Erholung für den Fall, dass der
+  // Trankvorrat aufgebraucht ist.
+  const cbStock = (typeof kriegerPotionCount === 'function')
+    ? kriegerPotionCount(dd, KRIEGER_AUTO_COLDBREW_KEY) : 0;
+  const cbOk = cbStock > KRIEGER_AUTO_POTION_KEEP;
+  const hurt = _kaMaxHp(dd) > 0 && _kaCurHp(dd) < _kaMaxHp(dd) * KRIEGER_AUTO_HEAL_AT;
+
   const armorKey = dd?.equipped?.armor || '';
-  const ck = `${tier}|${enemy.level}|${enemy.flavorIdx}|${_kaCurHp(dd)}|${armorKey}|${_kaArmorDur(dd, armorKey)}|${losses}`;
+  const ck = `${tier}|${enemy.level}|${enemy.flavorIdx}|${_kaCurHp(dd)}|${armorKey}|${_kaArmorDur(dd, armorKey)}|${losses}|${cbOk ? 1 : 0}`;
   if (_kaPlanCache.has(ck)) return _kaPlanCache.get(ck);
 
   let plan = null;
   const plain = kriegerAutoBestLoadout(dd, enemy, dd?.equipped, false);
-  if (plain && plain.est.pct >= need) {
+  if (plain && plain.est.pct >= need && !(hurt && cbOk)) {
     plan = { best: plain, potionKey: null, enemy };
-  } else {
-    // 🧊 Cold Brew nur, wenn der Kampf ohne ihn NICHT reicht und mit ihm schon —
-    // nie vorsorglich, und nie unter die Reserve von KRIEGER_AUTO_POTION_KEEP.
-    const stock = (typeof kriegerPotionCount === 'function')
-      ? kriegerPotionCount(dd, KRIEGER_AUTO_COLDBREW_KEY) : 0;
-    if (stock > KRIEGER_AUTO_POTION_KEEP) {
-      const withCb = kriegerAutoBestLoadout(dd, enemy, dd?.equipped, true);
-      if (withCb && withCb.est.pct >= need) {
-        plan = { best: withCb, potionKey: KRIEGER_AUTO_COLDBREW_KEY, enemy };
-      }
+  } else if (cbOk) {
+    const withCb = kriegerAutoBestLoadout(dd, enemy, dd?.equipped, true);
+    if (withCb && withCb.est.pct >= need) {
+      plan = { best: withCb, potionKey: KRIEGER_AUTO_COLDBREW_KEY, enemy };
+    } else if (plain && plain.est.pct >= need) {
+      // Der Trank half nicht — dann eben ohne (kein Trank verbrennen für nichts).
+      plan = { best: plain, potionKey: null, enemy };
     }
   }
   _kaPlanCache.set(ck, plan);
@@ -656,6 +824,13 @@ async function kriegerAutoRun(member, state, seed, COLS, ROWS, MARGIN) {
     byTier: {}, skippedByTier: {},
     ccFight: 0, ccFind: 0, refund: 0, ep: 0,
     levelUps: [], vouchers: 0, potions: 0, coldbrews: 0,
+    heals: 0, healCost: 0,
+    // 🧪 Welche Tränke/Ausrüstungsgutscheine gefunden wurden. JP 2026-08-21: „Ich weiß
+    // auch nicht, ob beim autolauf gefundene Schätze eingeführt werden, das gilt auch zu
+    // testen." Sie werden es (Trank → dd.potions, Gutschein → dd.equipmentVoucher,
+    // CC → rep.ccFind → DB.addCoins) — nur nannte das Protokoll bloss die ANZAHL.
+    // ⚠️ Eine blosse Zahl ist nicht prüfbar. Ab jetzt steht da, WAS gefunden wurde.
+    potionKinds: {}, voucherSlots: [],
     hpStart: 0, hpEnd: 0, hpMax: 0,
     loadouts: {}, endReason: 'budget',
   };
@@ -698,9 +873,54 @@ async function kriegerAutoRun(member, state, seed, COLS, ROWS, MARGIN) {
     // Zustandsführung je wieder auseinanderlaufen, dreht sich der Krieger höchstens
     // zweimal im Kreis statt endlos — und das Protokoll zeigt es als gemiedenes Feld.
     const fightCount = new Map();
-    // true = in diesem Durchgang zuerst erkunden. Wird nach jedem Altlasten-Kampf
-    // gesetzt, damit Erkundung und Aufräumen sich abwechseln.
-    let preferExplore = false;
+
+    // 🛌 AUTO-HEILUNG (27y). Kauft die „Volle Erholung" (dieselbe Aktion wie der Knopf
+    // im Dungeon), wenn die HP unter KRIEGER_AUTO_HEAL_AT fallen.
+    //
+    // ⚠️ KEIN ZWEITES SYSTEM: Der Ablauf ist 1:1 der von `krieger-buy-heal` in
+    // imperium.js — spendCoins, dd.hp/hpMax/hpDate setzen, saveDungeonData. Ein eigener
+    // Heilweg wäre der Fall „zwei Dinge, ein Name" gewesen.
+    // ⚠️ Nach der Heilung MUSS der Planungs-Cache fallen: seine Schlüssel enthalten die
+    // alte HP, sonst gälte für den Rest des Laufs weiter die Bewertung eines
+    // angeschlagenen Kriegers.
+    // ⚠️ Cold Brew heilt zwar auch 50 % — aber NUR am Anfang eines Kampfes (er ist ein
+    // Trank-Parameter von dungeon_fight, keine eigenständige Handlung). Deshalb bleibt
+    // er das Mittel für den knappen Kampf, und die Erholung ist das für den langen Lauf.
+    const maybeHeal = async (force) => {
+      if (!_kriegerAutoHeal) return false;
+      if (rep.heals >= KRIEGER_AUTO_HEAL_MAX) return false;
+      const max = _kaMaxHp(state.dd), cur = _kaCurHp(state.dd);
+      if (!(max > 0)) return false;
+      if (!force && cur > max * KRIEGER_AUTO_HEAL_AT) return false;
+      if (cur >= max) return false;
+      // ⚠️ Reihenfolge der Mittel: erst der Trank, den es im Überfluss gibt, dann Geld.
+      // Solange Cold Brew über der Reserve liegt, heilt ihn `_kaPlanFight` beim nächsten
+      // Kampf gratis auf über die Hälfte — dann wäre die bezahlte Erholung Verschwendung.
+      // ⚠️ `force` (0 HP, der Server verweigert den Kampf) übergeht das: dort zählt nur,
+      // dass es überhaupt weitergeht.
+      if (!force) {
+        const cb = (typeof kriegerPotionCount === 'function')
+          ? kriegerPotionCount(state.dd, KRIEGER_AUTO_COLDBREW_KEY) : 0;
+        if (cb > KRIEGER_AUTO_POTION_KEEP) return false;
+      }
+      if ((state.memberCoins || 0) < KRIEGER_AUTO_HEAL_COST + KRIEGER_AUTO_HEAL_KEEP_CC) return false;
+      let left;
+      try { left = await DB.spendCoins(member.id, KRIEGER_AUTO_HEAL_COST); } catch (err) { return false; }
+      if (left === null || left === undefined) return false;
+      state.memberCoins = left;
+      if (typeof currentUserData !== 'undefined') currentUserData = { ...(currentUserData || {}), coins: left };
+      if (typeof _updateHeaderCoins === 'function') _updateHeaderCoins({ coins: left });
+      const today = (typeof _kriegerTodayKey === 'function') ? _kriegerTodayKey() : null;
+      state.dd = { ...state.dd, hp: max, hpMax: max, ...(today ? { hpDate: today } : {}) };
+      _kaHpLive = { cur: max, max };
+      _kaPlanCache = new Map();
+      try { await DB.saveDungeonData(member.id, state.dd); } catch (err) { /* nicht kritisch */ }
+      rep.heals++;
+      rep.healCost += KRIEGER_AUTO_HEAL_COST;
+      _kaRepaint(state, seed);
+      _kriegerAutoUpdateProgress(rep, budget);
+      return true;
+    };
 
     // Freies Laufen über bereits erkundete Felder (kostet keinen Tagesschritt).
     const walkPath = async (path) => {
@@ -734,6 +954,13 @@ async function kriegerAutoRun(member, state, seed, COLS, ROWS, MARGIN) {
           ? await kriegerFight(member.id, tier, e.flavorIdx ?? 0, plan.potionKey || null, null, e.level)
           : await DB.dungeonFight(member.id, tier, e.flavorIdx ?? 0, plan.potionKey || null, null, e.level);
       } catch (err) { return 'error'; }
+      // ⚠️ 27y: `dungeon_fight` bricht bei 0 HP mit `error: 'no_hp'` ab (Zeile 256 der
+      // Migration). Das lief bisher in denselben Zweig wie ein Verbindungsabbruch und
+      // beendete den ganzen Lauf mit „Verbindungsproblem" — obwohl nur geheilt werden
+      // musste. Jetzt ein eigener Status, den die Schleife behandeln kann.
+      //   ⚠️ ÜBERTRAGBARE LEHRE: „irgendein Fehler" als EIN Zustand verschenkt genau die
+      //   Fälle, aus denen es einen Ausweg gäbe.
+      if (result && result.error === 'no_hp') return 'nohp';
       if (!result || result.error) return 'error';
 
       if (plan.potionKey) rep.coldbrews++;
@@ -813,22 +1040,23 @@ async function kriegerAutoRun(member, state, seed, COLS, ROWS, MARGIN) {
       actions++;
       if (_kriegerAutoStop) { rep.endReason = 'stopped'; break; }
 
+      // 🛌 Vor jeder Planung: sind die HP unten, erst auffüllen. Muss VOR
+      // kriegerAutoFindPendingFight stehen — die Suche bewertet jedes Feld mit den
+      // aktuellen HP und fände sonst gar nichts mehr, was zu schaffen wäre.
+      await maybeHeal(false);
+
       // ── PHASE 1: offene Gegner auf bereits erkundeten Feldern ──────────────
-      // Kostet keinen Tagesschritt, deshalb hat sie Vorrang. Genau hier liegen die
-      // stumpfen Altlasten, die manuell niemand abarbeiten will.
-      // Abwechslung: solange Schritte übrig sind, kommt nach jedem alten Feld ein
-      // neues. Erst wenn das Tagesbudget aufgebraucht ist, räumt der Lauf nur noch auf.
-      const stepsLeft = rep.steps < budget;
-      const detour    = stepsLeft ? KRIEGER_AUTO_MAX_DETOUR : KRIEGER_AUTO_MAX_DETOUR_LATE;
+      // Kostet keinen Tagesschritt und ist genau das, was JP will: erst alles
+      // wegräumen, was erreichbar ist, und erst dann Neuland betreten (27y).
       const capHit    = rep.revisits >= KRIEGER_AUTO_MAX_REVISITS;
-      const doPending = !(preferExplore && stepsLeft) && !capHit;
-      const pend = doPending ? kriegerAutoFindPendingFight(state.dd, triedKeys, rep.losses, seed, detour) : null;
+      const pend = !capHit
+        ? kriegerAutoFindPendingFight(state.dd, triedKeys, rep.losses, seed, KRIEGER_AUTO_MAX_DETOUR)
+        : null;
       if (pend && (fightCount.get(pend.key) || 0) >= 2) {
         triedKeys.add(pend.key);
         continue;
       }
       if (pend) {
-        preferExplore = true;
         fightCount.set(pend.key, (fightCount.get(pend.key) || 0) + 1);
         await walkPath(pend.path);
         const plan = _kaPlanFight(state.dd, pend.tier, pend.target.x, pend.target.y, seed, rep.losses);
@@ -837,13 +1065,19 @@ async function kriegerAutoRun(member, state, seed, COLS, ROWS, MARGIN) {
         const st = await doFight(pend.tier, pend.key, plan, pend.target.x, pend.target.y);
         if (st === 'error')   { rep.endReason = 'error';   break; }
         if (st === 'noarmor') { rep.endReason = 'noarmor'; break; }
+        if (st === 'nohp') {
+          // Keine Trefferpunkte mehr. Heilen und dasselbe Feld nochmal — geht das nicht
+          // (kein Geld, Deckel erreicht, Automatik aus), endet der Lauf mit klarem Grund
+          // statt mit „Verbindungsproblem".
+          if (await maybeHeal(true)) continue;
+          rep.endReason = 'nohp'; break;
+        }
         if (st === 'lost')    triedKeys.add(pend.key);
         await _kaSleep(KRIEGER_AUTO_STEP_DELAY);
         continue;
       }
 
       // ── PHASE 2: neues Feld erkunden ──────────────────────────────────────
-      preferExplore = false;
       if (rep.steps >= budget) {
         // Schritte alle. Hierher kommt der Lauf nur, wenn Phase 1 nichts mehr gefunden
         // hat — also ist wirklich nichts Bekämpfbares mehr in Reichweite.
@@ -872,7 +1106,11 @@ async function kriegerAutoRun(member, state, seed, COLS, ROWS, MARGIN) {
       const gimmick = res.gimmick, encounter = res.encounter;
       if (encounter) dd2 = { ...dd2, encounters:   { ...(dd2.encounters   || {}), [key]: encounter.tier } };
       if (gimmick)   dd2 = { ...dd2, gimmickTiles: { ...(dd2.gimmickTiles || {}), [key]: true } };
-      if (gimmick?.voucher) { dd2 = { ...dd2, equipmentVoucher: gimmick.voucher }; rep.vouchers++; }
+      if (gimmick?.voucher) {
+        dd2 = { ...dd2, equipmentVoucher: gimmick.voucher };
+        rep.vouchers++;
+        rep.voucherSlots.push(gimmick.name || gimmick.voucher.slot || 'Gutschein');
+      }
       if (gimmick?.potion) {
         // ⚠️ kriegerExploreTile meldet den Trank nur — EINTRAGEN muss ihn der Aufrufer.
         // Genau deshalb sind die Trankfunde des Auto-Laufs vorher spurlos verschwunden.
@@ -880,6 +1118,7 @@ async function kriegerAutoRun(member, state, seed, COLS, ROWS, MARGIN) {
         pots[gimmick.potion] = (pots[gimmick.potion] || 0) + 1;
         dd2 = { ...dd2, potions: pots };
         rep.potions++;
+        rep.potionKinds[gimmick.potion] = (rep.potionKinds[gimmick.potion] || 0) + 1;
       }
       if (gimmick?.cc)      rep.ccFind += gimmick.cc;
       state.dd = dd2;
@@ -899,6 +1138,12 @@ async function kriegerAutoRun(member, state, seed, COLS, ROWS, MARGIN) {
           const st = await doFight(encounter.tier, key, plan, tx, ty);
           if (st === 'error')   { rep.endReason = 'error';   break; }
           if (st === 'noarmor') { rep.endReason = 'noarmor'; break; }
+          if (st === 'nohp') {
+            // Das Feld ist erkundet und der Gegner bleibt stehen — heilen und weiter.
+            if (!(await maybeHeal(true))) { rep.endReason = 'nohp'; break; }
+            rep.skipped++;
+            rep.skippedByTier[encounter.tier] = (rep.skippedByTier[encounter.tier] || 0) + 1;
+          }
           if (st === 'lost')    triedKeys.add(key);
         }
       }
@@ -916,6 +1161,17 @@ async function kriegerAutoRun(member, state, seed, COLS, ROWS, MARGIN) {
   _kriegerAutoStop    = false;
 
   rep.hpEnd = _kaCurHp(state.dd);
+  // ⚠️ 27y — JP 2026-08-21: „Auch wird komischerweise 0HP teilweise angegeben, auch nach
+  // HP-Auffüllen."
+  // BEFUND: `_kaHpLive` ist ein MODUL-Zustand und wurde bisher nur BEIM START eines
+  // Laufs zurückgesetzt. Endete ein Lauf mit 0 HP, blieb `_kaHpLive.cur = 0` liegen —
+  // und `_kaHpState()` bevorzugt diesen Wert vor allem anderen. Der Start-Dialog zeigte
+  // danach „❤️ 0/721", auch nachdem der Spieler die Volle Erholung gekauft hatte, und
+  // die Vorschau bewertete jeden Gegner mit 0 HP als aussichtslos.
+  //   ⚠️ ÜBERTRAGBARE LEHRE: Ein Cache, der nur beim BETRETEN geleert wird, überlebt das
+  //   Verlassen — und ist danach die einzige Quelle, die von der Aussenwelt nichts mehr
+  //   mitbekommt. Ein Momentaufnahme-Cache gehört an BEIDEN Enden geleert.
+  _kaHpLive = { cur: null, max: null };
 
   // R8: Ausgangs-Loadout wiederherstellen
   state.dd = { ...state.dd, equipped: { ...(state.dd.equipped || {}), ...loadout0 } };
@@ -966,6 +1222,7 @@ async function kriegerAutoRun(member, state, seed, COLS, ROWS, MARGIN) {
     { label: '⚔️ Auto-Lauf Kampfgewinne', amount: rep.ccFight, detail: `${rep.wins} Siege / ${rep.fights} Kämpfe` },
     { label: '🪙 Auto-Lauf Dungeon-Funde', amount: rep.ccFind,  detail: `${rep.steps} Felder erkundet` },
     { label: '🤖 Auto-Lauf Erstattung',    amount: rep.refund,  detail: 'kein erreichbares Feld mehr' },
+    { label: '🛌 Auto-Lauf Erholung',      amount: -rep.healCost, detail: `${rep.heals}× volle Erholung` },
   ]);
 
   _kaRepaint(state, seed);
@@ -975,7 +1232,10 @@ async function kriegerAutoRun(member, state, seed, COLS, ROWS, MARGIN) {
 
 // Chat (genau EINE Zusammenfassung) + Achievements
 async function _kriegerAutoFinish(member, state, rep) {
-  const net = Math.round(rep.ccFight + rep.ccFind + rep.refund - rep.cost);
+  // ⚠️ Regel 1 (Statistik-Vollständigkeit): die Heilkosten sind eine Ausgabe des Laufs
+  // und gehören in dieselbe Netto-Zeile wie die Gebühr — sonst meldet der Chat einen
+  // Gewinn, den es nicht gab.
+  const net = Math.round(rep.ccFight + rep.ccFind + rep.refund - rep.cost - rep.healCost);
   try {
     await DB.postMessage(
       `🤖 ${_kaEsc(member.name)} schickte den Krieger auf Patrouille: ${rep.steps} Felder, ` +
@@ -1044,8 +1304,9 @@ function kriegerAutoMountControls(member, state, seed, COLS, ROWS, MARGIN, body)
     wrap.innerHTML = `
       <div style="font-weight:700">🤖 Auto-Lauf</div>
       <div style="font-size:11px;opacity:.7;margin-top:3px;line-height:1.4">
-        Der Krieger erkundet allein, wählt seine Ausrüstung selbst und kämpft nur,
-        wenn er gewinnen kann. Zu starke Gegner bleiben für dich stehen.
+        Der Krieger räumt zuerst alle erreichbaren offenen Kämpfe ab und erkundet erst
+        dann weiter. Er wählt seine Ausrüstung selbst, füllt unterwegs seine HP auf und
+        kämpft nur, wenn er gewinnen kann. Zu starke Gegner bleiben für dich stehen.
       </div>
       <button class="cc-build-btn" id="krieger-auto-go" style="width:100%;margin-top:8px"
         ${left <= 0 ? 'disabled' : ''}>
@@ -1105,9 +1366,20 @@ function _kriegerAutoConfirm(member, state, seed, COLS, ROWS, MARGIN) {
           <div style="font-size:12px">Der Krieger verbraucht <strong>alle ${left} Schritte</strong> von heute.</div>
           <div style="font-size:12px">Kosten: <strong>${cost} 🫘</strong> (Stufe ${level} × ${KRIEGER_AUTO_COST_PER_LV})</div>
           <div style="font-size:12px">Zustand: <strong>❤️ ${_kaCurHp(state.dd)}/${_kaMaxHp(state.dd)}</strong> · 🧊 ${(typeof kriegerPotionCount === 'function' ? kriegerPotionCount(state.dd, KRIEGER_AUTO_COLDBREW_KEY) : 0)} Cold Brew</div>
+          ${/* 🛌 27y: Ohne Auffüllen endet jeder lange Lauf am Chip-Schaden (2 % Max-HP
+                je Runde). Der Schalter steht hier und nicht in einem Einstellungsmenü, weil
+                genau hier die Entscheidung fällt, wie teuer der Lauf werden darf (Regel 4:
+                die Regel dort, wo man auf sie trifft). */''}
+          <label style="display:flex;align-items:center;gap:7px;font-size:12px;cursor:pointer">
+            <input type="checkbox" id="krieger-auto-healbox" ${_kriegerAutoHeal ? 'checked' : ''}>
+            <span>🛌 HP unterwegs auffüllen — unter ${Math.round(KRIEGER_AUTO_HEAL_AT * 100)} %,
+              je ${KRIEGER_AUTO_HEAL_COST} 🫘, höchstens ${KRIEGER_AUTO_HEAL_MAX}×
+              (max. ${KRIEGER_AUTO_HEAL_MAX * KRIEGER_AUTO_HEAL_COST} 🫘)</span>
+          </label>
           <div style="margin-top:4px;font-size:11px;opacity:.7">Geschätzte Siegchance je Gegnerart:</div>
           ${preview}
           <div style="font-size:11px;opacity:.6;margin-top:4px">
+            Erst werden ALLE erreichbaren offenen Kämpfe abgesucht, dann wird erkundet.
             Es wird nur gekämpft ab ${Math.round(KRIEGER_AUTO_MIN_WINPCT * 100)} % Siegchance.
             🧊 Cold Brew wird nur eingesetzt, wenn ein Kampf sonst zu knapp wäre — und nie
             unter ${KRIEGER_AUTO_POTION_KEEP} Stück Reserve.
@@ -1122,7 +1394,11 @@ function _kriegerAutoConfirm(member, state, seed, COLS, ROWS, MARGIN) {
     </div>`;
 
   document.getElementById('krieger-auto-cancel').onclick = () => popup.classList.add('hidden');
+  document.getElementById('krieger-auto-healbox')?.addEventListener('change', (ev) => {
+    _kriegerAutoHeal = !!ev.target.checked;
+  });
   document.getElementById('krieger-auto-confirm').onclick = async () => {
+    _kriegerAutoHeal = !!document.getElementById('krieger-auto-healbox')?.checked;
     popup.classList.add('hidden');
     _kriegerAutoRunning = true;
     if (typeof _kriegerRenderSubTab === 'function') _kriegerRenderSubTab(member, state, seed, COLS, ROWS, MARGIN);
@@ -1134,7 +1410,7 @@ function _kriegerAutoConfirm(member, state, seed, COLS, ROWS, MARGIN) {
 function _kriegerAutoShowReport(rep, state) {
   const popup = document.getElementById('krieger-popup');
   if (!popup) return;
-  const net = Math.round(rep.ccFight + rep.ccFind + rep.refund - rep.cost);
+  const net = Math.round(rep.ccFight + rep.ccFind + rep.refund - rep.cost - rep.healCost);
   const tierLine = Object.keys(rep.byTier).map(t => {
     const d = (typeof kriegerEnemyDef === 'function') ? kriegerEnemyDef(t) : null;
     return `${_kaEsc(d?.name || t)}: ${rep.byTier[t]}`;
@@ -1142,6 +1418,7 @@ function _kriegerAutoShowReport(rep, state) {
   const endMsg = {
     budget:     'Alle Tagesschritte verbraucht.',
     nofights:   'Schritte aufgebraucht und kein schaffbarer Gegner mehr in Reichweite.',
+    nohp:       'Keine Trefferpunkte mehr — und keine Erholung mehr möglich (Deckel, Geld oder Automatik aus).',
     revisitcap: `Obergrenze von ${KRIEGER_AUTO_MAX_REVISITS} aufgeräumten Feldern erreicht.`,
     stopped: 'Vom Spieler gestoppt.',
     blocked: 'Kein erreichbares unerkundetes Feld mehr — Bohrer oder Granate helfen weiter.',
@@ -1150,6 +1427,12 @@ function _kriegerAutoShowReport(rep, state) {
     safety:  'Sicherheitsgrenze erreicht.',
   }[rep.endReason] || '';
   const warnHp   = _kaHpUnknown ? 'Trefferpunkte konnten nicht ausgelesen werden — es wurde vorsichtig gerechnet.' : '';
+  // Was genau gefunden wurde — damit sich „kommen die Funde an?" prüfen lässt.
+  const fundTeile = Object.keys(rep.potionKinds || {}).map(k => {
+    const pd = (typeof kriegerPotionByKey === 'function') ? kriegerPotionByKey(k) : null;
+    return `${pd ? pd.icon : '🧪'} ${_kaEsc(pd ? pd.name : k)} ×${rep.potionKinds[k]}`;
+  }).concat((rep.voucherSlots || []).map(v => `🎁 ${_kaEsc(v)}`));
+  const fundLine = fundTeile.length ? `Eingebucht: ${fundTeile.join(' · ')}` : '';
   const warnLoss = rep.losses >= KRIEGER_AUTO_MAX_LOSSES ? `Nach ${rep.losses} Niederlagen wurde nur noch erkundet.` : '';
 
   const row = (l, v) => `<div style="display:flex;justify-content:space-between;font-size:12px"><span style="opacity:.75">${l}</span><span>${v}</span></div>`;
@@ -1166,6 +1449,7 @@ function _kriegerAutoShowReport(rep, state) {
           ${rep.revisits ? row('Alte Felder geräumt', `♻️ ${rep.revisits}`) : ''}
           ${row('Kampfgewinne', `+${Math.round(rep.ccFight)} 🫘`)}
           ${row('Funde', `+${Math.round(rep.ccFind)} 🫘${rep.vouchers ? ` · 🎁 ${rep.vouchers}` : ''}${rep.potions ? ` · 🧪 ${rep.potions}` : ''}`)}
+          ${fundLine ? `<div style="font-size:11px;opacity:.75">${fundLine}</div>` : ''}
           ${row('Gebühr', `−${rep.cost} 🫘`)}
           ${rep.refund ? row('Erstattung', `+${rep.refund} 🫘`) : ''}
           <div style="display:flex;justify-content:space-between;font-weight:700;border-top:1px solid rgba(255,255,255,.12);padding-top:5px;margin-top:3px">
@@ -1174,6 +1458,7 @@ function _kriegerAutoShowReport(rep, state) {
           ${row('Erfahrung', `+${rep.ep} EP`)}
           ${row('Trefferpunkte', `❤️ ${rep.hpStart} → ${rep.hpEnd}${rep.hpMax ? ` / ${rep.hpMax}` : ''}`)}
           ${rep.coldbrews ? row('Cold Brew', `🧊 ${rep.coldbrews} eingesetzt`) : ''}
+          ${rep.heals ? row('Erholung', `🛌 ${rep.heals}× · −${rep.healCost} 🫘`) : ''}
           ${rep.levelUps.length ? `<div class="krieger-levelup">🎉 Stufe ${rep.levelUps[rep.levelUps.length - 1]} erreicht!</div>` : ''}
           ${endMsg ? `<div style="font-size:11px;opacity:.6;margin-top:5px">${_kaEsc(endMsg)}</div>` : ''}
           ${warnLoss ? `<div style="font-size:11px;opacity:.75">⚠️ ${_kaEsc(warnLoss)}</div>` : ''}
