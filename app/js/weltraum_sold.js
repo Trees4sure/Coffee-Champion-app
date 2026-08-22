@@ -264,13 +264,30 @@ async function wrsSoldAbbuchen() {
         label: '🏛️ Kolonie-Verwaltung', amount: -anteil(sr.colonies), cat: 'weltraum',
         detail: `${sr.colonyCount || cnt.nCol} Kolonien (progressiv)`,
         aggKey: 'space_kolverw', aggBase: '🏛️ Kolonie-Verwaltung' });
-      const anlagen = (parseFloat(sr.defense) || 0) + (parseFloat(sr.power) || 0)
-                    + (parseFloat(sr.station) || 0);
+      // 🛡️ 27ac (JP 2026-08-22: „Geschütze sollten auch Geld kosten genauso wie flotten
+      // im Betrieb").
+      // ⚠️ BEFUND VOR DER UMSETZUNG: Sie kosten längst. `_space_sold_rate` bucht seit
+      // 26w `anlage = 0,005` je Tag auf die Baukosten JEDES Geschützes — am Hafen wie auf
+      // jeder Kolonie —, während Schiffe `ship = 0,01` zahlen. Das sind auf den Punkt die
+      // 50 %, die als neue Regel gefordert waren.
+      // ⚠️ Hätte ich die Forderung wörtlich umgesetzt, zahlten Geschütze ab heute doppelt.
+      // Gefehlt hat nur die SICHTBARKEIT: Geschütze, Reaktoren und Stationen standen in
+      // EINER Zeile „⚡ Anlagen", und eine Kostenart, die man nicht einzeln sieht, kann
+      // man auch nicht steuern — man hält sie für kostenlos. Genau das ist passiert.
+      // Der Server liefert `defense` und `power` seit 26w getrennt; hier werden sie nur
+      // nicht mehr zusammengeworfen.
+      const geschuetze = parseFloat(sr.defense) || 0;
+      if (geschuetze > 0) posten.push({
+        label: '🛡️ Geschütz-Unterhalt', amount: -anteil(geschuetze), cat: 'weltraum',
+        detail: `${cnt.nTur} Geschütze · halber Schiffssatz`
+              + ` · ${Math.round(tage * 10) / 10} Tage`,
+        aggKey: 'space_geschuetze', aggBase: '🛡️ Geschütz-Unterhalt' });
+      const anlagen = (parseFloat(sr.power) || 0) + (parseFloat(sr.station) || 0);
       if (anlagen > 0) posten.push({
-        label: '⚡ Betriebskosten Anlagen', amount: -anteil(anlagen), cat: 'weltraum',
-        detail: `${cnt.nTur} Geschütze · ${cnt.nGen} Reaktoren`
+        label: '⚡ Reaktoren & Stationen', amount: -anteil(anlagen), cat: 'weltraum',
+        detail: `${cnt.nGen} Reaktoren`
               + (cnt.nStat ? ` · ${cnt.nStat} Station${cnt.nStat === 1 ? '' : 'en'}` : ''),
-        aggKey: 'space_betrieb', aggBase: '⚡ Betriebskosten Anlagen' });
+        aggKey: 'space_betrieb', aggBase: '⚡ Reaktoren & Stationen' });
       if (posten.length && (res.charged || 0) > 0) await DB.appendTodayLogFresh(me.id, posten);
     } catch (e) {}
 
@@ -421,7 +438,12 @@ function wrsSoldCardHtml() {
           ${rate.routes ? kpi('🛰️ Stationiert', `${_f(rate.routes)}<br><span class="wr-sub">${_f(rate.nRoute)} Schiffe</span>`) : ''}
           ${rate.garrison ? kpi('🛡️ Garnison', `${_f(rate.garrison)}<br><span class="wr-sub">${_f(rate.nGarrison)} Schiffe · voller Satz</span>`) : ''}
           ${kpi('🏛️ Kolonien', `${_f(rate.colonies)}<br><span class="wr-sub">${rate.nCol} Stück</span>`)}
-          ${kpi('⚡ Anlagen', `${_f(rate.defense + rate.power)}<br><span class="wr-sub">${rate.nTur} Geschütze · ${rate.nGen} Reaktoren</span>`)}
+          ${/* 🛡️ 27ac: Geschütze bekommen eine EIGENE Kachel neben der Flotte. Sie
+                zahlen seit 26w den halben Schiffssatz — nur sah man das nie, weil sie mit
+                den Reaktoren in einer Kachel „⚡ Anlagen" steckten. Eine Kostenart, die
+                man nicht einzeln sieht, hält man für kostenlos. */''}
+          ${rate.defense ? kpi('🛡️ Geschütze', `${_f(rate.defense)}<br><span class="wr-sub">${rate.nTur} Stück · halber Schiffssatz</span>`) : ''}
+          ${rate.power ? kpi('⚡ Reaktoren', `${_f(rate.power)}<br><span class="wr-sub">${rate.nGen} Stück</span>`) : ''}
           ${rate.nStat ? kpi('📡 Stationen', `${_f(rate.station)}<br><span class="wr-sub">${rate.nStat} Stück</span>`) : ''}
           ${kpi('🪙 Guthaben reicht', `${reicht > 999 ? '999+' : reicht} Tage`)}
           ${st?.paid ? kpi('📉 Bisher gezahlt', _f(st.paid)) : ''}

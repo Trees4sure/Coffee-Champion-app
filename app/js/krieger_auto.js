@@ -1633,11 +1633,28 @@ function _kriegerAutoShowReport(rep, state) {
 
   const row = (l, v) => `<div style="display:flex;justify-content:space-between;font-size:12px"><span style="opacity:.75">${l}</span><span>${v}</span></div>`;
 
-  popup.classList.remove('hidden');
-  popup.innerHTML = `
-    <div class="krieger-fight-overlay">
-      <div class="cc-karte-popup-inner" style="max-width:360px;width:100%">
-        <div class="cc-karte-popup-hdr">🤖 Lauf-Protokoll</div>
+  // ⚠️ EIGENES Overlay statt `.krieger-fight-overlay` (JP 2026-08-22: „beim
+  // Kriegerautolauf fehlt die Übersicht wie sie in karte-auto ist").
+  // Das Kampf-Overlay zentriert sein Kind (`align-items:center`) UND scrollt
+  // (`overflow-y:auto`). Solange der Bericht kurz war, fiel das nicht auf; seit er in
+  // 39b vier Blöcke hat, ist er höher als das Bild — und ein zentriertes Flex-Kind
+  // ragt dann OBEN heraus, wo der Bildlauf nicht hinkommt (Scroll-Ursprung ist 0).
+  // Der Kopf samt „⚔️ Besiegt" war damit unerreichbar: der Bericht war da, man kam
+  // nur nicht an ihn heran. Der Karten-Autolauf baut aus genau diesem Grund seit dem
+  // 2026-08-05 sein eigenes Overlay mit `align-items:flex-start` — hier dasselbe.
+  // ⚠️ Und wie dort wird es zum Schließen RESTLOS ENTFERNT, nicht nur versteckt:
+  // eine unsichtbare bildschirmfüllende Schicht fängt sonst alle Tipps ab.
+  popup.classList.add('hidden');
+  const host = _kaEnsureReportHost();
+  if (!host) return;
+  host.innerHTML = `
+      <div class="cc-karte-popup-inner" id="krieger-auto-card"
+           style="max-width:360px;width:100%;max-height:none;margin:auto 0">
+        <div class="cc-karte-popup-hdr" style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <span>🤖 Lauf-Protokoll</span>
+          <button id="krieger-auto-x" aria-label="Schließen"
+            style="background:none;border:0;color:inherit;font-size:20px;line-height:1;padding:0 4px;cursor:pointer">✕</button>
+        </div>
         <div class="cc-karte-popup-body" style="flex-direction:column;align-items:stretch;gap:5px">
           ${row('Schritte / Felder', `${rep.steps} von ${rep.budget}`)}
           ${row('Kämpfe', `🏆 ${rep.wins} · 💀 ${rep.losses} · 🚫 ${rep.skipped} gemieden`)}
@@ -1667,9 +1684,29 @@ function _kriegerAutoShowReport(rep, state) {
           ${rep.skipped ? `<div style="font-size:11px;opacity:.6">Gemiedene Gegner bleiben stehen — du kannst sie jederzeit selbst angehen.</div>` : ''}
         </div>
         <button class="cc-karte-popup-close" id="krieger-auto-report-close" style="width:100%;margin-top:10px">Schließen</button>
-      </div>
-    </div>`;
-  document.getElementById('krieger-auto-report-close').onclick = () => popup.classList.add('hidden');
+      </div>`;
+
+  const close = () => { document.getElementById('krieger-auto-report')?.remove(); };
+  document.getElementById('krieger-auto-report-close').onclick = close;
+  document.getElementById('krieger-auto-x').onclick = close;
+  // Tipp neben die Karte schließt ebenfalls — bei einem langen Bericht steht der Knopf
+  // unten oft ausserhalb des Bildes, und genau daneben tippt man dann.
+  host.addEventListener('click', (e) => { if (e.target === host) close(); });
+}
+
+// Eigenes Overlay für den Lauf-Bericht. `align-items:flex-start` ist der Kern: nur so
+// beginnt ein zu hoher Bericht am oberen Rand und lässt sich vollständig scrollen.
+function _kaEnsureReportHost() {
+  try {
+    document.getElementById('krieger-auto-report')?.remove();
+    const host = document.createElement('div');
+    host.id = 'krieger-auto-report';
+    host.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;'
+      + 'align-items:flex-start;justify-content:center;padding:24px 16px;'
+      + 'background:rgba(8,3,0,.93);overflow-y:auto;-webkit-overflow-scrolling:touch';
+    document.body.appendChild(host);
+    return host;
+  } catch (e) { console.warn('Lauf-Bericht: Overlay nicht möglich:', e); return null; }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

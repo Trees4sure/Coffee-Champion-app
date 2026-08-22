@@ -917,6 +917,12 @@ function wrColonyKitHtml(m, ring, sel) {
   const zeile = (key, wert, ist) => wert <= 0 ? '' :
     `<span class="${fehlt.has(key) ? 'wr-bad' : 'wr-good'}">${wrKitLabelHtml(key)} ${wrFmt(ist)}/${wrFmt(wert)}</span>`;
   const f = sel || {};
+  // 🛸 Der Knopf macht die Automatik SICHTBAR. Sie gab es schon (erster Klick auf
+  // „Kolonisieren" stellt zusammen), aber sie war hinter einem Knopf versteckt, der bei
+  // fehlendem Rohstoff mit einer Fehlermeldung antwortete — für JP sah das aus, als
+  // wäre sie abgeschaltet. Eine Automatik, die man nicht sieht, gibt es für den
+  // Spieler nicht.
+  const schiffeFehlen = wrColonyKitMissing(m, ring, f).some(x => x.schiff);
   return `<div class="wr-kit">
     <div class="wr-sub"><strong>Ring ${ring}: Ausrüstung der Kolonie-Mission</strong> —
       diese Schiffe gehen bei der Gründung im Rumpf auf und kehren <strong>nicht</strong> zurück.</div>
@@ -929,6 +935,8 @@ function wrColonyKitHtml(m, ring, sel) {
       ${zeile('plasmoid', k.plasmoid, wrPlasmoid(m))}
       ${zeile('quantum', k.quantum, wrQuantum(m))}
     </div>
+    ${schiffeFehlen ? `<button class="wr-btn wr-btn-sm" data-wr-kitfill="${ring}"
+      style="margin-top:6px">🛸 Verband automatisch zusammenstellen</button>` : ''}
   </div>`;
 }
 
@@ -1204,6 +1212,58 @@ function wrTripExoFuel(fleet, ring) {
   }
   return { pla: Math.ceil(pla), qua: Math.ceil(qua) };
 }
+
+// 🏗️ KOLONIE-AUSBAUZEIT (27ad, JP 2026-08-22: „Eine Kolonie Stufe zu erhöhen kostet
+// keine Zeit das macht keinen Sinn. Das muss auch mindestens ein Tag").
+// ⚠️ SPIEGEL von `_space_colony_build_min` (SQL 27ad). Es gibt nur DREI Stufen —
+// `build_planet_defense` klemmt seit 26h auf LEAST(3, …), eine vierte Zeile wäre die
+// Beschreibung einer Stufe, die es nicht gibt.
+const WR_COLONY_BUILD_MIN = { 2: 1440, 3: 2160 };   // Minuten je ZIELSTUFE
+function wrColonyBuildMin(target) {
+  return WR_COLONY_BUILD_MIN[Math.max(2, Math.min(3, parseInt(target, 10) || 2))] || 1440;
+}
+
+// Läuft auf dieser Kolonie ein Ausbau? Liest die Planetenzeile — `colony_ready_at` und
+// `colony_next_lvl` kommen über `select('*')` mit der Galaxie mit, es braucht also keinen
+// eigenen Abruf.
+// ⚠️ Die RESTZEIT kommt aus einem SERVER-Zeitstempel, nicht aus einer Client-Konstante.
+// Genau daran ist der Transmuter gescheitert (27ac §1): dort rechneten beide Seiten
+// selbst, und ab 27w rechneten sie verschieden — die Anzeige gab frei, was der Server
+// ablehnte. Die Konstante oben dient nur der VORSCHAU vor dem Klick.
+function wrColonyBuild(p) {
+  if (!p || !p.colony_ready_at) return null;
+  const ready = Date.parse(p.colony_ready_at);
+  if (!isFinite(ready)) return null;
+  const leftMin = Math.max(0, (ready - Date.now()) / 60000);
+  if (leftMin <= 0) return null;          // fällig — die nächste Abholung bucht ihn ein
+  const target = Math.max(2, Math.min(3, parseInt(p.colony_next_lvl, 10) || 2));
+  return { target, minutesLeft: leftMin, totalMin: wrColonyBuildMin(target) };
+}
+
+// 💰 EINSATZKOSTEN je Absendung (27ac, JP 2026-08-22: „Bei einer im Absenden einer
+// Flotte soll man dreimal die kampfkraft bezahlen").
+// ⚠️ SPIEGEL von `start_space_trip` (SQL 27ac). Die Kampfkraft ist derselbe Wert, den
+// der Verband-Picker als ⚔️ zeigt — kein zweiter Kennwert, sonst rechnet die Vorschau
+// mit einer Zahl, die der Spieler nirgends sieht.
+// ⚠️ WARUM KAMPFKRAFT UND NICHT BAUKOSTEN: an den Baukosten gemessen läge ein
+// Röstkometen-Flug bei 22.500 CC und die Dauerernte wäre tot. Kampfkraft misst genau
+// das, was JP besteuern wollte — Krieg. Ein Aufklärungsflug kostet 3 CC.
+const WR_DISPATCH_CC = 3;   // CC je Punkt Kampfkraft
+function wrDispatchCc(fleet) {
+  return Math.ceil(Math.max(0, wrFleetPower(fleet || {})) * WR_DISPATCH_CC);
+}
+
+// ⚡ NOTFALL-BOOST (27ac): 5 × Kristall-Treibstoff der Reise je halbe Stunde, min. 5 💎.
+// ⚠️ SPIEGEL von `_space_boost_cost`. Der Bezug ist `trip.fuel` — der Kristall-Posten,
+// den diese Reise beim Start bezahlt hat; er liegt seit 22h im Reisedatensatz.
+const WR_BOOST_MIN     = 5;    // 💎 Untergrenze (fängt den treibstofffreien Ring-1-Flug ab)
+const WR_BOOST_FACTOR  = 5;
+const WR_BOOST_MINUTES = 30;   // Zeitgewinn je Stufe
+function wrBoostCost(trip) {
+  return Math.max(WR_BOOST_MIN,
+    Math.ceil(Math.max(0, parseFloat(trip?.fuel) || 0) * WR_BOOST_FACTOR));
+}
+
 function _wrEsc(s) { return (typeof _esc === 'function') ? _esc(s) : String(s == null ? '' : s); }
 function wrFmt(n) { return Math.round(n || 0).toLocaleString('de-DE'); }
 // Minutenangabe menschenlesbar (Bauzeiten/Flugzeiten)
@@ -2265,6 +2325,27 @@ function wrTripHtml(m, trip) {
                    ? '🌀 Faltraum-Anker: SOFORT zu Hause (1× am Tag)'
                    : 'Rückweg = bisherige Flugzeit'}</span></button>`
              : ''}
+           ${(() => {
+             // ⚡ NOTFALL-BOOST (27ac). JP: „Wenn eine Kolonie angegriffen wird schafft
+             // man gar nichts seine eigene Garnison noch mal hinzuschicken."
+             // Es gibt bewusst KEIN What's-New-Popup — dieser Knopf IST die Erklärung
+             // der Regel und muss deshalb vollständig sein: Preis, Zeitgewinn und die
+             // Untergrenze stehen dran, nicht in einer Meldung nach dem Klick.
+             if (now >= arrive || trip.recalled) return '';
+             const restMin = (arrive - now) / 60000;
+             const kosten  = wrBoostCost(trip);
+             const zuNah   = restMin - WR_BOOST_MINUTES < 5;
+             const knapp   = wrKristall(m) < kosten;
+             if (zuNah) {
+               return `<div class="wr-sub">⚡ Für einen Boost zu kurz vor der Ankunft `
+                    + `(es müssen 5 Minuten übrig bleiben).</div>`;
+             }
+             return `<button class="wr-btn wr-btn-sm" data-wr-boost="${trip.id}"
+                 ${knapp ? 'disabled' : ''}>⚡ Beschleunigen −${WR_BOOST_MINUTES} min`
+               + `<span class="wr-btn-sub">${wrFmt(kosten)} ${wrIc('kri')}`
+               + `${knapp ? ` — du hast nur ${wrFmt(wrKristall(m))}` : ' · beliebig oft'}`
+               + `</span></button>`;
+           })()}
            ${trip.recalled ? '<div class="wr-sub">↩️ Auf dem Rückweg — der Auftrag wurde abgebrochen.</div>' : ''}`}
     </div>`;
 }
@@ -2597,6 +2678,34 @@ function wrFleetPickerHtml(m) {
   if (!avail.length) {
     return `<div class="wr-fleetsel wr-fleetsel-empty">🏗️ Kein Schiff im Hafen — bau erst in der Werft.</div>`;
   }
+  // 📋 27ac / D1 (JP 2026-08-22: „Der flottenverband den man auswählen kann ist sehr gut
+  // allerdings auch versteckt und man könnte ihn mit Hinweis auf führen bei der Auswahl
+  // des Planeten").
+  // ⚠️ BEFUND: Die Vorlagen stehen im 🛩️ Flotten-Tab, zusammengestellt wird aber HIER,
+  // auf der 🌌 Sternkarte. Zwei Tabs auseinander — man findet sie nur, wenn man schon
+  // weiss, dass es sie gibt. Eine Abkürzung, die man suchen muss, ist keine.
+  // ⚠️ BEWUSST DIESELBEN `data-wr-tplload`-Knöpfe wie dort und KEINE eigenen IDs: der
+  // Klick-Handler existiert längst und gilt global. Ein zweites Bedienelement mit
+  // eigener Logik wäre der Anfang von zwei Wahrheiten (die Lehre aus 27p/27y).
+  const tplList = wrTemplates(m);
+  const tplHtml = `
+    <div class="wr-fs-tplrow">
+      <span class="wr-sub">📋 Flottenverband laden:</span>
+      ${tplList.length
+        ? tplList.map(t => {
+            const av = wrTplAvail(m, t);
+            return `<button type="button" class="wr-fs-q${av.full ? '' : ' wr-tpl-part'}"
+              data-wr-tplload="${_wrEsc(t.id)}"
+              title="${av.full ? 'Vollständig verfügbar' : `nur ${av.have} von ${av.want} Schiffen im Hafen`}"
+              >${_wrEsc(t.name || 'Vorlage')}${av.full ? '' : ' ⚠️'}</button>`;
+          }).join('')
+        : `<span class="wr-sub">— noch keine. Tipp: häufige Zusammenstellungen einmal merken
+             und danach mit einem Klick laden.</span>`}
+      ${wrSelTotal() > 0 && tplList.length < WR_TPL_MAX
+        ? `<button type="button" class="wr-fs-q" id="wr-fs-tplsave"
+             title="Die aktuelle Auswahl als Verband speichern">➕ merken</button>` : ''}
+    </div>`;
+
   let rows = '';
   for (const s of avail) {
     const have = parseInt(ships[s.key], 10) || 0;
@@ -2618,6 +2727,7 @@ function wrFleetPickerHtml(m) {
     <div class="wr-fleetsel">
       <div class="wr-fs-head">🚀 Flottenverband
         <span class="wr-sub">— wähle, was mitfliegt</span></div>
+      ${tplHtml}
       ${rows}
       <div class="wr-fs-quick">
         <button class="wr-fs-q" data-wr-fq="attack">⚔️ Kampfflotte</button>
@@ -2629,6 +2739,18 @@ function wrFleetPickerHtml(m) {
         <span>Schiffe: <strong>${wrFmt(wrSelTotal())}</strong></span>
         <span>${wrIc("atk")} Kampfkraft: <strong>${wrFmt(power)}</strong></span>
         ${mine > 0 ? `<span>${wrIc("mine")} Abbau: <strong>${wrFmt(mine)}</strong></span>` : ''}
+        ${(() => {
+          // 💰 27ac: Absendekosten. Sie stehen NEBEN der Kampfkraft, aus der sie
+          // gerechnet werden — dann muss niemand raten, worauf sich die „dreimal"
+          // bezieht. Und sie wandern bei jedem ± mit, weil dieser ganze Block bei
+          // jedem Rendern neu entsteht.
+          const kost = wrDispatchCc(sel);
+          if (kost <= 0) return '';
+          const habe = Math.floor(parseFloat(m?.coins) || 0);
+          return `<span class="${habe < kost ? 'wr-bad' : ''}">💰 Einsatzkosten:
+            <strong>${wrFmt(kost)} CC</strong>${habe < kost
+              ? ` <span class="wr-sub">(nur ${wrFmt(habe)} CC auf dem Konto!)</span>` : ''}</span>`;
+        })()}
         ${(() => {
           // 💎 Treibstoff der aktuellen Auswahl zum gewählten Ziel (Ring aus der Auswahl)
           const ring = _wrSel?.planet?.ring ?? _wrSel?.q?.ring ?? 0;
@@ -2719,7 +2841,10 @@ function wrInjectHtml(m) {
         ${alles > 0 ? `<button class="wr-fs-q" data-wr-inject="${alles}">Max (+${alles})</button>` : ''}
       </div>
       <div class="wr-sub">Wird beim nächsten Gefecht gegen Wächter verbraucht — Sieg oder Niederlage.
-        Ein Abbau- oder Transportflug verbrennt nichts, die Ladung bleibt liegen.</div>
+        Ein Abbau- oder Transportflug verbrennt nichts, die Ladung bleibt liegen.
+        <br>⚠️ <strong>Die Ladung fliegt mit DIESEM Angriff mit</strong> und ist danach hier wieder
+        leer — sie gilt nicht mehr für alle Flotten zugleich. Kommt der Verband zurück, ohne
+        gekämpft zu haben, ist sie wieder da.</div>
     </div>`;
 }
 
@@ -2838,6 +2963,15 @@ function wrColonizeInbound(planetId) {
   return null;
 }
 
+// Stellt den Begleitverband einer Kolonie-Mission zusammen.
+// ⚠️ Der Rückgabewert meldet, ob die SCHIFFE vollständig sind — nicht, ob die Mission
+// startklar ist (JP 2026-08-22: „das wurde schon mal gemacht das ist jetzt wieder
+// deaktiviert"). Vorher lieferte er `wrColonyKitMissing(...).length === 0`, und darin
+// stecken auch CC/Erz/Plasmoid. Wem nur ein Rohstoff fehlte, der bekam „unvollständig"
+// zu sehen, obwohl das Zusammenstellen tadellos funktioniert hatte — die Automatik sah
+// dadurch abgeschaltet aus, während sie in Wahrheit lief.
+// ⚠️ ZWEI FRAGEN, ZWEI ANTWORTEN: „Habe ich die Schiffe?" beantwortet der Hafen,
+// „Kann ich es bezahlen?" das Lager. Ein Rückgabewert für beides beantwortet keine.
 function wrColonyFleetFill(m, ring) {
   const k = WR_COLONY_KIT[Math.max(1, Math.min(3, ring || 1))];
   if (!k) return false;
@@ -2848,7 +2982,7 @@ function wrColonyFleetFill(m, ring) {
   nimm('kolonie', 1);
   for (const key of WR_KIT_SHIPS) if (k[key] > 0) nimm(key, k[key]);
   _wrSelFleet = f;
-  return wrColonyKitMissing(m, ring, f).length === 0;
+  return !wrColonyKitMissing(m, ring, f).some(x => x.schiff);
 }
 
 // ── Hafen-Übersicht (Klick auf den Heimatquadranten) ────────────────────────
@@ -3147,6 +3281,50 @@ async function wrInjectLoad(amount) {
     wrRender();
   } catch (e) {
     wrToast('Injektion fehlgeschlagen: ' + e.message, 'error');
+  } finally { _wrBusy = false; }
+}
+
+// ⚡ NOTFALL-BOOST (27ac): Ankunft einer laufenden Reise um 30 Minuten vorziehen.
+// ⚠️ Der SERVER verschiebt die Zeitstempel, nie der Client — sonst hätte jeder Browser
+// seine eigene Ankunftszeit, und `claim_space_arrival` entschiede etwas anderes als die
+// Anzeige. Der Client schickt nur die Reise-ID und übernimmt, was zurückkommt.
+async function wrTripBoost(tripId) {
+  if (_wrBusy || !tripId) return;
+  _wrBusy = true;
+  try {
+    const res = await DB.spaceTripBoost(_wrMember.id, tripId);
+    if (!res || res.error) {
+      if (res?.error === 'boost_no_kristall') {
+        // ⚠️ Fehler-Toast OHNE HTML-Freigabe → hier bleibt es beim Emoji. Die Regel
+        // steht an WR_IC: Bilder nur dort, wo `showToast(..., true)` gerufen wird.
+        wrToast(`Nicht genug 💎 Kristall: der Boost kostet ${wrFmt(res.need)}, `
+              + `du hast ${wrFmt(res.have)}.`, 'error');
+      } else if (res?.error === 'boost_too_close') {
+        wrToast(`Zu kurz vor der Ankunft — es bleiben nur noch ${wrFmt(res.minutesLeft)} Minuten. `
+              + `Nach einem Boost müssen 5 übrig bleiben.`, 'error');
+      } else {
+        wrToast(wrErrText(res?.error), 'error');
+      }
+      return;
+    }
+    if (res.space) wrApplySpace(res.space);
+    wrToast(`⚡ Ankunft um ${WR_BOOST_MINUTES} Minuten vorgezogen — noch `
+          + `${wrCountdown((parseFloat(res.minutesLeft) || 0) * 60000)}. `
+          + `−${wrFmt(res.cost)} ${wrIc('kri')}`, 'success', true);
+
+    // 📒 Regel 1: eine neue Kristall-Ausgabe gehört ab dem ersten Tag ins Log.
+    // ⚠️ Das Tages-Log beziffert CC — der Kristall steht deshalb in der Detailzeile und
+    // der Betrag auf 0. Eine erfundene CC-Zahl wäre schlimmer als keine: sie ginge in
+    // die Tagesbilanz ein und wäre dort nicht mehr als Kristall erkennbar.
+    try {
+      await DB.appendTodayLogFresh(_wrMember.id, [{
+        label: '⚡ Flug-Beschleunigung', amount: 0, cat: 'weltraum',
+        detail: `−${wrFmt(res.cost)} 💎 Kristall für ${WR_BOOST_MINUTES} Minuten`,
+        aggKey: 'space_boost', aggBase: '⚡ Flug-Beschleunigung' }]);
+    } catch (e) { console.warn('Boost nicht geloggt:', e); }
+    wrRender();
+  } catch (e) {
+    wrToast('Beschleunigen fehlgeschlagen: ' + e.message, 'error');
   } finally { _wrBusy = false; }
 }
 
@@ -3896,11 +4074,30 @@ function wrPlanetDefHtml(m, p) {
       <div class="wr-pdef-row">
         <div class="wr-pdef-lbl">🏙️ Kolonie-Ausbau <span class="wr-sub">Stufe ${clv} von 3</span></div>
         <div class="wr-pdef-val">${wrResIc(p.resource_type)} ${wrFmt(yieldFor(clv))}/Tag</div>
-        ${cUp
-          ? `<button class="wr-btn wr-btn-sm" data-wr-pbuild="${p.id}:colony_upgrade" ${canPay(cUp) ? '' : 'disabled'}
+        ${(() => {
+          // 🏗️ 27ad (JP 2026-08-22: „Eine Kolonie Stufe zu erhoehen kostet keine Zeit
+          // das macht keinen Sinn"). Es gibt bewusst KEIN What's-New-Popup — dieser
+          // Block IST die Erklärung der neuen Regel, und er steht dort, wo man auf sie
+          // trifft: am Ausbau-Knopf.
+          const bau = wrColonyBuild(p);
+          if (bau) {
+            const pct = bau.totalMin > 0
+              ? Math.max(0, Math.min(100, Math.round((1 - bau.minutesLeft / bau.totalMin) * 100)))
+              : 0;
+            return `<div class="wr-colbuild">
+              <div class="wr-sub">🏗️ Ausbau auf Stufe ${bau.target} läuft —
+                noch <strong data-wr-coleta="${p.id}">${wrCountdown(bau.minutesLeft * 60000)}</strong></div>
+              <div class="wr-colbuild-bar"><span style="width:${pct}%"></span></div>
+              <div class="wr-sub">Die Kolonie liefert währenddessen weiter Stufe ${clv} —
+                Ertrag und Verteidigung laufen normal.</div>
+            </div>`;
+          }
+          if (!cUp) return '<div class="wr-slot-max">✅ Vollausbau</div>';
+          return `<button class="wr-btn wr-btn-sm" data-wr-pbuild="${p.id}:colony_upgrade" ${canPay(cUp) ? '' : 'disabled'}
                >Auf Stufe ${cUp.level} ausbauen
-               <span class="wr-btn-sub">${priceTxt(cUp)} → ${wrResIc(p.resource_type)} ${wrFmt(yieldFor(cUp.level))}/Tag</span></button>`
-          : '<div class="wr-slot-max">✅ Vollausbau</div>'}
+               <span class="wr-btn-sub">${priceTxt(cUp)} · ⏳ ${wrDur(wrColonyBuildMin(cUp.level))}
+                 → ${wrResIc(p.resource_type)} ${wrFmt(yieldFor(cUp.level))}/Tag</span></button>`;
+        })()}
       </div>
 
       <div class="wr-pdef-row">
@@ -7088,8 +7285,14 @@ function wrBindEvents() {
     // ⚠️ ALLE Buttons in der Trip-Karte ausnehmen — der Karten-Klick (Lightbox) steht
     // VOR den Button-Handlern und schluckte sonst den Klick (JP: „Zurückrufen geht
     // nicht — da öffnet sich nur der Verband").
+    // ⚡ 27ac: Der Boost-Knopf gehört in DIESELBE Ausnahmeliste. Ein neuer Knopf in der
+    // Karte, der nicht hier steht, öffnet nur die Lightbox — genau der Fehler, den JP
+    // beim Zurückrufen gemeldet hat. Wer hier einen Knopf ergänzt, ergänzt ihn zweimal.
+    const boostBtn = e.target.closest('[data-wr-boost]');
+    if (boostBtn && !boostBtn.disabled) { await wrTripBoost(boostBtn.dataset.wrBoost); return; }
     const tripCard = e.target.closest('[data-wr-tripcard]');
-    if (tripCard && !e.target.closest('[data-wr-claim]') && !e.target.closest('[data-wr-recall]')) { wrFleetLightbox(tripCard.dataset.wrTripcard); return; }
+    if (tripCard && !e.target.closest('[data-wr-claim]') && !e.target.closest('[data-wr-recall]')
+        && !e.target.closest('[data-wr-boost]')) { wrFleetLightbox(tripCard.dataset.wrTripcard); return; }
 
     // Raumhafen: Ausbau + Geschütze
     // 🛰️ 27s: Mitspieler-Flotten ein/aus. Nur Karte neu zeichnen, kein wrRender() —
@@ -7344,6 +7547,26 @@ function wrBindEvents() {
     }
     const inj = e.target.closest('[data-wr-inject]');
     if (inj && !inj.disabled) { await wrInjectLoad(parseInt(inj.dataset.wrInject, 10) || 0); return; }
+    // 🛸 Kolonie-Verband automatisch zusammenstellen (sichtbarer Weg zur Automatik).
+    const kf = e.target.closest('[data-wr-kitfill]');
+    if (kf) {
+      try {
+        const ring = parseInt(kf.dataset.wrKitfill, 10) || 1;
+        const ok = wrColonyFleetFill(_wrMember, ring);
+        wrRefreshDetail();
+        const rest = wrColonyKitMissing(_wrMember, ring, wrSyncFleetSel(_wrMember));
+        wrToast(ok
+          ? (rest.length
+              ? '🛸 Verband steht — es fehlt noch: '
+                + rest.map(x => `${wrKitLabel(x.was)} ${wrFmt(x.have)}/${wrFmt(x.need)}`).join(' · ')
+              : '🛸 Verband steht — bereit zum Kolonisieren.')
+          : '🛸 Es fehlen Schiffe: '
+            + rest.filter(x => x.schiff)
+                  .map(x => `${wrKitLabel(x.was)} ${wrFmt(x.have)}/${wrFmt(x.need)}`).join(' · '),
+          ok && !rest.length ? 'success' : 'info');
+      } catch (err) { wrToast('Zusammenstellen fehlgeschlagen: ' + err.message, 'error'); }
+      return;
+    }
     if (e.target.closest('#wr-wave-help'))    { await wrRequestHelp(); return; }
     if (e.target.closest('#wr-wave-resolve')) { await wrResolveWave(); return; }
     const help = e.target.closest('[data-wr-help]');
@@ -7436,7 +7659,13 @@ function wrBindEvents() {
     if (tplDel) { await wrTplDelete(tplDel.dataset.wrTpldel); return; }
     const tplLoad = e.target.closest('[data-wr-tplload]');
     if (tplLoad) { wrTplLoad(tplLoad.dataset.wrTplload); return; }
-    if (e.target.closest('#wr-tpl-save')) { await wrTplSave(); return; }
+    // ⚠️ 27ac: BEIDE Speichern-Knöpfe. Der im Flotten-Tab hat ein Namensfeld daneben,
+    // der auf der Sternkarte nicht — `wrTplSave` liest das Feld ohnehin über
+    // `getElementById` und vergibt ohne Feld einen laufenden Namen. Deshalb genügt
+    // hier derselbe Aufruf; ein zweiter Speicher-Weg wäre die zweite Wahrheit.
+    if (e.target.closest('#wr-tpl-save') || e.target.closest('#wr-fs-tplsave')) {
+      await wrTplSave(); return;
+    }
   };
 
   // Der Vorlagen-Name muss das Neurendern überleben (jeder wrRender baut das DOM neu auf);
@@ -7495,31 +7724,64 @@ async function wrSend(intent) {
     // statt abzulehnen (JP 2026-08-17). Bewusst KEIN Sofortstart danach — eine Mission,
     // die dauerhaft 30 Jäger und 8 Kutter verbraucht, soll nicht aus einem einzigen
     // Klick entstehen. Der Spieler sieht erst, was zusammengestellt wurde.
+    //
+    // ⚠️ 2026-08-22 GERADEGEZOGEN. Der alte Ablauf hatte zwei Ausgänge und einen davon
+    // falsch beschriftet: bei fehlendem ROHSTOFF galt das Zusammenstellen als
+    // gescheitert, die Auswahl war aber bereits ersetzt — der Spieler sah seine eigene
+    // Zusammenstellung verschwinden und daneben „unvollständig". Genau das meint JP mit
+    // „ist jetzt wieder deaktiviert": die Automatik lief, sie sagte es nur nicht.
+    // Jetzt EIN Durchgang: zusammenstellen, übernehmen, dann sagen, was übrig bleibt.
     if (wrColonyKitMissing(m, planet.ring, fleet).length) {
-      const voll = wrColonyFleetFill(m, planet.ring);
+      const vorher = JSON.stringify(fleet);
+      wrColonyFleetFill(m, planet.ring);
       wrRefreshDetail();
-      if (voll) {
-        wrToast('🛸 Verband zusammengestellt — nochmal auf Kolonisieren drücken zum Start.', 'info');
-        return;
-      }
       // ⚠️ `fleet` ist `const` — den Inhalt austauschen statt die Bindung. (Ein
       // `fleet = …` hätte `node --check` klaglos passiert und wäre erst beim Klick als
       // „Assignment to constant variable" hochgekommen: derselbe Mechanismus wie bei den
       // plpgsql-Körpern, nur in JS.)
       for (const k of Object.keys(fleet)) delete fleet[k];
       for (const [k, n] of Object.entries(wrSyncFleetSel(m))) if (n > 0) fleet[k] = n;
-    }
-    // ⚠️ Alle fehlenden Posten auf einmal nennen — vier Anläufe für vier Meldungen wären
-    // genau die Zumutung, die der Server bereits vermeidet (er sammelt sie ebenfalls).
-    const kitFehlt = wrColonyKitMissing(m, planet.ring, fleet);
-    if (kitFehlt.length) {
-      wrToast('Kolonie-Mission unvollständig — es fehlen: '
-        + kitFehlt.map(x => `${wrKitLabel(x.was)} ${wrFmt(x.have)}/${wrFmt(x.need)}`).join(' · '), 'error');
-      return;
+
+      // ⚠️ Alle fehlenden Posten auf einmal nennen — vier Anläufe für vier Meldungen
+      // wären genau die Zumutung, die der Server bereits vermeidet (er sammelt sie
+      // ebenfalls). Schiffe und Rohstoffe getrennt: das eine baut die Werft, das andere
+      // bringt eine Ernte — zwei verschiedene Wege für den Spieler.
+      const rest   = wrColonyKitMissing(m, planet.ring, fleet);
+      const schiff = rest.filter(x => x.schiff);
+      const roh    = rest.filter(x => !x.schiff);
+      if (schiff.length) {
+        wrToast('🛸 Es fehlen Schiffe für die Kolonie-Mission: '
+          + schiff.map(x => `${wrKitLabel(x.was)} ${wrFmt(x.have)}/${wrFmt(x.need)}`).join(' · '), 'error');
+        return;
+      }
+      if (roh.length) {
+        wrToast('🛸 Verband steht — es fehlt noch: '
+          + roh.map(x => `${wrKitLabel(x.was)} ${wrFmt(x.have)}/${wrFmt(x.need)}`).join(' · '), 'error');
+        return;
+      }
+      if (vorher !== JSON.stringify(fleet)) {
+        wrToast('🛸 Verband zusammengestellt — nochmal auf Kolonisieren drücken zum Start.', 'info');
+        return;
+      }
     }
   }
   if (intent === 'harvest'  && wrFleetMine(fleet) < 1) { wrToast('Ohne ⛏️ Röstkometen gibt es nichts abzubauen.', 'error'); return; }
   if (intent === 'attack'   && wrFleetPower(fleet) < 1) { wrToast('Dieser Verband hat keine Kampfkraft.', 'error'); return; }
+
+  // 💰 EINSATZKOSTEN-Vorabcheck (27ac). Gleiche Bauart wie die Treibstoff-Checks
+  // darunter: der Server prüft autoritativ nochmal, aber der Spieler soll den Grund
+  // schon vor dem Klick sehen — und er sieht ihn: die Zahl steht im Verband-Picker.
+  // ⚠️ Bei der Kolonie-Mission wird NICHT hier geprüft. Dort kommt das Kit hinzu, und
+  // der Server nennt Kit + Einsatzkosten in EINER Zahl (`colony_kit_incomplete`).
+  // Zwei Prüfungen mit zwei Zahlen für denselben Klick wären genau die Zumutung, die
+  // 27e schon einmal beseitigt hat.
+  const einsatz = wrDispatchCc(fleet);
+  if (intent !== 'colonize' && einsatz > 0 && (parseFloat(m?.coins) || 0) < einsatz) {
+    wrToast(`Nicht genug CC für den Einsatz: das Absenden kostet ${wrFmt(einsatz)} CC `
+          + `(3× Kampfkraft ${wrFmt(wrFleetPower(fleet))}), du hast `
+          + `${wrFmt(Math.floor(parseFloat(m?.coins) || 0))} CC.`, 'error');
+    return;
+  }
 
   // 💎 Treibstoff-Vorabcheck (Server prüft autoritativ nochmal — 22h/27aa)
   const fuel = wrTripFuel(fleet, planet.ring);
@@ -7595,11 +7857,17 @@ async function wrSend(intent) {
     const fuelTok = [['kristall', res.fuel], ['plasmoid', res.fuelPla], ['quantum', res.fuelQua]]
       .filter(([, n]) => (n || 0) > 0)
       .map(([k, n]) => `−${wrFmt(n)} ${wrArtTok(k)}`).join(' · ');
+    // 💰 27ac: die Absendekosten stehen in derselben Zeile wie der Treibstoff — es ist
+    // derselbe Posten „was dieser Start gekostet hat". Der Betrag kommt aus der
+    // SERVER-Antwort, nicht aus dem Client-Spiegel: was abgebucht wurde, entscheidet
+    // der Server (die Lehre aus 22e — der Client versprach 4.080, es waren 6.400).
+    const dispCc  = Math.round(parseFloat(res.dispatchCc) || 0);
+    const dispTxt = dispCc > 0 ? ` · 💰 −${wrFmt(dispCc)} CC Einsatz` : '';
     wrToast(intent === 'colonize'
       ? `🛸 Kolonie-Mission gestartet — Gründung bei Ankunft in ${wrCountdown(Date.parse(res.trip.arriveAt) - Date.now())}. `
         + `Der Verband geht bei der Gründung im Rumpf auf und kehrt NICHT zurück`
-        + `${res.colonyCc ? ` · 💰 −${wrFmt(res.colonyCc)} CC` : ''}${fuelTxt}`
-      : `${info.icon || '🚀'} Flotte gestartet — zurück in ${wrCountdown(Date.parse(res.trip.returnAt) - Date.now())}${fuelTxt}`,
+        + `${res.colonyCc ? ` · 💰 −${wrFmt(res.colonyCc)} CC` : ''}${dispTxt}${fuelTxt}`
+      : `${info.icon || '🚀'} Flotte gestartet — zurück in ${wrCountdown(Date.parse(res.trip.returnAt) - Date.now())}${dispTxt}${fuelTxt}`,
       // ⚠️ `true` = HTML erlaubt. Zulässig, weil in dieser Zeichenkette KEIN fremder
       // Text steckt — nur Zahlen, feste Wörter und selbst erzeugte Bild-Hüllen.
       // Planeten- und Spielernamen stehen bewusst nur in der Chat-Fassung unten.
@@ -7625,7 +7893,23 @@ async function wrSend(intent) {
          + `Auftrag: ${_wrEsc(info.name || intent)}, ` + (intent === 'colonize'
             ? `Ankunft in ${ankunft}, der Verband kehrt nicht zurück.`
             : `Ankunft in ${ankunft}, zurück in ${wrCountdown(Date.parse(res.trip.returnAt) - Date.now())}.`)
-         + (fuelTok ? ` ⛽ Treibstoff: ${fuelTok}` : ''));
+         + (fuelTok ? ` ⛽ Treibstoff: ${fuelTok}` : '')
+         + (dispCc > 0 ? ` 💰 Einsatzkosten: −${wrFmt(dispCc)} CC` : ''));
+
+    // 📒 CLAUDE.md Regel 1 (Statistik-Vollständigkeit): die Einsatzkosten sind eine
+    // neue, wiederkehrende CC-Ausgabe und gehören ab dem ERSTEN Tag ins Tages-Log —
+    // nicht nachgezogen. Eigene Kategorie, damit im Profil sichtbar wird, was der Krieg
+    // kostet; `aggKey` fasst mehrere Starts eines Tages zu EINER Zeile zusammen (dieselbe
+    // Verdichtung wie beim Transmuter, JP: „bitte auf einen Tag zusammenfassen").
+    // ⚠️ try/catch: ein fehlgeschlagener Log-Eintrag darf einen laufenden Start nie kippen.
+    if (dispCc > 0) {
+      try {
+        await DB.appendTodayLogFresh(m.id, [{
+          label: '🚀 Flotten-Einsatzkosten', amount: -dispCc, cat: 'weltraum',
+          detail: `${info.name || intent} → ${planet.name}`,
+          aggKey: 'space_dispatch', aggBase: '🚀 Flotten-Einsatzkosten' }]);
+      } catch (e) { console.warn('Einsatzkosten nicht geloggt:', e); }
+    }
     wrRender();
   } catch (e) {
     wrToast('Start fehlgeschlagen: ' + e.message, 'error');
@@ -7946,16 +8230,49 @@ async function wrClaimTurrets(silent) {
   // und würde bei JEDEM Tab-Wechsel einen RPC auslösen. Der Wertvergleich stimmt nach
   // dem Claim wieder überein und schaltet sich damit selbst ab.
   const mine = (_wrGalaxy?.planets || []).filter(p => p.colonized_by === _wrMember?.id);
-  if (!mine.some(p => wrColonyPowerExpected(p) !== wrPlanetDef(p))) return false;
+  // 🏗️ 27ad: ZWEITER Grund für einen Claim — ein fälliger Kolonie-Ausbau.
+  // ⚠️ OHNE DIESE ZEILE WÜRDE EIN AUSBAU NIE FERTIG. Die Bedingung darüber vergleicht
+  // die Feuerkraft; die Kolonie-Stufe steht während des Ausbaus aber noch auf dem alten
+  // Wert, Erwartung und Speicher stimmen also überein — der Claim liefe nie, und die
+  // Stufe bliebe für immer „gleich fertig". Ein bezahlter Ausbau, der nichts tut.
+  //   ⚠️ Und wie die Bedingung darüber schaltet auch diese sich selbst ab: der Claim
+  //   räumt `colony_ready_at` auf NULL, danach findet `faellig` nichts mehr.
+  const faellig = mine.some(p => p.colony_ready_at
+    && isFinite(Date.parse(p.colony_ready_at)) && Date.parse(p.colony_ready_at) <= Date.now());
+  if (!faellig && !mine.some(p => wrColonyPowerExpected(p) !== wrPlanetDef(p))) return false;
   _wrBusy = true;
   try {
     const res = await DB.claimSpaceTurrets(_wrMember.id);
     if (!res || res.error) return false;
+    // 🏗️ 27ad: Fertige Ausbauten melden. Ein Vorgang, der einen TAG gedauert hat, darf
+    // nicht wortlos passieren — sonst weiss niemand, ob er je fertig wurde.
+    const fertig = Array.isArray(res.upgraded) ? res.upgraded : [];
+    if (fertig.length) {
+      _wrGalaxy = await DB.fetchGalaxy();
+      // Den lokalen Spiegel nachziehen. Der Server hat ihn in derselben RPC gesetzt,
+      // aber unsere Kopie von `space` ist von vorher — und `harvest_space` rechnet mit
+      // genau diesem Feld. Ohne das zeigte die Kolonie-Liste bis zum nächsten vollen
+      // Laden die alte Stufe, obwohl der Ertrag schon der neuen entspricht.
+      try {
+        const cols = _wrMember?.space?.colonies || {};
+        for (const p of (_wrGalaxy?.planets || [])) {
+          if (p.colonized_by === _wrMember?.id && cols[p.id]) {
+            cols[p.id].level = Math.max(1, Math.min(3, parseInt(p.colony_level, 10) || 1));
+          }
+        }
+      } catch (e) { /* Anzeige-Korrektur, darf nie werfen */ }
+      for (const u of fertig) {
+        wrToast(`🏙️ ${u.planet} ist auf Kolonie-Stufe ${u.level} ausgebaut — der höhere `
+              + `Ertrag läuft ab sofort.`, 'success');
+        wrChat(`🏙️ ${_wrEsc(_wrMember?.name || 'Jemand')}: die Kolonie ${_wrEsc(u.planet)} `
+             + `ist fertig auf Stufe ${u.level} ausgebaut.`);
+      }
+    }
     if (res.updated > 0) {
       _wrGalaxy = await DB.fetchGalaxy();   // planet_defense hat sich geändert
       if (!silent) wrToast(`🛡️ ${res.updated} Kolonie(n) neu berechnet`, 'success');
     }
-    if (!silent) wrRender();
+    if (!silent || fertig.length) wrRender();
     return true;
   } catch (e) {
     return false;
@@ -8318,9 +8635,30 @@ async function wrPlanetBuild(planetId, action, slot, type) {
            + `${_wrEsc(g.name || 'Energie-Generator')} ${verb} — Geschütze jetzt `
            + `🛡️ ${wrFmt(res.defense)}${pct < 100 ? ` (noch ${pct} % Versorgung)` : ''}.`);
     } else if (action === 'colony_upgrade') {
-      wrToast(`🏙️ ${pl} auf Kolonie-Stufe ${res.level} ausgebaut`, 'success');
-      wrChat(`🏙️ ${_wrEsc(name)} hat die Kolonie ${_wrEsc(pl)} auf Stufe ${res.level} `
-           + `ausgebaut (${wrFmt(res.cc)} CC) — mehr Ertrag pro Tag.`);
+      // ⚠️ 27ad: Der Ausbau ist ab jetzt BEAUFTRAGT, nicht fertig. `res.level` ist die
+      // ZIELSTUFE — die RPC meldet sie unverändert, weil der Trigger die Erhöhung erst
+      // danach zurücknimmt. Wer hier weiter „ausgebaut" schreibt, meldet einen Abschluss,
+      // den es erst morgen gibt: exakt der Fehler, den 26u bei der Forschung gemacht hat
+      // („hat erforscht", während der Vorgang noch Stunden lief).
+      // ⚠️ UND `res.space` IST HIER FALSCH. Die RPC baut ihr Rückgabe-Objekt, BEVOR der
+      // Trigger die Erhöhung zurücknimmt — im gelieferten Spiegel steht also schon die
+      // Zielstufe, in der Datenbank nicht. Angewendet hätte der Client bis zum nächsten
+      // vollen Laden den Ertrag der neuen Stufe angezeigt, den es noch gar nicht gibt.
+      //   ⚠️ Das ist die alte 27f-Lehre in neuem Gewand: was eine Funktion ZURÜCKGIBT,
+      //   ist nicht automatisch das, was am Ende in der Zeile steht — dazwischen liegen
+      //   die Trigger. Wer einen Trigger einführt, muss jeden Rückgabewert nachsehen,
+      //   den er verändert.
+      try {
+        const cols = _wrMember?.space?.colonies;
+        if (cols && cols[planetId]) {
+          cols[planetId].level = Math.max(1, (parseInt(res.level, 10) || 2) - 1);
+        }
+      } catch (e) { /* Anzeige-Korrektur, darf nie werfen */ }
+      const dauer = wrDur(wrColonyBuildMin(res.level));
+      wrToast(`🏙️ Ausbau von ${pl} auf Stufe ${res.level} beauftragt — fertig in ${dauer}. `
+            + `Bis dahin liefert die Kolonie weiter Stufe ${Math.max(1, (res.level || 2) - 1)}.`, 'success');
+      wrChat(`🏙️ ${_wrEsc(name)} baut die Kolonie ${_wrEsc(pl)} auf Stufe ${res.level} `
+           + `aus (${wrFmt(res.cc)} CC) — fertig in ${dauer}.`);
     } else if (action === 'station_build') {
       wrToast(`📡 Quadranten-Station bei ${pl} errichtet`, 'success');
       wrChat(`📡 ${_wrEsc(name)} hat bei ${_wrEsc(pl)} eine Quadranten-Station errichtet — `
@@ -8853,6 +9191,21 @@ function wrReport(r) {
 
   if (r.ambushed || r.recalled) {
     // Bei Abbruch gibt es kein Kampf-/Aufklärungs-Ergebnis zu melden
+  } else if (r.intent === 'attack' && r.note === 'too_late') {
+    // 🏁 27ac / R6a: Ein anderer war schneller. Vorher meldete der Server hier einen
+    // SIEG mit leerer Beute — der Spieler las „gewonnen" und suchte den Fehler bei der
+    // Beute statt bei der Uhr. Jetzt sagt der Bericht, was wirklich passiert ist.
+    lines.push(`<div class="wr-rep-head wr-bad">🏁 Zu spät gekommen</div>`);
+    lines.push(`<div>Die Wächter von ${_wrEsc(r.planet)} waren schon besiegt, als dein Verband eintraf —
+      ein Mitspieler war schneller. Es gab keinen Kampf und keine Beute.</div>`);
+    if ((r.salvage || 0) > 0) {
+      lines.push(`<div class="wr-good">♻️ Immerhin: deine Bergungseinheiten haben
+        <strong>${wrFmt(r.salvage)}</strong> aus dem Trümmerfeld geholt
+        <span class="wr-sub">— der Sieger hat Vorrang, mehr als ein Viertel des Rests geht nicht.</span></div>`);
+    } else {
+      lines.push(`<div class="wr-sub">♻️ Ohne 🚀 Espresso-Kutter oder ♻️ Bergungsschiffe im Verband
+        gab es auch nichts zu bergen — und das Trümmerfeld kann bereits abgetragen sein.</div>`);
+    }
   } else if (r.intent === 'attack') {
     lines.push(r.won
       ? `<div class="wr-rep-head wr-good">⚔️ Sieg über die Wächter von ${_wrEsc(r.planet)}!</div>`
@@ -8879,10 +9232,35 @@ function wrReport(r) {
     } else {
       lines.push(`<div class="wr-rep-head wr-good">🪐 Kolonie auf ${_wrEsc(r.planet)} gegründet!</div>`);
     }
+    // 🏛️ 27ac / R6b: Das Kit wird beim START abgebucht und erst bei der Gründung
+    // verbraucht. Kam es nicht dazu, war es bisher trotzdem weg — bis zu 28.000 CC.
+    // ⚠️ Diese Zeile muss stehen, auch wenn niemand sie je zu sehen bekommt: eine
+    // Erstattung, die der Spieler nicht bemerkt, sieht aus wie ein Buchungsfehler.
+    {
+      const rf = r.refund || {};
+      const teile = [];
+      if ((rf.cc || 0) > 0)       teile.push(`${wrFmt(rf.cc)} CC`);
+      if ((rf.erz || 0) > 0)      teile.push(`${wrFmt(rf.erz)} ${wrIc('erz')}`);
+      if ((rf.kristall || 0) > 0) teile.push(`${wrFmt(rf.kristall)} ${wrIc('kri')}`);
+      if ((rf.plasmoid || 0) > 0) teile.push(`${wrFmt(rf.plasmoid)} ${wrIc('pla')}`);
+      if ((rf.quantum || 0) > 0)  teile.push(`${wrFmt(rf.quantum)} ${wrIc('qua')}`);
+      if (teile.length) {
+        lines.push(`<div class="wr-good">💰 Ausrüstung der Mission zurückerstattet:
+          <strong>${teile.join(' · ')}</strong>
+          <span class="wr-sub">— Treibstoff und Einsatzkosten nicht, die Reise hat stattgefunden.</span></div>`);
+      }
+    }
   } else {
     lines.push(`<div class="wr-rep-head">${info.icon} ${_wrEsc(r.planet)}</div>`);
   }
   if (r.shipsLost > 0) lines.push(`<div class="wr-bad">Verluste: ${wrFmt(r.shipsLost)} Schiff(e) (${Math.round((r.lossRatio || 0) * 100)} %)${_wrEsc(wrLossBreakdown(r.lost))}</div>`);
+  // ⚗️ 27ac: Mitgeführte, aber nicht verschossene Injektion kommt ins Magazin zurück.
+  // ⚠️ Ohne diese Zeile wäre die Rückgabe unsichtbar — und ein Spieler, der beim Start
+  // „Magazin 0" gesehen hat, würde es für einen Fehler halten, dass es wieder voll ist.
+  if ((r.injectBack || 0) > 0) {
+    lines.push(`<div class="wr-good">⚗️ ${wrFmt(r.injectBack)} ${wrIc('pla')} Injektion kommen zurück ins Magazin
+      <span class="wr-sub">— es kam zu keinem Gefecht, verschossen wurde nichts.</span></div>`);
+  }
   // NEU: gekapertes Schiff / treibendes Wrack
   if (r.foundShip && r.foundCount > 0) {
     const fs = SPACE_SHIP_BY_KEY[r.foundShip];
@@ -8967,6 +9345,22 @@ function wrStartLoop() {
       _wrGarBusy = true;
       try { if (await wrClaimGarrison(false)) wrRender(); } finally { _wrGarBusy = false; }
     }
+
+    // 🏗️ 27ad: Kolonie-Ausbau-Countdown. Steht BEWUSST vor dem `return` unten — er läuft
+    // auch, wenn gerade keine Flotte unterwegs ist, und ein Ausbau dauert Stunden.
+    // ⚠️ Wird er fällig, holt `wrClaimTurrets` ihn ab. Ohne diesen Aufruf bliebe ein
+    // fertiger Ausbau bis zum nächsten Tab-Wechsel liegen — die Anzeige stünde auf
+    // „0:00" und täte nichts, was wie ein Defekt aussieht.
+    let colDue = false;
+    for (const p of (_wrGalaxy?.planets || [])) {
+      if (p.colonized_by !== _wrMember?.id || !p.colony_ready_at) continue;
+      const rem = Date.parse(p.colony_ready_at) - Date.now();
+      if (!isFinite(rem)) continue;
+      const el = document.querySelector(`[data-wr-coleta="${p.id}"]`);
+      if (el) el.textContent = wrCountdown(Math.max(0, rem));
+      if (rem <= 0) colDue = true;
+    }
+    if (colDue) { try { await wrClaimTurrets(false); } catch (e) {} }
 
     const trips = wrTrips(_wrMember);
     if (!trips.length) return;
@@ -9089,7 +9483,19 @@ function wrErrText(err) {
     colony_inbound:        'Zu diesem Planeten fliegt bereits eine Kolonie-Mission — ein zweiter Verband würde nur umkehren.',
     already_colonized:     'Dieser Planet ist bereits kolonisiert.',
     colony_kit_incomplete: 'Der Kolonie-Mission fehlt noch etwas — die Anforderung steht unter dem Kolonisieren-Knopf.',
-    transmute_cooldown:    'Der Transmuter läuft noch nach — er braucht 48 Stunden zwischen zwei Vorgängen.',
+    // ⚠️ 27ac: Hier stand „48 Stunden". Der Text war seit 27w falsch (24) — und dieselbe
+    // 48 stand hartkodiert in `_space_transmute_ready`, weshalb JP tatsächlich 48 warten
+    // musste. Der Text war also RICHTIG für einen Fehler, der jetzt behoben ist.
+    // Deshalb nennt er ab sofort gar keine Zahl mehr, sondern die Anzeige verweist auf
+    // die Restzeit, die daneben steht — eine Zahl an zwei Orten läuft wieder auseinander.
+    transmute_cooldown:    'Der Transmuter läuft noch nach — die Restzeit steht am Gerät.',
+    // ⚡ 27ac
+    boost_arrived:         'Diese Flotte ist schon angekommen — beschleunigen bringt nichts mehr.',
+    boost_too_close:       'Zu kurz vor der Ankunft: nach einem Boost müssen 5 Minuten übrig bleiben.',
+    boost_no_kristall:     'Nicht genug 💎 Kristall für den Boost.',
+    no_trip:               'Diese Reise gibt es nicht mehr — vielleicht ist sie gerade angekommen.',
+    // 💰 27ac
+    not_enough_cc_dispatch: 'Nicht genug CC für den Einsatz — das Absenden kostet 3× die Kampfkraft des Verbands.',
     region_too_strong:     'Diese Region gehört jemand anderem — dein Verband ist zu schwach für eine Kolonie dort (nötig: das 1,15-fache der Regionsverteidigung).',
     merc_active:           'Es läuft bereits ein Söldner-Geschwader.',
     merc_not_rentable:     'Dieses Schiff lässt sich nicht mieten.',

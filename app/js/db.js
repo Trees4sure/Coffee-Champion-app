@@ -250,7 +250,8 @@ const DB = (() => {
     const tPerDay = tradeBonusDay || 0;
     const pPerDay = (typeof worldPassivePerDay === 'function') ? worldPassivePerDay(member, worldByCountry) : 0; // 🏦 Stille Anlage
     const tot = rPerDay + bPerDay + wPerDay + gPerDay + tPerDay + pPerDay;
-    if (tot <= 0) return [{ label: '⚙️ Passiv-Einkommen', amount: passiveEarned }];
+    if (tot <= 0) return [{ label: '⚙️ Passiv-Einkommen', amount: passiveEarned,
+      aggKey: 'passiv_gesamt', aggBase: '⚙️ Passiv-Einkommen' }];
     const bShare = Math.round(passiveEarned * (bPerDay / tot) * 100) / 100;
     const wShare = Math.round(passiveEarned * (wPerDay / tot) * 100) / 100;
     const gShare = Math.round(passiveEarned * (gPerDay / tot) * 100) / 100;
@@ -261,13 +262,34 @@ const DB = (() => {
       (typeof worldPerDayDetail === 'function') ? worldPerDayDetail(worldRankMap) : '',
       (typeof worldBuildingPerDayDetail === 'function') ? worldBuildingPerDayDetail(worldRankMap, worldByCountry) : '',
     ].filter(Boolean).join(', ');
+    // 📒 27ac / E1 (JP 2026-08-22: „Bei der aufsummierung der der baueinnahmen bitte auf
+    // einen Tag zusammenfassen, anstatt jedes Mal ein Ansprechen — das verringert die
+    // Übersichtlichkeit aktuell").
+    // ⚠️ BEFUND: `claimPassive` läuft bei JEDEM App-Öffnen und bei jedem Tick. Jeder
+    // Aufruf hängte SECHS neue Zeilen an — an einem normalen Tag zweistellig oft. Das
+    // 50-Einträge-Fenster war dadurch allein mit Passiv-Einkommen gefüllt, und alles
+    // andere fiel hinten heraus. Das ist kein Schönheitsfehler: es hat die Log-Einträge
+    // verdrängt, für die man ins Log schaut.
+    // ⚠️ EIN `aggKey` genügt — die Verdichtung gibt es seit dem Barista-Bart. Sie ist
+    // bewusst ANZEIGESEITIG: die Tages-Summen (`sums`) und die day_stats-Deltas werden
+    // weiter aus den ROHEN Einträgen gerechnet, jeder einzelne Zugang zählt also
+    // unverändert mit. Verdichtet wird die Darstellung, nicht die Buchhaltung.
+    //   ⚠️ Deshalb ist die Summe hinterher auf den Cent dieselbe wie vorher. Hätte man
+    //   stattdessen Einträge weggeworfen, wäre die Tagesbilanz gesunken — genau der Fehler
+    //   („1800→1000"), den die `sums` 2026-07-22 beheben mussten.
     const out = [];
-    if (rShare > 0) out.push({ label: '⚙️ Forschung (passiv)', amount: rShare, cat: 'forschung', detail: (typeof researchPerDayDetail === 'function') ? researchPerDayDetail(member.research) : '' });
-    if (bShare > 0) out.push({ label: '🏗️ Gebäude-Einkommen',  amount: bShare, cat: 'karte', detail: (typeof buildingPerDayDetail === 'function') ? buildingPerDayDetail(member.map_data?.buildings || {}) : '' });
-    if (wShare > 0) out.push({ label: '🌍 Welt-Einfluss',       amount: wShare, cat: 'welt', detail: wDetail });
-    if (tShare > 0) out.push({ label: '🤝 Handelsdividende',    amount: tShare, cat: 'welt', ally: true, detail: '+10% des Einkommens aus dem Partner-Land' });
-    if (gShare > 0) out.push({ label: '🏛️ Gruppenkasse (passiv)', amount: gShare, cat: 'gruppe', detail: `+${gPerDay} CC/Tag für alle` });
-    if (pShare > 0) out.push({ label: '🏦 Stille Anlage',        amount: pShare, cat: 'welt', detail: (typeof worldPassivePerDayDetail === 'function') ? worldPassivePerDayDetail(member, worldByCountry) : '' });
+    if (rShare > 0) out.push({ label: '⚙️ Forschung (passiv)', amount: rShare, cat: 'forschung', detail: (typeof researchPerDayDetail === 'function') ? researchPerDayDetail(member.research) : '',
+      aggKey: 'passiv_forschung', aggBase: '⚙️ Forschung (passiv)' });
+    if (bShare > 0) out.push({ label: '🏗️ Gebäude-Einkommen',  amount: bShare, cat: 'karte', detail: (typeof buildingPerDayDetail === 'function') ? buildingPerDayDetail(member.map_data?.buildings || {}) : '',
+      aggKey: 'passiv_gebaeude', aggBase: '🏗️ Gebäude-Einkommen' });
+    if (wShare > 0) out.push({ label: '🌍 Welt-Einfluss',       amount: wShare, cat: 'welt', detail: wDetail,
+      aggKey: 'passiv_welt', aggBase: '🌍 Welt-Einfluss' });
+    if (tShare > 0) out.push({ label: '🤝 Handelsdividende',    amount: tShare, cat: 'welt', ally: true, detail: '+10% des Einkommens aus dem Partner-Land',
+      aggKey: 'passiv_handel', aggBase: '🤝 Handelsdividende' });
+    if (gShare > 0) out.push({ label: '🏛️ Gruppenkasse (passiv)', amount: gShare, cat: 'gruppe', detail: `+${gPerDay} CC/Tag für alle`,
+      aggKey: 'passiv_gruppe', aggBase: '🏛️ Gruppenkasse (passiv)' });
+    if (pShare > 0) out.push({ label: '🏦 Stille Anlage',        amount: pShare, cat: 'welt', detail: (typeof worldPassivePerDayDetail === 'function') ? worldPassivePerDayDetail(member, worldByCountry) : '',
+      aggKey: 'passiv_anlage', aggBase: '🏦 Stille Anlage' });
     return out;
   }
 
@@ -2886,6 +2908,19 @@ const DB = (() => {
     } catch (e) { return { error: e.message }; }
   }
 
+  // ⚡ 27ac: Ankunft einer laufenden Reise um 30 Minuten vorziehen (gegen 💎 Kristall).
+  // ⚠️ Angesprochen wird die Reise über ihre `id`, nicht über den Index im Array: eine
+  // andere Flotte kann zwischen Anzeige und Klick angekommen sein, und ein Index hätte
+  // dann die falsche beschleunigt.
+  async function spaceTripBoost(memberId, tripId) {
+    try {
+      const { data, error } = await _sb.rpc('space_trip_boost', {
+        p_member_id: memberId, p_trip_id: String(tripId || '') });
+      if (error) return { error: error.message };
+      return data || {};
+    } catch (e) { return { error: e.message }; }
+  }
+
   async function buildSpaceCart(memberId, cart) {
     try {
       const { data, error } = await _sb.rpc('build_space_cart', {
@@ -3286,6 +3321,7 @@ const DB = (() => {
     startSpaceGarrison, claimSpaceGarrison, claimSpaceGarrisonLost,   // 🛡️ 27k
     hireSpaceMerc, setSpaceMercGuard, spaceMercSweep,  // 🎖️ 26x
     refineStart, refineClaim, spaceTransmute, spacePowerRefuel, spaceInjectLoad,
+    spaceTripBoost,
     buySpaceTech, ensureSpaceWave, fetchSpaceWaves, fetchSpaceHelp,
     fetchSpaceTrades, createSpaceTrade, cancelSpaceTrade, buySpaceTrade,
     createSpaceRequest, fulfillSpaceRequest, createSpaceShipOffer, buySpaceShipOffer,
