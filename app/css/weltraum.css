@@ -284,6 +284,24 @@
 .wr-fs-q { flex: 1 1 auto; padding: 5px 8px; border-radius: 6px; border: 1px solid #3a4470;
   background: #101733; color: #a8b6dc; font-size: .7rem; cursor: pointer; }
 .wr-fs-q:active { background: #1d2a55; }
+/* 🏗️ 27ad: laufender Kolonie-Ausbau. Der Balken zeigt, DASS etwas läuft — die Zahl
+   daneben sagt, wie lange noch. Ohne den Balken sieht ein Ausbau, der einen Tag dauert,
+   aus wie ein Knopf, der nicht funktioniert hat. */
+.wr-colbuild { flex-basis: 100%; margin-top: 4px; }
+.wr-colbuild-bar { height: 6px; border-radius: 3px; background: #1b2547; overflow: hidden;
+  margin: 4px 0 3px; }
+.wr-colbuild-bar > span { display: block; height: 100%; border-radius: 3px;
+  background: linear-gradient(90deg, #4a7cff, #7fe3c0); transition: width .4s linear; }
+
+/* 📋 27ac: Vorlagen-Zeile direkt im Verband-Picker (D1). Eigene Zeile statt in
+   .wr-fs-quick, damit die Auftrags-Schnellknöpfe daneben nicht ihre Bedeutung verlieren —
+   „Kampfflotte" ist eine Vorbelegung, ein Verband eine gespeicherte Entscheidung. */
+.wr-fs-tplrow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  margin: 6px 0 2px; padding-bottom: 6px; border-bottom: 1px solid #24305a; }
+.wr-fs-tplrow .wr-fs-q { flex: 0 1 auto; }
+/* Unvollständig verfügbar: gestrichelt, wie im Flotten-Tab — dieselbe Sprache. */
+.wr-fs-tplrow .wr-tpl-part { border-style: dashed; opacity: .8; }
+
 .wr-fs-sum { display: flex; flex-wrap: wrap; gap: 10px; font-size: .72rem; color: #8b9ac4;
   border-top: 1px solid #24305a; padding-top: 8px; }
 .wr-fs-sum strong { color: #dce6ff; }
