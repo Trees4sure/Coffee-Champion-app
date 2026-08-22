@@ -199,6 +199,54 @@ const DB = (() => {
     return { date: day, gross: 0, spent: 0, net: 0, cats: {} };
   }
 
+  // ── 📅 Wochenbilanz: 7 Kalendertage, je Tag EINE Summe (27ae) ────────────────
+  // JP 2026-08-22: „Die Tagessammlung ist noch immer je nach Login — das ist blöd. es
+  // soll nur die gesamtsumme je Tag für 1 Woche also 7 Einträge kommen, die je Login
+  // geupdated werden."
+  //
+  // ⚠️ Die Sitzungsabhängigkeit war kein Anzeigefehler: bis 27ae wurde der Vortag beim
+  // Tageswechsel in `add_day_stats` schlicht ÜBERSCHRIEBEN. Es gab keine Historie, also
+  // konnte die Anzeige nur zeigen, was in dieser Sitzung ins Tages-Log gelaufen war.
+  // Seit 27ae wandert der abgeschlossene Tag nach `day_stats.hist`.
+  //
+  // ⚠️ SIEBEN KALENDERTAGE, nicht sieben Datensätze. Wer drei Tage nicht spielt, hat drei
+  // Tage ohne Eintrag — die werden hier mit 0 aufgefüllt. Eine Liste, die stattdessen
+  // „die letzten sieben vorhandenen" zeigte, sprränge über Lücken hinweg und suggerierte
+  // eine Woche, die es nicht gab.
+  // ⚠️ Und die Nullen kommen aus dem CLIENT, nicht aus der Datenbank: ein dort erfundener
+  // Datensatz wäre später von einem echten nicht mehr zu unterscheiden.
+  const CC_WEEK_DAYS = 7;   // Spiegel von _cc_hist_keep() (dort 6 = 7 minus heute)
+  function weekStats(member) {
+    const r2 = n => Math.round((+n || 0) * 100) / 100;
+    const d  = (member && (member.day_stats || member.dayStats)) || {};
+    // Alles bekannte Material in EINE Tabelle: Archiv + laufender Tag.
+    const byDay = {};
+    const hist = Array.isArray(d.hist) ? d.hist : [];
+    for (const h of hist) {
+      if (!h || !h.d) continue;
+      byDay[h.d] = { gross: r2(h.gross), spent: r2(h.spent) };
+    }
+    // ⚠️ Der laufende Tag ZULETZT — er überschreibt einen gleichnamigen Archiveintrag.
+    // Der kann entstehen, wenn ein über Mitternacht offener Client den Tag zweimal
+    // anfasst; dann gilt der laufende Stand, nicht die Momentaufnahme davor.
+    if (d.date) byDay[d.date] = { gross: r2(d.gross), spent: r2(d.spent) };
+
+    const out = [];
+    const heute = new Date();
+    for (let i = CC_WEEK_DAYS - 1; i >= 0; i--) {
+      const t = new Date(heute.getFullYear(), heute.getMonth(), heute.getDate() - i);
+      // ⚠️ Lokales Datum zusammensetzen, NICHT toISOString(): das rechnet nach UTC um und
+      // hätte je nach Zeitzone einen Tag Versatz — genau die Timezone-Kette aus Teil 15.
+      const key = t.getFullYear() + '-'
+                + String(t.getMonth() + 1).padStart(2, '0') + '-'
+                + String(t.getDate()).padStart(2, '0');
+      const v = byDay[key] || { gross: 0, spent: 0 };
+      out.push({ d: key, gross: v.gross, spent: v.spent, net: r2(v.gross - v.spent),
+                 heute: i === 0, leer: !byDay[key] });
+    }
+    return out;
+  }
+
   // ── Bilanz-Ledger: kumulative Lifetime-Summen je Kategorie (Einnahmen/Ausgaben/Investitionen) ──
   // Wächst ab Einführung ("seit jetzt"). Erfasst NUR Einträge mit explizitem `cat` — retro-gezählte
   // Posten (Krieger-Kampf → dungeon_data.totalCcEarned, Tränke → potionsSpent, Kartenschätze →
@@ -789,11 +837,44 @@ const DB = (() => {
   }
 
   async function _writeSalaryPoint(memberId, sal) {
-    const { data: fresh } = await _sb.from('members').select('map_data').eq('id', memberId).single();
+    // 🚀 27ag: `day_stats` kommt mit — daraus stammt der Weltraum-Tagesnetto.
+    const { data: fresh } = await _sb.from('members').select('map_data, day_stats').eq('id', memberId).single();
     const md0    = (fresh && fresh.map_data) || {};
     const bucket = _salaryBucket();
     const hist   = Array.isArray(md0.salaryHistory) ? md0.salaryHistory.slice() : [];
+
+    // 🚀 27ag (JP 2026-08-22: „kannst du noch in statistik die Tageseinnahmen tracken und
+    // den Gesamtverlauf anzeigen aller Einnahmen im Weltraum?").
+    // ⚠️ ES WIRD NICHTS NEU GEZÄHLT. Beide Zahlen existieren bereits:
+    //   • `map_data.wrStats.ccFromSpace` — der Karriere-Zähler aus weltraum_stats.js,
+    //     summiert seit jeher JEDE CC-Einnahme aus dem All (Kampfbeute, Raffinerie,
+    //     Transmuter, Wellen). Das IST der Gesamtverlauf, er wurde nur nie über die
+    //     Zeit festgehalten.
+    //   • `day_stats.cats.weltraum` — das Tagesnetto der Rubrik, seit der Tagesbilanz.
+    // Ein eigener Zähler wäre die zweite Wahrheit (die Lehre aus 22e/27i) und würde
+    // beim ersten Balancing von der bestehenden Statistik abweichen.
+    // ⚠️ Der Snapshot ist der EINZIGE Ort im Projekt, der eine Zeitreihe je Mitglied
+    // führt und für ALLE Mitglieder läuft (recordSalarySnapshotsAll). Genau deshalb
+    // hängen die zwei Felder hier und nicht an einem neuen Mechanismus.
+    let wrTot = null, wrDay = null;
+    try {
+      const st = md0.wrStats;
+      if (st && typeof st === 'object') wrTot = Math.round(parseFloat(st.ccFromSpace) || 0);
+      const ds = fresh && fresh.day_stats;
+      // ⚠️ NUR wenn der Datensatz von HEUTE ist. Ein alter day_stats-Stand würde sonst
+      // als heutiger Wert in den Snapshot wandern und dort für immer stehen bleiben.
+      if (ds && ds.date === today() && ds.cats) {
+        wrDay = Math.round((parseFloat(ds.cats.weltraum) || 0) * 100) / 100;
+      }
+    } catch (e) { /* Statistik darf den Snapshot nie kippen */ }
+
     const entry  = { ts: bucket, day: sal.day, cup: sal.cup, coins: sal.coins, gross: sal.gross, net: sal.net };
+    // ⚠️ `null` NICHT mitschreiben: im Chart bedeutet ein fehlender Wert „keine Daten"
+    // und wird übersprungen (spanGaps). Eine 0 hingegen wäre die Aussage „an diesem Tag
+    // nichts verdient" — zwei verschiedene Dinge, die man nicht verwechseln darf.
+    if (wrTot != null) entry.wrTot = wrTot;
+    if (wrDay != null) entry.wrDay = wrDay;
+
     const idx    = hist.findIndex(h => _salaryTsOf(h) === bucket);
     if (idx >= 0) hist[idx] = entry; else hist.push(entry);
     await updateMapData(memberId, { ...md0, salaryHistory: _pruneSalaryHistory(hist) });
@@ -3296,7 +3377,7 @@ const DB = (() => {
     spendCoins, fetchTreasury, contributeToTreasury, syncTreasuryGoals,
     applyDailyLevy, checkWeeklyChallenge,
     purchaseResearchItem, saveCosmetics, buyCiqPerk, applyCiqAttack, fetchMemberMapData,
-    updateMapData, addCoins, appendTodayLog, appendTodayLogFresh, dayStats, claimPassive, recordSalarySnapshot, recordSalarySnapshotsAll,
+    updateMapData, addCoins, appendTodayLog, appendTodayLogFresh, dayStats, weekStats, claimPassive, recordSalarySnapshot, recordSalarySnapshotsAll,
     saveDungeonData, dungeonFight, buyKriegerItem, repairArmor, buyKriegerPotion, sellKriegerPotion, buyKriegerCompanion, buyKriegerMount,
     payBaristaBartGroup, addPenaltyToTreasury, payEigeneTasseGroup,
     claimLoginBonus, claimDailyTask,

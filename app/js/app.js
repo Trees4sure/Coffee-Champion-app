@@ -1015,8 +1015,18 @@ function renderProfile() {
       }).join('');
       const emptyHint = log.length ? '' :
         `<div class="today-log-detail" style="margin-top:6px">Die Einzel-Einträge dieses Tages liegen nicht mehr vor — die Tagesbilanz oben ist davon unabhängig und vollständig.</div>`;
-      logList.innerHTML = _todayBilanzHeaderHtml(u, todayKey)
-                        + _todayRubrikSummaryHtml(u, todayKey) + entriesHtml + emptyHint;
+      // 📅 27ae: Woche zuerst, dann die Tagesbilanz, dann die Rubriken — und die
+      // Einzelposten ZUGEKLAPPT ganz unten. Vorher füllten sie die ganze Ansicht und
+      // sahen je nach Sitzung anders aus; nachschlagen können muss man sie trotzdem.
+      // ⚠️ `<details>` statt eines eigenen Auf/Zu-Knopfs: kein Zustand, den ein
+      // Neurendern verlieren könnte, und ohne einen weiteren Klick-Handler.
+      const details = (entriesHtml || emptyHint)
+        ? `<details class="cc-week-details"><summary>Einzelposten von heute${
+             log.length ? ` (${log.length})` : ''}</summary>${entriesHtml}${emptyHint}</details>`
+        : '';
+      logList.innerHTML = _weekBilanzHtml(u)
+                        + _todayBilanzHeaderHtml(u, todayKey)
+                        + _todayRubrikSummaryHtml(u, todayKey) + details;
     } else {
       logSection.style.display = 'none';
       logList.innerHTML = '';
@@ -1147,6 +1157,59 @@ function _ccDayStats(u) {
 // 📊 Tagesbilanz-Kopf im Profil (JP 2026-07-21): Brutto ALLER Einnahmen von 0:00 bis
 // 24:00 — unabhängig davon, was noch im Einzel-Log steht. Steht bewusst GANZ OBEN und
 // wird immer gerendert, sobald der Tag Bewegung hatte.
+// 📅 27ae: Die Woche als SIEBEN Zeilen — eine Summe je Tag.
+// JP 2026-08-22: „es soll nur die gesamtsumme je Tag für 1 Woche also 7 Einträge kommen,
+// die je Login geupdated werden."
+//
+// ⚠️ Diese Ansicht steht GANZ OBEN und ist die Hauptsache; die Einzelposten des heutigen
+// Tages stehen darunter und sind zugeklappt. Sie ganz zu streichen wäre falsch: Regel 1
+// (Statistik-Vollständigkeit) lebt davon, dass man nachsehen KANN, wo eine Zahl herkommt.
+// Was JP gestört hat, war nicht ihre Existenz, sondern dass sie die ganze Ansicht füllte
+// und je nach Sitzung anders aussah.
+//
+// ⚠️ Die Zahlen kommen aus derselben Quelle wie die Tagesbilanz (`day_stats`), nicht aus
+// den Log-Einträgen. Sonst schrumpfte die Woche, sobald Einträge aus dem 50er-Fenster
+// fallen — genau der „1800→1000"-Fehler vom 2026-07-22, nur eine Ebene höher.
+const CC_WOCHENTAGE = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+function _weekBilanzHtml(u) {
+  let woche;
+  try { woche = (typeof DB !== 'undefined' && DB.weekStats) ? DB.weekStats(u) : null; }
+  catch (e) { woche = null; }
+  if (!woche || !woche.length) return '';        // alter Client/Server: Abschnitt entfällt
+
+  const maxAbs = Math.max(1, ...woche.map(t => Math.abs(t.net)));
+  const zeilen = woche.map(t => {
+    const dt  = new Date(t.d + 'T12:00:00');     // Mittag: immun gegen Sommerzeit-Sprünge
+    const tag = CC_WOCHENTAGE[dt.getDay()];
+    const dm  = `${dt.getDate()}.${dt.getMonth() + 1}.`;
+    const neg = t.net < 0;
+    // Balken als reine Optik — die ZAHL ist die Aussage, der Balken nur der Vergleich.
+    const pct = Math.round(Math.abs(t.net) / maxAbs * 100);
+    return `
+      <div class="today-log-row${t.heute ? ' cc-week-today' : ''}">
+        <span class="today-log-label">${t.heute ? '▶ ' : ''}${tag}, ${dm}${
+          t.leer ? ' <span style="opacity:.45">— nichts</span>' : ''}</span>
+        <span class="today-log-amount"${neg ? ' style="color:#e0795a"' : ''}>${
+          neg ? '' : '+'}${_fmtCoins(t.net)} CC</span>
+      </div>
+      <div class="cc-week-bar"><span style="width:${pct}%${neg ? ';background:#e0795a' : ''}"></span></div>`;
+  }).join('');
+
+  const summe = woche.reduce((s, t) => s + t.net, 0);
+  return `<div style="margin-bottom:9px;padding-bottom:8px;border-bottom:1px solid rgba(255,255,255,.10)">
+      <div class="today-log-detail" style="font-weight:700;opacity:.9;margin:0 0 4px">📅 Letzte 7 Tage (Netto je Tag)</div>
+      ${zeilen}
+      <div class="today-log-row" style="font-weight:700;margin-top:4px">
+        <span class="today-log-label">Woche gesamt</span>
+        <span class="today-log-amount"${summe < 0 ? ' style="color:#e0795a"' : ''}>${
+          summe < 0 ? '' : '+'}${_fmtCoins(Math.round(summe * 100) / 100)} CC</span>
+      </div>
+      ${woche.every(t => t.leer) ? `<div class="today-log-detail" style="margin-top:5px">
+        Die Woche füllt sich ab jetzt — vor dieser Version wurde der Vortag beim
+        Tageswechsel nicht aufgehoben.</div>` : ''}
+    </div>`;
+}
+
 function _todayBilanzHeaderHtml(u, todayKey) {
   const ds = _ccDayStats(u);
   if (ds.date !== todayKey || (!ds.gross && !ds.spent)) return '';
@@ -1733,12 +1796,26 @@ function renderGehalt() {
     return;
   }
 
+  // ⚠️ Je Tag gibt es bis zu fünf Snapshots — welcher gilt, hängt von der METRIK ab:
+  //   • kumulative Größen (gross, day) wachsen über den Tag → der HÖCHSTE ist der
+  //     Tagesendstand.
+  //   • ein Tagesnetto (net) kann über den Tag auch FALLEN (Ausgaben). Dort wäre das
+  //     Maximum der beste Zwischenstand, nicht das Ergebnis — es muss der LETZTE sein.
+  // ⚠️ Hier stand für ALLE Metriken `Math.max` — bei `net` eine stille Schönfärbung,
+  // die umso mehr auffällt, je grösser die Tagesausgaben werden (Flotten-Einsatzkosten,
+  // Sold, Bauaufträge). Gefunden beim Weltraum-Verlauf, behoben unabhängig davon.
+  const kumulativ = (metric === 'gross' || metric === 'day');
   const datasets = top5.map((u, i) => {
-    const m = {};
+    const m = {}, mTs = {};
     histOf(u).forEach(h => {
       const t = tsOf(h); if (!t) return;
       const v = h[metric]; if (v == null) return;
-      const k = dayKey(t); m[k] = Math.max(k in m ? m[k] : -Infinity, v);
+      const k = dayKey(t);
+      if (kumulativ) {
+        m[k] = Math.max(k in m ? m[k] : -Infinity, v);
+      } else if (!(k in mTs) || t >= mTs[k]) {
+        m[k] = v; mTs[k] = t;
+      }
     });
     return {
       label: u.name,
@@ -1762,6 +1839,9 @@ function renderGehalt() {
       + ';color:' + (active ? 'var(--gold)' : 'var(--muted)') + (dis ? ';opacity:.4' : '');
     return `<button type="button" class="cc-gehalt-btn" data-metric="${m}"${dis ? ' disabled' : ''} style="${style}">${label}</button>`;
   };
+  // ⚠️ Der Weltraum-Verlauf gehört bewusst NICHT hierher (JP 2026-08-22: „Ich wollte es
+  // eigentlich in der Weltraumstatistik haben und nicht in der Gesamtstatistik"). Er
+  // steht im 📊-Reiter des 🚀-Moduls (weltraum_stats.js, `wrsVerlaufHtml`).
   const toggleHtml = `<div style="display:flex;gap:6px;margin:0 0 10px;flex-wrap:wrap">${_gbtn('gross', '📈 Einnahmen (Brutto)')}${_gbtn('net', '🧮 Netto')}</div>`;
 
   // Tabelle folgt dem Umschalter → nur die Spalten der gewählten Metrik (schmaler).

@@ -1002,22 +1002,61 @@ const WRS_CHART_OPTS = {
   },
 };
 
+// 📈 Einnahme-Verlauf — eine LINIE je Mitspieler.
+// ⚠️ `spanGaps`: wer einen Tag nicht gespielt hat, hat dort keinen Snapshot. Ohne das
+// Flag risse die Linie, und eine Lücke sähe aus wie ein Absturz auf null.
+// ⚠️ `beginAtZero` gilt nur für das TAGESNETTO. Beim kumulierten Verlauf (Werte im
+// sechsstelligen Bereich) quetschte eine Null-Basis alle Linien zu einem Strich
+// zusammen — genau die Vergleichbarkeit, um die es hier geht, ginge verloren.
+function wrsVerlaufChart() {
+  const V = _wrsVerlaufData;
+  if (!V?.tage?.length) return;
+  const pal = (typeof COLORS !== 'undefined' && Array.isArray(COLORS)) ? COLORS
+    : ['#d4aa37', '#4e9af1', '#e06c75', '#98c379', '#c678dd', '#e5c07b', '#56b6c2'];
+  const ds = V.reihen.map((r, i) => ({
+    label: r.name + (r.me ? ' (du)' : ''),
+    data: r.werte, spanGaps: true,
+    borderColor: pal[i % pal.length],
+    backgroundColor: pal[i % pal.length] + '33',
+    // Die eigene Linie dicker — sie ist die, die man sucht.
+    borderWidth: r.me ? 3 : 2, tension: 0.25,
+    pointRadius: r.me ? 3 : 2, fill: false,
+  }));
+  const labels = V.tage.map(k => { const p = k.split('-'); return p[2] + '.' + p[1]; });
+  wrsChart('wrs-c-verlauf', labels, ds, {
+    scales: Object.assign({}, WRS_CHART_OPTS.scales, {
+      y: Object.assign({}, WRS_CHART_OPTS.scales.y, { beginAtZero: _wrsVerlauf === 'day' }),
+    }),
+  }, 'line');
+}
+
 function wrsDestroyCharts() {
   for (const c of _wrsCharts) { try { c.destroy(); } catch (e) {} }
   _wrsCharts = [];
 }
 
-function wrsChart(id, labels, datasets, extra) {
+// ⚠️ `type` kam 2026-08-22 dazu (Einnahme-Verlauf als LINIE). Der Vorgabewert bleibt
+// 'bar' — jeder bestehende Aufruf verhält sich unverändert.
+function wrsChart(id, labels, datasets, extra, type) {
   try {
     const cv = document.getElementById(id);
     if (!cv || typeof Chart === 'undefined') return;
     const opts = Object.assign({}, WRS_CHART_OPTS, extra || {});
-    _wrsCharts.push(new Chart(cv.getContext('2d'), { type: 'bar', data: { labels, datasets }, options: opts }));
+    _wrsCharts.push(new Chart(cv.getContext('2d'),
+      { type: type || 'bar', data: { labels, datasets }, options: opts }));
   } catch (e) { console.warn('[wr-stats] Diagramm ' + id + ':', e.message); }
 }
 
 function wrsBuildCharts() {
   wrsDestroyCharts();
+  // ⚠️ Der Verlauf steht VOR dem `if (!d) return` und in einem eigenen try/catch: er
+  // hängt an `_wrsVerlaufData`, nicht an `_wrsChartData` (das die Detailansicht füllt).
+  // Wäre er darunter, verschwände er still, sobald die Detailansicht einmal nichts
+  // liefert — und niemand käme auf die Idee, dort zu suchen.
+  try {
+    if (_wrsVerlaufData?.tage?.length) wrsVerlaufChart();
+  } catch (e) { console.warn('[wr-stats] Verlauf-Diagramm:', e.message); }
+
   const d = _wrsChartData;
   if (!d) return;
   try {
@@ -1049,10 +1088,129 @@ function wrsBuildCharts() {
   } catch (e) { console.warn('[wr-stats] Diagramme:', e.message); }
 }
 
+// ── 📈 Einnahme-Verlauf (JP 2026-08-22) ───────────────────────────────────
+// „kannst du noch in statistik die Tageseinnahmen tracken und den Gesamtverlauf anzeigen
+// aller Einnahmen im Weltraum? Liniendiagramme — da könnte man auch die anderen members
+// mit aktivieren und dann seinen Stand besser einschätzen."
+//
+// ⚠️ ES WIRD NICHTS NEU GEZÄHLT. Beide Größen gibt es längst:
+//   • `map_data.wrStats.ccFromSpace` — der Karriere-Zähler dieses Moduls, summiert seit
+//     jeher JEDE CC-Einnahme aus dem All. Das IST der Gesamtverlauf.
+//   • `day_stats.cats.weltraum` — das Tagesnetto der Rubrik.
+// Neu ist allein, dass der 5-Stunden-Snapshot (`map_data.salaryHistory`) sie als
+// `wrTot`/`wrDay` über die ZEIT festhält (db.js, `_writeSalaryPoint`). Das ist der
+// einzige Mechanismus im Projekt, der eine Zeitreihe je Mitglied führt UND für alle
+// Mitglieder läuft — genau die Voraussetzung für „die anderen members mit aktivieren".
+//
+// ⚠️ HIER und nicht in der Gesamtstatistik (JP 2026-08-22: „Ich wollte es eigentlich in
+// der Weltraumstatistik haben"). Es stand kurz im Gehalts-Diagramm, weil dort Overlay,
+// Farben und Umschalter schon lagen — der Preis dafür war, dass eine Weltraum-Frage in
+// einem Reiter beantwortet wird, in dem man sie nicht sucht.
+let _wrsVerlauf = 'tot';   // 'tot' = kumuliert · 'day' = Tagesnetto
+let _wrsVerlaufData = null;   // gerechnete Reihen, vom HTML gefüllt, vom Chart gelesen
+
+function _wrsHistOf(u) {
+  const h = u?.map_data?.salaryHistory;
+  return Array.isArray(h) ? h : [];
+}
+function _wrsTsOf(h) {
+  return h.ts || (h.d ? new Date(h.d + 'T00:00:00').getTime() : 0);
+}
+function _wrsDayKey(t) {
+  const d = new Date(t);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0')
+       + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+// Liefert { tage:[key], reihen:[{name, me, werte:[]}] } für die gewählte Größe.
+function _wrsVerlaufDaten(feld) {
+  const users = wrAllUsers().filter(u => _wrsHistOf(u).some(h => h[feld] != null));
+  const tage = new Set();
+  users.forEach(u => _wrsHistOf(u).forEach(h => {
+    if (h[feld] == null) return;
+    const t = _wrsTsOf(h); if (t) tage.add(_wrsDayKey(t));
+  }));
+  const keys = [...tage].sort();
+  const me = (typeof currentUserData !== 'undefined' && currentUserData?.id) || null;
+  const reihen = users.map(u => {
+    const m = {}, mTs = {};
+    _wrsHistOf(u).forEach(h => {
+      const t = _wrsTsOf(h); if (!t || h[feld] == null) return;
+      const k = _wrsDayKey(t);
+      // ⚠️ Je Tag bis zu fünf Snapshots. Beim KUMULIERTEN Wert ist der höchste der
+      // Tagesendstand; beim TAGESNETTO kann der Wert über den Tag auch fallen
+      // (Einsatzkosten, Sold, Bauaufträge) — dort wäre das Maximum der beste
+      // Zwischenstand, nicht das Ergebnis. Also der LETZTE.
+      if (feld === 'wrTot') {
+        m[k] = Math.max(k in m ? m[k] : -Infinity, h[feld]);
+      } else if (!(k in mTs) || t >= mTs[k]) {
+        m[k] = h[feld]; mTs[k] = t;
+      }
+    });
+    return { name: u.name, me: u.id === me, werte: keys.map(k => (k in m ? m[k] : null)) };
+  });
+  // Der eigene Eintrag zuerst — man sucht sich selbst.
+  reihen.sort((a, b) => (b.me ? 1 : 0) - (a.me ? 1 : 0) || a.name.localeCompare(b.name));
+  return { tage: keys, reihen };
+}
+
+function wrsVerlaufHtml() {
+  let d = null;
+  try { d = _wrsVerlaufDaten(_wrsVerlauf === 'day' ? 'wrDay' : 'wrTot'); }
+  catch (e) { console.warn('[wr-stats] Verlauf:', e.message); }
+
+  const btn = (k, label) => `<button class="wrs-sort${_wrsVerlauf === k ? ' active' : ''}"
+    data-wrs-verlauf="${k}">${label}</button>`;
+  const kopf = `<div class="wr-card-title">📈 Einnahme-Verlauf
+      <span class="wr-sub">— alle CC aus dem All, im Vergleich</span></div>
+    <div class="wrs-sortbar">${btn('tot', '🚀 Gesamt (kumuliert)')}${btn('day', '📅 Pro Tag (netto)')}</div>`;
+
+  // ⚠️ Der Verlauf baut sich erst auf — das MUSS dastehen, sonst wirkt ein leerer Kasten
+  // wie ein Defekt. (Rückwirkend gibt es ihn nicht: bis zu dieser Version hat niemand
+  // die Zahlen über die Zeit festgehalten.)
+  if (!d || d.tage.length < 1) {
+    _wrsVerlaufData = null;
+    return `<div class="wr-card">${kopf}
+      <div class="wrs-empty">Noch keine Verlaufsdaten. Der Verlauf wird alle 5 Stunden
+        fortgeschrieben und füllt sich ab jetzt — schau später wieder vorbei.</div></div>`;
+  }
+  _wrsVerlaufData = d;
+
+  // Momentanwerte als Tabelle daneben: die Linie zeigt die Entwicklung, die Zahl den Stand.
+  const me = (typeof currentUserData !== 'undefined' && currentUserData?.id) || null;
+  const zeilen = wrAllUsers().map(u => {
+    const st = wrStatsOf(u);
+    const ds = (typeof DB !== 'undefined' && DB.dayStats) ? DB.dayStats(u) : null;
+    return { name: u.name, me: u.id === me,
+             tot: Math.round(parseFloat(st.ccFromSpace) || 0),
+             tag: Math.round((parseFloat(ds?.cats?.weltraum) || 0) * 100) / 100 };
+  }).filter(r => r.tot > 0 || r.tag !== 0 || r.me)
+    .sort((a, b) => b.tot - a.tot);
+
+  return `<div class="wr-card">${kopf}
+    <div class="wrs-chartwrap"><canvas id="wrs-c-verlauf"></canvas></div>
+    <div class="wrs-tablewrap"><table class="wrs-table">
+      <thead><tr><th>Spieler</th><th>🚀 Gesamt</th><th>📅 Heute (netto)</th></tr></thead>
+      <tbody>${zeilen.map(r => `<tr class="${r.me ? 'wrs-me' : ''}">
+        <td>${_e(r.name)}</td><td><strong>${_f(r.tot)}</strong></td>
+        <td>${r.tag ? (r.tag < 0 ? '' : '+') + _f(r.tag) : '—'}</td></tr>`).join('')
+        || '<tr><td colspan="3">Noch niemand im All.</td></tr>'}</tbody>
+    </table></div>
+    <div class="wrs-note"><strong>🚀 Gesamt</strong> zählt jede CC-Einnahme aus dem All
+      seit Einbau der Statistik (Kampfbeute, 🏭 Raffinerie, ⚗️ Transmuter, abgewehrte
+      Wellen) — diese Linie steigt immer. <strong>📅 Pro Tag</strong> ist das
+      <em>Netto</em> der Rubrik: dieselben Einnahmen minus alles, was das All an dem Tag
+      gekostet hat (Schiffbau, Sold, Flotten-Einsatzkosten, Kolonie-Ausbau). Sie darf
+      unter null gehen — und genau dann trägt sich die Expansion gerade nicht.
+      Die Tabelle zeigt den <strong>aktuellen</strong> Stand, die Linie bis zum letzten
+      Snapshot (alle 5 Stunden).</div>
+  </div>`;
+}
+
 function wrsPanelHtml() {
   try {
     const rows = wrsRows();
-    return wrsRanglisteHtml(rows) + wrsRegionenHtml() + wrsSteckbriefHtml()
+    return wrsRanglisteHtml(rows) + wrsVerlaufHtml() + wrsRegionenHtml() + wrsSteckbriefHtml()
          + wrsDetailHtml() + wrsClanHtml();
   } catch (e) {
     console.warn('[wr-stats] Panel:', e.message);
@@ -1085,6 +1243,9 @@ function wrsPanelHtml() {
         if (s) { _wrsSort = s.dataset.wrsSort; window.wrRender(); return; }
         const d = e.target.closest('[data-wrs-detail]');
         if (d) { _wrsDetail = d.dataset.wrsDetail; window.wrRender(); return; }
+        // 📈 Umschalter des Einnahme-Verlaufs (kumuliert / pro Tag).
+        const v = e.target.closest('[data-wrs-verlauf]');
+        if (v) { _wrsVerlauf = v.dataset.wrsVerlauf; window.wrRender(); return; }
       });
       // Diagramme erst NACH dem Einhängen — ein <canvas> ausserhalb des DOM
       // hat keine Grösse, Chart.js zeichnet dann ins Leere.
