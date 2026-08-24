@@ -837,13 +837,13 @@ const DB = (() => {
   }
 
   async function _writeSalaryPoint(memberId, sal) {
-    // 🚀 27ag: `day_stats` kommt mit — daraus stammt der Weltraum-Tagesnetto.
+    // 🚀 Einnahme-Verlauf: `day_stats` kommt mit — daraus stammt der Weltraum-Tagesnetto.
     const { data: fresh } = await _sb.from('members').select('map_data, day_stats').eq('id', memberId).single();
     const md0    = (fresh && fresh.map_data) || {};
     const bucket = _salaryBucket();
     const hist   = Array.isArray(md0.salaryHistory) ? md0.salaryHistory.slice() : [];
 
-    // 🚀 27ag (JP 2026-08-22: „kannst du noch in statistik die Tageseinnahmen tracken und
+    // 🚀 EINNAHME-VERLAUF (JP 2026-08-22: „kannst du noch in statistik die Tageseinnahmen tracken und
     // den Gesamtverlauf anzeigen aller Einnahmen im Weltraum?").
     // ⚠️ ES WIRD NICHTS NEU GEZÄHLT. Beide Zahlen existieren bereits:
     //   • `map_data.wrStats.ccFromSpace` — der Karriere-Zähler aus weltraum_stats.js,
@@ -856,6 +856,11 @@ const DB = (() => {
     // ⚠️ Der Snapshot ist der EINZIGE Ort im Projekt, der eine Zeitreihe je Mitglied
     // führt und für ALLE Mitglieder läuft (recordSalarySnapshotsAll). Genau deshalb
     // hängen die zwei Felder hier und nicht an einem neuen Mechanismus.
+    // ⚠️ REINE DATENHALTUNG, KEINE ANZEIGE-ENTSCHEIDUNG. Gezeichnet werden die beiden
+    // Reihen im 📊-Reiter des Weltraum-Moduls (`wrsVerlaufHtml` in weltraum_stats.js).
+    // Sie standen zwischenzeitlich im Gehalts-Diagramm der Gesamtstatistik; dass der
+    // Umzug hier NICHTS geändert hat, ist der Beleg dafür, dass der Schnitt stimmt —
+    // wo eine Zahl entsteht und wo sie gezeigt wird, sind zwei Fragen.
     let wrTot = null, wrDay = null;
     try {
       const st = md0.wrStats;
