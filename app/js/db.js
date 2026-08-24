@@ -861,10 +861,31 @@ const DB = (() => {
     // Sie standen zwischenzeitlich im Gehalts-Diagramm der Gesamtstatistik; dass der
     // Umzug hier NICHTS geändert hat, ist der Beleg dafür, dass der Schnitt stimmt —
     // wo eine Zahl entsteht und wo sie gezeigt wird, sind zwei Fragen.
-    let wrTot = null, wrDay = null;
+    // 🪨 Und dieselbe Behandlung für die ROHSTOFFE (JP 2026-08-24: „Auch die statistische
+    // Übersicht in Weltraum/Statistik zu den Rohstoffeinnahmen fehlt").
+    // ⚠️ Wieder nichts Neues gezählt: `wrStats` führt seit jeher je Sorte DREI Herkünfte
+    // (mined* = Kolonien & Routen · flight* = Abbau-Flüge · loot* = Kampfbeute). Hier
+    // wird nur ihre SUMME je Sorte über die Zeit festgehalten — dieselbe Zahl, die die
+    // Rohstofftabelle im Steckbrief in der Σ-Spalte zeigt.
+    // ⚠️ Kurze Schlüssel (e/k/p/q): der Snapshot liegt in `map_data.salaryHistory` und
+    // wächst mit jedem 5-Stunden-Punkt. Vier lange Namen × 4 Sorten × N Punkte wären
+    // reiner Ballast in einem Blob, der ohnehin schon gross ist.
+    let wrTot = null, wrDay = null, wrRes = null;
     try {
       const st = md0.wrStats;
       if (st && typeof st === 'object') wrTot = Math.round(parseFloat(st.ccFromSpace) || 0);
+      if (st && typeof st === 'object') {
+        const s = (a, b, c) => Math.round((parseFloat(st[a]) || 0) + (parseFloat(st[b]) || 0)
+                                        + (parseFloat(st[c]) || 0));
+        const r = { e: s('minedErz', 'flightErz', 'lootErz'),
+                    k: s('minedKri', 'flightKri', 'lootKri'),
+                    p: s('minedPla', 'flightPla', 'lootPla'),
+                    q: s('minedQua', 'flightQua', 'lootQua') };
+        // ⚠️ Nur schreiben, wenn überhaupt etwas drinsteht — ein Punkt mit vier Nullen
+        // wäre von „noch nie Rohstoffe gesehen" nicht zu unterscheiden und liesse die
+        // Linie bei null starten, obwohl es keine Messung gab.
+        if (r.e || r.k || r.p || r.q) wrRes = r;
+      }
       const ds = fresh && fresh.day_stats;
       // ⚠️ NUR wenn der Datensatz von HEUTE ist. Ein alter day_stats-Stand würde sonst
       // als heutiger Wert in den Snapshot wandern und dort für immer stehen bleiben.
@@ -879,6 +900,7 @@ const DB = (() => {
     // nichts verdient" — zwei verschiedene Dinge, die man nicht verwechseln darf.
     if (wrTot != null) entry.wrTot = wrTot;
     if (wrDay != null) entry.wrDay = wrDay;
+    if (wrRes != null) entry.wrRes = wrRes;
 
     const idx    = hist.findIndex(h => _salaryTsOf(h) === bucket);
     if (idx >= 0) hist[idx] = entry; else hist.push(entry);

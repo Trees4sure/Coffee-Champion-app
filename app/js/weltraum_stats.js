@@ -1106,7 +1106,7 @@ function wrsBuildCharts() {
 // der Weltraumstatistik haben"). Es stand kurz im Gehalts-Diagramm, weil dort Overlay,
 // Farben und Umschalter schon lagen — der Preis dafür war, dass eine Weltraum-Frage in
 // einem Reiter beantwortet wird, in dem man sie nicht sucht.
-let _wrsVerlauf = 'tot';   // 'tot' = kumuliert · 'day' = Tagesnetto
+let _wrsVerlauf = 'tot';   // 'tot' = kumulierter Stand · 'day' = Tageswert/Zuwachs
 let _wrsVerlaufData = null;   // gerechnete Reihen, vom HTML gefüllt, vom Chart gelesen
 
 function _wrsHistOf(u) {
@@ -1122,33 +1122,89 @@ function _wrsDayKey(t) {
        + '-' + String(d.getDate()).padStart(2, '0');
 }
 
-// Liefert { tage:[key], reihen:[{name, me, werte:[]}] } für die gewählte Größe.
-function _wrsVerlaufDaten(feld) {
-  const users = wrAllUsers().filter(u => _wrsHistOf(u).some(h => h[feld] != null));
+// 🪨 Welche Grösse wird gezeigt? (JP 2026-08-24: „Auch die statistische Übersicht in
+// Weltraum/Statistik zu den Rohstoffeinnahmen fehlt.")
+// ⚠️ ZWEI ACHSEN statt sieben Knöpfen: WAS (CC oder eine Rohstoffsorte) × WIE (kumuliert
+// oder Zuwachs je Tag). Sieben Einzelknöpfe hätten dieselbe Information gehabt, aber der
+// Spieler müsste sich die Kombination selbst zusammensuchen.
+let _wrsSorte = 'cc';   // 'cc' | 'e' | 'k' | 'p' | 'q'
+const WRS_SORTEN = [
+  { key:'cc', ic:'🪙', name:'CC' },
+  { key:'e',  ic:'erz', name:'Erz' },
+  { key:'k',  ic:'kri', name:'Kristall' },
+  { key:'p',  ic:'pla', name:'Plasmoid' },
+  { key:'q',  ic:'qua', name:'Quantenschaum' },
+];
+function _wrsSortenIc(s) {
+  return (s.key === 'cc') ? s.ic : ((typeof wrIc === 'function') ? wrIc(s.ic) : '•');
+}
+
+// Kumulierter Wert eines Snapshots für die gewählte Sorte, oder null.
+function _wrsPunkt(h, sorte) {
+  if (sorte === 'cc') return (h.wrTot == null) ? null : h.wrTot;
+  const r = h.wrRes;
+  if (!r || typeof r !== 'object') return null;
+  const v = r[sorte];
+  return (v == null) ? null : v;
+}
+
+// Liefert { tage:[key], reihen:[{name, me, werte:[]}] }.
+// modus: 'tot' = kumulierter Stand · 'day' = Zuwachs des Tages
+function _wrsVerlaufDaten(sorte, modus) {
+  const users = wrAllUsers().filter(u => _wrsHistOf(u).some(h => _wrsPunkt(h, sorte) != null));
   const tage = new Set();
   users.forEach(u => _wrsHistOf(u).forEach(h => {
-    if (h[feld] == null) return;
+    if (_wrsPunkt(h, sorte) == null) return;
     const t = _wrsTsOf(h); if (t) tage.add(_wrsDayKey(t));
   }));
   const keys = [...tage].sort();
   const me = (typeof currentUserData !== 'undefined' && currentUserData?.id) || null;
+
   const reihen = users.map(u => {
-    const m = {}, mTs = {};
+    // Tagesendstand je Tag — kumulierte Zähler wachsen über den Tag, also der HÖCHSTE.
+    const stand = {};
     _wrsHistOf(u).forEach(h => {
-      const t = _wrsTsOf(h); if (!t || h[feld] == null) return;
+      const v = _wrsPunkt(h, sorte); if (v == null) return;
+      const t = _wrsTsOf(h); if (!t) return;
       const k = _wrsDayKey(t);
-      // ⚠️ Je Tag bis zu fünf Snapshots. Beim KUMULIERTEN Wert ist der höchste der
-      // Tagesendstand; beim TAGESNETTO kann der Wert über den Tag auch fallen
-      // (Einsatzkosten, Sold, Bauaufträge) — dort wäre das Maximum der beste
-      // Zwischenstand, nicht das Ergebnis. Also der LETZTE.
-      if (feld === 'wrTot') {
-        m[k] = Math.max(k in m ? m[k] : -Infinity, h[feld]);
-      } else if (!(k in mTs) || t >= mTs[k]) {
-        m[k] = h[feld]; mTs[k] = t;
-      }
+      stand[k] = Math.max(k in stand ? stand[k] : -Infinity, v);
     });
-    return { name: u.name, me: u.id === me, werte: keys.map(k => (k in m ? m[k] : null)) };
-  });
+
+    let werte;
+    if (modus === 'tot') {
+      werte = keys.map(k => (k in stand ? stand[k] : null));
+    } else if (sorte === 'cc') {
+      // ⚠️ Beim CC gibt es einen ECHTEN Tageswert: `wrDay` aus `day_stats.cats.weltraum`.
+      // Er ist das NETTO (Einnahmen minus Schiffbau, Sold, Einsatzkosten) und damit die
+      // ehrlichere Zahl als eine Differenz kumulierter Einnahmen — die kennt die
+      // Ausgaben nicht. Deshalb hier die eigene Quelle statt der Differenz.
+      const netto = {}, ts = {};
+      _wrsHistOf(u).forEach(h => {
+        if (h.wrDay == null) return;
+        const t = _wrsTsOf(h); if (!t) return;
+        const k = _wrsDayKey(t);
+        // Ein Tagesnetto kann über den Tag FALLEN — also der LETZTE Wert, nicht der grösste.
+        if (!(k in ts) || t >= ts[k]) { netto[k] = h.wrDay; ts[k] = t; }
+      });
+      werte = keys.map(k => (k in netto ? netto[k] : null));
+    } else {
+      // 🪨 Rohstoffe: es gibt keinen Tageszähler, nur den kumulierten Stand. Der Zuwachs
+      // ist die Differenz zum letzten TAG MIT MESSUNG.
+      // ⚠️ Nicht zum Vortag im Kalender: fehlt der, wäre die Differenz null statt
+      // unbekannt — und ein Spieler, der zwei Tage pausiert, sähe eine Null-Ernte
+      // statt einer Lücke. Der erste gemessene Tag hat keinen Vorgänger und bleibt
+      // deshalb leer: sein „Zuwachs" wäre der gesamte Bestand seit Spielbeginn.
+      let vorher = null;
+      werte = keys.map(k => {
+        if (!(k in stand)) return null;
+        const d = (vorher == null) ? null : Math.max(0, stand[k] - vorher);
+        vorher = stand[k];
+        return d;
+      });
+    }
+    return { name: u.name, me: u.id === me, werte };
+  }).filter(r => r.werte.some(v => v != null));
+
   // Der eigene Eintrag zuerst — man sucht sich selbst.
   reihen.sort((a, b) => (b.me ? 1 : 0) - (a.me ? 1 : 0) || a.name.localeCompare(b.name));
   return { tage: keys, reihen };
@@ -1156,14 +1212,26 @@ function _wrsVerlaufDaten(feld) {
 
 function wrsVerlaufHtml() {
   let d = null;
-  try { d = _wrsVerlaufDaten(_wrsVerlauf === 'day' ? 'wrDay' : 'wrTot'); }
+  try { d = _wrsVerlaufDaten(_wrsSorte, _wrsVerlauf); }
   catch (e) { console.warn('[wr-stats] Verlauf:', e.message); }
 
+  const so = WRS_SORTEN.find(s => s.key === _wrsSorte) || WRS_SORTEN[0];
   const btn = (k, label) => `<button class="wrs-sort${_wrsVerlauf === k ? ' active' : ''}"
     data-wrs-verlauf="${k}">${label}</button>`;
+  // ⚠️ Eine Sorte, für die noch kein Snapshot existiert, wird ausgegraut statt versteckt:
+  // sonst wechselt die Knopfleiste ihr Aussehen, während sich der Verlauf aufbaut, und
+  // man hält eine fehlende Sorte für einen Fehler.
+  const sbtn = (s) => {
+    const da = wrAllUsers().some(u => _wrsHistOf(u).some(h => _wrsPunkt(h, s.key) != null));
+    return `<button class="wrs-sort${_wrsSorte === s.key ? ' active' : ''}"
+      data-wrs-sorte="${s.key}"${da ? '' : ' disabled style="opacity:.45"'}
+      title="${da ? '' : 'noch keine Messpunkte'}">${_wrsSortenIc(s)} ${_e(s.name)}</button>`;
+  };
   const kopf = `<div class="wr-card-title">📈 Einnahme-Verlauf
-      <span class="wr-sub">— alle CC aus dem All, im Vergleich</span></div>
-    <div class="wrs-sortbar">${btn('tot', '🚀 Gesamt (kumuliert)')}${btn('day', '📅 Pro Tag (netto)')}</div>`;
+      <span class="wr-sub">— ${_e(so.name)} aus dem All, im Vergleich</span></div>
+    <div class="wrs-sortbar">${WRS_SORTEN.map(sbtn).join('')}</div>
+    <div class="wrs-sortbar">${btn('tot', '📊 Gesamt (kumuliert)')}${
+      btn('day', _wrsSorte === 'cc' ? '📅 Pro Tag (netto)' : '📅 Zuwachs je Tag')}</div>`;
 
   // ⚠️ Der Verlauf baut sich erst auf — das MUSS dastehen, sonst wirkt ein leerer Kasten
   // wie ein Defekt. (Rückwirkend gibt es ihn nicht: bis zu dieser Version hat niemand
@@ -1176,32 +1244,51 @@ function wrsVerlaufHtml() {
   }
   _wrsVerlaufData = d;
 
-  // Momentanwerte als Tabelle daneben: die Linie zeigt die Entwicklung, die Zahl den Stand.
+  // Momentanwerte als Tabelle daneben: die Linie zeigt die Entwicklung, die Zahl den
+  // Stand. ⚠️ AUS DEM LEBENDEN ZÄHLER, nicht aus dem Snapshot — der ist bis zu fünf
+  // Stunden alt, und „mein aktueller Stand" ist genau das, was man hier nachschlägt.
   const me = (typeof currentUserData !== 'undefined' && currentUserData?.id) || null;
+  const summe = (st, a, b, c) => Math.round((parseFloat(st[a]) || 0)
+    + (parseFloat(st[b]) || 0) + (parseFloat(st[c]) || 0));
   const zeilen = wrAllUsers().map(u => {
     const st = wrStatsOf(u);
     const ds = (typeof DB !== 'undefined' && DB.dayStats) ? DB.dayStats(u) : null;
     return { name: u.name, me: u.id === me,
-             tot: Math.round(parseFloat(st.ccFromSpace) || 0),
-             tag: Math.round((parseFloat(ds?.cats?.weltraum) || 0) * 100) / 100 };
-  }).filter(r => r.tot > 0 || r.tag !== 0 || r.me)
-    .sort((a, b) => b.tot - a.tot);
+             cc:  Math.round(parseFloat(st.ccFromSpace) || 0),
+             tag: Math.round((parseFloat(ds?.cats?.weltraum) || 0) * 100) / 100,
+             e: summe(st, 'minedErz', 'flightErz', 'lootErz'),
+             k: summe(st, 'minedKri', 'flightKri', 'lootKri'),
+             p: summe(st, 'minedPla', 'flightPla', 'lootPla'),
+             q: summe(st, 'minedQua', 'flightQua', 'lootQua') };
+  }).filter(r => r.cc > 0 || r.e || r.k || r.p || r.q || r.me)
+    .sort((a, b) => b.cc - a.cc);
 
+  const ic = (k, fb) => (typeof wrIc === 'function') ? wrIc(k) : fb;
+  // ⚠️ ALLE Sorten in der Tabelle, nicht nur die gewählte: die Linie beantwortet
+  // „wie entwickelt es sich", die Tabelle „wo stehe ich überall". Wer sie an den
+  // Umschalter koppelte, zwänge zu fünf Klicks für einen Überblick.
   return `<div class="wr-card">${kopf}
     <div class="wrs-chartwrap"><canvas id="wrs-c-verlauf"></canvas></div>
     <div class="wrs-tablewrap"><table class="wrs-table">
-      <thead><tr><th>Spieler</th><th>🚀 Gesamt</th><th>📅 Heute (netto)</th></tr></thead>
+      <thead><tr><th>Spieler</th><th>🪙 CC</th><th>📅 heute</th>
+        <th>${ic('erz', '🪨')}</th><th>${ic('kri', '💎')}</th>
+        <th>${ic('pla', '🟣')}</th><th>${ic('qua', '🌀')}</th></tr></thead>
       <tbody>${zeilen.map(r => `<tr class="${r.me ? 'wrs-me' : ''}">
-        <td>${_e(r.name)}</td><td><strong>${_f(r.tot)}</strong></td>
-        <td>${r.tag ? (r.tag < 0 ? '' : '+') + _f(r.tag) : '—'}</td></tr>`).join('')
-        || '<tr><td colspan="3">Noch niemand im All.</td></tr>'}</tbody>
+        <td>${_e(r.name)}</td><td><strong>${_f(r.cc)}</strong></td>
+        <td>${r.tag ? (r.tag < 0 ? '' : '+') + _f(r.tag) : '—'}</td>
+        <td>${r.e ? _f(r.e) : '·'}</td><td>${r.k ? _f(r.k) : '·'}</td>
+        <td>${r.p ? _f(r.p) : '·'}</td><td>${r.q ? _f(r.q) : '·'}</td></tr>`).join('')
+        || '<tr><td colspan="7">Noch niemand im All.</td></tr>'}</tbody>
     </table></div>
-    <div class="wrs-note"><strong>🚀 Gesamt</strong> zählt jede CC-Einnahme aus dem All
-      seit Einbau der Statistik (Kampfbeute, 🏭 Raffinerie, ⚗️ Transmuter, abgewehrte
-      Wellen) — diese Linie steigt immer. <strong>📅 Pro Tag</strong> ist das
-      <em>Netto</em> der Rubrik: dieselben Einnahmen minus alles, was das All an dem Tag
-      gekostet hat (Schiffbau, Sold, Flotten-Einsatzkosten, Kolonie-Ausbau). Sie darf
-      unter null gehen — und genau dann trägt sich die Expansion gerade nicht.
+    <div class="wrs-note"><strong>📊 Gesamt</strong> ist der kumulierte Zähler seit Einbau
+      der Statistik — beim CC jede Einnahme aus dem All (Kampfbeute, 🏭 Raffinerie,
+      ⚗️ Transmuter, abgewehrte Wellen), bei den Rohstoffen die Summe aus Kolonien &amp;
+      Routen, Abbau-Flügen und Kampfbeute. Diese Linien steigen immer.<br>
+      <strong>📅 Pro Tag</strong> ist beim CC das <em>Netto</em> der Rubrik (Einnahmen
+      minus Schiffbau, Sold, Einsatzkosten, Kolonie-Ausbau) — es darf unter null gehen.
+      Bei den Rohstoffen gibt es keinen Ausgaben-Zähler, dort steht der <em>Zuwachs</em>
+      gegenüber dem letzten gemessenen Tag; verbrauchte Rohstoffe sind darin nicht
+      enthalten.<br>
       Die Tabelle zeigt den <strong>aktuellen</strong> Stand, die Linie bis zum letzten
       Snapshot (alle 5 Stunden).</div>
   </div>`;
@@ -1246,6 +1333,9 @@ function wrsPanelHtml() {
         // 📈 Umschalter des Einnahme-Verlaufs (kumuliert / pro Tag).
         const v = e.target.closest('[data-wrs-verlauf]');
         if (v) { _wrsVerlauf = v.dataset.wrsVerlauf; window.wrRender(); return; }
+        // 🪨 Umschalter der Sorte (CC / Erz / Kristall / Plasmoid / Quantenschaum).
+        const so = e.target.closest('[data-wrs-sorte]');
+        if (so && !so.disabled) { _wrsSorte = so.dataset.wrsSorte; window.wrRender(); return; }
       });
       // Diagramme erst NACH dem Einhängen — ein <canvas> ausserhalb des DOM
       // hat keine Grösse, Chart.js zeichnet dann ins Leere.

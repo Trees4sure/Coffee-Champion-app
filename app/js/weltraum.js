@@ -1253,15 +1253,68 @@ function wrDispatchCc(fleet) {
   return Math.ceil(Math.max(0, wrFleetPower(fleet || {})) * WR_DISPATCH_CC);
 }
 
-// ⚡ NOTFALL-BOOST (27ac): 5 × Kristall-Treibstoff der Reise je halbe Stunde, min. 5 💎.
-// ⚠️ SPIEGEL von `_space_boost_cost`. Der Bezug ist `trip.fuel` — der Kristall-Posten,
-// den diese Reise beim Start bezahlt hat; er liegt seit 22h im Reisedatensatz.
-const WR_BOOST_MIN     = 5;    // 💎 Untergrenze (fängt den treibstofffreien Ring-1-Flug ab)
-const WR_BOOST_FACTOR  = 5;
+// ⚡ NOTFALL-BOOST (27ac, neu gefasst in 27ah).
+// JP 2026-08-24 nach dem Live-Test: „30 Minuten Verkürzung nicht nur 5 Kristall, sondern
+// 20 % der Flugkosten. Bei 5x ausführen (aktuelle Begrenzung) sind es nochmal dieselben
+// Flugkosten oben drauf, also 100%"
+//
+// ⚠️ WARUM DER ERSTE PREIS DANEBENLAG: „fünfmal die Kosten von Kristall" hatte ich auf
+// `trip.fuel` bezogen — den Kristall-Treibstoff aus 22h. Der ist aber nur EINER von vier
+// Kostenposten und auf Ring 1 gleich null; dort griff nur noch die Untergrenze von 5 💎.
+// **Ein Anteil an einer Teilmenge ist kein Anteil an den Kosten.**
+// Jetzt: 20 % ALLER Flugkosten je Stufe (CC · 💎 · 🟣 · 🌀), höchstens fünf Stufen.
+//
+// ⚠️ AUFSUMMIERT GERECHNET, NICHT FÜNFMAL GERUNDET — sonst läge die Summe der fünf
+// Stufen über den versprochenen 100 %. Spiegel von `_space_boost_step` (SQL 27ah).
+const WR_BOOST_MAX     = 5;    // Stufen je Reise
 const WR_BOOST_MINUTES = 30;   // Zeitgewinn je Stufe
-function wrBoostCost(trip) {
-  return Math.max(WR_BOOST_MIN,
-    Math.ceil(Math.max(0, parseFloat(trip?.fuel) || 0) * WR_BOOST_FACTOR));
+
+// Die vollen Flugkosten einer Reise. Ein 🛡️ Garnisons-Transport trägt keine
+// Kostenfelder — für ihn wird gerechnet, was dieselben Schiffe als Reise gekostet
+// HÄTTEN (Spiegel von `_space_boost_total`). Der Transport bleibt kostenlos; bezahlt
+// wird nur die Eile.
+function wrBoostTotal(trip, ring) {
+  if (!trip || typeof trip !== 'object') return { cc: 0, kri: 0, pla: 0, qua: 0 };
+  if ('dispatchCc' in trip || 'fuel' in trip) {
+    return { cc:  Math.max(0, parseFloat(trip.dispatchCc) || 0),
+             kri: Math.max(0, parseFloat(trip.fuel)       || 0),
+             pla: Math.max(0, parseFloat(trip.fuelPla)    || 0),
+             qua: Math.max(0, parseFloat(trip.fuelQua)    || 0) };
+  }
+  const ships = trip.ships || {};
+  const r = Math.max(1, parseInt(ring, 10) || 1);
+  const exo = wrTripExoFuel(ships, r);
+  return { cc:  wrDispatchCc(ships),
+           kri: wrTripFuel(ships, r),
+           pla: exo.pla, qua: exo.qua };
+}
+
+// Preis der (done+1)-ten Stufe. `done` = wie viele Boosts diese Reise schon hatte.
+function wrBoostCost(trip, ring, done) {
+  const t = wrBoostTotal(trip, ring);
+  const n = Math.max(0, Math.min(WR_BOOST_MAX - 1, parseInt(done, 10) || 0));
+  const st = (v) => Math.ceil(v * (n + 1) / WR_BOOST_MAX) - Math.ceil(v * n / WR_BOOST_MAX);
+  return { cc: st(t.cc), kri: st(t.kri), pla: st(t.pla), qua: st(t.qua) };
+}
+
+// Reicht der Vorrat für diese Stufe? Liefert die fehlenden Posten (leer = alles da).
+function wrBoostFehlt(m, k) {
+  const out = [];
+  if (k.cc  > (parseFloat(m?.coins) || 0)) out.push(`${wrFmt(k.cc)} CC`);
+  if (k.kri > wrKristall(m))               out.push(`${wrFmt(k.kri)} 💎`);
+  if (k.pla > wrPlasmoid(m))               out.push(`${wrFmt(k.pla)} 🟣`);
+  if (k.qua > wrQuantum(m))                out.push(`${wrFmt(k.qua)} 🌀`);
+  return out;
+}
+
+// Preisschild als HTML — nur die Posten, die wirklich anfallen.
+function wrBoostPreisHtml(k) {
+  const t = [];
+  if (k.cc  > 0) t.push(`${wrFmt(k.cc)} CC`);
+  if (k.kri > 0) t.push(`${wrFmt(k.kri)} ${wrIc('kri')}`);
+  if (k.pla > 0) t.push(`${wrFmt(k.pla)} ${wrIc('pla')}`);
+  if (k.qua > 0) t.push(`${wrFmt(k.qua)} ${wrIc('qua')}`);
+  return t.join(' · ') || 'frei';
 }
 
 function _wrEsc(s) { return (typeof _esc === 'function') ? _esc(s) : String(s == null ? '' : s); }
@@ -1864,6 +1917,16 @@ function wrRender() {
         ${wrHafenHtml(m)}
         ${WR_RES_NOTE}
         ${wrRaffinerieHtml(m)}
+        ${/* ⚗️ 2026-08-24 hierher gezogen (JP: „Der Transmuter ist weiterhin unter
+              Forschung"). Er gehört direkt UNTER die Raffinerie: beide wandeln
+              Rohstoffe in CC, und man entscheidet sich zwischen ihnen. Eine Abwägung
+              trifft man nur, wenn beide Optionen nebeneinander stehen — vorher lagen
+              sie zwei Reiter auseinander. */''}
+        ${wrTransmuterHtml(m)}
+        ${/* 🚨 2026-08-24: die Gefahrenliste des GANZEN Clans, VOR den eigenen Kolonien.
+              Sie ist zeitkritisch — was zurückfällt, ist weg, und die Wächter stehen
+              danach wieder im ganzen Quadranten im Weg. */''}
+        ${wrClanRiskHtml(m)}
         ${wrColoniesHtml(m)}
       </div>
       <div${_wrTab === 'werft' ? '' : ' hidden'}>${wrWerftHtml(m)}</div>
@@ -2189,47 +2252,102 @@ async function wrTradeCancel(tradeId) {
 // Protokoll, das auf dem Telefon anders aussieht als am Rechner, muss das sagen.
 // ⚠️ Jeder Zugriff in try/catch (Regel 3): `localStorage` wirft in privaten Fenstern
 // und bei gesperrten Seitendaten, und eine Ernte darf daran nie scheitern.
-const WR_ERNTE_LOG_MAX = 40;
+// ⚠️ JE TAG EIN EINTRAG, nicht 40 Einzelposten (JP 2026-08-24: „Auch die
+// Rohstoff-Einnahmeübersicht beim Ereignis-Protokoll soll je einen Tag zusammenfassen.
+// und nicht 40 Einträge halten.").
+// ⚠️ DIE AUTO-ERNTE LÄUFT BEI JEDEM TAB-ÖFFNEN (gedrosselt auf 10 Minuten). Vierzig
+// Einträge waren deshalb keine vierzig Ereignisse, sondern oft ein einziger Tag — genau
+// dasselbe Muster wie beim Passiv-Einkommen im Tages-Log, das seit 27ac verdichtet wird.
+// **Ein Ereignis, das mehrmals täglich von selbst eintritt, ist keine Zeile wert.**
+// Verdichtet wird hier beim SCHREIBEN (anders als im Tages-Log, wo die Rohdaten für die
+// Bilanz gebraucht werden): dieses Protokoll ist reine Anzeige, ein Rohbestand hätte
+// keinen zweiten Leser.
+const WR_ERNTE_TAGE = 14;   // wie viele TAGE aufgehoben werden
 function _wrErnteKey() { return 'wr_ernte_' + (_wrMember?.id || 'x'); }
+function _wrErnteTag(ts) {
+  // Lokales Datum, NICHT toISOString() — sonst läge der Tageswechsel je nach Zeitzone
+  // daneben (die Timezone-Kette aus Teil 15).
+  const d = new Date(ts);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0')
+       + '-' + String(d.getDate()).padStart(2, '0');
+}
+// Liest das Protokoll und bringt Altbestand auf das Tagesformat.
+// ⚠️ Die alten Einträge tragen `t` (Zeitstempel) statt `d` (Tag). Sie werden gefaltet
+// statt weggeworfen — wer gestern geerntet hat, soll das morgen noch sehen.
 function wrErnteLog() {
   try {
-    const r = JSON.parse(localStorage.getItem(_wrErnteKey()) || '[]');
-    return Array.isArray(r) ? r : [];
+    const roh = JSON.parse(localStorage.getItem(_wrErnteKey()) || '[]');
+    if (!Array.isArray(roh)) return [];
+    const tage = {};
+    for (const x of roh) {
+      if (!x || typeof x !== 'object') continue;
+      const d = x.d || (x.t ? _wrErnteTag(x.t) : null);
+      if (!d) continue;
+      const a = tage[d] || (tage[d] = { d, erz:0, kri:0, pla:0, qua:0, cc:0, fuel:0, n:0, nAuto:0 });
+      a.erz += Math.round(parseFloat(x.erz) || 0);
+      a.kri += Math.round(parseFloat(x.kri) || 0);
+      a.pla += Math.round(parseFloat(x.pla) || 0);
+      a.qua += Math.round(parseFloat(x.qua) || 0);
+      a.cc  += Math.round(parseFloat(x.cc)  || 0);
+      a.fuel += Math.round(parseFloat(x.fuel) || 0);
+      a.n   += Math.max(1, parseInt(x.n, 10) || 1);
+      // ⚠️ Die Unterscheidung automatisch/von Hand geht durch die Verdichtung NICHT
+      // verloren — sie wird gezählt statt je Zeile gezeigt. Beim Altbestand trägt sie
+      // das Feld `auto`, bei neuen Tagen `nAuto`.
+      a.nAuto += (x.nAuto != null) ? (parseInt(x.nAuto, 10) || 0) : (x.auto ? 1 : 0);
+    }
+    return Object.values(tage).sort((a, b) => a.d.localeCompare(b.d)).slice(-WR_ERNTE_TAGE);
   } catch (e) { return []; }
 }
 function wrErnteLogAdd(res, auto) {
   try {
     const n = (v) => Math.round(parseFloat(v) || 0);
-    const eintrag = { t: Date.now(), auto: !!auto,
-      erz: n(res?.erz), kri: n(res?.kristall), pla: n(res?.plasmoid), qua: n(res?.quantum),
-      cc:  n(res?.cc),  fuel: n(res?.fuel) };
+    const zu = { erz: n(res?.erz), kri: n(res?.kristall),
+                 pla: n(res?.plasmoid), qua: n(res?.quantum),
+                 cc:  n(res?.cc),  fuel: n(res?.fuel) };
     // Eine Ernte ohne Ertrag ist kein Ereignis — sonst füllt sich die Liste mit Nullen,
     // und genau die waren JPs Ausgangsbeschwerde an der Dauerernte-Karte.
-    if (!(eintrag.erz || eintrag.kri || eintrag.pla || eintrag.qua || eintrag.cc)) return;
-    const list = wrErnteLog();
-    list.push(eintrag);
-    localStorage.setItem(_wrErnteKey(), JSON.stringify(list.slice(-WR_ERNTE_LOG_MAX)));
+    if (!(zu.erz || zu.kri || zu.pla || zu.qua || zu.cc)) return;
+    const heute = _wrErnteTag(Date.now());
+    const list  = wrErnteLog();               // bringt Altbestand gleich mit auf Tagesform
+    let a = list.find(x => x.d === heute);
+    if (!a) { a = { d: heute, erz:0, kri:0, pla:0, qua:0, cc:0, fuel:0, n:0, nAuto:0 }; list.push(a); }
+    a.erz += zu.erz; a.kri += zu.kri; a.pla += zu.pla; a.qua += zu.qua;
+    a.cc  += zu.cc;  a.fuel += zu.fuel; a.n += 1;
+    if (auto) a.nAuto = (a.nAuto || 0) + 1;
+    localStorage.setItem(_wrErnteKey(),
+      JSON.stringify(list.sort((x, y) => x.d.localeCompare(y.d)).slice(-WR_ERNTE_TAGE)));
   } catch (e) { /* Regel 3: darf das Einsammeln nie stören */ }
 }
 function wrErnteLogHtml() {
-  const list = wrErnteLog().slice().reverse();
+  const list = wrErnteLog().slice().reverse();   // neuester Tag oben
   if (!list.length) return '';
   const sum = list.reduce((a, x) => ({ erz: a.erz + x.erz, kri: a.kri + x.kri,
     pla: a.pla + x.pla, qua: a.qua + x.qua, cc: a.cc + x.cc }), { erz:0, kri:0, pla:0, qua:0, cc:0 });
   const zeile = (x) => `${wrResListe(x) || '—'}${x.cc > 0 ? ` · +${wrFmt(x.cc)} CC` : ''}`;
+  const heute = _wrErnteTag(Date.now());
+  const label = (d) => {
+    if (d === heute) return 'heute';
+    const p = d.split('-');
+    return `${p[2]}.${p[1]}.`;
+  };
   const rows = list.map(x => `
-    <div class="wr-log-row"><span class="wr-log-t">${wrWhen(x.t)}</span>
-      <span class="wr-log-msg">${x.auto ? '📥' : '✋'} ${zeile(x)}${
-        x.fuel > 0 ? ` <span class="wr-sub">−${wrFmt(x.fuel)} ${wrIc('kri')} Treibstoff</span>` : ''}</span></div>`).join('');
+    <div class="wr-log-row"><span class="wr-log-t">${label(x.d)}</span>
+      <span class="wr-log-msg">📥 ${zeile(x)}${
+        x.fuel > 0 ? ` <span class="wr-sub">−${wrFmt(x.fuel)} ${wrIc('kri')} Treibstoff</span>` : ''}
+        <span class="wr-sub">· ${wrFmt(x.n)}× eingesammelt${
+          x.nAuto ? ` (📥 ${wrFmt(x.nAuto)}× automatisch)` : ''}</span></span></div>`).join('');
   return `<div class="wr-card">
-      <div class="wr-card-title">📥 Deine letzten Ernten
+      <div class="wr-card-title">📥 Deine Ernten je Tag
         <span class="wr-sub">— Kolonien, Dauerernte und Bergung</span></div>
-      <div class="wr-facts"><span>Summe dieser ${list.length}: <strong>${zeile(sum)}</strong></span></div>
+      <div class="wr-facts"><span>Summe dieser ${list.length} Tage:
+        <strong>${zeile(sum)}</strong></span></div>
       <div class="wr-log-list">${rows}</div>
-      <div class="wr-sub">📥 automatisch beim Öffnen des 🚀-Tabs · ✋ per Knopf.
-        Die letzten ${WR_ERNTE_LOG_MAX} Einträge, gespeichert in DIESEM Browser — auf einem
-        anderen Gerät steht hier eine andere Liste. Bewusst nicht im Gruppen-Chat: dort
-        stünde sonst mehrmals täglich eine Zeile von jedem Mitspieler.</div>
+      <div class="wr-sub">Eine Zeile je Tag, die letzten ${WR_ERNTE_TAGE} Tage —
+        eingesammelt wird automatisch bei jedem Öffnen des 🚀-Tabs, deshalb wäre eine
+        Zeile je Vorgang nur Rauschen. Gespeichert in DIESEM Browser; auf einem anderen
+        Gerät steht hier eine andere Liste. Bewusst nicht im Gruppen-Chat: dort stünde
+        sonst mehrmals täglich eine Zeile von jedem Mitspieler.</div>
     </div>`;
 }
 
@@ -2297,6 +2415,32 @@ function wrHudHtml(m) {
 const WR_RES_NOTE = `<div class="wr-note">${wrIc('erz')} Erz und ${wrIc('kri')} Koffeinkristall sind <strong>nicht käuflich</strong> — es gibt sie
       ausschließlich im All. Sie zählen nicht zu deinem CoffeeCoin-Vermögen.</div>`;
 
+// ⚡ Der Boost-Knopf für BEIDE Reisearten (reguläre Reise und 🛡️ Garnisons-Transport).
+// ⚠️ EINE Funktion, zwei Aufrufer — sonst hätte der Garnisons-Knopf seine eigene
+// Preislogik bekommen, und spätestens beim nächsten Balancing wären es zwei Wahrheiten.
+// Es gibt bewusst KEIN What's-New-Popup: dieser Knopf IST die Erklärung der Regel und
+// nennt deshalb Preis, Zeitgewinn, Stufenstand und die Untergrenze.
+function wrBoostBtnHtml(m, trip, arriveMs, ring) {
+  const restMin = (arriveMs - Date.now()) / 60000;
+  const done    = Math.max(0, parseInt(trip?.boosts, 10) || 0);
+  if (done >= WR_BOOST_MAX) {
+    return `<div class="wr-sub">⚡ Alle ${WR_BOOST_MAX} Beschleunigungen verbraucht
+      (−${WR_BOOST_MAX * WR_BOOST_MINUTES} min, zusammen einmal die Flugkosten).</div>`;
+  }
+  if (restMin - WR_BOOST_MINUTES < 5) {
+    return `<div class="wr-sub">⚡ Für einen Boost zu kurz vor der Ankunft
+      (es müssen 5 Minuten übrig bleiben).</div>`;
+  }
+  const k     = wrBoostCost(trip, ring, done);
+  const fehlt = wrBoostFehlt(m, k);
+  return `<button class="wr-btn wr-btn-sm" data-wr-boost="${_wrEsc(trip.id)}"
+      ${fehlt.length ? 'disabled' : ''}>⚡ Beschleunigen −${WR_BOOST_MINUTES} min`
+    + `<span class="wr-btn-sub">${wrBoostPreisHtml(k)}`
+    + (fehlt.length ? ` — es fehlt ${_wrEsc(fehlt.join(' · '))}`
+                    : ` · Stufe ${done + 1} von ${WR_BOOST_MAX}`)
+    + `</span></button>`;
+}
+
 // ── Laufende Reise ───────────────────────────────────────────────────────────
 function wrTripHtml(m, trip) {
   const now = Date.now();
@@ -2332,19 +2476,7 @@ function wrTripHtml(m, trip) {
              // der Regel und muss deshalb vollständig sein: Preis, Zeitgewinn und die
              // Untergrenze stehen dran, nicht in einer Meldung nach dem Klick.
              if (now >= arrive || trip.recalled) return '';
-             const restMin = (arrive - now) / 60000;
-             const kosten  = wrBoostCost(trip);
-             const zuNah   = restMin - WR_BOOST_MINUTES < 5;
-             const knapp   = wrKristall(m) < kosten;
-             if (zuNah) {
-               return `<div class="wr-sub">⚡ Für einen Boost zu kurz vor der Ankunft `
-                    + `(es müssen 5 Minuten übrig bleiben).</div>`;
-             }
-             return `<button class="wr-btn wr-btn-sm" data-wr-boost="${trip.id}"
-                 ${knapp ? 'disabled' : ''}>⚡ Beschleunigen −${WR_BOOST_MINUTES} min`
-               + `<span class="wr-btn-sub">${wrFmt(kosten)} ${wrIc('kri')}`
-               + `${knapp ? ` — du hast nur ${wrFmt(wrKristall(m))}` : ' · beliebig oft'}`
-               + `</span></button>`;
+             return wrBoostBtnHtml(m, trip, arrive, trip.ring);
            })()}
            ${trip.recalled ? '<div class="wr-sub">↩️ Auf dem Rückweg — der Auftrag wurde abgebrochen.</div>' : ''}`}
     </div>`;
@@ -2493,7 +2625,14 @@ function wrGarrisonFleetHtml(m) {
           ? `<div class="wr-ok">🚚 ${trip.kind === 'recall' ? 'Rückholung' : 'Verlegung'} unterwegs
                (${wrFmt(unterwegsN)} Schiffe) — Ankunft in
                <strong data-wr-gareta="${_wrEsc(trip.id || '')}"
-               >${wrCountdown(Date.parse(trip.arriveAt) - Date.now())}</strong>.</div>`
+               >${wrCountdown(Date.parse(trip.arriveAt) - Date.now())}</strong>.</div>
+             ${/* ⚡ 27ah (JP 2026-08-24): „Die Verkürzung soll auch bei der Garnison sein,
+                   sodass man noch den Planeten mit hohen Kosten verbunden aber erreichen
+                   kann." Der Transport selbst bleibt kostenlos — bezahlt wird die EILE,
+                   und zwar zu dem Preis, den dieselben Schiffe als Reise gekostet hätten. */''}
+             ${Date.parse(trip.arriveAt) > Date.now()
+               ? wrBoostBtnHtml(m, trip, Date.parse(trip.arriveAt), p?.ring)
+               : ''}`
           : ''}
         <div class="wr-gar-acts">
           <button class="wr-btn wr-btn-sm" data-wr-goto-colony="${_wrEsc(pid)}"
@@ -3109,6 +3248,14 @@ function wrTechHtml(m) {
               ><span class="wr-fl-fb">${a.icon}</span><span class="wr-zoom-hint">🔍</span></span>
             <strong class="wr-tech-name">${_wrEsc(t.name)}</strong>
             <span class="wr-tech-desc wr-sub">${wrIcText(t.wirkung)}</span>
+            ${/* ⚗️ 2026-08-24: Wegweiser für die Techniken, deren GERÄT woanders steht.
+                  Der Transmuter ist in den 🛰️ Raumhafen umgezogen (neben die Raffinerie);
+                  ohne diesen Hinweis sucht ihn genau hier, wer ihn gerade erforscht hat —
+                  und findet nichts. Eine Funktion umzuziehen heisst, an ihrem alten Platz
+                  eine Wegbeschreibung zu hinterlassen. */''}
+            ${(t.key === 'wt_f9' && wrHasTech(m, 'wt_f9'))
+              ? '<span class="wr-tech-desc wr-ok">→ Das Gerät steht im 🛰️ Raumhafen, unter der 🏭 Raffinerie.</span>'
+              : ''}
             ${/* ⏱️ 27q: die Dauer gehört NEBEN die Kosten — sie ist der zweite Preis.
                   Ohne sie liess sich nicht planen (JP), obwohl das Labor immer nur EIN
                   Projekt gleichzeitig annimmt: wer die Laufzeit nicht kennt, weiss auch
@@ -3131,7 +3278,15 @@ function wrTechHtml(m) {
       </div>`;
   }).join('');
   const sp = wrTechSpeed(m), bt = Math.round((1 - wrTechBuildTime(m)) * 100);
-  return `${wrTransmuterHtml(m)}<div class="wr-card">
+  // ⚗️ 2026-08-24: Der Transmuter steht NICHT mehr hier (JP: „Der Transmuter ist
+  // weiterhin unter Forschung"). Er wandelt Rohstoffe in CC — dieselbe Aufgabe wie die
+  // 🏭 Raffinerie, und die steht im 🛰️ Raumhafen. Hier war er nur, WEIL ihn eine
+  // Forschung freischaltet.
+  // ⚠️ „Freigeschaltet durch" ist kein guter Ort für „benutzt für". Gesucht wird ein
+  // Gerät bei dem, was es tut — dieselbe Diagnose wie bei den Flottenverbänden (D1) und
+  // beim Einnahme-Verlauf, den ich erst in die falsche Statistik gehängt hatte.
+  // Ein Verweis bleibt: wer die Technik hier sieht, soll wissen, wo sie steht.
+  return `<div class="wr-card">
       <div class="wr-card-title">🔬 Weltraum-Technik
         <span class="wr-sub">verstärkt, was du schon hast · ein Projekt gleichzeitig,
           Dauer nach Stufe (2 h → 5 Tage)</span></div>
@@ -3158,7 +3313,11 @@ function wrTechHtml(m) {
     </div>`;
 }
 
-// ⚗️ Transmuter (wt_f9): Ring-Rohstoffe → CC. Erscheint im Forschungs-Tab, sobald erforscht.
+// ⚗️ Transmuter (wt_f9): Ring-Rohstoffe → CC.
+// ⚠️ STEHT SEIT 2026-08-24 IM 🛰️ RAUMHAFEN, direkt unter der 🏭 Raffinerie — nicht
+// mehr im Forschungs-Tab. Beide wandeln Rohstoffe in CC; man entscheidet sich
+// zwischen ihnen, und das geht nur nebeneinander. Die Forschung schaltet ihn frei,
+// aber „freigeschaltet durch“ ist kein Ort für „benutzt für“.
 // ⚠️ CLIENT-SYNC-PFLICHT: Spiegel der Kurse in space_transmute (26s).
 // 26s (JP 2026-07-30): 60/150 → 120/260. Der Transmuter lag bei einem Drittel der
 // Raffinerie und war damit ein toter Knopf hinter einer 40.000-CC-Technik. Neue Regel:
@@ -3170,7 +3329,11 @@ function wrTechHtml(m) {
 // Problem, die fehlende Mengengrenze war es. Ein Preisnachteil von 43 % gegenüber der
 // Raffinerie wiegt keine 34 Stunden Wartezeit auf.
 const WR_TRANSMUTE       = { plasmoid: 120, quantum: 260 };
-const WR_TRANSMUTE_MAX   = 500;   // Einheiten je Vorgang
+const WR_TRANSMUTE_MAX   = 1000;  // Einheiten je Vorgang (27ai: 500 → 1000)
+// ⚠️ 27ai: Die Pause gilt JE SORTE, nicht mehr fürs ganze Gerät (JP: „und ruhig
+// jeweils anklickbar"). 27b hatte es bewusst umgekehrt entschieden — damals war der
+// Transmuter der Notausgang für EINEN Überschuss; jetzt stapeln sich zwei Sorten,
+// und eine Gerätesperre zwänge zu einer Wahl, die niemandem nützt.
 // ⚠️ 27w: 48 → 24 h (JP). Geprüft gegen den KONKURRIERENDEN Weg, nicht gegen sich selbst:
 // die Raffinerie schafft auf Stufe 6 rund 1.280 🟣 + 640 🌀 am Tag zu besseren Kursen
 // (210/400 gegen 120/260). Der Transmuter bleibt also auch verdoppelt der zweitbeste Weg
@@ -3180,35 +3343,52 @@ const WR_TRANSMUTE_PAUSE = 24;    // Stunden Pause danach — gilt fürs GANZE G
 // Wann ist der Transmuter wieder frei? 0 = jetzt. Spiegel von `_space_transmute_ready`.
 // ⚠️ Ein unlesbarer Zeitstempel gilt als „frei" — eine kaputte Uhr darf das Gerät nicht
 // dauerhaft sperren (dieselbe Kulanzrichtung wie bei wrSlotLevel/readyAt).
-function wrTransmuteLeftMs(m) {
+// ⚠️ 27ai: JE SORTE. `typ` ist 'plasmoid' oder 'quantum'; ohne Angabe wird der SPÄTERE
+// der beiden geliefert (Rückfall für alte Aufrufer — lieber zu lange gesperrt aussehen
+// als freigeben und dann abgelehnt werden, das war der Fehler in 27ac §1).
+// Spiegel von `_space_transmute_ready_t`.
+function wrTransmuteLeftMs(m, typ) {
   const t = wrSpace(m).transmute;
-  if (!t || typeof t !== 'object' || !t.at) return 0;
-  const at = Date.parse(t.at);
-  if (!isFinite(at)) return 0;
-  return Math.max(0, at + WR_TRANSMUTE_PAUSE * 3600000 - Date.now());
+  if (!t || typeof t !== 'object') return 0;
+  const einzeln = (ty) => {
+    let s = t[ty === 'quantum' ? 'atQua' : 'atPla'];
+    // Altbestand: der gemeinsame `at` gilt nur für die Sorte, die in `type` steht.
+    if (!s && t.type === ty) s = t.at;
+    if (!s) return 0;
+    const at = Date.parse(s);
+    if (!isFinite(at)) return 0;         // kaputte Uhr sperrt nicht
+    return Math.max(0, at + WR_TRANSMUTE_PAUSE * 3600000 - Date.now());
+  };
+  if (typ) return einzeln(typ);
+  return Math.max(einzeln('plasmoid'), einzeln('quantum'));
 }
 
 function wrTransmuterHtml(m) {
   if (!wrHasTech(m, 'wt_f9')) return '';
   const pla = wrPlasmoid(m), qua = wrQuantum(m);
-  const restMs = wrTransmuteLeftMs(m);
-  const gesperrt = restMs > 0;
-  const std = Math.floor(restMs / 3600000), min = Math.round((restMs % 3600000) / 60000);
-  const restTxt = std >= 1 ? `${std} h ${min} min` : `${min} min`;
+  const txt = (ms) => {
+    const std = Math.floor(ms / 3600000), min = Math.round((ms % 3600000) / 60000);
+    return std >= 1 ? `${std} h ${min} min` : `${min} min`;
+  };
 
-  // ⚠️ Der Knopf zeigt, was WIRKLICH passiert (höchstens 500), nicht den ganzen Bestand.
-  // Vorher versprach er den Gesamtwert des Lagers — der Server hätte ihn geklemmt, und
-  // der Spieler hätte den Unterschied erst am Kontostand gemerkt.
+  // ⚠️ Der Knopf zeigt, was WIRKLICH passiert (höchstens die Losgrösse), nicht den
+  // ganzen Bestand. Vorher versprach er den Gesamtwert des Lagers — der Server hätte
+  // ihn geklemmt, und der Spieler hätte den Unterschied erst am Kontostand gemerkt.
+  // ⚠️ 27ai: Die Restzeit wird JE SORTE gelesen. Vorher sperrte eine Umwandlung beide
+  // Zeilen; wer 🟣 abfliessen liess, sass 24 h auf seinem 🌀.
   const zeile = (typ, menge, icon, name) => {
-    const los = Math.min(menge, WR_TRANSMUTE_MAX);
+    const los  = Math.min(menge, WR_TRANSMUTE_MAX);
+    const rest = wrTransmuteLeftMs(m, typ);
     return `<div class="wr-refine-row">
       <span>${icon} ${name}: <strong>${wrFmt(menge)}</strong>${
-        menge > WR_TRANSMUTE_MAX ? ` <span class="wr-sub">(${WR_TRANSMUTE_MAX} je Vorgang)</span>` : ''}</span>
-      ${gesperrt
-        ? `<span class="wr-sub">⏳ ${restTxt}</span>`
+        menge > WR_TRANSMUTE_MAX ? ` <span class="wr-sub">(${wrFmt(WR_TRANSMUTE_MAX)} je Vorgang)</span>` : ''}</span>
+      ${rest > 0
+        ? `<span class="wr-sub">⏳ ${txt(rest)}</span>`
         : `<button class="wr-btn wr-btn-sm" data-wr-transmute="${typ}" ${los < 1 ? 'disabled' : ''}>→ ${wrFmt(los * WR_TRANSMUTE[typ])} CC</button>`}
     </div>`;
   };
+  const restPla = wrTransmuteLeftMs(m, 'plasmoid');
+  const restQua = wrTransmuteLeftMs(m, 'quantum');
 
   return `<div class="wr-card">
     <div class="wr-card-title">⚗️ Transmuter <span class="wr-sub">— Ring-Rohstoffe zu CC</span></div>
@@ -3216,8 +3396,10 @@ function wrTransmuterHtml(m) {
     ${zeile('quantum',  qua, wrIc('qua'), 'Quantenschaum')}
     <p class="wr-sub" style="margin:4px 0 0">Kurs: ${wrIc('pla')} ${WR_TRANSMUTE.plasmoid} CC ·
       ${wrIc('qua')} ${WR_TRANSMUTE.quantum} CC je Einheit — sofort, aber höchstens
-      <strong>${WR_TRANSMUTE_MAX} Einheiten</strong>, danach <strong>${WR_TRANSMUTE_PAUSE} h Pause</strong>
-      für beide Sorten. ${gesperrt ? `Wieder frei in ${restTxt}.` : ''}
+      <strong>${wrFmt(WR_TRANSMUTE_MAX)} Einheiten</strong>, danach <strong>${WR_TRANSMUTE_PAUSE} h Pause</strong>
+      <strong>je Sorte</strong> — 🟣 und 🌀 sperren sich nicht mehr gegenseitig.
+      ${restPla > 0 ? `${wrIc('pla')} wieder frei in ${txt(restPla)}. ` : ''}${
+        restQua > 0 ? `${wrIc('qua')} wieder frei in ${txt(restQua)}. ` : ''}
       Die 🏭 Raffinerie zahlt mehr (${WR_REFINE[2].ratePla}–${WR_REFINE[6].ratePla} bzw.
       ${WR_REFINE[4].rateQua}–${WR_REFINE[6].rateQua}) und hat den besseren Durchsatz —
       der Transmuter ist der Notausgang, nicht der Hauptweg.</p>
@@ -3294,11 +3476,21 @@ async function wrTripBoost(tripId) {
   try {
     const res = await DB.spaceTripBoost(_wrMember.id, tripId);
     if (!res || res.error) {
-      if (res?.error === 'boost_no_kristall') {
-        // ⚠️ Fehler-Toast OHNE HTML-Freigabe → hier bleibt es beim Emoji. Die Regel
-        // steht an WR_IC: Bilder nur dort, wo `showToast(..., true)` gerufen wird.
-        wrToast(`Nicht genug 💎 Kristall: der Boost kostet ${wrFmt(res.need)}, `
-              + `du hast ${wrFmt(res.have)}.`, 'error');
+      if (res?.error === 'boost_no_res') {
+        // ⚠️ Fehler-Toast OHNE HTML-Freigabe → hier bleiben es Emoji. Die Regel steht
+        // an WR_IC: Bilder nur dort, wo `showToast(..., true)` gerufen wird.
+        // ⚠️ ALLE fehlenden Posten auf einmal — vier nacheinander abgelehnte Klicks für
+        // denselben Boost wären die Zumutung, die 26u/27e schon beseitigt haben.
+        const n = res.need || {}, h = res.have || {};
+        const fehlt = [];
+        if ((n.cc || 0)       > (h.cc || 0))       fehlt.push(`${wrFmt(n.cc)} CC (hast ${wrFmt(h.cc)})`);
+        if ((n.kristall || 0) > (h.kristall || 0)) fehlt.push(`${wrFmt(n.kristall)} 💎 (hast ${wrFmt(h.kristall)})`);
+        if ((n.plasmoid || 0) > (h.plasmoid || 0)) fehlt.push(`${wrFmt(n.plasmoid)} 🟣 (hast ${wrFmt(h.plasmoid)})`);
+        if ((n.quantum || 0)  > (h.quantum || 0))  fehlt.push(`${wrFmt(n.quantum)} 🌀 (hast ${wrFmt(h.quantum)})`);
+        wrToast('Für den Boost fehlt: ' + fehlt.join(' · '), 'error');
+      } else if (res?.error === 'boost_max') {
+        wrToast(`Diese Reise wurde schon ${wrFmt(res.boosts)}× beschleunigt — mehr als `
+              + `${wrFmt(res.max)} geht nicht.`, 'error');
       } else if (res?.error === 'boost_too_close') {
         wrToast(`Zu kurz vor der Ankunft — es bleiben nur noch ${wrFmt(res.minutesLeft)} Minuten. `
               + `Nach einem Boost müssen 5 übrig bleiben.`, 'error');
@@ -3308,18 +3500,37 @@ async function wrTripBoost(tripId) {
       return;
     }
     if (res.space) wrApplySpace(res.space);
+    // ⚠️ 27ah: `res.cost` ist jetzt ein OBJEKT mit vier Posten, keine Zahl mehr.
+    // Wer die alte Zeile stehen liesse, bekäme „−[object Object] 💎" — die Sorte
+    // Anzeige, die einen richtigen Server für kaputt hält.
+    const kk = res.cost || {};
+    const bez = [];
+    if ((kk.cc || 0)       > 0) bez.push(`${wrFmt(kk.cc)} CC`);
+    if ((kk.kristall || 0) > 0) bez.push(`${wrFmt(kk.kristall)} ${wrIc('kri')}`);
+    if ((kk.plasmoid || 0) > 0) bez.push(`${wrFmt(kk.plasmoid)} ${wrIc('pla')}`);
+    if ((kk.quantum || 0)  > 0) bez.push(`${wrFmt(kk.quantum)} ${wrIc('qua')}`);
     wrToast(`⚡ Ankunft um ${WR_BOOST_MINUTES} Minuten vorgezogen — noch `
           + `${wrCountdown((parseFloat(res.minutesLeft) || 0) * 60000)}. `
-          + `−${wrFmt(res.cost)} ${wrIc('kri')}`, 'success', true);
+          + `Stufe ${wrFmt(res.boosts)} von ${wrFmt(res.max)}`
+          + (bez.length ? ` · −${bez.join(' · ')}` : ''), 'success', true);
 
     // 📒 Regel 1: eine neue Kristall-Ausgabe gehört ab dem ersten Tag ins Log.
     // ⚠️ Das Tages-Log beziffert CC — der Kristall steht deshalb in der Detailzeile und
     // der Betrag auf 0. Eine erfundene CC-Zahl wäre schlimmer als keine: sie ginge in
     // die Tagesbilanz ein und wäre dort nicht mehr als Kristall erkennbar.
     try {
+      // ⚠️ Der CC-Anteil ist eine echte CC-Ausgabe und gehört als BETRAG ins Log; die
+      // Rohstoffe beziffert das Tages-Log nicht und stehen deshalb in der Detailzeile.
+      // Eine erfundene CC-Zahl für Kristall wäre schlimmer als keine — sie ginge in die
+      // Tagesbilanz ein und wäre dort nicht mehr als Kristall erkennbar.
+      const roh = [];
+      if ((kk.kristall || 0) > 0) roh.push(`${wrFmt(kk.kristall)} 💎`);
+      if ((kk.plasmoid || 0) > 0) roh.push(`${wrFmt(kk.plasmoid)} 🟣`);
+      if ((kk.quantum || 0)  > 0) roh.push(`${wrFmt(kk.quantum)} 🌀`);
       await DB.appendTodayLogFresh(_wrMember.id, [{
-        label: '⚡ Flug-Beschleunigung', amount: 0, cat: 'weltraum',
-        detail: `−${wrFmt(res.cost)} 💎 Kristall für ${WR_BOOST_MINUTES} Minuten`,
+        label: '⚡ Flug-Beschleunigung', amount: -(kk.cc || 0), cat: 'weltraum',
+        detail: `${WR_BOOST_MINUTES} Minuten${roh.length ? ` · −${roh.join(' · ')}` : ''}`
+              + `${res.garrison ? ' · 🛡️ Garnison' : ''}`,
         aggKey: 'space_boost', aggBase: '⚡ Flug-Beschleunigung' }]);
     } catch (e) { console.warn('Boost nicht geloggt:', e); }
     wrRender();
@@ -3378,12 +3589,12 @@ async function wrBuyTech(key) {
 const WR_REFINE = [
   null,
   { capErz: 40,  capKri: 15,  hours: 6,   rErz: 32, rKri: 80,  capPla: 0,   capQua: 0,  ratePla: 0,   rateQua: 0   },
-  { capErz: 80,  capKri: 30,  hours: 5,   rErz: 34, rKri: 84,  capPla: 15,  capQua: 0,  ratePla: 140, rateQua: 0   },
-  { capErz: 140, capKri: 55,  hours: 4,   rErz: 36, rKri: 88,  capPla: 40,  capQua: 0,  ratePla: 150, rateQua: 0   },
-  { capErz: 240, capKri: 100, hours: 3,   rErz: 38, rKri: 92,  capPla: 70,  capQua: 25, ratePla: 170, rateQua: 280 },
-  { capErz: 400, capKri: 160, hours: 2,   rErz: 42, rKri: 100, capPla: 110, capQua: 45, ratePla: 190, rateQua: 340 },
+  { capErz: 80,  capKri: 30,  hours: 5,   rErz: 34, rKri: 84,  capPla: 40,  capQua: 0,  ratePla: 140, rateQua: 0   },
+  { capErz: 140, capKri: 55,  hours: 4,   rErz: 36, rKri: 88,  capPla: 100, capQua: 0,  ratePla: 150, rateQua: 0   },
+  { capErz: 240, capKri: 100, hours: 3,   rErz: 38, rKri: 92,  capPla: 175, capQua: 60, ratePla: 170, rateQua: 280 },
+  { capErz: 400, capKri: 160, hours: 2,   rErz: 42, rKri: 100, capPla: 275, capQua: 110, ratePla: 190, rateQua: 340 },
   // Stufe 6: wt_e13 Plasma-Raffinerie
-  { capErz: 600, capKri: 260, hours: 1.5, rErz: 46, rKri: 110, capPla: 180, capQua: 70, ratePla: 210, rateQua: 400 },
+  { capErz: 600, capKri: 260, hours: 1.5, rErz: 46, rKri: 110, capPla: 450, capQua: 175, ratePla: 210, rateQua: 400 },
 ];
 function wrRefineTier(m) {
   if (wrHasTech(m, 'wt_e13')) return 6;
@@ -4254,6 +4465,84 @@ function wrGarrisonHtml(m, p) {
 }
 
 // Rückfall-Warnung für befreite, aber ungeschützte Planeten (26h).
+// ── 🚨 Ungeschützte Planeten im GANZEN Clan (JP 2026-08-24) ──────────────────
+// „Die ungeschützten Planeten vom gesamten Clan sollen jeweils angezeigt werden, nicht
+// nur die, welche man selbst befreit hat."
+//
+// ⚠️ WARUM DAS MEHR IST ALS EINE LÄNGERE LISTE: Ein zurückgefallener Planet stellt die
+// Wächter im ganzen QUADRANTEN wieder in den Weg — das trifft auch die Nachbarn. Der
+// Sweep meldet das seit 26h an den ganzen Clan; sehen konnte man die Gefahr vorher aber
+// nur bei sich selbst. Wer helfen will (Route stationieren, Station bauen), muss wissen,
+// wo es brennt.
+//
+// ⚠️ DER FEHLER, DER HIER LAUERT: `wrPlanetProtected(p, m)` liest `wrRoutes(m)` — MEINE
+// Routen. Für einen fremden Planeten schützen aber die Routen SEINES Besitzers, und die
+// Rückfall-Frist richtet sich nach DESSEN Forschung (wt_e12). Wer einfach über alle
+// Planeten iteriert und `m` durchreicht, meldet fremde Planeten als ungeschützt, die es
+// nicht sind — eine Warnliste, die falsche Alarme enthält, liest nach zwei Tagen niemand
+// mehr. Deshalb wird für jeden Planeten der BESITZER aufgelöst und mit dessen Daten
+// gerechnet.
+function wrUserById(id) {
+  if (!id) return null;
+  try {
+    if (typeof appData !== 'undefined' && Array.isArray(appData?.users)) {
+      return appData.users.find(u => u.id === id) || null;
+    }
+  } catch (e) {}
+  return null;
+}
+// Alle ungeschützten Planeten des Clans, nach Dringlichkeit sortiert.
+function wrClanRiskList() {
+  const out = [];
+  try {
+    for (const p of (_wrGalaxy?.planets || [])) {
+      if (!p.cleared_by) continue;
+      // ⚠️ Der Besitzer rechnet für sich selbst. Fehlt sein Datensatz (noch nicht
+      // geladen), fällt es auf den eigenen zurück — eine Schätzung ist hier besser als
+      // gar keine Warnung, und die Zeile sagt dann, wem der Planet gehört.
+      const owner = wrUserById(p.cleared_by) || _wrMember;
+      const at = wrFallbackAt(p, owner);
+      if (!at) continue;
+      out.push({ p, at, owner, mine: p.cleared_by === _wrMember?.id });
+    }
+    out.sort((a, b) => a.at - b.at);
+  } catch (e) { console.warn('Clan-Risikoliste:', e); }
+  return out;
+}
+function wrClanRiskHtml(m) {
+  const list = wrClanRiskList();
+  if (!list.length) return '';
+  const eigene = list.filter(x => x.mine).length;
+  const rows = list.map(({ p, at, owner, mine }) => {
+    const left = at - Date.now();
+    const eilig = left < 86400000;
+    return `
+      <div class="wr-col-item">
+        <button type="button" class="wr-col-row" data-wr-colmap="${_wrEsc(p.id)}"
+          title="Auf der Sternkarte zeigen">
+          <span class="wr-col-caret">🌌</span>
+          <span>${wrResIc(p.resource_type)} ${_wrEsc(p.name || 'Planet')}
+            <span class="wr-sub">Ring ${p.ring} · ${_wrEsc(p.quadrant)} ·
+              ${mine ? '<strong>dein Planet</strong>' : _wrEsc(owner?.name || 'Mitspieler')}</span></span>
+          <strong class="${eilig ? 'wr-bad' : ''}">${left > 0 ? wrCountdown(left) : 'überfällig'}</strong>
+        </button>
+      </div>`;
+  }).join('');
+  return `<div class="wr-card">
+      <div class="wr-card-title">🚨 Ungeschützt im Clan
+        <span class="wr-sub">— ${list.length} Planet(en)${eigene ? `, davon ${eigene} von dir` : ''}</span></div>
+      <div class="wr-col-list">${rows}</div>
+      <div class="wr-sub">Diese Planeten fallen nach Ablauf der Frist an die Wächter zurück —
+        und deren Verband steht dann wieder im ganzen Quadranten im Weg, auch für die
+        Nachbarn. Es hält sie: eine <b>Kolonie</b> darauf, <b>stationierte Schiffe</b>
+        (Route) oder eine <b>📡 Station</b> im Quadranten. Ein Klick springt auf die
+        Sternkarte.
+        ⚠️ Bei fremden Planeten ist die Restzeit eine Schätzung: die Frist richtet sich
+        nach der Forschung des Befreiers, und die Technik anderer Spieler liegt hier nur
+        teilweise vor.</div>
+    </div>`;
+}
+
 function wrFallbackHtml(p, m) {
   const at = wrFallbackAt(p, m);
   if (!at) return '';
@@ -9492,7 +9781,12 @@ function wrErrText(err) {
     // ⚡ 27ac
     boost_arrived:         'Diese Flotte ist schon angekommen — beschleunigen bringt nichts mehr.',
     boost_too_close:       'Zu kurz vor der Ankunft: nach einem Boost müssen 5 Minuten übrig bleiben.',
+    // ⚠️ 27ah: der Boost kostet nicht mehr nur Kristall, sondern 20 % ALLER Flugkosten.
+    // Der alte Code bleibt als Rückfall stehen (ein Server vor 27ah kann ihn noch
+    // senden); die neue Meldung `boost_no_res` nennt die fehlenden Posten einzeln.
     boost_no_kristall:     'Nicht genug 💎 Kristall für den Boost.',
+    boost_no_res:          'Für den Boost fehlen Rohstoffe.',
+    boost_max:             'Diese Reise wurde bereits so oft beschleunigt, wie es geht.',
     no_trip:               'Diese Reise gibt es nicht mehr — vielleicht ist sie gerade angekommen.',
     // 💰 27ac
     not_enough_cc_dispatch: 'Nicht genug CC für den Einsatz — das Absenden kostet 3× die Kampfkraft des Verbands.',
