@@ -102,13 +102,23 @@ const RESEARCH_COMBOS = [
 // `art` = Pixel-Art-Kachel aus JPs Render (plans/Weltraum_expansion.png), zugeschnitten nach
 // assets/weltraum/. `icon` bleibt als Emoji-Rückfall, falls die Datei fehlt (siehe onerror
 // in imperium.js) — die App darf nie von einem Bild abhängen.
+// ⚠️ Die Schiffe im `desc` stehen als `[[s:key]]`-TOKEN, nicht als Emoji.
+// JP 2026-08-26: „am Anfang der Einleitung zum Weltall … sind einfache Emojis, statt die
+// Assets." Aufgelöst werden sie von `_chatArt` (app.js) — dasselbe Whitelist-System, das
+// der Chat seit 2026-07-22 benutzt, mit Bild und Emoji-Rückfall.
+//   ⚠️ BEWUSST Token statt einer Emoji→Bild-Ersetzung: Emoji sind in diesem Spiel NICHT
+//   eindeutig (🛩️ ist Großer Jäger UND Trägerschiff, 🛸 Kolonieschiff UND Mutterschiff).
+//   Eine Ersetzung über das Symbol hätte geraten.
+//   ⚠️ Und sie waren bereits veraltet: hier stand `🔫 Jäger`, während das Schiff seit
+//   Längerem `🗡️` trägt. Ein Symbol, das an zwei Orten gepflegt werden muss, läuft
+//   auseinander — der Schlüssel `jaeger` kann das nicht.
 const SPACE_RESEARCH = [
   { id: 'wt_ionenantrieb', name: 'Ionenantrieb',  icon: '🚀', art: 'wt1_ionenantrieb', ast: 'Antrieb & Hülle', wt: 1, cost: 8000,
-    desc: 'Baut den Raumhafen und schaltet 🛰️ Bohnen-Sonde + 🔫 Jäger frei' },
+    desc: 'Baut den Raumhafen und schaltet [[s:sonde]] Bohnen-Sonde + [[s:jaeger]] Jäger frei' },
   { id: 'wt_frachtmodule', name: 'Frachtmodule',  icon: '📦', art: 'wt2_frachtmodule', ast: 'Antrieb & Hülle', wt: 2, cost: 15000,
-    requires: ['wt_ionenantrieb'], desc: 'Schaltet 🚀 Espresso-Kutter + 🛸 Kolonieschiff frei' },
+    requires: ['wt_ionenantrieb'], desc: 'Schaltet [[s:kutter]] Espresso-Kutter + [[s:kolonie]] Kolonieschiff frei' },
   { id: 'wt_handbohrer',   name: 'Handbohrer',    icon: '⛏️', art: 'wt1_handbohrer',   ast: 'Schürftechnik',   wt: 1, cost: 8000,
-    requires: ['wt_ionenantrieb'], desc: 'Schaltet ⛏️ Röstkometen frei — Abbau von Erz und Koffeinkristall' },
+    requires: ['wt_ionenantrieb'], desc: 'Schaltet [[s:ernter]] Röstkometen frei — Abbau von [[s:erz]] Erz und [[s:kristall]] Koffeinkristall' },
 ];
 
 // Die Tab-Freischaltung hängt an DIESER festen Liste, NICHT an „alle SPACE_RESEARCH besessen".

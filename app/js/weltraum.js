@@ -503,7 +503,18 @@ const WR_MUTTER_PARTS = [
   // ⚠️ Key `bomber` = das im Spiel „Kreuzer" genannte Schiff (Namenstausch vom 22.07.)
   { ship:'bomber',      count:1  },
 ];
-const WR_MUTTER_COST = { cc:30000, erz:600, kristall:250, plasmoid:80, quantum:40 };
+// ⚠️ SPIEGEL von `_space_flagship_cost()` — zuletzt definiert in
+// migration_2026-08-20_27i_schiffskosten.sql, NICHT in 26j.
+// JP 2026-08-26: „Ich könnte eigentlich ein Mutterschiff bauen, aber es wird behauptet,
+// ich hätte nicht genug Quantenschaum." — die MELDUNG war richtig, die Anzeige nicht:
+// hier standen noch die Werte von 26j (80 🟣 / 40 🌀), der Server verlangt seit 27i
+// 180 / 400. Der Client versprach ein Zehntel des Preises.
+//   ⚠️ 27i hat sechs Schiffspreise UND den Flaggschiff-Preis angehoben — nachgezogen
+//   wurde nur `SPACE_SHIPS`. Eine Konstante, die neben einer geänderten Tabelle steht,
+//   wird beim Ändern nicht mitgesucht. `test_27aj_spiegel_anzeige.js` sichert das ab jetzt.
+//   ⚠️ Und: `build_mutterschiff` prüft GAR KEINE Forschung — wer hier eine vermutet,
+//   sucht am falschen Ende.
+const WR_MUTTER_COST = { cc:37500, erz:750, kristall:310, plasmoid:180, quantum:400 };
 function wrFlagshipBonus(fleet) {
   const n = parseInt((fleet || {}).mutterschiff, 10) || 0;
   return Math.min(WR_FLAG_CAP, 1 + WR_FLAG_PER * Math.max(0, n));
@@ -1445,12 +1456,12 @@ function wrResIc(t) {
 // ⚠️ 27ab: Vorher habe ich das Minus per Regex ins FERTIGE HTML gepatcht — auf einer
 // Zeichenkette, die Bild-Hüllen enthält. Das funktionierte, war aber genau die Sorte
 // Griff, die beim nächsten Umbau bricht. Ein Parameter kostet eine Zeile und hält.
-function wrResListe(o, suffix, vz) {
+function wrResListe(o, suffix, vz, sep) {
   const sfx = suffix || '', s = vz || '+';
   return [['erz', o.erz], ['kri', o.kri], ['pla', o.pla], ['qua', o.qua]]
     .map(([k, v]) => [k, Math.round(v || 0)])
     .filter(([, n]) => n > 0)
-    .map(([k, n]) => `${s}${wrFmt(n)} ${wrIc(k)}${sfx}`).join(' · ');
+    .map(([k, n]) => `${s}${wrFmt(n)} ${wrIc(k)}${sfx}`).join(sep || ' · ');
 }
 // ⚠️ Hier stand bis 27z eine zweite Fassung `wrResListeTxt` mit Emoji — für Toasts,
 // weil `showToast` `textContent` setzte. Seit `showToast(msg, type, {html:true})`
@@ -2139,7 +2150,7 @@ async function wrShipOffer(shipKey) {
   _wrBusy = true;
   try {
     const res = await DB.createSpaceShipOffer(_wrMember.id, shipKey, 1);
-    if (!res || res.error) { wrToast(wrErrText(res?.error), 'error'); return; }
+    if (!res || res.error) { wrErrToast(res?.error); return; }
     if (res.space) wrApplySpace(res.space);
     wrToast(`🚀 ${sd.name} eingestellt — im Hafen gesperrt.`, 'success');
     wrChat(`🤝 ${_wrEsc(_wrMember.name)} bietet ${wrArtTok(shipKey)} ${_wrEsc(sd.name)} zum Kaufpreis an — `
@@ -2155,7 +2166,7 @@ async function wrShipBuy(tradeId) {
   _wrBusy = true;
   try {
     const res = await DB.buySpaceShipOffer(_wrMember.id, tradeId);
-    if (!res || res.error) { wrToast(wrErrText(res?.error), 'error'); return; }
+    if (!res || res.error) { wrErrToast(res?.error); return; }
     if (res.space) wrApplySpace(res.space);
     if (typeof res.coins === 'number') wrApplyCoins(res.coins);
     const sd = SPACE_SHIP_BY_KEY[res.ship];
@@ -2175,7 +2186,7 @@ async function wrTradeRequest() {
   _wrBusy = true;
   try {
     const res = await DB.createSpaceRequest(_wrMember.id, type, amount);
-    if (!res || res.error) { wrToast(wrErrText(res?.error), 'error'); return; }
+    if (!res || res.error) { wrErrToast(res?.error); return; }
     if (typeof res.coins === 'number') wrApplyCoins(res.coins);
     wrToast(`📨 Gesuch abgeschickt — ${wrFmt(res.price || price)} CC gesperrt.`, 'success');
     wrChat(`🤝 ${_wrEsc(_wrMember.name)} sucht ${wrFmt(amount)} ${wrArtTok(type)} für ${wrFmt(res.price || price)} CC — `
@@ -2191,7 +2202,7 @@ async function wrTradeFulfill(tradeId) {
   _wrBusy = true;
   try {
     const res = await DB.fulfillSpaceRequest(_wrMember.id, tradeId);
-    if (!res || res.error) { wrToast(wrErrText(res?.error), 'error'); return; }
+    if (!res || res.error) { wrErrToast(res?.error); return; }
     if (res.space) wrApplySpace(res.space);
     if (typeof res.coins === 'number') wrApplyCoins(res.coins);
     const icon = res.type === 'erz' ? '🪨' : '💎';
@@ -2209,7 +2220,7 @@ async function wrTradeBuy(tradeId) {
   _wrBusy = true;
   try {
     const res = await DB.buySpaceTrade(_wrMember.id, tradeId);
-    if (!res || res.error) { wrToast(wrErrText(res?.error), 'error'); return; }
+    if (!res || res.error) { wrErrToast(res?.error); return; }
     if (res.space) wrApplySpace(res.space);
     if (typeof res.coins === 'number') wrApplyCoins(res.coins);
     const icon = res.type === 'erz' ? '🪨' : '💎';
@@ -2227,7 +2238,7 @@ async function wrTradeCancel(tradeId) {
   _wrBusy = true;
   try {
     const res = await DB.cancelSpaceTrade(_wrMember.id, tradeId);
-    if (!res || res.error) { wrToast(wrErrText(res?.error), 'error'); return; }
+    if (!res || res.error) { wrErrToast(res?.error); return; }
     if (res.space) wrApplySpace(res.space);
     wrToast('↩️ Zurückgezogen — die Sperre (CC/Ware/Schiff) ist erstattet.', 'info');
     wrRender();
@@ -2810,6 +2821,31 @@ function wrDefaultIntent(m) {
 function wrSelCount(key) { return parseInt(_wrSelFleet?.[key], 10) || 0; }
 function wrSelTotal() { return SPACE_SHIPS.reduce((a, s) => a + wrSelCount(s.key), 0); }
 
+// 🛡️ Verbandsschild als Text. Der Schild senkt die VERLUSTE (nicht die Siegchance)
+// und ist ein kampfkraftgewichteter Mittelwert über die Auswahl, gedeckelt bei 40 %.
+//
+// ⚠️ JP 2026-08-26: „Ich habe durch Angriffe 347 Jäger verloren — funktionieren die
+// Schilde überhaupt?" SIE FUNKTIONIEREN (`_space_fleet_shield` wirkt bis in die aktuelle
+// Fassung von `claim_space_arrival`). Angezeigt wurden sie aber nur bei `> 0` — und der
+// Jäger hat shield 0,00 bei `loss_order` 10, fällt also als erstes. Genau der Fall, der
+// eine Erklärung braucht, blieb stumm.
+//   ⚠️ ÜBERTRAGBARE LEHRE: eine Kennzahl, die bei ihrem SCHLECHTESTEN Wert verschwindet,
+//   erklärt nicht das Gute — sie verbirgt das Schlechte, und Schweigen liest sich wie
+//   „gibt es nicht". Eine Mechanik, die nur in der Abrechnung auftaucht, gilt als kaputt.
+// ⚠️ Reine ANZEIGE aus dem vorhandenen `wrFleetShield` — keine Zahl geändert, keine
+// zweite Rechnung. Soll der Schild wirken, ist das eine Balance-Änderung mit Ansage.
+function wrSchildTxt(shield, fleet) {
+  const pct = Math.round(Math.max(0, shield || 0) * 100);
+  if (pct >= 5) return `<span class="wr-good">🛡️ Verbandsschild: <strong>−${pct} %</strong> Verluste</span>`;
+  const jae = parseInt((fleet || {}).jaeger, 10) || 0;
+  return `<span class="wr-bad" style="flex-basis:100%">🛡️ Verbandsschild: <strong>−${pct} %</strong>
+    <span class="wr-sub">— ${jae > 0
+      ? 'kleine Jäger haben KEINEN Schild und fallen zuerst. Schwere Schiffe im Verband '
+        + '(Schlachtschiff − 20 %, Dunkle Röstung / Träger − 30 %, Mutterschiff − 35 %) '
+        + 'heben ihn für alle.'
+      : 'dieser Verband hat keine gepanzerten Schiffe — Verluste treffen ihn ungebremst.'}</span></span>`;
+}
+
 function wrFleetPickerHtml(m) {
   const sel   = wrSyncFleetSel(m);
   const ships = wrHomeShips(m);
@@ -2878,6 +2914,11 @@ function wrFleetPickerHtml(m) {
         <span>Schiffe: <strong>${wrFmt(wrSelTotal())}</strong></span>
         <span>${wrIc("atk")} Kampfkraft: <strong>${wrFmt(power)}</strong></span>
         ${mine > 0 ? `<span>${wrIc("mine")} Abbau: <strong>${wrFmt(mine)}</strong></span>` : ''}
+        ${/* 🛡️ Hier und nicht nur in der Kampfvorschau: beeinflussen kann man den
+              Schild genau an dieser Stelle — beim Zusammenstellen. Dieselbe Diagnose wie
+              bei den Flottenverbänden und beim Transmuter (Teil 41): eine Auskunft gehört
+              an den Ort ihrer FRAGE, nicht an den ihrer Technik. */''}
+        ${wrSelTotal() > 0 ? wrSchildTxt(wrFleetShield(sel), sel) : ''}
         ${(() => {
           // 💰 27ac: Absendekosten. Sie stehen NEBEN der Kampfkraft, aus der sie
           // gerechnet werden — dann muss niemand raten, worauf sich die „dreimal"
@@ -3412,7 +3453,7 @@ async function wrTransmute(type) {
   _wrBusy = true;
   try {
     const res = await DB.spaceTransmute(_wrMember.id, type, amt);
-    if (!res || res.error) { wrToast(wrErrText(res?.error), 'error'); return; }
+    if (!res || res.error) { wrErrToast(res?.error); return; }
     if (res.space) wrApplySpace(res.space);
     if (typeof res.coins === 'number') wrApplyCoins(res.coins);
     const rm = wrResMeta(type);
@@ -3436,7 +3477,7 @@ async function wrRefuel(planetId, amount) {
   _wrBusy = true;
   try {
     const res = await DB.spacePowerRefuel(_wrMember.id, planetId, amount);
-    if (!res || res.error) { wrToast(wrErrText(res?.error), 'error'); return; }
+    if (!res || res.error) { wrErrToast(res?.error); return; }
     if (res.space) wrApplySpace(res.space);
     const ic = res.res === 'quantum' ? '🌀' : '🟣';
     wrToast(`⛽ ${wrFmt(res.added)} ${ic} getankt — Tank ${wrFmt(Math.round(res.fuel))} `
@@ -3457,7 +3498,7 @@ async function wrInjectLoad(amount) {
   _wrBusy = true;
   try {
     const res = await DB.spaceInjectLoad(_wrMember.id, amount);
-    if (!res || res.error) { wrToast(wrErrText(res?.error), 'error'); return; }
+    if (!res || res.error) { wrErrToast(res?.error); return; }
     if (res.space) wrApplySpace(res.space);
     wrToast(`⚗️ ${wrFmt(res.added)} 🟣 injiziert — Kampfkraft +${res.pct} % im nächsten Gefecht`, 'success');
     wrRender();
@@ -3495,7 +3536,7 @@ async function wrTripBoost(tripId) {
         wrToast(`Zu kurz vor der Ankunft — es bleiben nur noch ${wrFmt(res.minutesLeft)} Minuten. `
               + `Nach einem Boost müssen 5 übrig bleiben.`, 'error');
       } else {
-        wrToast(wrErrText(res?.error), 'error');
+        wrErrToast(res?.error);
       }
       return;
     }
@@ -3545,7 +3586,7 @@ async function wrBuyTech(key) {
   _wrBusy = true;
   try {
     const res = await DB.buySpaceTech(_wrMember.id, key);
-    if (!res || res.error) { wrToast(wrErrText(res.error), 'error'); return; }
+    if (!res || res.error) { wrErrToast(res.error); return; }
     if (res.space) wrApplySpace(res.space);
     // ⏱️ JP 2026-08-20: Forschungszeit gehört in die Meldung.
     // ⚠️ Und dabei fiel auf: seit 26u ist Forschung KEIN Sofortvorgang mehr — buy_space_tech
@@ -3588,13 +3629,18 @@ async function wrBuyTech(key) {
 // wert werden. Alle Erz-/Kristall-Werte und die Stundenzahlen sind unangetastet.
 const WR_REFINE = [
   null,
-  { capErz: 40,  capKri: 15,  hours: 6,   rErz: 32, rKri: 80,  capPla: 0,   capQua: 0,  ratePla: 0,   rateQua: 0   },
-  { capErz: 80,  capKri: 30,  hours: 5,   rErz: 34, rKri: 84,  capPla: 40,  capQua: 0,  ratePla: 140, rateQua: 0   },
-  { capErz: 140, capKri: 55,  hours: 4,   rErz: 36, rKri: 88,  capPla: 100, capQua: 0,  ratePla: 150, rateQua: 0   },
-  { capErz: 240, capKri: 100, hours: 3,   rErz: 38, rKri: 92,  capPla: 175, capQua: 60, ratePla: 170, rateQua: 280 },
-  { capErz: 400, capKri: 160, hours: 2,   rErz: 42, rKri: 100, capPla: 275, capQua: 110, ratePla: 190, rateQua: 340 },
+  // ⏱️ 27al (JP 2026-08-26: „Die Raffinerie soll 8 h im Maximum laufen — die
+  // Reduzierungen; aktuell sind es 2 h, das ist zu schnell"). Nur `hours` geändert;
+  // Kapazitäten und Kurse stehen unverändert daneben — genau wie 27ai nur cap_pla/cap_qua
+  // angefasst hat. ⚠️ Wirkt der Kapazitätserhöhung aus 27ai entgegen: doppelt so lange
+  // Chargen halbieren die Chargen pro Tag, netto bleibt ×1,25 gegenüber vor 27ai.
+  { capErz: 40,  capKri: 15,  hours: 8,   rErz: 32, rKri: 80,  capPla: 0,   capQua: 0,  ratePla: 0,   rateQua: 0   },
+  { capErz: 80,  capKri: 30,  hours: 7,   rErz: 34, rKri: 84,  capPla: 40,  capQua: 0,  ratePla: 140, rateQua: 0   },
+  { capErz: 140, capKri: 55,  hours: 6,   rErz: 36, rKri: 88,  capPla: 100, capQua: 0,  ratePla: 150, rateQua: 0   },
+  { capErz: 240, capKri: 100, hours: 5,   rErz: 38, rKri: 92,  capPla: 175, capQua: 60, ratePla: 170, rateQua: 280 },
+  { capErz: 400, capKri: 160, hours: 4,   rErz: 42, rKri: 100, capPla: 275, capQua: 110, ratePla: 190, rateQua: 340 },
   // Stufe 6: wt_e13 Plasma-Raffinerie
-  { capErz: 600, capKri: 260, hours: 1.5, rErz: 46, rKri: 110, capPla: 450, capQua: 175, ratePla: 210, rateQua: 400 },
+  { capErz: 600, capKri: 260, hours: 3,   rErz: 46, rKri: 110, capPla: 450, capQua: 175, ratePla: 210, rateQua: 400 },
 ];
 function wrRefineTier(m) {
   if (wrHasTech(m, 'wt_e13')) return 6;
@@ -3739,7 +3785,7 @@ async function wrRefineStart() {
   _wrBusy = true;
   try {
     const res = await DB.refineStart(_wrMember.id, _wrRefErz, _wrRefKri, _wrRefPla, _wrRefQua);
-    if (!res || res.error) { wrToast(wrErrText(res?.error), 'error'); return; }
+    if (!res || res.error) { wrErrToast(res?.error); return; }
     if (res.space) wrApplySpace(res.space);
     _wrRefErz = 0; _wrRefKri = 0; _wrRefPla = 0; _wrRefQua = 0;
     wrToast(`🏭 Verarbeitung gestartet — ${wrFmt(res.cc)} CC in ${res.hours} h.`, 'success');
@@ -3754,7 +3800,7 @@ async function wrRefineClaim() {
   _wrBusy = true;
   try {
     const res = await DB.refineClaim(_wrMember.id);
-    if (!res || res.error) { wrToast(wrErrText(res?.error), 'error'); return; }
+    if (!res || res.error) { wrErrToast(res?.error); return; }
     if (res.space) wrApplySpace(res.space);
     if (typeof res.coins === 'number') wrApplyCoins(res.coins);
     if ((res.cc || 0) > 0) {
@@ -3909,8 +3955,10 @@ function wrDetailHtml(m) {
                  : ''}</span>
              <span>Gegner: <strong>${wrFmt(Math.round(bp.foe))}</strong> effektiv${
                Math.round(bp.foe) !== Math.round(p.enemy_strength) ? ` (roh ${wrFmt(p.enemy_strength)})` : ''}</span>
-             <span>Erwartete Verluste: <strong>${Math.round(lossPct * 100)} %</strong> der Flotte${
-               bp.shield > 0 ? ` <span class="wr-good">(Schild −${Math.round(bp.shield * 100)} %)</span>` : ''}</span>
+             <span>Erwartete Verluste: <strong>${Math.round(lossPct * 100)} %</strong> der Flotte</span>
+             ${/* ⚠️ Früher `bp.shield > 0 ? … : ''` — bei einer reinen Jägerflotte stand
+                   hier also NICHTS, und genau die braucht die Erklärung. Siehe wrSchildTxt. */''}
+             ${wrSchildTxt(bp.shield, wrSyncFleetSel(m))}
              <span class="${bp.win ? 'wr-good' : 'wr-bad'}">
                ${bp.win ? '→ Sieg wahrscheinlich' : '→ zu schwach, du verlierst Schiffe ohne Erfolg'}</span>
            </div>
@@ -5569,7 +5617,11 @@ function wrRouteModeHtml(m, p, mode) {
              <span>Restbestand: <strong>${wrFmt(left)}</strong>${
                sel > 0 ? ` (leer in ${tage} Tag${tage === 1 ? '' : 'en'})` : ''}</span>`;
   } else {
-    const ic = wrResMeta(p.resource_type).icon;
+    // ⚠️ JP 2026-08-26: „der Ertrag bei Plasmoid (auch Quantenschaum?) wenn Röstkomet
+    // stationieren — ist immer noch emoji/Tag". `wrResMeta().icon` ist der EMOJI-Wert;
+    // `wrResIc()` liefert dasselbe Symbol als Bild mit genau diesem Emoji als Rückfall.
+    // Betrifft alle vier Rohstoffe — also ja, auch 🌀.
+    const ic = wrResIc(p.resource_type);
     facts = `<span>Ertrag: <strong>${wrFmt(wrRouteRate(p.resource_type, p.richness, sel))} ${ic}/Tag</strong></span>`;
   }
 
@@ -5661,15 +5713,26 @@ function wrRoutesHtml(m) {
     const bereit = wreck
       ? (pd.erz + pd.kri + (pd.pla || 0) + (pd.qua || 0))
       : (pd.amount + (pd.sideErz || 0) + (pd.sideKri || 0));
-    amtTxt = (wrResListe(day, '/Tag') || '—')
+    // ⚠️ JP 2026-08-26: „links sehr gedrungen und rechts +2/Tag gerade eingesammelt".
+    // Ertrag und Status waren EINE Zeichenkette in einer `nowrap`-Spalte — die Spalte
+    // nahm sich damit so viel Breite, wie beide zusammen brauchten, und der Textspalte
+    // blieb der Rest. Jetzt zwei Zeilen (Wert oben, Status darunter), und die
+    // Rohstoffe der Tagesleistung stehen untereinander statt in einer langen Kette.
+    //   ⚠️ ÜBERTRAGBAR: Zwei Aussagen in einem `white-space: nowrap`-Element sind keine
+    //   Formatierung, sondern eine Breitenforderung an alle Nachbarn.
+    amtTxt = `<span class="wr-route-amt-v">${wrResListe(day, '/Tag', '+', '<br>') || '—'}</span>`
            + (bereit > 0
                 ? `<span class="wr-sub">${wrFmt(bereit)} liegen bereit</span>`
                 : '<span class="wr-sub">gerade eingesammelt</span>');
+    // ⚠️ Die Rate stand hier ein zweites Mal — rechts steht sie als Tagesleistung, und
+    // zwar aufgeschlüsselt. CLAUDE.md Regel 4: was in der Wertzeile steht, gehört nicht
+    // zusätzlich in den Untertitel. Beim Wrack entfällt der Abtrag ebenfalls: wofür man
+    // ihn braucht — „wann ist das Feld leer" — rechnet die Hinweiszeile darunter aus.
     const sub = wreck
-      ? `${cnt}× Bergungsschiff · ${wrFmt(wrWreckRate(cnt))}/Tag · noch `
-        + `${wrFmt(planet ? wrWreckLeft(planet) : 0)} im Feld`
-      : `${cnt}× Röstkomet · ${'★'.repeat(Math.max(1, Math.min(5, r.richness || 1)))}`
-        + ` · ${wrFmt(wrRouteRate(r.type, r.richness, cnt))}/Tag`;
+      ? `${cnt}× Bergungsschiff · noch `
+        + `${wrFmt(planet ? wrWreckLeft(planet) : 0)} im Feld · `
+        + `${wrFmt(wrRouteFuel(cnt))} ${wrIc('kri')}/Tag`
+      : `${cnt}× Röstkomet · ${'★'.repeat(Math.max(1, Math.min(5, r.richness || 1)))}`;
 
     // ⬇️ JP 2026-07-29: „Bei den Bergungs-Trupps fehlt es noch an Information, wie lange
     // noch abgebaut wird und wann erwarteter Rückflug ist."
@@ -5692,8 +5755,10 @@ function wrRoutesHtml(m) {
       // Rohstoff-Routen laufen unbefristet — begrenzt ist nur der Treibstoff.
       const reachOne = Math.floor(stock / wrRouteFuel(cnt));
       if (Number.isFinite(reachOne)) {
-        hinweis = `<span class="wr-route-eta">${wrIc('kri')} Treibstoff für
-          <strong>${reachOne > 99 ? '99+' : reachOne} Tage</strong>
+        // Verbrauch und Reichweite gehören zusammen — der Verbrauch stand vorher im
+        // Untertitel und hat ihn zusammen mit der Rate über die Zeilenbreite getrieben.
+        hinweis = `<span class="wr-route-eta">${wrIc('kri')} ${wrFmt(wrRouteFuel(cnt))}/Tag
+          · reicht <strong>${reachOne > 99 ? '99+' : reachOne} Tage</strong>
           <span class="wr-sub">— danach pausiert die Route</span></span>`;
       }
     }
@@ -5703,7 +5768,7 @@ function wrRoutesHtml(m) {
         <span class="wr-fl-art">${wrShipArt(wreck ? 'berger' : 'ernter', 'wr-mini wr-mini-md')}</span>
         <span class="wr-route-txt">
           <strong>${wreck ? '♻️ ' : ''}${_wrEsc(r.name || 'Planet')}</strong>
-          <span class="wr-sub">${sub} · ${wrFmt(wrRouteFuel(cnt))} ${wrIc('kri')}/Tag Treibstoff</span>
+          <span class="wr-sub">${sub}</span>
           ${hinweis}
         </span>
         <span class="wr-route-amt">${amtTxt}</span>
@@ -7630,7 +7695,7 @@ function wrBindEvents() {
       _wrBusy = true;
       try {
         const res = await DB.resolveColonyAttack(_wrMember.id, pid);
-        if (!res || res.error) { wrToast(wrErrText(res && res.error), 'error'); return; }
+        if (!res || res.error) { wrErrToast(res && res.error); return; }
         if (res.nothing) { wrToast('Dieser Angriff ist bereits erledigt.', 'info'); }
         _wrGalaxy  = await DB.fetchGalaxy();
         _wrAttacks = await DB.fetchColonyAttacks(_wrMember.id);
@@ -7658,7 +7723,7 @@ function wrBindEvents() {
       _wrBusy = true;
       try {
         const res = await DB.hireSpaceMerc(_wrMember.id, sq.ships);
-        if (!res || res.error) { wrToast(wrErrText(res && res.error), 'error'); return; }
+        if (!res || res.error) { wrErrToast(res && res.error); return; }
         if (res.space) wrApplySpace(res.space);
         wrToast(`🎖️ ${sq.name} angeheuert (${wrFmt(res.cc)} CC, ${res.days} Tage)`, 'success');
         // ⚠️ Chat ist reiner Text (Teil 23) — Betonung nur über Emoji.
@@ -7681,7 +7746,7 @@ function wrBindEvents() {
       _wrBusy = true;
       try {
         const res = await DB.setSpaceMercGuard(_wrMember.id, pid || null);
-        if (!res || res.error) { wrToast(wrErrText(res && res.error), 'error'); return; }
+        if (!res || res.error) { wrErrToast(res && res.error); return; }
         if (res.space) wrApplySpace(res.space);
         wrToast(pid ? '🎖️ Geschwader bewacht die Kolonie' : '🎖️ Geschwader am Raumhafen', 'info');
         wrRender();
@@ -7699,7 +7764,7 @@ function wrBindEvents() {
       _wrBusy = true;
       try {
         const res = await DB.repairPlanetTurret(_wrMember.id, pid, slot);
-        if (!res || res.error) { wrToast(wrErrText(res && res.error), 'error'); return; }
+        if (!res || res.error) { wrErrToast(res && res.error); return; }
         if (res.space) wrApplySpace(res.space);
         _wrGalaxy = await DB.fetchGalaxy();
         wrToast(`🛠️ ${SPACE_TURRET_BY_KEY[res.type]?.name || 'Geschütz'} repariert `
@@ -8115,7 +8180,7 @@ async function wrSend(intent) {
         wrToast(`Diese Region gehört jemand anderem — dein Verband bringt ⚔️ ${wrFmt(res.have)}, `
               + `nötig sind ${wrFmt(res.need)} (das 1,15-fache der Regionsverteidigung).`, 'error');
       } else {
-        wrToast(wrErrText(res?.error), 'error');
+        wrErrToast(res?.error);
       }
       return;
     }
@@ -8215,7 +8280,7 @@ async function wrBuildCart() {
     // Preise rechnet der SERVER (build_space_cart) — beim Warenkorb wäre ein vom Client
     // mitgeschickter Preis je Position eine offene Flanke.
     const res = await DB.buildSpaceCart(_wrMember.id, cart);
-    if (!res || res.error) { wrToast(wrErrText(res?.error), 'error'); return; }
+    if (!res || res.error) { wrErrToast(res?.error); return; }
     if (res.space) wrApplySpace(res.space);
     if (typeof res.coins_left === 'number') wrApplyCoins(res.coins_left);
     _wrCart = null;
@@ -8225,13 +8290,18 @@ async function wrBuildCart() {
     const longest = lines.reduce((a, l) => Math.max(a, l.minutes || 0), 0);
     // Abgebuchte Kosten im Toast — der Server liefert die ECHTEN Beträge (inkl.
     // Werft-Rabatt + Raffinerie), damit sieht JP sofort, was wirklich abging.
-    // Toast rendert KEIN HTML → hier bleiben es bewusst Emoji (die Regel steht an WR_IC).
+    // ⚠️ Der Satz „Toast rendert KEIN HTML" stand hier bis 2026-08-26 — und stimmte
+    // seit 39b nicht mehr: `wrToast(…, kind, true)` erlaubt HTML, der Flottenstart-Toast
+    // nutzt das längst. JP: „Auch wenn ein Bauauftrag ausgegeben wird, kommen die Emojis."
+    //   ⚠️ ÜBERTRAGBAR: ein Kommentar, der eine Einschränkung begründet, wird beim
+    //   Aufheben der Einschränkung nicht mitgesucht — er konserviert sie.
+    // `true` ist zulässig: in dieser Zeichenkette steckt KEIN fremder Text, nur Zahlen,
+    // feste Wörter und selbst erzeugte Bild-Hüllen (dieselbe Begründung wie beim Start).
     const paid = [`${wrFmt(res.cc || 0)} CC`]
-      .concat(res.erz ? [`${wrFmt(res.erz)} 🪨`] : [])
-      .concat(res.kristall ? [`${wrFmt(res.kristall)} 💎`] : [])
-      .concat(res.plasmoid ? [`${wrFmt(res.plasmoid)} 🟣`] : [])
-      .concat(res.quantum ? [`${wrFmt(res.quantum)} 🌀`] : []).join(' · ');
-    wrToast(`🏗️ ${wrFmt(total)} Schiff(e) in Bau — fertig in ${wrDur(longest)} (${paid})`, 'success');
+      .concat(wrResListe({ erz: res.erz, kri: res.kristall,
+                           pla: res.plasmoid, qua: res.quantum }, '', '') || []).join(' · ');
+    wrToast(`🏗️ ${wrFmt(total)} Schiff(e) in Bau — fertig in ${wrDur(longest)} (${paid})`,
+      'success', true);
 
     // 📒 Handover §6 / CLAUDE.md Regel 1: Schiffbau ist die grösste laufende CC-Ausgabe
     // im Weltraum und fehlte im Tages-Log komplett — im Profil war nicht zu sehen, wohin
@@ -8487,7 +8557,7 @@ async function wrClaimTech(silent) {
   try {
     const res = await DB.claimSpaceTech(_wrMember.id);
     if (!res || res.error) {
-      if (!silent && res && res.error) wrToast(wrErrText(res.error), 'error');
+      if (!silent && res && res.error) wrErrToast(res.error);
       return false;
     }
     if (res.space) wrApplySpace(res.space);
@@ -8579,7 +8649,7 @@ async function wrClaimBuild(silent) {
   try {
     const res = await DB.claimSpaceBuild(_wrMember.id);
     if (!res || res.error) {
-      if (!silent && res.error) wrToast(wrErrText(res.error), 'error');
+      if (!silent && res.error) wrErrToast(res.error);
       return false;
     }
     if (res.space) wrApplySpace(res.space);
@@ -8609,7 +8679,7 @@ async function wrRequestHelp() {
   _wrBusy = true;
   try {
     const res = await DB.requestSpaceHelp(_wrMember.id);
-    if (!res || res.error) { wrToast(wrErrText(res?.error), 'error'); return; }
+    if (!res || res.error) { wrErrToast(res?.error); return; }
     _wrWave.helpOpen = true;
     const tier = wrWaveTier(_wrWave.strength);
     wrToast('📣 Hilferuf abgesetzt', 'success');
@@ -8628,7 +8698,7 @@ async function wrResolveWave() {
   _wrBusy = true; _wrResolving = true;
   try {
     const res = await DB.resolveSpaceWave(_wrMember.id);
-    if (!res || res.error) { wrToast(wrErrText(res?.error), 'error'); return; }
+    if (!res || res.error) { wrErrToast(res?.error); return; }
     if (res.nothing) { await wrLoadWaves(false); wrRender(); return; }
     if (res.space) wrApplySpace(res.space);
     wrWaveReport(res);
@@ -8708,7 +8778,7 @@ async function wrSendHelp(waveId) {
   _wrBusy = true;
   try {
     const res = await DB.sendSpaceHelp(_wrMember.id, waveId, fleet);
-    if (!res || res.error) { wrToast(wrErrText(res?.error), 'error'); return; }
+    if (!res || res.error) { wrErrToast(res?.error); return; }
     if (res.space) wrApplySpace(res.space);
     _wrHelpFleet = null;
     const w = (_wrAllWaves || []).find(x => x.id === waveId);
@@ -8734,7 +8804,7 @@ async function wrSetRoute(planetId, count, mode) {
   _wrBusy = true;
   try {
     const res = await DB.setSpaceRoute(_wrMember.id, planetId, count, mode || 'res');
-    if (!res || res.error) { wrToast(wrErrText(res?.error), 'error'); return; }
+    if (!res || res.error) { wrErrToast(res?.error); return; }
     if (res.space) wrApplySpace(res.space);
     if (_wrRouteSel) delete _wrRouteSel[planetId + (wreck ? ':w' : '')];
     const ship = wreck ? 'berger' : 'ernter';
@@ -8762,7 +8832,7 @@ async function wrRecall(tripId) {
   _wrBusy = true;
   try {
     const res = await DB.recallSpaceTrip(m.id, tripId || null);
-    if (!res || res.error) { wrToast(wrErrText(res?.error), 'error'); return; }
+    if (!res || res.error) { wrErrToast(res?.error); return; }
     if (res.space) wrApplySpace(res.space);
     const back = Date.parse(res.trip?.returnAt) - Date.now();
     wrToast(`↩️ Flotte kehrt um — zurück in ${wrCountdown(back)}`, 'info');
@@ -8781,7 +8851,7 @@ async function wrDefense(action, slot, type) {
   _wrBusy = true;
   try {
     const res = await DB.buildSpaceDefense(_wrMember.id, action, slot, type);
-    if (!res || res.error) { wrToast(wrErrText(res?.error), 'error'); return; }
+    if (!res || res.error) { wrErrToast(res?.error); return; }
     if (res.space) wrApplySpace(res.space);
     if (typeof res.coins_left === 'number') wrApplyCoins(res.coins_left);
 
@@ -8872,7 +8942,7 @@ async function wrBuildMutterschiff() {
           `${SPACE_SHIP_BY_KEY[x.ship]?.name || x.ship}: ${x.have}/${x.need}`).join(' · ');
         wrToast('Es fehlen Rümpfe — ' + txt, 'error');
       } else {
-        wrToast(wrErrText(res?.error), 'error');
+        wrErrToast(res?.error);
       }
       return;
     }
@@ -8900,7 +8970,7 @@ async function wrPlanetBuild(planetId, action, slot, type) {
   _wrBusy = true;
   try {
     const res = await DB.buildPlanetDefense(_wrMember.id, planetId, action, slot, type);
-    if (!res || res.error) { wrToast(wrErrText(res?.error), 'error'); return; }
+    if (!res || res.error) { wrErrToast(res?.error); return; }
     if (res.space) wrApplySpace(res.space);
     if (typeof res.coins_left === 'number') wrApplyCoins(res.coins_left);
 
@@ -8989,7 +9059,7 @@ async function wrTryClaim(silent) {
     while (guard++ < 6) {   // Schutz: maximal 5 Flotten gleichzeitig
       const res = await DB.claimSpaceArrival(m.id);
       if (!res || res.error) {
-        if (res?.error !== 'still_traveling' && !silent) wrToast(wrErrText(res?.error), 'error');
+        if (res?.error !== 'still_traveling' && !silent) wrErrToast(res?.error);
         break;
       }
       if (res.space) wrApplySpace(res.space);
@@ -9017,7 +9087,7 @@ async function wrHarvest() {
   _wrBusy = true;
   try {
     const res = await DB.harvestSpace(_wrMember.id);
-    if (!res || res.error) { wrToast(wrErrText(res?.error), 'error'); return; }
+    if (!res || res.error) { wrErrToast(res?.error); return; }
     if (res.space) wrApplySpace(res.space);
     wrErnteLogAdd(res, false);
     const parts = [];
@@ -9909,4 +9979,16 @@ function wrErrText(err) {
     same_power:            'Dieser Generator steht bereits.',
   };
   return map[err] || ('Fehler: ' + (err || 'unbekannt'));
+}
+
+// 🚫➡️🖼️ Fehlermeldung MIT echten Rohstoff-Bildern.
+// JP 2026-08-26 zu „Nicht genug 🌀 Quantenschaum": „wieder das Emoji, statt Asset."
+// ⚠️ EIN Helfer statt zwanzig geänderter Meldungen: `wrErrText` bleibt reiner Text
+// (Konsole, Verkettungen), und nur die ANZEIGE bekommt Bilder. Zwei parallele
+// Meldungstabellen wären der Anfang von zwei Wahrheiten.
+// ⚠️ `wrIcText` escapt ZUERST und ersetzt danach — wichtig, weil der Rückfallzweig
+// von `wrErrText` einen SERVER-Fehlercode einbettet („Fehler: …").
+function wrErrToast(err, kind) {
+  try { wrToast(wrIcText(wrErrText(err)), kind || 'error', true); }
+  catch (e) { wrToast(wrErrText(err), kind || 'error'); }
 }

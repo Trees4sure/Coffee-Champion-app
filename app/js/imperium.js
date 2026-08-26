@@ -320,7 +320,14 @@ function _buildWeltraumZweig(research) {
           <span class="cc-space-ast">${_esc2(it.ast)} · WT${it.wt}</span>
           <span class="cc-space-cost">${owned ? '✓' : _impCostHtml(it.cost)}</span>
         </div>
-        <p class="cc-space-desc">${_esc2(it.desc)}</p>
+        ${/* 🖼️ Die Schiffe im desc stehen als [[s:key]]-Token (research.js) — `_chatArt`
+              löst sie in die echten Renders auf. ⚠️ REIHENFOLGE: erst escapen, dann
+              auflösen; andersherum würde die eingefügte Bild-Hülle selbst escaped und
+              stünde als Text da (dieselbe Regel wie bei wrIcText).
+              ⚠️ typeof-Wache (Regel 3): fehlt app.js, bleibt der Text lesbar — die
+              Token wären dann sichtbar, aber der Baum stürzt nicht ab. */''}
+        <p class="cc-space-desc">${typeof _chatArt === 'function'
+          ? _chatArt(_esc2(it.desc)) : _esc2(it.desc)}</p>
         ${owned ? '<p class="cc-combo-owned-lbl">✓ Erforscht</p>'
           : avail ? `<button class="cc-buy-btn cc-combo-buy-btn" data-buy="${it.id}">Erforschen</button>`
           : `<p class="cc-combo-locked">🔒 Braucht: ${_esc2(missing || '—')}</p>`}
