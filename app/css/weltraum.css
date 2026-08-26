@@ -667,12 +667,31 @@
   border: 1px solid #4c8f5c; background: rgba(122,212,138,.10); }
 
 /* ── Dauerernte-Routen ────────────────────────────────────────────────────── */
-.wr-route { display: grid; grid-template-columns: 36px 1fr auto; gap: 10px;
+/* ⚠️ `minmax(0, 1fr)` statt `1fr`: ein Grid-Track hat `min-width: auto` und schrumpft
+   NICHT unter seinen längsten unteilbaren Inhalt. Mit blossem `1fr` gewinnt die
+   Textspalte jeden Platzstreit gegen sich selbst und quetscht dafür die Zeile.
+   Die Wertspalte ist zusätzlich gedeckelt — sie soll den Ertrag zeigen, nicht die
+   Zeile aufteilen. */
+.wr-route { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; gap: 10px;
   align-items: center; padding: 8px 0; border-bottom: 1px solid #1c2544; }
 .wr-route:last-of-type { border-bottom: none; margin-bottom: 8px; }
-.wr-route-txt { display: flex; flex-direction: column; font-size: .82rem;
+.wr-route-txt { display: flex; flex-direction: column; min-width: 0; font-size: .82rem;
   color: #c3cfee; line-height: 1.35; }
-.wr-route-amt { font-size: .84rem; font-weight: 700; color: #7ad48a; white-space: nowrap; }
+.wr-route-txt > * { min-width: 0; overflow-wrap: anywhere; }
+/* Wert oben, Status darunter — nie beides in einer nowrap-Zeile (JP 2026-08-26). */
+.wr-route-amt { display: flex; flex-direction: column; align-items: flex-end;
+  justify-content: center; gap: 1px; max-width: 42%; text-align: right;
+  font-size: .84rem; font-weight: 700; color: #7ad48a; }
+.wr-route-amt-v { white-space: nowrap; line-height: 1.3; }
+.wr-route-amt .wr-sub { font-weight: 400; white-space: nowrap; }
+/* Schmale Geräte: der Ertrag rutscht unter den Text, statt ihn zu verdrängen.
+   ⚠️ `grid-column: 2` explizit — automatisch platziert landete er unter dem Bild. */
+@media (max-width: 430px) {
+  .wr-route { grid-template-columns: 36px minmax(0, 1fr); row-gap: 3px; }
+  .wr-route-amt { grid-column: 2; max-width: none; align-items: flex-start;
+    text-align: left; }
+  .wr-route-amt-v { white-space: normal; }
+}
 .wr-routebox { margin-top: 12px; padding: 10px 11px; border-radius: 10px;
   background: #0d1430; border: 1px solid #24305a; }
 .wr-routebox .wr-facts { margin: 8px 0; }
@@ -955,6 +974,13 @@
   background: color-mix(in srgb, #4d7fd4 14%, transparent); font-size: .82rem;
 }
 .wr-techjob-done { border-color: #3f7a4c; background: color-mix(in srgb, #3f7a4c 16%, transparent); }
+/* 🔬 27ak — Platzstand des Labors (3 Projekte gleichzeitig).
+   ⚠️ Steht bewusst AUCH dann da, wenn alle Plätze frei sind: ein Labor mit einem
+   laufenden Projekt sah vorher genauso aus wie eines mit dreien, und niemand konnte
+   sehen, ob noch etwas anzustossen ist. Die Einschränkung („nur in verschiedenen
+   Ästen") steht in derselben Zeile — hier trifft der Spieler auf die Regel. */
+.wr-techslots { margin: 2px 0 10px; line-height: 1.4; }
+.wr-techslots em { font-style: normal; opacity: .85; display: block; margin-top: 2px; }
 /* Ein laufendes Projekt am Knoten selbst — und die anderen sichtbar gesperrt. */
 .wr-tech-run  { color: #9dc0ff; font-weight: 600; }
 .wr-tech-node.wr-tech-running { border-color: #4d7fd4; }
@@ -978,3 +1004,25 @@
   background: rgba(20,30,60,.45); }
 .wr-kit-grid { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 5px; }
 .wr-kit-grid > span { white-space: nowrap; }
+
+/* 📖 27am/Teil 42 — Zugang zum Handbuch (weltraum_regeln.html).
+   ⚠️ Das Einstiegs-Popup erscheint nur EINMAL je Mitglied; ohne diese Zeile wäre das
+   Handbuch danach unauffindbar. Eine Erklärung, die man nicht wiederfindet, ist keine. */
+.wr-handbuch-line {
+  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+  margin: 8px 0 2px; padding: 7px 11px; border-radius: var(--radius, 10px);
+  border: 1px solid #2f3d6e; background: rgba(110,168,255,.07); font-size: .82rem;
+}
+.wr-handbuch-line a { color: #9dc0ff; font-weight: 600; text-decoration: none; }
+.wr-handbuch-line a:hover { text-decoration: underline; }
+
+/* ⏳ 27al — laufender Raumhafen-/Werft-Ausbau (2 Tage).
+   ⚠️ Der Kasten ersetzt den Ausbau-Knopf, solange gebaut wird. Ohne ihn verschwände der
+   Knopf einfach, und ein bezahlter Vorgang sähe aus wie ein Fehler — dieselbe Lücke,
+   die 26u bei der Forschung und 26v bei den Kolonie-Angriffen hatte. */
+.wr-upbox {
+  display: flex; flex-direction: column; gap: 2px; margin: 6px 0 2px; padding: 8px 10px;
+  border: 1px solid #4d7fd4; border-radius: var(--radius, 10px);
+  background: color-mix(in srgb, #4d7fd4 14%, transparent); font-size: .82rem;
+}
+.wr-upbox-done { border-color: #3f7a4c; background: color-mix(in srgb, #3f7a4c 16%, transparent); }
