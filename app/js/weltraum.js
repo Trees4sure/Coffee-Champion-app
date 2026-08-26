@@ -133,23 +133,23 @@ const SPACE_TECH_ASTE = [
 const SPACE_TECH = [
   // Ast A — verdrahtet
   // art: dedizierte Forschungs-Icons aus assets/weltraum/ (JP-Fix 2026-07-26), nicht mehr generische space/-Namen
-  { key:'wt_a3', ast:'a', stufe:3, name:'Warp-Kessel',    cc:15000, erz:240, kristall:65,  requires:null,
+  { key:'wt_a3', ast:'a', stufe:3, name:'Warp-Kessel',    cc:45000, erz:720, kristall:195,  requires:null,
     wirkung:'Flugzeit −25 %',            art:'wt3_warp_kessel', live:true },
-  { key:'wt_a4', ast:'a', stufe:4, name:'Orbitalwerft',   cc:24000, erz:400, kristall:130,  requires:'wt_a3',
+  { key:'wt_a4', ast:'a', stufe:4, name:'Orbitalwerft',   cc:72000, erz:1200, kristall:390,  requires:'wt_a3',
     wirkung:'Bauzeit −15 %',             art:'wt4_werft', live:true },
-  { key:'wt_a5', ast:'a', stufe:5, name:'Dunkle Materie', cc:39000, erz:640, kristall:240, requires:'wt_a4',
+  { key:'wt_a5', ast:'a', stufe:5, name:'Dunkle Materie', cc:117000, erz:1920, kristall:720, requires:'wt_a4',
     wirkung:'Flugzeit weitere −25 %',    art:'wt5_dunkle_materie', live:true },
   // Ast B — noch nicht verdrahtet
-  { key:'wt_b1', ast:'b', stufe:1, name:'Bohnen-Railgun',       cc:4800,  erz:65,  kristall:0,   requires:null,   wirkung:'Geschütz-Feuerkraft +15 %',      art:'wt1_railgun',        live:true },
-  { key:'wt_b2', ast:'b', stufe:2, name:'Koffein-Laser',        cc:9000, erz:130,  kristall:25,  requires:'wt_b1', wirkung:'Flotten-Kampfkraft +10 %',       art:'wt2_koffein_laser',  live:true },
-  { key:'wt_b3', ast:'b', stufe:3, name:'Plasma-Kanone',        cc:15000, erz:240, kristall:65,  requires:'wt_b2', wirkung:'Kampfverluste −15 %',            art:'wt3_plasma_kanone',  live:true },
-  { key:'wt_b4', ast:'b', stufe:4, name:'EMP-Espresso',         cc:24000, erz:400, kristall:130,  requires:'wt_b3', wirkung:'Hinterhalte halb so oft',        art:'wt4_emp_espresso',   live:true },
-  { key:'wt_b5', ast:'b', stufe:5, name:'Singularitätswerfer',  cc:39000, erz:640, kristall:240, requires:'wt_b4', wirkung:'Geschütze +40 %, Reparatur 4 h', art:'wt5_singularitaet',  live:true },
+  { key:'wt_b1', ast:'b', stufe:1, name:'Bohnen-Railgun',       cc:14400,  erz:195,  kristall:0,   requires:null,   wirkung:'Geschütz-Feuerkraft +15 %',      art:'wt1_railgun',        live:true },
+  { key:'wt_b2', ast:'b', stufe:2, name:'Koffein-Laser',        cc:27000, erz:390,  kristall:75,  requires:'wt_b1', wirkung:'Flotten-Kampfkraft +10 %',       art:'wt2_koffein_laser',  live:true },
+  { key:'wt_b3', ast:'b', stufe:3, name:'Plasma-Kanone',        cc:45000, erz:720, kristall:195,  requires:'wt_b2', wirkung:'Kampfverluste −15 %',            art:'wt3_plasma_kanone',  live:true },
+  { key:'wt_b4', ast:'b', stufe:4, name:'EMP-Espresso',         cc:72000, erz:1200, kristall:390,  requires:'wt_b3', wirkung:'Hinterhalte halb so oft',        art:'wt4_emp_espresso',   live:true },
+  { key:'wt_b5', ast:'b', stufe:5, name:'Singularitätswerfer',  cc:117000, erz:1920, kristall:720, requires:'wt_b4', wirkung:'Geschütze +40 %, Reparatur 4 h', art:'wt5_singularitaet',  live:true },
   // Ast C
-  { key:'wt_c2', ast:'c', stufe:2, name:'Tiefenscanner',    cc:9000, erz:130,  kristall:25,  requires:null,   wirkung:'Abbau +15 %',            art:'wt2_scanner',        live:true },
-  { key:'wt_c3', ast:'c', stufe:3, name:'Plasma-Bohrkopf',  cc:15000, erz:240, kristall:65,  requires:'wt_c2', wirkung:'Dauerernte +25 %',       art:'wt3_plasma_bohrkopf', live:true },
-  { key:'wt_c4', ast:'c', stufe:4, name:'Schürfdrohnen',    cc:24000, erz:400, kristall:130,  requires:'wt_c3', wirkung:'Treibstoff −50 %',       art:'wt4_schuerfdrohnen', live:true },
-  { key:'wt_c5', ast:'c', stufe:5, name:'Kern-Extraktor',   cc:39000, erz:640, kristall:240, requires:'wt_c4', wirkung:'Kolonie-Ertrag +50 %',   art:'wt5_kern_extraktor', live:true },
+  { key:'wt_c2', ast:'c', stufe:2, name:'Tiefenscanner',    cc:27000, erz:390,  kristall:75,  requires:null,   wirkung:'Abbau +15 %',            art:'wt2_scanner',        live:true },
+  { key:'wt_c3', ast:'c', stufe:3, name:'Plasma-Bohrkopf',  cc:45000, erz:720, kristall:195,  requires:'wt_c2', wirkung:'Dauerernte +25 %',       art:'wt3_plasma_bohrkopf', live:true },
+  { key:'wt_c4', ast:'c', stufe:4, name:'Schürfdrohnen',    cc:72000, erz:1200, kristall:390,  requires:'wt_c3', wirkung:'Treibstoff −50 %',       art:'wt4_schuerfdrohnen', live:true },
+  { key:'wt_c5', ast:'c', stufe:5, name:'Kern-Extraktor',   cc:117000, erz:1920, kristall:720, requires:'wt_c4', wirkung:'Kolonie-Ertrag +50 %',   art:'wt5_kern_extraktor', live:true },
   // Ast D
   // ⚠️ Die Raffinerie-STUFE ist ein unsichtbarer Nebeneffekt dieses Astes: wrRefineTier()
   // nimmt schlicht die höchste besessene wt_d*-Technik (e13 = 6). In den Wirkungstexten
@@ -158,21 +158,21 @@ const SPACE_TECH = [
   // steht die Stufe jetzt VORNE, und die zwei Freischaltungen (🟣 ab St. 2, 🌀 ab St. 4)
   // sind benannt. ⚠️ Wer WR_REFINE/_space_refine_def ändert, muss diese Texte mitziehen —
   // test_26s_plasmoid.js prüft die Zuordnung Technik → Stufe gegen wrRefineTier.
-  { key:'wt_d1', ast:'d', stufe:1, name:'Raffinerie',         cc:4800,  erz:65,  kristall:0,   requires:null,   wirkung:'🏭 Raffinerie Stufe 1 · Rohstoffkosten −20 %',    art:'wt1_raffinerie',      live:true },
-  { key:'wt_d2', ast:'d', stufe:2, name:'Handelsdock',        cc:9000, erz:130,  kristall:25,  requires:'wt_d1', wirkung:'🏭 Raffinerie Stufe 2 — verwertet 🟣 · Kampf-Bergung +25 %',     art:'wt2_handelsdock',     live:true },
-  { key:'wt_d3', ast:'d', stufe:3, name:'Orbitallager',       cc:15000, erz:240, kristall:65,  requires:'wt_d2', wirkung:'🏭 Raffinerie Stufe 3 · Ansammlung 14 → 21 Tage', art:'wt3_lager',           live:true },
-  { key:'wt_d4', ast:'d', stufe:4, name:'Fern-Handelsroute',  cc:24000, erz:400, kristall:130,  requires:'wt_d3', wirkung:'🏭 Raffinerie Stufe 4 — verwertet 🌀 · Kolonien geben CC/Tag',   art:'wt4_handelsroute',    live:true },
-  { key:'wt_d5', ast:'d', stufe:5, name:'Sternenbörse',       cc:39000, erz:640, kristall:240, requires:'wt_d4', wirkung:'🏭 Raffinerie Stufe 5 · Wrack-Ausbeute +30 %',    art:'wt5_sternenboerse',   live:true },
+  { key:'wt_d1', ast:'d', stufe:1, name:'Raffinerie',         cc:14400,  erz:195,  kristall:0,   requires:null,   wirkung:'🏭 Raffinerie Stufe 1 · Rohstoffkosten −20 %',    art:'wt1_raffinerie',      live:true },
+  { key:'wt_d2', ast:'d', stufe:2, name:'Handelsdock',        cc:27000, erz:390,  kristall:75,  requires:'wt_d1', wirkung:'🏭 Raffinerie Stufe 2 — verwertet 🟣 · Kampf-Bergung +25 %',     art:'wt2_handelsdock',     live:true },
+  { key:'wt_d3', ast:'d', stufe:3, name:'Orbitallager',       cc:45000, erz:720, kristall:195,  requires:'wt_d2', wirkung:'🏭 Raffinerie Stufe 3 · Ansammlung 14 → 21 Tage', art:'wt3_lager',           live:true },
+  { key:'wt_d4', ast:'d', stufe:4, name:'Fern-Handelsroute',  cc:72000, erz:1200, kristall:390,  requires:'wt_d3', wirkung:'🏭 Raffinerie Stufe 4 — verwertet 🌀 · Kolonien geben CC/Tag',   art:'wt4_handelsroute',    live:true },
+  { key:'wt_d5', ast:'d', stufe:5, name:'Sternenbörse',       cc:117000, erz:1920, kristall:720, requires:'wt_d4', wirkung:'🏭 Raffinerie Stufe 5 · Wrack-Ausbeute +30 %',    art:'wt5_sternenboerse',   live:true },
   // ── Fortgeschrittene Forschung (26d), Kosten teils in 🟣/🌀. LIVE: wt_e7/wt_f5 (Abbau-Gates)
   //    + wt_f9 (Transmuter-Sink). Die übrigen 22 sind sichtbare Roadmap (live:false). ──
   // 🟣 Ehemaliger Ast E („Plasmoid-Technik") — seit 2026-07-29 nach Thema in A–D
   // einsortiert (JP). Die Schlüssel bleiben `wt_e*`, weil sie in Spielerdaten stehen;
   // `ast`/`stufe` je Zeile sagen jetzt, wo die Technik im Baum erscheint.
-  { key:'wt_e1',  ast:'b', stufe:7,  name:'Plasmoid-Torpedo',        cc:22000, erz:300, kristall:60,  plasmoid:20, quantum:0, requires:'wt_b3', wirkung:'Schiffs-Angriff +12 % gegen schwere Ziele', art:'wt6_plasmoid_torpedo',  live:true  },
-  { key:'wt_e2',  ast:'b', stufe:8,  name:'Resonanz-Geschütz',       cc:26000, erz:360, kristall:90,  plasmoid:30, quantum:0, requires:'wt_b5', wirkung:'Neues Geschütz atk 200 (hebt Cap)',          art:'wt6_resonanz_geschuetz', live:true  },
-  { key:'wt_e3',  ast:'b', stufe:6,  name:'Schwarmraketen',          cc:20000, erz:280, kristall:50,  plasmoid:20, quantum:0, requires:'wt_b2', wirkung:'+20 % gegen Schwärme / leichte Gegner',      art:'wt6_schwarmraketen',    live:true  },
-  { key:'wt_e4',  ast:'a', stufe:6,  name:'Plasmoid-Triebwerk',      cc:24000, erz:320, kristall:80,  plasmoid:30, quantum:0, requires:'wt_a5', wirkung:'Flugzeit −20 %',                            art:'wt6_plasmoid_triebwerk', live:true  },
-  { key:'wt_e5',  ast:'d', stufe:6,  name:'Trägheitsdämpfer',        cc:20000, erz:260, kristall:60,  plasmoid:20, quantum:0, requires:'wt_d2', wirkung:'Verlust-Rückbergung +25 %',                 art:'wt6_traegheitsdaempfer', live:true  },
+  { key:'wt_e1',  ast:'b', stufe:7,  name:'Plasmoid-Torpedo',        cc:66000, erz:900, kristall:180,  plasmoid:60, quantum:0, requires:'wt_b3', wirkung:'Schiffs-Angriff +12 % gegen schwere Ziele', art:'wt6_plasmoid_torpedo',  live:true  },
+  { key:'wt_e2',  ast:'b', stufe:8,  name:'Resonanz-Geschütz',       cc:78000, erz:1080, kristall:270,  plasmoid:90, quantum:0, requires:'wt_b5', wirkung:'Neues Geschütz atk 200 (hebt Cap)',          art:'wt6_resonanz_geschuetz', live:true  },
+  { key:'wt_e3',  ast:'b', stufe:6,  name:'Schwarmraketen',          cc:60000, erz:840, kristall:150,  plasmoid:60, quantum:0, requires:'wt_b2', wirkung:'+20 % gegen Schwärme / leichte Gegner',      art:'wt6_schwarmraketen',    live:true  },
+  { key:'wt_e4',  ast:'a', stufe:6,  name:'Plasmoid-Triebwerk',      cc:72000, erz:960, kristall:240,  plasmoid:90, quantum:0, requires:'wt_a5', wirkung:'Flugzeit −20 %',                            art:'wt6_plasmoid_triebwerk', live:true  },
+  { key:'wt_e5',  ast:'d', stufe:6,  name:'Trägheitsdämpfer',        cc:60000, erz:780, kristall:180,  plasmoid:60, quantum:0, requires:'wt_d2', wirkung:'Verlust-Rückbergung +25 %',                 art:'wt6_traegheitsdaempfer', live:true  },
   // ⚠️ EFFEKT NEU GESTALTET 2026-07-30 (JP: „Ich habe die Funktion freigeschaltet, dass
   // ich alle Quadranten sehen kann ohne Sonde - das finde ich doof - Alles sichtbar ist
   // OP. Kannst du das Rückgängig machen und diese Forschung anders gestalten?").
@@ -188,29 +188,29 @@ const SPACE_TECH = [
   // Pflicht. Information statt Zugang. Preis bewusst UNVERÄNDERT (18 000 CC): die Technik
   // ist damit nicht mehr allmächtig, aber der blinde Sondenflug war die eigentliche
   // Schwäche der Erkundung, und die behebt sie vollständig.
-  { key:'wt_e6',  ast:'a', stufe:8,  name:'Deep-Space-Sensorik',     cc:18000, erz:240, kristall:50,  plasmoid:15, quantum:0, requires:'wt_a3', wirkung:'📡 Ortet angrenzende Nebel-Quadranten: Planetenzahl, Wächterstärke, Wracks und Ring-Rohstoffe — die Sonde bleibt nötig', art:'wt6_deepspace_sensor',  live:true  },
-  { key:'wt_e7',  ast:'c', stufe:7,  name:'Plasmoid-Kollektor',      cc:20000, erz:300, kristall:80,  plasmoid:0,  quantum:0, requires:'wt_c4', wirkung:'Schaltet 🟣 Plasmoiden-Abbau frei',        art:'wt6_plasmoid_kollektor', live:true  },
-  { key:'wt_e8',  ast:'c', stufe:6,  name:'Wrack-Tiefenscanner',     cc:22000, erz:300, kristall:70,  plasmoid:25, quantum:0, requires:'wt_c2', wirkung:'+30 % Wrack-Ausbeute',                      art:'wt6_wrack_scanner',     live:true  },
-  { key:'wt_e9',  ast:'c', stufe:10,  name:'Auto-Ernte-Protokoll',    cc:28000, erz:400, kristall:120, plasmoid:40, quantum:0, requires:'wt_c5', wirkung:'Kolonien ernten selbsttätig',               art:'wt6_auto_ernte',        live:true  },
-  { key:'wt_e10', ast:'b', stufe:11, name:'Planetar-Schildgenerator',cc:26000, erz:380, kristall:100, plasmoid:40, quantum:0, requires:'wt_b4', wirkung:'Schaltet Planeten-Geschütze frei',          art:'wt6_planetar_schild',   live:true  },
-  { key:'wt_e11', ast:'b', stufe:12, name:'Selbstreparatur-Nanobots',cc:24000, erz:340, kristall:90,  plasmoid:35, quantum:0, requires:'wt_e10',wirkung:'Geschütz-Ausfallzeit −50 %',                art:'wt6_nanobots',          live:true  },
-  { key:'wt_e12', ast:'b', stufe:13, name:'Frühwarn-Netz',           cc:22000, erz:300, kristall:80,  plasmoid:30, quantum:0, requires:'wt_e6', wirkung:'Rückfall-Frist +2 Tage + Wellen-Vorwarnung',art:'wt6_fruehwarnnetz',     live:true  },
-  { key:'wt_e13', ast:'d', stufe:8, name:'Plasma-Raffinerie',       cc:30000, erz:500, kristall:150, plasmoid:50, quantum:0, requires:'wt_d5', wirkung:'🏭 Raffinerie Stufe 6 (höchste) — 180 🟣 / 70 🌀 je Charge',                   art:'wt6_plasma_raffinerie', live:true  },
-  { key:'wt_e14', ast:'a', stufe:7, name:'Orbital-Fabrik',          cc:26000, erz:400, kristall:110, plasmoid:40, quantum:0, requires:'wt_a4', wirkung:'Bauzeit −25 %',                             art:'wt6_orbital_fabrik',    live:true  },
-  { key:'wt_e15', ast:'d', stufe:7, name:'Handelskolonie',          cc:28000, erz:420, kristall:120, plasmoid:45, quantum:0, requires:'wt_d4', wirkung:'Kolonien geben zusätzlich CC/Tag',          art:'wt6_handelskolonie',    live:true  },
+  { key:'wt_e6',  ast:'a', stufe:8,  name:'Deep-Space-Sensorik',     cc:54000, erz:720, kristall:150,  plasmoid:45, quantum:0, requires:'wt_a3', wirkung:'📡 Ortet angrenzende Nebel-Quadranten: Planetenzahl, Wächterstärke, Wracks und Ring-Rohstoffe — die Sonde bleibt nötig', art:'wt6_deepspace_sensor',  live:true  },
+  { key:'wt_e7',  ast:'c', stufe:7,  name:'Plasmoid-Kollektor',      cc:60000, erz:900, kristall:240,  plasmoid:0,  quantum:0, requires:'wt_c4', wirkung:'Schaltet 🟣 Plasmoiden-Abbau frei',        art:'wt6_plasmoid_kollektor', live:true  },
+  { key:'wt_e8',  ast:'c', stufe:6,  name:'Wrack-Tiefenscanner',     cc:66000, erz:900, kristall:210,  plasmoid:75, quantum:0, requires:'wt_c2', wirkung:'+30 % Wrack-Ausbeute',                      art:'wt6_wrack_scanner',     live:true  },
+  { key:'wt_e9',  ast:'c', stufe:10,  name:'Auto-Ernte-Protokoll',    cc:84000, erz:1200, kristall:360, plasmoid:120, quantum:0, requires:'wt_c5', wirkung:'Kolonien ernten selbsttätig',               art:'wt6_auto_ernte',        live:true  },
+  { key:'wt_e10', ast:'b', stufe:11, name:'Planetar-Schildgenerator',cc:78000, erz:1140, kristall:300, plasmoid:120, quantum:0, requires:'wt_b4', wirkung:'Schaltet Planeten-Geschütze frei',          art:'wt6_planetar_schild',   live:true  },
+  { key:'wt_e11', ast:'b', stufe:12, name:'Selbstreparatur-Nanobots',cc:72000, erz:1020, kristall:270,  plasmoid:105, quantum:0, requires:'wt_e10',wirkung:'Geschütz-Ausfallzeit −50 %',                art:'wt6_nanobots',          live:true  },
+  { key:'wt_e12', ast:'b', stufe:13, name:'Frühwarn-Netz',           cc:66000, erz:900, kristall:240,  plasmoid:90, quantum:0, requires:'wt_e6', wirkung:'Rückfall-Frist +2 Tage + Wellen-Vorwarnung',art:'wt6_fruehwarnnetz',     live:true  },
+  { key:'wt_e13', ast:'d', stufe:8, name:'Plasma-Raffinerie',       cc:90000, erz:1500, kristall:450, plasmoid:150, quantum:0, requires:'wt_d5', wirkung:'🏭 Raffinerie Stufe 6 (höchste) — grösste Chargen, kürzeste Laufzeit',                   art:'wt6_plasma_raffinerie', live:true  },
+  { key:'wt_e14', ast:'a', stufe:7, name:'Orbital-Fabrik',          cc:78000, erz:1200, kristall:330, plasmoid:120, quantum:0, requires:'wt_a4', wirkung:'Bauzeit −25 %',                             art:'wt6_orbital_fabrik',    live:true  },
+  { key:'wt_e15', ast:'d', stufe:7, name:'Handelskolonie',          cc:84000, erz:1260, kristall:360, plasmoid:135, quantum:0, requires:'wt_d4', wirkung:'Kolonien geben zusätzlich CC/Tag',          art:'wt6_handelskolonie',    live:true  },
   // 🌀 Ehemaliger Ast F („Quanten-Technik") — ebenfalls in A–D einsortiert.
   // ⚠️ Anzeigename 2026-07-29 von „Quanten-Lanze" auf „Quanten-Geschütz" geändert (JP).
   // Schlüssel `wt_f1` und Bildname bleiben — beide stecken in Spielerdaten bzw. Assets.
-  { key:'wt_f1',  ast:'b', stufe:9,  name:'Quanten-Geschütz',        cc:40000, erz:500, kristall:180, plasmoid:60, quantum:30, requires:'wt_e2', wirkung:'Neues Geschütz atk 320',                    art:'wt7_quanten_lanze',     live:true  },
-  { key:'wt_f2',  ast:'b', stufe:10,  name:'Antimaterie-Sprengkopf',  cc:45000, erz:550, kristall:200, plasmoid:70, quantum:40, requires:'wt_f1', wirkung:'Erstschlag −15 % Gegnerstärke',             art:'wt7_antimaterie_kopf',  live:true  },
-  { key:'wt_f3',  ast:'a', stufe:9,  name:'Sprungtor-Netzwerk',      cc:38000, erz:480, kristall:160, plasmoid:50, quantum:25, requires:'wt_e4', wirkung:'Multi-Flotten-Strafe +15 → +8 min',         art:'wt7_sprungtor',         live:true  },
-  { key:'wt_f4',  ast:'a', stufe:10,  name:'Faltraum-Anker',          cc:42000, erz:520, kristall:180, plasmoid:60, quantum:35, requires:'wt_f3', wirkung:'1×/Tag sofortiger Flotten-Rückruf',         art:'wt7_faltraum_anker',    live:true  },
-  { key:'wt_f5',  ast:'c', stufe:8,  name:'Quantenschaum-Extraktor', cc:30000, erz:400, kristall:120, plasmoid:60, quantum:0,  requires:'wt_e7', wirkung:'Schaltet 🌀 Quantenschaum-Abbau frei',      art:'wt7_quantum_extraktor', live:true  },
-  { key:'wt_f6',  ast:'c', stufe:9,  name:'Resonanz-Bohrung',        cc:40000, erz:500, kristall:170, plasmoid:50, quantum:40, requires:'wt_f5', wirkung:'Abbau Ring 2/3 +25 %',                      art:'wt7_resonanz_bohrung',  live:true  },
-  { key:'wt_f7',  ast:'b', stufe:14,  name:'Quadranten-Kommandostation',cc:48000,erz:600, kristall:220, plasmoid:80, quantum:50, requires:'wt_e10',wirkung:'Schaltet Quadranten-Station frei',          art:'wt7_quadranten_station',live:true  },
-  { key:'wt_f8',  ast:'c', stufe:11,  name:'Terraforming-Kern',       cc:44000, erz:560, kristall:200, plasmoid:70, quantum:45, requires:'wt_c5', wirkung:'Kolonie-Ertrag +50 %',                      art:'wt7_terraforming_kern', live:true  },
-  { key:'wt_f9',  ast:'d', stufe:9,  name:'Transmuter',              cc:40000, erz:0,   kristall:0,   plasmoid:40, quantum:30, requires:'wt_f5', wirkung:'Wandelt 🟣/🌀 sofort in CC (🟣 120 · 🌀 260 CC)',   art:'wt7_transmuter',        live:true  },
-  { key:'wt_f10', ast:'d', stufe:10, name:'Xeno-Diplomatie',         cc:46000, erz:580, kristall:210, plasmoid:75, quantum:50, requires:'wt_f7', wirkung:'Hinterhalt −20 %, gelegentl. Gratis-Rohstoffe',art:'wt7_xeno_diplomatie',  live:true  },
+  { key:'wt_f1',  ast:'b', stufe:9,  name:'Quanten-Geschütz',        cc:120000, erz:1500, kristall:540, plasmoid:180, quantum:90, requires:'wt_e2', wirkung:'Neues Geschütz atk 320',                    art:'wt7_quanten_lanze',     live:true  },
+  { key:'wt_f2',  ast:'b', stufe:10,  name:'Antimaterie-Sprengkopf',  cc:135000, erz:1650, kristall:600, plasmoid:210, quantum:120, requires:'wt_f1', wirkung:'Erstschlag −15 % Gegnerstärke',             art:'wt7_antimaterie_kopf',  live:true  },
+  { key:'wt_f3',  ast:'a', stufe:9,  name:'Sprungtor-Netzwerk',      cc:114000, erz:1440, kristall:480, plasmoid:150, quantum:75, requires:'wt_e4', wirkung:'Multi-Flotten-Strafe +15 → +8 min',         art:'wt7_sprungtor',         live:true  },
+  { key:'wt_f4',  ast:'a', stufe:10,  name:'Faltraum-Anker',          cc:126000, erz:1560, kristall:540, plasmoid:180, quantum:105, requires:'wt_f3', wirkung:'1×/Tag sofortiger Flotten-Rückruf',         art:'wt7_faltraum_anker',    live:true  },
+  { key:'wt_f5',  ast:'c', stufe:8,  name:'Quantenschaum-Extraktor', cc:90000, erz:1200, kristall:360, plasmoid:180, quantum:0,  requires:'wt_e7', wirkung:'Schaltet 🌀 Quantenschaum-Abbau frei',      art:'wt7_quantum_extraktor', live:true  },
+  { key:'wt_f6',  ast:'c', stufe:9,  name:'Resonanz-Bohrung',        cc:120000, erz:1500, kristall:510, plasmoid:150, quantum:120, requires:'wt_f5', wirkung:'Abbau Ring 2/3 +25 %',                      art:'wt7_resonanz_bohrung',  live:true  },
+  { key:'wt_f7',  ast:'b', stufe:14,  name:'Quadranten-Kommandostation',cc:144000,erz:1800, kristall:660, plasmoid:240, quantum:150, requires:'wt_e10',wirkung:'Schaltet Quadranten-Station frei',          art:'wt7_quadranten_station',live:true  },
+  { key:'wt_f8',  ast:'c', stufe:11,  name:'Terraforming-Kern',       cc:132000, erz:1680, kristall:600, plasmoid:210, quantum:135, requires:'wt_c5', wirkung:'Kolonie-Ertrag +50 %',                      art:'wt7_terraforming_kern', live:true  },
+  { key:'wt_f9',  ast:'d', stufe:9,  name:'Transmuter',              cc:120000, erz:0,   kristall:0,   plasmoid:120, quantum:90, requires:'wt_f5', wirkung:'Wandelt 🟣/🌀 sofort in CC (🟣 120 · 🌀 260 CC)',   art:'wt7_transmuter',        live:true  },
+  { key:'wt_f10', ast:'d', stufe:10, name:'Xeno-Diplomatie',         cc:138000, erz:1740, kristall:630, plasmoid:225, quantum:150, requires:'wt_f7', wirkung:'Hinterhalt −20 %, gelegentl. Gratis-Rohstoffe',art:'wt7_xeno_diplomatie',  live:true  },
 ];
 const SPACE_TECH_BY_KEY = SPACE_TECH.reduce((m, t) => (m[t.key] = t, m), {});
 
@@ -346,21 +346,71 @@ function wrTechMinFor(t) {
   return st <= 8 ? WR_TECH_MIN_MID : WR_TECH_MIN_TOP;
 }
 
-function wrTechJob(m) {
-  const j = wrSpace(m).techJob;
-  return (j && typeof j === 'object' && j.key) ? j : null;
+// ⚠️ CLIENT-SPIEGEL von `_space_tech_slots()` (27ak). Weicht die Zahl ab, sperrt die
+// Anzeige einen Platz, den der Server vergeben würde — oder umgekehrt.
+const WR_TECH_SLOTS = 3;
+
+// ⚠️ 27ak (JP 2026-08-26: „man darf 3 auf einmal forschen"). Aus dem EINEN
+// `space.techJob` wird `space.techJobs` — ein Objekt Schlüssel → Projekt, genau wie
+// `yard.jobs` bei den Schiffen. Dasselbe Muster, damit es nur eine Denkweise gibt.
+//
+// ⚠️ DER ALTBESTAND WIRD MITGELESEN. Die Migration hebt `techJob` zwar einmalig, aber
+// zwischen SQL- und Client-Upload liegt ein Fenster — und ein BEZAHLTES Projekt darf
+// darin nicht unsichtbar werden. Geprüft wird auf das FELD, nicht auf einen Wert:
+// „läuft nichts" und „gibt es nicht" sind zwei Aussagen (die 27ac-Lehre).
+function wrTechJobs(m) {
+  const out = {};
+  try {
+    const sp = wrSpace(m) || {};
+    const alt = sp.techJob;
+    if (alt && typeof alt === 'object' && alt.key) out[alt.key] = alt;
+    const js = sp.techJobs;
+    if (js && typeof js === 'object') {
+      for (const k of Object.keys(js)) {
+        const j = js[k];
+        if (j && typeof j === 'object') out[k] = j;
+      }
+    }
+  } catch (e) { /* Regel 3: der Baum muss auch ohne Projekte aufgehen */ }
+  return out;
 }
-// Restzeit in ms. Ein unlesbarer Zeitstempel gilt als fertig — eine kaputte Uhr darf ein
-// bezahltes Projekt nicht ewig festhalten (Kulanzrichtung wie bei readyAt in 26u).
-function wrTechJobLeftMs(m) {
-  const j = wrTechJob(m);
-  if (!j || !j.doneAt) return 0;
-  const done = Date.parse(j.doneAt);
-  if (!isFinite(done)) return 0;
-  return Math.max(0, done - Date.now());
+// Liste mit garantiertem `key` — ein Altbestand-Objekt trägt ihn, ein neues auch, aber
+// verlassen sollte man sich auf den Schlüssel des Objekts.
+function wrTechJobList(m) {
+  const j = wrTechJobs(m);
+  return Object.keys(j).map(k => Object.assign({}, j[k], { key: k }));
 }
-function wrTechJobRestTxt(m) {
-  const ms = wrTechJobLeftMs(m);
+function wrTechJobFor(m, key)  { return wrTechJobs(m)[key] || null; }
+function wrTechJobCount(m)     { return Object.keys(wrTechJobs(m)).length; }
+function wrTechSlotsFree(m)    { return Math.max(0, WR_TECH_SLOTS - wrTechJobCount(m)); }
+
+// Restzeit EINES Projekts in ms. Ohne `key`: das nächste fällige (für „ist überhaupt
+// etwas abzuholen?"). Ein unlesbarer Zeitstempel gilt als fertig — eine kaputte Uhr darf
+// ein bezahltes Projekt nicht ewig festhalten (Kulanzrichtung wie bei readyAt in 26u).
+function wrTechJobLeftMs(m, key) {
+  const jobs = key ? [wrTechJobFor(m, key)] : wrTechJobList(m);
+  let min = null;
+  for (const j of jobs) {
+    if (!j) continue;
+    if (!j.doneAt) return 0;
+    const done = Date.parse(j.doneAt);
+    if (!isFinite(done)) return 0;
+    const rest = Math.max(0, done - Date.now());
+    if (min === null || rest < min) min = rest;
+  }
+  return min === null ? 0 : min;
+}
+// ⚠️ Gibt es überhaupt ein Projekt? `wrTechJobLeftMs` liefert 0 sowohl für „fertig"
+// als auch für „gar keins" — wer nur darauf prüft, holt ins Leere ab.
+function wrTechFaellig(m) {
+  return wrTechJobList(m).some(j => {
+    if (!j.doneAt) return true;
+    const done = Date.parse(j.doneAt);
+    return !isFinite(done) || Date.now() >= done;
+  });
+}
+function wrTechJobRestTxt(m, key) {
+  const ms = wrTechJobLeftMs(m, key);
   if (ms <= 0) return 'gleich fertig';
   const min = Math.round(ms / 60000);
   if (min < 60) return `${min} min`;
@@ -371,15 +421,16 @@ function wrTechJobRestTxt(m) {
 function wrTechState(m, t) {
   if (!t) return 'unknown';
   if (wrHasTech(m, t.key))                        return 'owned';
-  const job = wrTechJob(m);
   // ⚠️ VOR den übrigen Prüfungen: ein laufendes Projekt ist bezahlt und muss als solches
   // erkennbar sein, auch wenn die Mittel inzwischen für etwas anderes ausgegeben wurden.
-  if (job && job.key === t.key)                   return 'running';
+  if (wrTechJobFor(m, t.key))                     return 'running';
   if (!t.live)                                    return 'soon';
   if (t.requires && !wrHasTech(m, t.requires))    return 'locked';
   // Labor belegt — die Sperre kommt NACH 'locked', damit eine gesperrte Technik weiter
   // ihre Voraussetzung nennt (die ist die nützlichere Auskunft).
-  if (job)                                        return 'blocked';
+  // ⚠️ 27ak: erst wenn ALLE drei Plätze belegt sind. Vorher genügte ein einziges
+  // laufendes Projekt — jetzt wäre das eine Sperre, die der Server nicht kennt.
+  if (wrTechSlotsFree(m) <= 0)                    return 'blocked';
   const sp = (m && m.space) || {};
   const affordable = (m.coins || 0) >= t.cc
     && (parseFloat(sp.erz) || 0) >= (t.erz || 0) && (parseFloat(sp.kristall) || 0) >= (t.kristall || 0)
@@ -3267,8 +3318,8 @@ function wrTechHtml(m) {
         const st = wrTechState(m, t);
         const aktion = {
           owned:  '<span class="wr-tech-ok">✓ erforscht</span>',
-          running: `<span class="wr-tech-run">⏳ läuft — noch ${wrTechJobRestTxt(m)}</span>`,
-          blocked: '<span class="wr-tech-lock">🔬 Labor belegt</span>',
+          running: `<span class="wr-tech-run">⏳ läuft — noch ${wrTechJobRestTxt(m, t.key)}</span>`,
+          blocked: `<span class="wr-tech-lock">🔬 alle ${WR_TECH_SLOTS} Laborplätze belegt</span>`,
           soon:   '<span class="wr-tech-soon">in Vorbereitung</span>',
           locked: `<span class="wr-tech-lock">🔒 braucht ${_wrEsc((SPACE_TECH_BY_KEY[t.requires] || {}).name || '')}</span>`,
           poor:   '<span class="wr-tech-poor">Mittel reichen nicht</span>',
@@ -3329,22 +3380,41 @@ function wrTechHtml(m) {
   // Ein Verweis bleibt: wer die Technik hier sieht, soll wissen, wo sie steht.
   return `<div class="wr-card">
       <div class="wr-card-title">🔬 Weltraum-Technik
-        <span class="wr-sub">verstärkt, was du schon hast · ein Projekt gleichzeitig,
-          Dauer nach Stufe (2 h → 5 Tage)</span></div>
+        <span class="wr-sub">verstärkt, was du schon hast · ${WR_TECH_SLOTS} Projekte
+          gleichzeitig, Dauer nach Stufe (2 h → 5 Tage)</span></div>
       ${/* ⏳ 26u: das laufende Projekt ganz oben. Ohne diese Zeile musste man den
             richtigen Ast suchen, um überhaupt zu sehen, DASS etwas läuft — und die
             Fehlermeldung „es läuft bereits eine Forschung" blieb unerklärlich. */''}
       ${(() => {
-        const job = wrTechJob(m);
-        if (!job) return '';
-        const t = SPACE_TECH_BY_KEY[job.key];
-        const fertig = wrTechJobLeftMs(m) <= 0;
-        return `<div class="wr-techjob${fertig ? ' wr-techjob-done' : ''}">
-          <span>⏳ <strong>${_wrEsc(t?.name || job.key)}</strong> wird erforscht</span>
-          <span class="wr-sub">${fertig
-            ? 'fertig — wird beim nächsten Öffnen übernommen'
-            : `noch ${wrTechJobRestTxt(m)} · solange ist das Labor belegt`}</span>
-        </div>`;
+        // ⚠️ 27ak: DREI Plätze. Der freie Platz wird ausdrücklich als solcher gezeigt —
+        // sonst sieht ein Labor mit einem laufenden Projekt genauso aus wie eines mit
+        // dreien, und niemand weiß, ob er noch etwas anstossen kann.
+        const jobs = wrTechJobList(m)
+          .sort((a, b) => (Date.parse(a.doneAt) || 0) - (Date.parse(b.doneAt) || 0));
+        const frei = wrTechSlotsFree(m);
+        if (!jobs.length) {
+          return `<div class="wr-sub wr-techslots">🔬 Alle ${WR_TECH_SLOTS}
+            Laborplätze sind frei.</div>`;
+        }
+        const zeilen = jobs.map(job => {
+          const t = SPACE_TECH_BY_KEY[job.key];
+          const fertig = wrTechJobLeftMs(m, job.key) <= 0;
+          return `<div class="wr-techjob${fertig ? ' wr-techjob-done' : ''}">
+            <span>⏳ <strong>${_wrEsc(t?.name || job.key)}</strong> wird erforscht</span>
+            <span class="wr-sub">${fertig
+              ? 'fertig — wird beim nächsten Öffnen übernommen'
+              : `noch ${wrTechJobRestTxt(m, job.key)}`}</span>
+          </div>`;
+        }).join('');
+        // ⚠️ HIER steht die neue Regel, nicht in einem Popup (CLAUDE.md Regel 4). Und
+        // sie nennt die EINSCHRÄNKUNG mit: `requires` prüft gegen ABGESCHLOSSENE
+        // Forschung, eine Kette im selben Ast lässt sich also nicht stapeln. Ohne diesen
+        // Satz sucht man den Fehler bei den Plätzen, wenn wt_b2 neben wt_b1 nicht geht.
+        return zeilen + `<div class="wr-sub wr-techslots">🔬
+          ${jobs.length} von ${WR_TECH_SLOTS} Laborplätzen belegt${frei > 0
+            ? ` — noch ${frei} frei.` : '.'}
+          <em>Gleichzeitig geht nur, was NICHT aufeinander aufbaut — die nächste Stufe
+          eines Astes wartet weiter auf ihre Vorstufe.</em></div>`;
       })()}
       ${(sp || bt) ? `<div class="wr-facts">
         ${sp ? `<span>${wrIc('time')} Flugzeit: <strong>−${sp} %</strong></span>` : ''}
@@ -8549,10 +8619,10 @@ async function wrSyncAttacks(silent) {
 // im stillen Modus keine Toasts und kein Weiterreichen von Fehlern.
 async function wrClaimTech(silent) {
   if (_wrBusy) return false;
-  const job = wrSpace(_wrMember).techJob;
-  if (!job || typeof job !== 'object' || !job.key) return false;
-  const due = Date.parse(job.doneAt);
-  if (isFinite(due) && Date.now() < due) return false;
+  // ⚠️ 27ak: EIN fälliges Projekt genügt — der Server sammelt dann alle ein.
+  // ⚠️ NICHT über `wrTechJobLeftMs(m) <= 0` prüfen: das liefert 0 auch dann, wenn es
+  // gar kein Projekt gibt, und löste bei JEDEM Tab-Wechsel einen RPC aus.
+  if (!wrTechFaellig(_wrMember)) return false;
   _wrBusy = true;
   try {
     const res = await DB.claimSpaceTech(_wrMember.id);
@@ -8562,12 +8632,27 @@ async function wrClaimTech(silent) {
     }
     if (res.space) wrApplySpace(res.space);
     if (res.done) {
-      const t = SPACE_TECH_BY_KEY?.[res.tech];
-      wrToast(`🔬 Forschung abgeschlossen: ${t?.name || res.tech}`, 'success');
-      try {
-        wrChat(`[[s:hafen]] ${_wrEsc(_wrMember?.name || 'Jemand')} hat die Forschung `
-             + `„${t?.name || res.tech}" abgeschlossen.`);
-      } catch (e) { /* Meldung darf den Abschluss nie verhindern */ }
+      // ⚠️ 27ak liefert eine LISTE (`techs`). `res.tech` bleibt als Einzelwert daneben
+      // stehen — für den Fall, dass die SQL schon läuft und dieser Client noch alt ist.
+      // Hier der umgekehrte Fall: neue Anzeige, möglicherweise alte SQL.
+      const fertig = Array.isArray(res.techs) && res.techs.length
+        ? res.techs : (res.tech ? [res.tech] : []);
+      const namen = fertig.map(k => SPACE_TECH_BY_KEY?.[k]?.name || k);
+      if (namen.length) {
+        wrToast(namen.length === 1
+          ? `🔬 Forschung abgeschlossen: ${namen[0]}`
+          : `🔬 ${namen.length} Forschungen abgeschlossen: ${namen.join(' · ')}`, 'success');
+        try {
+          // ⚠️ EINE Chat-Zeile für alle: drei Projekte können gleichzeitig fertig
+          // werden, und drei Meldungen hintereinander sind Spam (dieselbe Verdichtung
+          // wie beim Werft-Warenkorb).
+          wrChat(`[[s:hafen]] ${_wrEsc(_wrMember?.name || 'Jemand')} hat `
+               + (namen.length === 1
+                    ? `die Forschung „${_wrEsc(namen[0])}" abgeschlossen.`
+                    : `${namen.length} Forschungen abgeschlossen: `
+                      + namen.map(n => `„${_wrEsc(n)}"`).join(' · ') + '.'));
+        } catch (e) { /* Meldung darf den Abschluss nie verhindern */ }
+      }
     }
     if (!silent) wrRender();
     return true;
@@ -9866,7 +9951,11 @@ function wrErrText(err) {
     merc_too_big:          'So grosse Geschwader vermittelt niemand.',
     no_merc:               'Kein Söldner-Geschwader vorhanden.',
     not_your_colony:       'Das ist nicht deine Kolonie.',
-    tech_busy:             'Es läuft bereits ein Forschungsprojekt.',
+    tech_busy:             `Alle ${WR_TECH_SLOTS} Laborplätze sind belegt — warte, bis `
+                         + 'eines der laufenden Projekte fertig ist.',
+    // ⚠️ Eigener Fall, eigene Auskunft: „dieselbe Technik läuft schon" ist NICHT
+    // „kein Platz frei". Mit einer gemeinsamen Meldung sucht man den freien Platz.
+    already_running:       'Diese Technik wird bereits erforscht.',
     not_damaged:           'Dieses Geschütz ist unbeschädigt.',
     bad_ship:              'Dieses Schiff lässt sich so nicht bauen (das Mutterschiff nur über sein eigenes Panel).',
     insufficient_coins:    'Nicht genug CoffeeCoins.',
