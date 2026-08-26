@@ -124,6 +124,12 @@ function showApp() {
   setTimeout(() => { if (typeof Loans !== 'undefined') Loans.checkAndMaybePopup(); }, 1400);
   // 📣 Weltraum-Hilferufe der Verbündeten (Merker pro Wellen-ID, gestaffelt nach Loans)
   setTimeout(() => { if (typeof wrCheckHelpPopup === 'function') wrCheckHelpPopup(); }, 2100);
+  // 📖 Weltraum-Handbuch: einmalige Einladung zum Einstieg (JP 2026-08-26 ausdrücklich
+  // gewünscht — die Ausnahme von Regel 4). ⚠️ BEWUSST HIER und nicht in `_buildWeltraum`:
+  // alle anderen Weltraum-Popups hängen am Öffnen des 🚀-Tabs und erreichen damit nur,
+  // wer ohnehin schon drin ist. Ein Popup, das zum Einstieg motivieren soll, gehört an
+  // den Login. Gated auf freigeschalteten Weltraum + einmal je Mitglied.
+  setTimeout(() => { if (typeof wrxHandbuchPopup === 'function') wrxHandbuchPopup(); }, 2800);
   // Passives Einkommen beim App-Start einlösen (entkoppelt von Tassen). Der
   // Gehalts-Snapshot läuft ERST danach (verkettet), nicht parallel: sein map_data-Write
   // (`{...md0, salaryHistory}`) würde sonst den frisch von claimPassive geschriebenen

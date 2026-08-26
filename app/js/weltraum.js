@@ -680,11 +680,17 @@ function wrBattlePreview(fleet, p, member) {
 //
 // Jeder Spieler hat einen EIGENEN Raumhafen (JP) — er lebt in members.space.base.
 // Der Heimatquadrant 0,0 ist trotzdem für alle derselbe Startpunkt.
+// ⏳ 27al (JP 2026-08-26: „Der Ausbau des Raumhafens soll ebenfalls doppelt so teuer
+// sein und 2 Tage dauern"). Kosten ×2, Slots unverändert.
+// ⚠️ CLIENT-SPIEGEL von `_space_port_stats`. Weicht eine Zahl ab, zeigt der Knopf einen
+// Preis an, den der Server nicht nimmt (die 22e/27i-Lehre).
 const SPACE_PORT = [
-  { level: 1, slots: 2, cc: 0,     erz: 0,   kristall: 0  },
-  { level: 2, slots: 4, cc: 5000,  erz: 60,  kristall: 0  },
-  { level: 3, slots: 6, cc: 15000, erz: 200, kristall: 50 },
+  { level: 1, slots: 2, cc: 0,     erz: 0,   kristall: 0   },
+  { level: 2, slots: 4, cc: 10000, erz: 120, kristall: 0   },
+  { level: 3, slots: 6, cc: 30000, erz: 400, kristall: 100 },
 ];
+// Bauzeit beider Ausbauten, in Minuten. Spiegel der `2 days` in 27al.
+const WR_AUSBAU_MIN = 2 * 24 * 60;
 // ⚠️ Spiegel von _space_turret_base in migration_2026-07-26k. `needs` = Forschung, die
 // den Typ freischaltet (26k) — der Neubau ist ohne sie gesperrt, ein BESTEHENDES Geschütz
 // bleibt aber nutz- und aufrüstbar. Bei Balance-Änderungen IMMER beide Seiten.
@@ -824,12 +830,14 @@ const WR_POWER_MAX = 3;
 // timeCut/costCut = Anteil, der WEGFÄLLT. Der Kosten-Rabatt ist bewusst kleiner als der
 // Zeit-Rabatt: die Werft soll Tempo bringen, nicht die Ökonomie aushebeln.
 // ⚠️ `slots` NEU mit 27u (Hellingen). Spiegel von `_space_yard_slots`.
+// ⏳ 27al: Kosten ×2. Hellingen sowie Zeit- und Kostenrabatt UNVERÄNDERT.
+// ⚠️ Spiegel von `_space_yard_stats`.
 const SPACE_YARD = [
   { level:1, timeCut:0.00, costCut:0.00, slots:2, cc:0,     erz:0,   kristall:0,
     desc:'Einfaches Trockendock — 2 Hellingen, Grundgeschwindigkeit.' },
-  { level:2, timeCut:0.25, costCut:0.10, slots:3, cc:4000,  erz:50,  kristall:0,
+  { level:2, timeCut:0.25, costCut:0.10, slots:3, cc:8000,  erz:100, kristall:0,
     desc:'Dritte Helling und Roboterarme: 3 gleichzeitig, 25 % schneller, 10 % billiger.' },
-  { level:3, timeCut:0.45, costCut:0.20, slots:4, cc:12000, erz:150, kristall:40,
+  { level:3, timeCut:0.45, costCut:0.20, slots:4, cc:24000, erz:300, kristall:80,
     desc:'Vollautomatische Fertigung: 4 Hellingen, 45 % schneller, 20 % billiger.' },
 ];
 
@@ -1932,6 +1940,15 @@ function wrRender() {
       <div class="wr-sticky">
         ${wrHudHtml(m)}
         ${wrTabsHtml()}
+      </div>
+      ${/* 📖 Dauerhafter Zugang zum Handbuch. Das Einstiegs-Popup kommt nur EINMAL je
+            Mitglied — ohne diese Zeile wäre das Handbuch danach unauffindbar, und eine
+            Erklärung, die man nicht wiederfindet, ist keine.
+            ⚠️ Bewusst AUSSERHALB von `wr-sticky`: der Kopf ist auf dem Telefon schon eng
+            (JPs Kritik an der Rohstoffzeile), und dieser Link muss nicht mitscrollen. */''}
+      <div class="wr-handbuch-line">
+        <a href="weltraum_regeln.html" target="_blank" rel="noopener">📖 Handbuch</a>
+        <span class="wr-sub">— Ringe, Schild, Forschung, Kosten: alle Regeln mit den echten Zahlen</span>
       </div>
       ${wrWaveHtml(m)}
       ${wrColonyAlertHtml(m)}
@@ -5525,11 +5542,21 @@ function wrHafenHtml(m) {
             : `<div class="wr-sub">⚡ Energie ${wrFmt(eDem)} / ${wrFmt(eSup)} — versorgt.</div>`}
           <div class="wr-sub">Deckungsfeuer beim Anflug und bei Angriffswellen. Jeder Spieler
             hat einen eigenen Hafen — alle starten aber aus demselben Quadranten.</div>
-          ${next
-            ? `<button class="wr-btn wr-btn-sm" id="wr-port-up" ${canPay(next) ? '' : 'disabled'}
+          ${(() => {
+            // ⏳ 27al: drei Zustände statt zwei — „ausbaubar", „wird gerade ausgebaut",
+            // „fertig ausgebaut". Wer einen Vorgang von SOFORT auf DAUERT umstellt, führt
+            // einen dritten Zustand ein; jede Anzeige, die mit zweien auskam, ist damit
+            // unvollständig (26u/26v/27ad, jetzt zum vierten Mal).
+            const up = wrPortUp(m);
+            if (up) return wrUpBoxHtml(up, 'Der Raumhafen');
+            if (!next) return '<div class="wr-slot-max">✅ Vollausbau erreicht</div>';
+            // ⚠️ Preis UND Dauer am Knopf (die 27q-Lehre): ein Vorgang, der Zeit kostet,
+            // braucht beides — den Zustand währenddessen und den Zeitpreis davor.
+            return `<button class="wr-btn wr-btn-sm" id="wr-port-up" ${canPay(next) ? '' : 'disabled'}
                  >Auf Stufe ${lv + 1} ausbauen
-                 <span class="wr-btn-sub">${priceTxt(next)} → ${next.slots} Slots</span></button>`
-            : '<div class="wr-slot-max">✅ Vollausbau erreicht</div>'}
+                 <span class="wr-btn-sub">${priceTxt(next)} · ${wrIc('time')} ${wrDur(WR_AUSBAU_MIN)}
+                   → ${next.slots} Slots</span></button>`;
+          })()}
         </div>
       </div>
       <!-- Ausbau-Leiter: macht sichtbar, dass es DREI Stufen gibt (Stufe 1 ist der
@@ -5986,13 +6013,14 @@ function wrWerftHtml(m) {
         <div class="wr-card-title">Werft am Raumhafen
           <span class="wr-sub">Stufe ${yl}</span></div>
         <div class="wr-sub">${_wrEsc(yd.desc)}</div>
-        ${yNext
+        ${wrYardUp(m) ? wrUpBoxHtml(wrYardUp(m), 'Die Werft') : yNext
           ? `<button class="wr-btn wr-btn-sm" id="wr-yard-up"
                ${(coins >= yNext.cc && wrErz(m) >= yNext.erz && wrKristall(m) >= yNext.kristall) ? '' : 'disabled'}
                >Werft auf Stufe ${yl + 1} ausbauen
                <span class="wr-btn-sub">${[`${wrFmt(yNext.cc)} CC`]
                  .concat(yNext.erz ? [`${yNext.erz} ${wrIc('erz')}`] : [])
                  .concat(yNext.kristall ? [`${yNext.kristall} ${wrIc('kri')}`] : []).join(' · ')}
+                 · ${wrIc('time')} ${wrDur(WR_AUSBAU_MIN)}
                  → ${wrYardDef(yl + 1).slots} Hellingen (statt ${wrYardDef(yl).slots}),
                  −${Math.round(yNext.timeCut * 100)} % Bauzeit, −${Math.round(yNext.costCut * 100)} % Kosten</span></button>`
           : '<div class="wr-slot-max">✅ Werft voll ausgebaut</div>'}
@@ -6334,6 +6362,45 @@ function wrBaseLevel(m) {
   const lv = parseInt(wrSpace(m).base?.level, 10) || 1;
   return Math.max(1, Math.min(3, lv));
 }
+// ⏳ 27al: läuft gerade ein Ausbau? `base.up` / `yard.up` = { to, startAt, doneAt }.
+// ⚠️ Die STUFE steigt währenddessen NICHT (siehe Migrationskopf) — `wrBaseLevel` und
+// `wrYardLevel` liefern weiterhin den alten Wert, und das ist genau richtig so: alle
+// Rabatte und Slot-Zahlen hängen daran und sollen erst bei Fertigstellung gelten.
+function wrUpJob(o) {
+  const u = o && o.up;
+  return (u && typeof u === 'object' && u.doneAt) ? u : null;
+}
+function wrPortUp(m) { return wrUpJob(wrSpace(m).base); }
+function wrYardUp(m) { return wrUpJob(wrSpace(m).yard); }
+// Restzeit in ms. Ein unlesbarer Zeitstempel gilt als fertig — eine kaputte Uhr darf
+// einen bezahlten Ausbau nicht ewig festhalten (Kulanzrichtung aus 26u/27ad).
+function wrUpLeftMs(u) {
+  if (!u) return 0;
+  const d = Date.parse(u.doneAt);
+  return isFinite(d) ? Math.max(0, d - Date.now()) : 0;
+}
+// ⚠️ „Fällig" ist NICHT dasselbe wie „Restzeit 0": ohne laufenden Ausbau ist die
+// Restzeit auch 0, und wer nur darauf prüft, löst bei JEDEM Tab-Wechsel einen RPC aus.
+function wrUpFaellig(u) {
+  if (!u) return false;
+  const d = Date.parse(u.doneAt);
+  return !isFinite(d) || Date.now() >= d;
+}
+// Fortschrittskasten für beide Ausbauten — EINE Funktion, zwei Aufrufer.
+// ⚠️ Ohne diesen Kasten wäre der Ausbau unsichtbar: der Knopf verschwände einfach,
+// und ein bezahlter Vorgang sähe aus wie ein Fehler. Genau diese Lücke hatte 26u bei
+// der Forschung und 26v bei den Kolonie-Angriffen.
+function wrUpBoxHtml(u, was) {
+  if (!u) return '';
+  const fertig = wrUpLeftMs(u) <= 0;
+  return `<div class="wr-upbox${fertig ? ' wr-upbox-done' : ''}">
+    <span>⏳ <strong>${_wrEsc(was)}</strong> wird auf Stufe ${parseInt(u.to, 10) || '?'} ausgebaut</span>
+    <span class="wr-sub">${fertig
+      ? 'fertig — wird beim nächsten Öffnen übernommen'
+      : `noch ${wrCountdown(wrUpLeftMs(u))} · ${wrWhen(Date.parse(u.doneAt))}`}</span>
+  </div>`;
+}
+
 function wrPortDef(level) { return SPACE_PORT[Math.max(1, Math.min(3, level || 1)) - 1]; }
 function wrPortSlots(m)   { return wrPortDef(wrBaseLevel(m)).slots; }
 function wrTurrets(m)     { return wrSpace(m).base?.turrets || {}; }
@@ -8683,13 +8750,37 @@ async function wrClaimTurrets(silent) {
   //   räumt `colony_ready_at` auf NULL, danach findet `faellig` nichts mehr.
   const faellig = mine.some(p => p.colony_ready_at
     && isFinite(Date.parse(p.colony_ready_at)) && Date.parse(p.colony_ready_at) <= Date.now());
-  if (!faellig && !mine.some(p => wrColonyPowerExpected(p) !== wrPlanetDef(p))) return false;
+  // ⏳ 27al: DRITTER Grund für einen Claim — ein fälliger Hafen- oder Werft-Ausbau.
+  // ⚠️ OHNE DIESE ZEILE WÜRDE EIN AUSBAU NIE FERTIG. Die Bedingung darunter vergleicht
+  // Feuerkraft; beim Hafenausbau ändert sich keine, und die Kolonie-Bedingung greift
+  // ebenfalls nicht. Der Claim liefe also nie, und die Stufe bliebe für immer „gleich
+  // fertig" — ein bezahlter Ausbau, der nichts tut. Genau die Stelle, an der 27ad
+  // beinahe gescheitert wäre; hier zum zweiten Mal.
+  //   ⚠️ Und wie die anderen schaltet auch sie sich selbst ab: der Claim räumt `up`,
+  //   danach findet `bauFertig` nichts mehr.
+  const bauFertig = wrUpFaellig(wrPortUp(_wrMember)) || wrUpFaellig(wrYardUp(_wrMember));
+  if (!faellig && !bauFertig
+      && !mine.some(p => wrColonyPowerExpected(p) !== wrPlanetDef(p))) return false;
   _wrBusy = true;
   try {
     const res = await DB.claimSpaceTurrets(_wrMember.id);
     if (!res || res.error) return false;
     // 🏗️ 27ad: Fertige Ausbauten melden. Ein Vorgang, der einen TAG gedauert hat, darf
     // nicht wortlos passieren — sonst weiss niemand, ob er je fertig wurde.
+    // ⏳ 27al: fertige Hafen-/Werft-Ausbauten melden. Ein Vorgang, der ZWEI TAGE
+    // gedauert hat, darf nicht wortlos passieren — sonst weiß niemand, ob er je fertig
+    // wurde (dasselbe Muster wie beim Kolonie-Ausbau in 27ad).
+    try {
+      if (res.space) wrApplySpace(res.space);
+      for (const [feld, was, icon] of [['portUp', 'Der Raumhafen', '🛰️'],
+                                       ['yardUp', 'Die Werft', '🏗️']]) {
+        const st = parseInt(res[feld], 10);
+        if (!st) continue;
+        wrToast(`${icon} ${was} steht auf Stufe ${st} — der Ausbau ist fertig.`, 'success');
+        wrChat(`${icon} ${_wrEsc(_wrMember?.name || 'Jemand')} hat ${was.toLowerCase()} `
+             + `auf Stufe ${st} ausgebaut.`);
+      }
+    } catch (e) { /* Regel 3: eine Meldung darf den Abschluss nie verhindern */ }
     const fertig = Array.isArray(res.upgraded) ? res.upgraded : [];
     if (fertig.length) {
       _wrGalaxy = await DB.fetchGalaxy();
@@ -10050,6 +10141,11 @@ function wrErrText(err) {
     turret_damaged:        'Ein beschädigtes Geschütz lässt sich nicht umrüsten — warte die Reparatur ab.',
     port_too_small:        'Dafür ist der Raumhafen noch zu klein — erst ausbauen.',
     yard_max:              'Die Werft ist bereits voll ausgebaut (Stufe 3).',
+    // ⏳ 27al — der dritte Zustand braucht auch eine Fehlermeldung.
+    port_building:         'Der Raumhafen wird gerade ausgebaut — warte, bis er fertig ist. '
+                         + 'Es wurde nichts abgebucht.',
+    yard_building:         'Die Werft wird gerade ausgebaut — warte, bis sie fertig ist. '
+                         + 'Es wurde nichts abgebucht.',
     // ⚡ Energie-Generator (26p)
     bad_power:             'Unbekannter Generator-Typ.',
     power_empty:           'Du hast noch kein Kraftwerk — erst einen Generator bauen.',

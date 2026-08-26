@@ -609,7 +609,117 @@ function wrxVerlustWert(st) {
   };
 })();
 
+// ═══ 📖 Weltraum-Handbuch — Einstiegs-Popup ════════════════════════════════
+// JP 2026-08-26: „mittlerweile sind fast alle beim Weltraum angelangt — es kann also ein
+// Popup morgen früh erscheinen, der motiviert einzusteigen!"
+//
+// ⚠️ DAS IST DIE AUSNAHME VON CLAUDE.md REGEL 4, NICHT IHR BRUCH. Die Regel lautet
+// „kein What's-New-Popup — AUSSER JP verlangt es ausdrücklich". Er verlangt es hier
+// ausdrücklich, und zwar für einen anderen Zweck: nicht um Neuerungen aufzuzählen,
+// sondern um zum EINSTIEG einzuladen.
+//
+// ⚠️ UND ES HÄNGT BEWUSST AM LOGIN, NICHT AM 🚀-TAB.
+// Alle anderen Weltraum-Popups hier hängen an `_buildWeltraum` — sie erscheinen also
+// erst, wenn jemand den Tab schon geöffnet hat. Für ein Popup, das zum Öffnen des Tabs
+// motivieren soll, wäre das genau der falsche Ort: es erreichte nur die, die ohnehin
+// drin sind. Aufgerufen wird es deshalb aus `showApp()` in app.js.
+//   ⚠️ ÜBERTRAGBAR: der Ort einer Einblendung folgt ihrem ZWECK, nicht der Nachbarschaft
+//   ihres Codes — dieselbe Diagnose wie beim Einnahme-Verlauf und beim ⚗️ Transmuter.
+const WRX_HANDBUCH_URL = 'weltraum_regeln.html';
+// Hochzählen, wenn das Handbuch neu beworben werden soll. Der Merker steht je Mitglied
+// in `map_data.wrHandbuch` — wer es gesehen hat, bekommt es nicht wieder.
+const WRX_HANDBUCH_VER = 1;
+// ⚠️ NICHT VOR DIESEM TAG (JP 2026-08-26: „Popup erst morgen früh").
+// Ohne diese Zeile käme es beim ERSTEN Login nach dem Upload — und der Upload muss
+// heute raus, weil die drei Laborplätze, der Mutterschiff-Preis und die Anzeige-Fixes
+// im selben Client stecken. Das Datum entkoppelt den Upload vom Erscheinen.
+//   ⚠️ ÜBERTRAGBAR: „soll morgen erscheinen" ist eine BEDINGUNG, keine Terminplanung
+//   für den Upload. Wer sie über den Zeitpunkt des Hochladens lösen will, koppelt zwei
+//   Dinge, die nichts miteinander zu tun haben.
+// Leerer String = sofort. Format JJJJ-MM-TT.
+const WRX_HANDBUCH_AB = '2026-08-27';
+
+// ⚠️ LOKALES Datum bauen, nie über toISOString() — das rechnet nach UTC und lässt das
+// Popup abends einen Tag zu früh (oder morgens zu spät) erscheinen. Dieselbe
+// Timezone-Falle wie in der Wochenbilanz (27ae) und beim Faltraum-Anker.
+function wrxHeuteLokal() {
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+function wrxHandbuchGesehen(me) {
+  try {
+    const h = me?.map_data?.wrHandbuch;
+    return !!(h && typeof h === 'object' && (parseInt(h.v, 10) || 0) >= WRX_HANDBUCH_VER);
+  } catch (e) { return false; }
+}
+
+let _wrxHbBusy = false;
+async function wrxHandbuchPopup() {
+  if (_wrxHbBusy) return;
+  try {
+    const me = wrxMe();
+    if (!me?.id) return;
+    // ⚠️ VOR allem anderen: das Startdatum. Steht der Merker erst einmal, kommt das
+    // Popup nie wieder — es darf also nicht vor dem gewünschten Tag gesetzt werden.
+    if (WRX_HANDBUCH_AB && wrxHeuteLokal() < WRX_HANDBUCH_AB) return;
+    // ⚠️ Nur für die, die überhaupt hineinkönnen. Wer den Weltraum noch nicht
+    // freigeschaltet hat, bekäme eine Einladung zu einer verschlossenen Tür — das
+    // motiviert nicht, das frustriert.
+    if (typeof spaceBranchComplete !== 'function') return;
+    if (!spaceBranchComplete(me.research || {})) return;
+    if (wrxHandbuchGesehen(me)) return;
+    if (wrxModalOffen()) return;                 // Quiz/Umfrage/Hilferuf haben Vorrang
+    if (document.getElementById('wrx-handbuch')) return;
+
+    _wrxHbBusy = true;
+    // ⚠️ Erst den Merker, dann das Popup — dieselbe Reihenfolge wie beim Startpaket.
+    // Ein zweimal gezeigtes Popup ist der ärgerlichere Fehler als ein verpasstes.
+    await wrxPatchMd({ wrHandbuch: { v: WRX_HANDBUCH_VER, at: new Date().toISOString() } });
+
+    const m = document.createElement('div');
+    m.id = 'wrx-handbuch';
+    // ⚠️ Der Knopf ist ein ECHTER Link mit target="_blank", kein window.open():
+    // ein skriptgeöffnetes Fenster fängt der Popup-Blocker ab, einen Klick auf ein
+    // <a> nicht. In der installierten PWA ist das der Unterschied zwischen
+    // „öffnet sich" und „passiert nichts".
+    m.innerHTML = `
+      <div class="quiz-backdrop"></div>
+      <div class="quiz-box"><div class="quiz-card" style="text-align:center">
+        <div class="quiz-emoji">🚀</div>
+        <h2>Das All wartet auf dich</h2>
+        <p style="font-size:.84rem;line-height:1.55;color:var(--muted);text-align:left">
+          Fast alle im Clan sind inzwischen im Weltraum angekommen — <strong>108 Planeten</strong>
+          liegen vor uns, verteilt auf drei Ringe. Jeder baut sein eigenes Ding:
+          eigene Flotte, eigene Kolonien, eigene Forschung.
+          <strong>Aber erobern können wir das All nur gemeinsam.</strong><br><br>
+          Es gibt <strong>kein Gegeneinander</strong> — niemand kann dich angreifen, der Gegner
+          ist immer die KI. Wer einem Mitspieler auf einen Hilferuf antwortet, verdient
+          <strong>selbst</strong> daran.<br><br>
+          Wenn du nicht weißt, wo du anfangen sollst: das Handbuch führt dich von der ersten
+          Sonde bis zum Orbitalring — mit allen Zahlen, mit denen das Spiel wirklich rechnet.
+        </p>
+        <a class="btn-primary quiz-cta" style="display:block;text-decoration:none"
+           href="${WRX_HANDBUCH_URL}" target="_blank" rel="noopener"
+           id="wrx-hb-open">📖 Handbuch öffnen</a>
+        <button class="btn-secondary" style="margin-top:8px;width:100%" id="wrx-hb-close">
+          Später — ab ins All</button>
+      </div></div>`;
+    document.body.appendChild(m);
+    const zu = () => { try { m.remove(); } catch (e) {} };
+    m.querySelector('#wrx-hb-close').onclick = zu;
+    // Nach dem Öffnen des Handbuchs schliesst sich das Popup ebenfalls — sonst steht es
+    // beim Zurückwechseln noch da und wirkt wie ein Fehler.
+    m.querySelector('#wrx-hb-open').onclick = () => setTimeout(zu, 200);
+    try { m.querySelector('.quiz-backdrop').onclick = zu; } catch (e) {}
+  } catch (e) {
+    console.warn('[wr-extras] Handbuch-Popup:', e.message);
+  } finally { _wrxHbBusy = false; }
+}
+
 window.wrxStartpaket   = wrxStartpaket;
+window.wrxHandbuchPopup = wrxHandbuchPopup;
 window.wrxWochenbericht = wrxWochenbericht;
 window.wrxSnapshot     = wrxSnapshot;
 window.wrxBackfill     = wrxBackfill;
