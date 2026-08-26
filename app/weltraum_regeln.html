@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>🚀 Weltraum — Handbuch</title>
+<!--
+  Handbuch zum Weltraum-Endgame. Eigenständige Seite, bewusst OHNE Abhängigkeit zu
+  style.css/weltraum.css: sie wird auch aus einem Popup und aus dem Chat heraus geöffnet
+  und muss auch dann vollständig aussehen, wenn die App gerade nicht geladen ist.
+  ⚠️ ALLE ZAHLEN HIER SIND SPIEGEL DES CODES (Stand 2026-08-26, nach 27am).
+     Ändert sich eine Regel, gehört diese Seite in die Liste der mitzusuchenden Stellen —
+     ein Regeltext, der beim Ändern der Regel nicht mitgesucht wird, altert still weiter
+     (die 27u-Lehre, dort stand ein Satz drei Regeländerungen lang falsch).
+     Quellen: js/weltraum.js (SPACE_SHIPS, SPACE_TECH, WR_*), migration 26u/27ac/27ai/27ak.
+-->
+<style>
+:root{
+  --bg:#080a14; --bg2:#0d1430; --bg3:#111a3c;
+  --line:#24305a; --line2:#2f3d6e;
+  --text:#dbe4ff; --sub:#8b9bc7; --head:#eaf0ff;
+  --blue:#6ea8ff; --green:#7ad48a; --amber:#e8b45a; --red:#e8705a; --violet:#b07ae0;
+  --radius:12px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{
+  background:radial-gradient(ellipse at 20% -10%,#16204a 0%,#080a14 55%) no-repeat,#080a14;
+  color:var(--text);font-family:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
+  font-size:16px;line-height:1.62;padding:0 0 64px;-webkit-text-size-adjust:100%;
+}
+.wrap{max-width:860px;margin:0 auto;padding:0 18px}
+h1{font-size:1.85rem;line-height:1.2;color:var(--head);margin:0 0 6px;letter-spacing:-.02em}
+h2{font-size:1.28rem;color:var(--head);margin:38px 0 12px;padding-top:14px;border-top:1px solid var(--line);letter-spacing:-.01em}
+h3{font-size:1.02rem;color:var(--blue);margin:22px 0 6px}
+p{margin:0 0 12px}
+ul,ol{margin:0 0 12px 22px}
+li{margin:0 0 6px}
+strong{color:var(--head)}
+em{font-style:normal;color:var(--amber)}
+code{background:#141d40;border:1px solid var(--line);border-radius:5px;padding:1px 5px;font-size:.88em}
+
+header{padding:34px 0 8px;text-align:center}
+.lead{color:var(--sub);font-size:1.02rem;max-width:620px;margin:0 auto}
+
+.ziel{
+  margin:24px 0 8px;padding:20px 22px;border-radius:var(--radius);
+  border:1px solid #3c5aa8;background:linear-gradient(160deg,#16224e,#101736);
+}
+.ziel .satz{font-size:1.18rem;line-height:1.45;color:#fff;font-weight:600}
+.ziel p:last-child{margin-bottom:0}
+
+nav.toc{margin:26px 0 8px;padding:14px 16px;border:1px solid var(--line);border-radius:var(--radius);background:var(--bg2)}
+nav.toc b{display:block;color:var(--sub);font-size:.82rem;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}
+nav.toc ol{margin:0;padding:0;list-style:none;display:flex;flex-wrap:wrap;gap:6px 10px}
+nav.toc a{color:var(--blue);text-decoration:none;font-size:.92rem;padding:3px 9px;border-radius:20px;background:#16204a;border:1px solid var(--line)}
+nav.toc a:hover{background:#1e2c60;color:#fff}
+
+.card{margin:14px 0;padding:15px 17px;border:1px solid var(--line);border-radius:var(--radius);background:var(--bg2)}
+.card.warn{border-color:#7a5a2a;background:#1c1608}
+.card.good{border-color:#3f7a4c;background:#0d1c14}
+.card.tip{border-color:#3c5aa8;background:#101736}
+.card h3{margin-top:0}
+.card p:last-child,.card ul:last-child{margin-bottom:0}
+
+table{width:100%;border-collapse:collapse;margin:12px 0;font-size:.93rem}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+th,td{padding:7px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
+th{color:var(--sub);font-weight:600;font-size:.82rem;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap}
+td.n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+tbody tr:hover{background:#111a3c}
+
+img.ic{width:22px;height:22px;object-fit:contain;vertical-align:-5px}
+img.sh{width:40px;height:40px;object-fit:contain;vertical-align:middle}
+img.big{width:64px;height:64px;object-fit:contain}
+.namecell{display:flex;align-items:center;gap:9px}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin:14px 0}
+.tile{padding:14px 15px;border:1px solid var(--line);border-radius:var(--radius);background:var(--bg2)}
+.tile .top{display:flex;align-items:center;gap:10px;margin-bottom:7px}
+.tile .top b{color:var(--head);font-size:1.02rem}
+.tile p{font-size:.93rem;color:var(--sub);margin:0}
+.tile p strong{color:var(--text)}
+
+.steps{counter-reset:s;list-style:none;margin:14px 0 0;padding:0}
+.steps li{counter-increment:s;position:relative;padding:0 0 16px 46px;margin:0}
+.steps li::before{
+  content:counter(s);position:absolute;left:0;top:-1px;width:30px;height:30px;border-radius:50%;
+  background:#1e2c60;border:1px solid #3c5aa8;color:#cfe0ff;font-weight:700;font-size:.92rem;
+  display:flex;align-items:center;justify-content:center;
+}
+.steps li b{color:var(--head);display:block;margin-bottom:2px}
+.steps li{color:var(--sub)}
+.steps li strong{color:var(--text)}
+
+.ring{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--line)}
+.ring:last-child{border-bottom:none}
+.ring .no{flex:0 0 46px;height:46px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:1.15rem}
+.r1 .no{background:#14301f;border:1px solid #3f7a4c;color:var(--green)}
+.r2 .no{background:#2e2410;border:1px solid #7a5a2a;color:var(--amber)}
+.r3 .no{background:#2a1430;border:1px solid #6b3a8a;color:var(--violet)}
+.ring div:last-child{font-size:.94rem;color:var(--sub)}
+.ring b{color:var(--head)}
+
+.q{color:var(--sub);font-size:.9rem;border-left:2px solid var(--line2);padding-left:12px;margin:10px 0}
+footer{margin-top:44px;padding-top:16px;border-top:1px solid var(--line);color:var(--sub);font-size:.86rem;text-align:center}
+a{color:var(--blue)}
+@media (max-width:600px){
+  body{font-size:15px}
+  h1{font-size:1.5rem}
+  .wrap{padding:0 14px}
+  img.sh{width:32px;height:32px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <img class="big" src="assets/space/base_3.png" alt="" onerror="this.style.display='none'">
+  <h1>🚀 Der Weltraum</h1>
+  <p class="lead">Alles, was du wissen musst — von der ersten Sonde bis zum Orbitalring&nbsp;3.
+     Jede Zahl auf dieser Seite ist die, mit der das Spiel wirklich rechnet.</p>
+</header>
+
+<div class="ziel">
+  <p class="satz">Jeder baut sein eigenes Ding — aber <em>erobern</em> können wir das All nur gemeinsam.</p>
+  <p style="margin-top:10px;color:#c3d2ff">
+    Eure Galaxie hat <strong>108 Planeten</strong>: 18 im Ring&nbsp;1, 36 im Ring&nbsp;2, 54 im Ring&nbsp;3.
+    Ihr teilt euch <strong>eine einzige Karte</strong>. Es gibt <strong>kein Gegeneinander</strong> —
+    niemand kann dich angreifen, der Gegner ist immer die KI. Was einer befreit, steht für alle offen;
+    was niemand hält, holen sich die Wächter zurück.
+  </p>
+</div>
+
+<nav class="toc">
+  <b>Inhalt</b>
+  <ol>
+    <li><a href="#start">Die ersten Schritte</a></li>
+    <li><a href="#ringe">Die Ringe</a></li>
+    <li><a href="#rohstoffe">Rohstoffe</a></li>
+    <li><a href="#geld">Woher kommen CC?</a></li>
+    <li><a href="#flotte">Flotte &amp; Kampf</a></li>
+    <li><a href="#schild">Der Schild</a></li>
+    <li><a href="#forschung">Forschung</a></li>
+    <li><a href="#kolonien">Kolonien</a></li>
+    <li><a href="#verteidigung">Verteidigung</a></li>
+    <li><a href="#zusammen">Zusammen spielen</a></li>
+    <li><a href="#kosten">Laufende Kosten</a></li>
+    <li><a href="#tempo">Tempo</a></li>
+    <li><a href="#fehler">Häufige Fehler</a></li>
+  </ol>
+</nav>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<h2 id="start">1 · Die ersten Schritte</h2>
+
+<p>Der Weltraum öffnet sich, wenn du das Imperium auf der Erde vollendet und die drei
+Einstiegs-Forschungen abgeschlossen hast: <strong>Ionenantrieb</strong>,
+<strong>Frachtmodule</strong> und <strong>Handbohrer</strong>. Danach steht dein
+Raumhafen — und der Rest liegt an dir.</p>
+
+<ol class="steps">
+  <li><b>Schick eine <img class="ic" src="assets/space/ship_spaeher.png" alt="" onerror="this.remove()"> Bohnen-Sonde los</b>
+      Sie kostet 750&nbsp;CC und deckt einen Nebel-Quadranten auf. <strong>Ohne Aufklärung fliegst du blind</strong> —
+      du siehst weder, wie stark die Wächter sind, noch was der Planet hergibt.</li>
+  <li><b>Bau <img class="ic" src="assets/space/ship_jaeger.png" alt="" onerror="this.remove()"> Jäger und nimm einen Ring‑1‑Planeten</b>
+      Ring‑1‑Wächter haben <strong>40–119</strong> Kampfkraft. Ein Jäger bringt 10 —
+      mit 15–20&nbsp;Jägern bist du auf der sicheren Seite. Die Kampfvorschau rechnet es dir vor dem Start aus.</li>
+  <li><b>Bau <img class="ic" src="assets/space/ship_ernter.png" alt="" onerror="this.remove()"> Röstkometen und richte eine Dauerernte ein</b>
+      Das ist deine erste <strong>Einnahmequelle, die ohne dich läuft</strong>. Stationierte Röstkometen
+      fördern Tag für Tag, auch wenn du die App nicht öffnest.</li>
+  <li><b>Forsche breit, nicht tief</b>
+      Du hast <strong>drei Laborplätze</strong>. Sie helfen dir nur, wenn du in
+      <strong>drei verschiedenen Ästen</strong> forschst — eine Kette wartet weiter aufeinander.</li>
+  <li><b>Erst dann: Kolonie gründen</b>
+      Eine Kolonie ist teuer und will verteidigt werden. Sie lohnt, wenn deine Ernte schon läuft.</li>
+</ol>
+
+<div class="card tip">
+  <h3>💡 Die goldene Anfängerregel</h3>
+  <p>Bau <strong>zuerst die Einnahmen, dann die Flotte</strong>. Eine große Flotte ohne Ernte
+  frisst dich über den Flottensold auf — jedes Schiff kostet dich täglich 1&nbsp;% seines Bauwerts.</p>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<h2 id="ringe">2 · Die Ringe — je weiter draußen, desto lohnender und gefährlicher</h2>
+
+<p>Dein Raumhafen steht im Heimatquadranten. Von dort geht es in drei Ringen nach außen.</p>
+
+<div class="card">
+  <div class="ring r1">
+    <div class="no">1</div>
+    <div><b>18 Planeten · Wächter 40–119</b><br>
+      Reichtum 1–3. Dein Übungsgelände: hier lernst du Kampf, Ernte und Kolonie.
+      Erz <img class="ic" src="assets/space/res_erz.png" alt="" onerror="this.remove()"> und
+      Koffeinkristall <img class="ic" src="assets/space/res_kristall.png" alt="" onerror="this.remove()">.</div>
+  </div>
+  <div class="ring r2">
+    <div class="no">2</div>
+    <div><b>36 Planeten · Wächter 150–399</b><br>
+      Reichtum 2–4. Hier gibt es zusätzlich <img class="ic" src="assets/space/res_plasmoid.png" alt="" onerror="this.remove()">
+      <strong>Plasmoiden-Staub</strong>. Und hier lauern Hinterhalte:
+      <strong>30&nbsp;%</strong> Wahrscheinlichkeit pro Anflug (Ring&nbsp;1: 12&nbsp;%).</div>
+  </div>
+  <div class="ring r3">
+    <div class="no">3</div>
+    <div><b>54 Planeten · der Orbitalring</b><br>
+      Nur hier fällt <img class="ic" src="assets/space/res_quantum.png" alt="" onerror="this.remove()">
+      <strong>Quantenschaum</strong> an. Kleine Jäger schaffen den Sprung nicht allein —
+      je 20&nbsp;Jäger braucht es ein <img class="ic" src="assets/space/ship_traeger.png" alt="" onerror="this.remove()">
+      Trägerschiff im Verband.</div>
+  </div>
+</div>
+
+<div class="card warn">
+  <h3>⚠️ Befreit heißt nicht für immer</h3>
+  <p>Ein Planet, um den sich niemand kümmert, <strong>fällt an die Wächter zurück</strong> —
+  und beim nächsten Mal sind sie <strong>1,6-mal so stark</strong> wie zuvor. Fläche sammelt sich
+  nicht an: <strong>sie muss gehalten werden.</strong> Genau deshalb ist „alles erobern" keine
+  Fleißaufgabe, sondern eine Frage dessen, was ihr <em>gemeinsam</em> tragen könnt.</p>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<h2 id="rohstoffe">3 · Die vier Rohstoffe</h2>
+
+<div class="scroll">
+<table>
+  <thead><tr><th>Rohstoff</th><th>Woher</th><th>Wofür</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><div class="namecell"><img class="ic" src="assets/space/res_erz.png" alt="" onerror="this.remove()"><b>Erz</b></div></td>
+      <td>Abbauflüge, Dauerernte, Kolonien, Wrackfelder</td>
+      <td>Schiffe, Geschütze, Forschung — der Grundstoff für alles</td>
+    </tr>
+    <tr>
+      <td><div class="namecell"><img class="ic" src="assets/space/res_kristall.png" alt="" onerror="this.remove()"><b>Koffeinkristall</b></div></td>
+      <td>dieselben Wege, aber seltener</td>
+      <td><strong>Treibstoff.</strong> Jede Reise und jede Route verbraucht ihn — er ist der einzige
+          Rohstoff mit dauerndem Abfluss und deshalb immer knapp</td>
+    </tr>
+    <tr>
+      <td><div class="namecell"><img class="ic" src="assets/space/res_plasmoid.png" alt="" onerror="this.remove()"><b>Plasmoiden-Staub</b></div></td>
+      <td>ab Ring&nbsp;2 — Abbau (braucht den <em>Plasmoid-Kollektor</em>) oder als Kampfbeute</td>
+      <td>schwere Geschütze, Reaktoren, Kampf-Injektion, hohe Forschungen</td>
+    </tr>
+    <tr>
+      <td><div class="namecell"><img class="ic" src="assets/space/res_quantum.png" alt="" onerror="this.remove()"><b>Quantenschaum</b></div></td>
+      <td>nur Ring&nbsp;3 — Abbau (braucht den <em>Quantenschaum-Extraktor</em>) oder als Kampfbeute</td>
+      <td>das Spätspiel: Quanten-Geschütz, Mutterschiff, die teuersten Techniken</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<div class="card good">
+  <h3>✅ Der Einstieg ohne Forschung</h3>
+  <p>🟣 und 🌀 <strong>abbauen</strong> darfst du erst mit der passenden Technik. Aber als
+  <strong>Kampfbeute</strong> fallen sie auch ohne sie an — wer im Ring&nbsp;2 oder 3 kämpft, kommt an
+  beide heran. Das ist Absicht: es soll einen Weg über <em>Spielen</em> geben, nicht nur über <em>Forschen</em>.</p>
+  <p>⚠️ <strong>Erz und Kristall kannst du nicht kaufen.</strong> Es gibt sie ausschließlich im All,
+  und sie zählen nicht zu deinem CoffeeCoin-Vermögen.</p>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<h2 id="geld">4 · Woher kommen CoffeeCoins?</h2>
+
+<div class="grid">
+  <div class="tile">
+    <div class="top"><img class="sh" src="assets/space/ship_ernter.png" alt="" onerror="this.remove()"><b>Dauerernte</b></div>
+    <p>Stationierte Röstkometen fördern <strong>jeden Tag</strong>, ohne dass du etwas tust.
+       Die verlässlichste Einnahme im Spiel.</p>
+  </div>
+  <div class="tile">
+    <div class="top"><img class="sh" src="assets/space/base_raffinerie.png" alt="" onerror="this.remove()"><b>🏭 Raffinerie</b></div>
+    <p>Wandelt Rohstoffe in CC. Eine Charge läuft <strong>8&nbsp;Stunden</strong>, mit jeder
+       Ausbaustufe eine Stunde weniger — bis auf <strong>3&nbsp;Stunden</strong>.</p>
+  </div>
+  <div class="tile">
+    <div class="top"><img class="sh" src="assets/weltraum/wt7_transmuter.png" alt="" onerror="this.remove()"><b>⚗️ Transmuter</b></div>
+    <p>Wandelt 🟣 und 🌀 <strong>sofort</strong> in CC — zu einem schlechteren Kurs als die
+       Raffinerie. Der Notausgang, wenn etwas übrig ist.</p>
+  </div>
+  <div class="tile">
+    <div class="top"><img class="sh" src="assets/space/ic_colony.png" alt="" onerror="this.remove()"><b>🪐 Kolonien</b></div>
+    <p>Werfen täglich Rohstoffe ab, mit der <em>Handelskolonie</em> zusätzlich CC.
+       Höhere Stufe, höherer Ertrag.</p>
+  </div>
+  <div class="tile">
+    <div class="top"><img class="sh" src="assets/space/ship_berger.png" alt="" onerror="this.remove()"><b>♻️ Wracks bergen</b></div>
+    <p>Wrackfelder sind <strong>endlich und geteilt</strong> — was ein Mitspieler holt, ist weg.
+       Wer zuerst da ist, gewinnt.</p>
+  </div>
+  <div class="tile">
+    <div class="top"><img class="sh" src="assets/space/foe_waechter.png" alt="" onerror="this.remove()"><b>⚔️ Kampfbeute</b></div>
+    <p>Jeder gewonnene Kampf bringt Rohstoffe — ab Ring&nbsp;2 auch 🟣, ab Ring&nbsp;3 auch 🌀.</p>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<h2 id="flotte">5 · Flotte &amp; Kampf</h2>
+
+<p>Jedes Schiff hat eine <strong>Kampfkraft</strong>, eine <strong>Klasse</strong> (leicht oder schwer)
+und eine <strong>Verlust-Reihenfolge</strong>. Das Modell ist eine Größen-Hierarchie, kein
+Schere-Stein-Papier: leicht schlägt leicht, schwer schlägt schwer.</p>
+
+<div class="scroll">
+<table>
+  <thead><tr><th>Schiff</th><th class="n">⚔️ Kampfkraft</th><th class="n">🛡️ Schild</th><th class="n">Preis</th><th>Fällt…</th></tr></thead>
+  <tbody>
+    <tr><td><div class="namecell"><img class="sh" src="assets/space/ship_jaeger.png" alt="" onerror="this.remove()">Jäger</div></td><td class="n">10</td><td class="n" style="color:var(--red)">0 %</td><td class="n">1.150 CC</td><td style="color:var(--red)"><strong>zuerst</strong></td></tr>
+    <tr><td><div class="namecell"><img class="sh" src="assets/space/ship_grossjaeger.png" alt="" onerror="this.remove()">Großer Jäger</div></td><td class="n">20</td><td class="n">5 %</td><td class="n">2.000 CC</td><td>früh</td></tr>
+    <tr><td><div class="namecell"><img class="sh" src="assets/space/ship_fregatte.png" alt="" onerror="this.remove()">Fregatte</div></td><td class="n">28</td><td class="n">15 %</td><td class="n">2.250 CC</td><td>früh</td></tr>
+    <tr><td><div class="namecell"><img class="sh" src="assets/space/ship_traeger.png" alt="" onerror="this.remove()">Trägerschiff</div></td><td class="n">40</td><td class="n">30 %</td><td class="n">22.500 CC</td><td>spät</td></tr>
+    <tr><td><div class="namecell"><img class="sh" src="assets/space/ship_bomber.png" alt="" onerror="this.remove()">Kreuzer</div></td><td class="n">65</td><td class="n">5 %</td><td class="n">4.500 CC</td><td>mittel</td></tr>
+    <tr><td><div class="namecell"><img class="sh" src="assets/space/ship_kreuzer.png" alt="" onerror="this.remove()">Bomber</div></td><td class="n">90</td><td class="n">10 %</td><td class="n">6.900 CC</td><td>mittel</td></tr>
+    <tr><td><div class="namecell"><img class="sh" src="assets/space/ship_schlachtschiff.png" alt="" onerror="this.remove()">Schlachtschiff</div></td><td class="n">180</td><td class="n">20 %</td><td class="n">13.800 CC</td><td>spät</td></tr>
+    <tr><td><div class="namecell"><img class="sh" src="assets/space/ship_dunkle_roestung.png" alt="" onerror="this.remove()">Dunkle Röstung</div></td><td class="n">320</td><td class="n">30 %</td><td class="n">26.300 CC</td><td>sehr spät</td></tr>
+    <tr><td><div class="namecell"><img class="sh" src="assets/space/ship_mutterschiff.png" alt="" onerror="this.remove()">Mutterschiff</div></td><td class="n">1.170</td><td class="n" style="color:var(--green)">35 %</td><td class="n">37.500 CC + Rümpfe</td><td>als letztes</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p class="q">Die Preise gelten ohne Werft-Rabatt. Eine ausgebaute Werft baut bis zu 20 % billiger
+und 45 % schneller.</p>
+
+<div class="card">
+  <h3>Die Nutzschiffe</h3>
+  <p>
+  <img class="ic" src="assets/space/ship_spaeher.png" alt="" onerror="this.remove()"> <strong>Bohnen-Sonde</strong> — deckt Nebel auf ·
+  <img class="ic" src="assets/space/ship_kutter.png" alt="" onerror="this.remove()"> <strong>Espresso-Kutter</strong> — Frachtraum ·
+  <img class="ic" src="assets/space/ship_ernter.png" alt="" onerror="this.remove()"> <strong>Röstkomet</strong> — Abbau und Dauerernte ·
+  <img class="ic" src="assets/space/ship_berger.png" alt="" onerror="this.remove()"> <strong>Bergungsschiff</strong> — Wracks ·
+  <img class="ic" src="assets/space/ship_kolonie.png" alt="" onerror="this.remove()"> <strong>Kolonieschiff</strong> — gründet Kolonien
+  </p>
+  <p style="margin-top:8px">⚠️ <strong>Nimm sie nicht in einen Kampfverband mit.</strong> Sie haben fast keine
+  Kampfkraft, aber die Verluste treffen die kleinen Schiffe zuerst — sie sind reines Kanonenfutter.</p>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<h2 id="schild">6 · Der Schild — die am meisten unterschätzte Zahl</h2>
+
+<div class="card warn">
+  <h3>⚠️ „Ich verliere ständig Jäger — funktionieren die Schilde überhaupt?"</h3>
+  <p>Ja. Aber der <strong>Jäger hat 0 % Schild</strong> und fällt als <strong>erstes</strong> Schiff im
+  Verband. Eine Flotte aus fast nur Jägern hat rechnerisch <strong>gar keinen Schild</strong> —
+  ihre Verluste sind ungebremst. Das ist keine Panne, das ist der Preis dafür, dass der Jäger
+  das billigste Kampfschiff ist.</p>
+</div>
+
+<p>Der <strong>Verbandsschild</strong> senkt eure <strong>Verluste</strong> — nicht die Siegchance.
+Er ist der nach Kampfkraft gewichtete Durchschnitt aller Schiffe im Verband und bei
+<strong>40&nbsp;%</strong> gedeckelt.</p>
+
+<ul>
+  <li><strong>So hebst du ihn:</strong> nimm schwere Schiffe mit. Schon ein Schlachtschiff (20 %) oder
+      eine Dunkle Röstung (30 %) im Verband hebt den Schnitt für <em>alle</em> — auch für die Jäger.</li>
+  <li><strong>Trägerschiff:</strong> Jäger an Bord fliegen mit dem Schild des Trägers (30 %) statt mit
+      ihrem eigenen. Das ist der günstigste Weg, viele Jäger zu schützen.</li>
+  <li><strong>Mutterschiff:</strong> 35 % Schild und <strong>+10 % Kampfkraft für den ganzen Verband</strong>
+      (höchstens +30 %).</li>
+</ul>
+
+<p>Die Zeile <em>„🛡️ Verbandsschild"</em> steht beim Zusammenstellen direkt unter der Kampfkraft.
+<strong>Schau sie an, bevor du absendest.</strong></p>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<h2 id="forschung">7 · Forschung — drei Projekte gleichzeitig</h2>
+
+<p>42 Techniken in vier Ästen. Du hast <strong>drei Laborplätze</strong>, ein Projekt läuft je nach
+Stufe zwischen <strong>2 Stunden und 5 Tagen</strong>. Bezahlt wird beim Start.</p>
+
+<div class="grid">
+  <div class="tile"><div class="top"><img class="sh" src="assets/space/base_werft_2.png" alt="" onerror="this.remove()"><b>🚀 Antrieb &amp; Hülle</b></div>
+    <p>Kürzere Flugzeiten, schnellere und günstigere Werft.</p></div>
+  <div class="tile"><div class="top"><img class="sh" src="assets/space/turret_plasma.png" alt="" onerror="this.remove()"><b>🛡️ Bewaffnung</b></div>
+    <p>Stärkere Geschütze und mehr Flotten-Kampfkraft.</p></div>
+  <div class="tile"><div class="top"><img class="sh" src="assets/space/base_erzraffinerie.png" alt="" onerror="this.remove()"><b>⛏️ Schürftechnik</b></div>
+    <p>Mehr Ausbeute, ergiebigere Dauerernte — und die Schlüssel zu 🟣 und 🌀.</p></div>
+  <div class="tile"><div class="top"><img class="sh" src="assets/space/base_kristallreactor.png" alt="" onerror="this.remove()"><b>🏭 Raffinerie &amp; Logistik</b></div>
+    <p>Höherer Durchsatz, mehr Kolonie-Ertrag, der ⚗️ Transmuter.</p></div>
+</div>
+
+<div class="card warn">
+  <h3>⚠️ Drei Plätze helfen nur über drei Äste</h3>
+  <p>Eine Technik verlangt ihre <strong>abgeschlossene</strong> Vorstufe. Du kannst also
+  <em>nicht</em> Stufe 1, 2 und 3 desselben Astes gleichzeitig anstoßen — die Kette wartet weiter
+  aufeinander. Drei Plätze bedeuten: <strong>drei Äste nebeneinander vorantreiben.</strong></p>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<h2 id="kolonien">8 · Kolonien</h2>
+
+<p>Eine Kolonie ist ein dauerhafter Stützpunkt: sie liefert täglich Ertrag, kann Geschütze
+tragen und eine Garnison aufnehmen. Gegründet wird mit einem <strong>Kolonie-Kit</strong> —
+Schiffe <em>und</em> Rohstoffe zusammen.</p>
+
+<div class="scroll">
+<table>
+  <thead><tr><th>Ring</th><th>Kit (Rohstoffe)</th><th class="n">CC</th><th>Schiffe</th></tr></thead>
+  <tbody>
+    <tr><td><b style="color:var(--green)">Ring 1</b></td><td>600 🪨 · 180 💎</td><td class="n">8.000</td><td>10 Jäger, 3 Kutter</td></tr>
+    <tr><td><b style="color:var(--amber)">Ring 2</b></td><td>1.000 🪨 · 320 💎 · 60 🟣</td><td class="n">16.000</td><td>20 Jäger, 5 Kutter, 2 Fregatten, 1 Röstkomet</td></tr>
+    <tr><td><b style="color:var(--violet)">Ring 3</b></td><td>1.600 🪨 · 500 💎 · 120 🟣 · 50 🌀</td><td class="n">28.000</td><td>30 Jäger, 8 Kutter, 4 Fregatten, 2 Röstkometen</td></tr>
+  </tbody>
+</table>
+</div>
+
+<ul>
+  <li>Der Verband <strong>kehrt nicht zurück</strong> — er geht bei der Gründung im Rumpf der Kolonie auf.</li>
+  <li>Eine Kolonie hat <strong>drei Stufen</strong>. Jeder Ausbau <strong>dauert</strong> und hebt den Ertrag.</li>
+  <li>Kolonien <strong>können angegriffen werden</strong> — von der KI. Sie brauchen Verteidigung.</li>
+</ul>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<h2 id="verteidigung">9 · Verteidigung</h2>
+
+<h3>🛡️ Geschütze</h3>
+<p>Geschütze stehen am Raumhafen und auf Kolonien. Sie decken anfliegende Verbände mit ab
+und wehren KI-Angriffswellen eigenständig.</p>
+
+<div class="scroll">
+<table>
+  <thead><tr><th>Geschütz</th><th class="n">Feuerkraft</th><th>Braucht</th></tr></thead>
+  <tbody>
+    <tr><td><div class="namecell"><img class="sh" src="assets/space/turret_railgun.png" alt="" onerror="this.remove()">Railgun</div></td><td class="n">20</td><td>Einstieg</td></tr>
+    <tr><td><div class="namecell"><img class="sh" src="assets/space/turret_laser.png" alt="" onerror="this.remove()">Laserbatterie</div></td><td class="n">45</td><td>Forschung</td></tr>
+    <tr><td><div class="namecell"><img class="sh" src="assets/space/turret_plasma.png" alt="" onerror="this.remove()">Plasmawerfer</div></td><td class="n">85</td><td>Forschung</td></tr>
+    <tr><td><div class="namecell"><img class="sh" src="assets/space/turret_singularity.png" alt="" onerror="this.remove()">Singularität</div></td><td class="n">130</td><td>🟣 Plasmoid</td></tr>
+    <tr><td><div class="namecell"><img class="sh" src="assets/space/turret_resonanz.png" alt="" onerror="this.remove()">Resonanz-Geschütz</div></td><td class="n">200</td><td>🟣 Plasmoid</td></tr>
+    <tr><td><div class="namecell"><img class="sh" src="assets/space/turret_quantenlanze.png" alt="" onerror="this.remove()">Quanten-Geschütz</div></td><td class="n">320</td><td>🌀 Quantenschaum</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h3>🛡️ Garnison</h3>
+<p>Du kannst Schiffe <strong>dauerhaft auf einer Kolonie stationieren</strong> — sie zählen dort zur
+Verteidigung. Platz: <strong>10 Schiffe je Kolonie-Stufe</strong>.
+⚠️ Sie sind dann <em>nicht</em> mehr in deiner Heimatflotte und verteidigen den Raumhafen nicht mit.</p>
+
+<h3>🎖️ Söldner</h3>
+<p>Gemietete Kampfkraft auf Zeit. Sie kosten das <strong>Dreifache</strong> des CC-Bauwerts der
+entsprechenden Schiffe — teuer, aber sofort da. Gut, wenn eine Angriffswelle näher ist als
+deine Werft schnell.</p>
+
+<div class="card">
+  <h3>🚨 Angriffswellen</h3>
+  <p>Die KI greift an — Raumhafen wie Kolonien. Du bekommst eine <strong>Vorwarnzeit</strong>
+  (30–120 Minuten) und siehst Stärke und deine Verteidigung. In der Zeit kannst du Geschütze bauen,
+  Söldner mieten, eine Garnison verlegen oder um Hilfe rufen.</p>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<h2 id="zusammen">10 · Zusammen spielen — und warum sich das für dich lohnt</h2>
+
+<div class="card good">
+  <h3>🤝 Hilfe bringt dir selbst etwas ein</h3>
+  <p>Wer auf einen <strong>Hilferuf</strong> eines Mitspielers reagiert, bekommt eine
+  <strong>eigene Belohnung</strong> — Hilfe ist keine Wohltätigkeit, sondern eine Einnahmequelle.
+  Ihr steht nie gegeneinander: <strong>es gibt kein PvP.</strong></p>
+</div>
+
+<ul>
+  <li><strong>Geteilte Karte:</strong> Wrackfelder und Planeten gehören dem Clan. Wer zuerst da ist,
+      bekommt sie — das ist Wettbewerb, aber ohne Kampf.</li>
+  <li><strong>Clan-Handel:</strong> Rohstoffe, Schiffe und Gesuche unter Mitspielern. Wer 🪨 im Überfluss
+      hat und 💎 braucht, findet fast immer jemanden mit dem umgekehrten Problem.</li>
+  <li><strong>Ungeschützt im Clan:</strong> Im 🚀-Tab siehst du, welche Planeten <em>aller</em> Mitspieler
+      gerade ungeschützt sind. Ein Hinweis im Chat kostet dich nichts und rettet jemandem den Tag.</li>
+  <li><strong>Die Rangliste</strong> zeigt, wer im Clan wie weit ist — und der Einnahme-Verlauf zeigt
+      dir, ob du gerade abgehängt wirst oder davonziehst.</li>
+</ul>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<h2 id="kosten">11 · Laufende Kosten — der häufigste Anfängerfehler</h2>
+
+<p><strong>Besitz kostet Geld, jeden Tag.</strong> Wer nur baut und nicht rechnet, rutscht ins Minus.</p>
+
+<div class="scroll">
+<table>
+  <thead><tr><th>Posten</th><th class="n">Satz</th><th>Bemerkung</th></tr></thead>
+  <tbody>
+    <tr><td>⚓ Flottensold</td><td class="n">1,0 % / Tag</td><td>vom Bauwert jedes Schiffs im Hafen</td></tr>
+    <tr><td>🛰️ Stationierte Schiffe</td><td class="n">0,5 % / Tag</td><td>halber Satz — sie erwirtschaften selbst</td></tr>
+    <tr><td>🛡️ Geschütz-Unterhalt</td><td class="n">0,5 % / Tag</td><td>je Geschütz, am Hafen wie auf Kolonien</td></tr>
+    <tr><td>💰 Einsatzkosten</td><td class="n">3 CC je Kampfkraft</td><td>einmalig beim Absenden eines Verbands</td></tr>
+    <tr><td>⛽ Treibstoff</td><td class="n">je Ring</td><td>💎 Kristall, ab Ring 2 zusätzlich 🟣 und 🌀</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="card tip">
+  <h3>💡 Schiffe einmotten</h3>
+  <p>Was du gerade nicht brauchst, kannst du <strong>einmotten</strong> — dann zahlst du keinen Sold
+  dafür. Der Weg zurück steht im 🛩️ Flotten-Tab. Besser einmotten als verkaufen.</p>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<h2 id="tempo">12 · Tempo — Zeit ist die eigentliche Währung</h2>
+
+<ul>
+  <li><strong>Flugzeit:</strong> rund <strong>4 Stunden je Ring</strong>. Der <em>Warp-Kessel</em> (−25 %),
+      <em>Dunkle Materie</em> (−25 %) und das <em>Plasmoid-Triebwerk</em> (−20 %) senken das,
+      zusammen bis zu 90 %.</li>
+  <li><strong>⚡ Beschleunigen:</strong> Jede laufende Reise lässt sich <strong>fünfmal</strong> um je
+      30 Minuten verkürzen. Eine Stufe kostet <strong>20 % der Flugkosten</strong> — alle fünf
+      zusammen also genau die Kosten der Reise noch einmal.</li>
+  <li><strong>🏗️ Werft:</strong> Mehr Hellingen bauen mehr Rümpfe gleichzeitig.
+      ⚠️ <strong>Aufteilen lohnt nie</strong> — jeder zusätzliche Auftrag kostet eine Anlaufzeit extra.
+      Ein einziger großer Auftrag ist immer der günstigste Weg.</li>
+  <li><strong>Höchstens 5 Verbände</strong> gleichzeitig unterwegs.</li>
+</ul>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<h2 id="fehler">13 · Die häufigsten Fehler</h2>
+
+<div class="card warn">
+  <ol style="margin-bottom:0">
+    <li><strong>Nur Jäger schicken.</strong> 0 % Schild, fallen zuerst — ein reiner Jägerschwarm
+        verliert auch im Sieg fast alles. Nimm etwas Schweres mit.</li>
+    <li><strong>Nutzschiffe im Kampfverband.</strong> Kutter, Sonden und Röstkometen sind Kanonenfutter.
+        Lass sie zu Hause.</li>
+    <li><strong>Flotte vor Einnahmen bauen.</strong> Der Sold läuft täglich, die Ernte auch —
+        aber nur eines davon in deine Richtung.</li>
+    <li><strong>Ohne Aufklärung angreifen.</strong> Die Kampfvorschau sagt dir vorher, ob du gewinnst.
+        Sie kostet nichts.</li>
+    <li><strong>Planeten befreien und liegen lassen.</strong> Sie fallen zurück, und die Wächter
+        kommen 1,6-mal so stark wieder.</li>
+    <li><strong>Eine Forschungskette stapeln wollen.</strong> Drei Plätze, aber nur über drei Äste.</li>
+  </ol>
+</div>
+
+<footer>
+  Stand 26.08.2026 · Alle Zahlen entsprechen dem laufenden Spielstand.<br>
+  Fragen? Frag im Clan-Chat — im Weltraum gewinnt niemand allein.
+</footer>
+
+</div>
+</body>
+</html>
