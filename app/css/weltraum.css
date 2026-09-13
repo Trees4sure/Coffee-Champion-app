@@ -1026,3 +1026,9 @@
   background: color-mix(in srgb, #4d7fd4 14%, transparent); font-size: .82rem;
 }
 .wr-upbox-done { border-color: #3f7a4c; background: color-mix(in srgb, #3f7a4c 16%, transparent); }
+
+/* 🗺️ 2026-09-13: Regions-Kasten im Planeten-/Nebel-Detail (wrRegionBoxHtml) */
+.wr-region { margin: 8px 0; padding: 8px 10px; border: 1px solid #24305a; border-left: 4px solid #7f8fbb;
+  border-radius: 8px; background: rgba(40,52,100,.18); font-size: .86rem; line-height: 1.45; }
+.wr-region.wr-ok { border-left-width: 4px; }
+.wr-region .wr-sub, .wr-region .wr-good { display: inline; }
