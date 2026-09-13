@@ -116,9 +116,9 @@ const SPACE_RESEARCH = [
   { id: 'wt_ionenantrieb', name: 'Ionenantrieb',  icon: '🚀', art: 'wt1_ionenantrieb', ast: 'Antrieb & Hülle', wt: 1, cost: 8000,
     desc: 'Baut den Raumhafen und schaltet [[s:sonde]] Bohnen-Sonde + [[s:jaeger]] Jäger frei' },
   { id: 'wt_frachtmodule', name: 'Frachtmodule',  icon: '📦', art: 'wt2_frachtmodule', ast: 'Antrieb & Hülle', wt: 2, cost: 15000,
-    requires: ['wt_ionenantrieb'], desc: 'Schaltet [[s:kutter]] Espresso-Kutter + [[s:kolonie]] Kolonieschiff frei' },
+    requires: ['wt_ionenantrieb'], desc: 'Schaltet [[s:kutter]] Espresso-Kutter frei — sie tragen die Abbau-Ausbeute heim — und das [[s:kolonie]] Kolonieschiff' },
   { id: 'wt_handbohrer',   name: 'Handbohrer',    icon: '⛏️', art: 'wt1_handbohrer',   ast: 'Schürftechnik',   wt: 1, cost: 8000,
-    requires: ['wt_ionenantrieb'], desc: 'Schaltet [[s:ernter]] Röstkometen frei — Abbau von [[s:erz]] Erz und [[s:kristall]] Koffeinkristall' },
+    requires: ['wt_ionenantrieb'], desc: 'Schaltet [[s:ernter]] Röstkometen frei — Abbau von [[s:erz]] Erz und [[s:kristall]] Koffeinkristall; heim tragen es die [[s:kutter]] Kutter' },
 ];
 
 // Die Tab-Freischaltung hängt an DIESER festen Liste, NICHT an „alle SPACE_RESEARCH besessen".

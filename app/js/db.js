@@ -3233,12 +3233,17 @@ const DB = (() => {
   }
 
   // Dauerernte-Route setzen (0 = auflösen).
-  async function setSpaceRoute(memberId, planetId, count, mode) {
+  // 🚀 27ao: `kutter` = Kutter der Route. null → Server behält den Bestand der Route.
+  // ⚠️ Der Schlüssel wird bei null WEGGELASSEN, nicht als null geschickt: so trifft der
+  // Aufruf auch die alte 5-stellige Funktion, falls das Frontend vor der SQL oben ist.
+  async function setSpaceRoute(memberId, planetId, count, mode, kutter) {
     try {
       if (!_groupId) return { error: 'no_group' };
-      const { data, error } = await _sb.rpc('set_space_route', {
+      const args = {
         p_member_id: memberId, p_group_id: _groupId,
-        p_planet_id: planetId, p_count: count | 0, p_mode: mode || 'res' });
+        p_planet_id: planetId, p_count: count | 0, p_mode: mode || 'res' };
+      if (kutter != null && Number.isFinite(kutter)) args.p_kutter = kutter | 0;
+      const { data, error } = await _sb.rpc('set_space_route', args);
       if (error) return { error: error.message };
       return data || {};
     } catch (e) { return { error: e.message }; }

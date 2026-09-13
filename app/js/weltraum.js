@@ -47,9 +47,9 @@ const SPACE_SHIPS = [
   { key:'grossjaeger', buildMin:180, art:'ship_grossjaeger', icon:'🛩️', name:'Großer Jäger', atk:20, mine:0, cc:2000, erz:30, kristall:10,
     needs:'wt_frachtmodule', desc:'Schwerer Abfangjäger — doppelte Feuerkraft je Rumpf, leichter Schild' },
   { key:'kutter', buildMin:180, art:'ship_kutter',  icon:'🚀', name:'Espresso-Kutter', atk:2,  mine:0, cc:1500, erz:0,  kristall:0,
-    needs:'wt_frachtmodule', desc:'Frachter, bringt Ausbeute sicher heim' },
+    needs:'wt_frachtmodule', desc:'Frachter: trägt je 20 Einheiten Ausbeute heim — Pflicht beim Abbau und in jeder Dauerernte-Route · je 10 im Sieg +50 Bergung · Kolonie-Kit · in der Garnison Handels-Kutter (CC/Tag) · fliegt ohne Treibstoff' },
   { key:'ernter', buildMin:240, art:'ship_ernter',  icon:'⛏️', name:'Röstkomet',       atk:3,  mine:8, cc:1500, erz:30, kristall:0,
-    needs:'wt_handbohrer',   desc:'Baut Erz und Koffeinkristall ab' },
+    needs:'wt_handbohrer',   desc:'Baut ab — heim tragen es die Espresso-Kutter' },
   { key:'berger', buildMin:240, art:'ship_berger',  icon:'♻️', name:'Bergungsschiff', atk:1,  mine:0, cc:1900, erz:50, kristall:0,
     needs:'wt_frachtmodule', desc:'Holt mehr aus Wracks — im Kampf und an befreiten Planeten' },
   { key:'kolonie', buildMin:1440, art:'ship_kolonie', icon:'🛸', name:'Kolonieschiff',   atk:0,  mine:0, cc:3750, erz:90, kristall:30,
@@ -261,6 +261,57 @@ function wrTechColonyCc(m) { return (wrHasTech(m,'wt_d4') ? 25 : 0) + (wrHasTech
 // `_space_colony_kutter_cc`.
 const WR_COLONY_CC = [0, 1500, 3500, 5000];   // je Kolonie-Stufe und Tag
 const WR_KUTTER_CC = 150;                     // 10 % des Kutter-Bauwerts (1.500 CC)
+// 🚀 27ao — JP 2026-09-13: „beim Abbau sind sie Zwang, jeder kann 20 Einheiten tragen, die
+// Röstkometen solo nichts … bei einer Abbauroute immer beides … im Kampf je 10 +50 Bergung."
+// ⚠️ Spiegel von `_space_kutter_cargo()` / `_space_kutter_salvage()` (SQL 27ao).
+// ⚠️ NICHT die `cargo`-Spalte aus `_space_ship_stats` (Kutter 40) — die wurde nie gelesen.
+const WR_KUTTER_CARGO   = 20;   // Einheiten je Kutter (Abbauflug) bzw. je Kutter und Tag (Route)
+const WR_KUTTER_SALVAGE = 50;   // Bergung je volle 10 Kutter nach einem Sieg
+function wrKutterSalvage(n) { return Math.floor((parseInt(n, 10) || 0) / 10) * WR_KUTTER_SALVAGE; }
+// Einheiten je Einheit Hauptertrag einer ROUTE — Spiegel `v_capU` in harvest_space (27ao):
+// 1 (falls abbaubar) + 0,75 Ring-Nebenertrag (0,5 Erz + 0,25 Kristall).
+function wrRouteUnits(m, type) {
+  return (wrResMinable(m, type) ? 1 : 0) + ((type === 'plasmoid' || type === 'quantum') ? 0.75 : 0);
+}
+// Abbauflug-Vorschau mit Frachtdeckel — Spiegel `v_capF` in claim_space_arrival (27ao).
+// Gedeckelt wird die Abbaukraft, nicht die Summe: dieselben Rundungen wie am Server.
+function wrHarvestPreview(m, p, sel) {
+  const kut   = parseInt(sel?.kutter, 10) || 0;
+  const cargo = kut * WR_KUTTER_CARGO;
+  const rich  = p?.richness || 1, t = p?.resource_type || 'erz';
+  const fak   = wrResMinable(m, t) ? (WR_RES_META[t]?.mine ?? 1) : 0;
+  const capF  = rich * (fak + ((t === 'plasmoid' || t === 'quantum') ? 0.625 : 0));
+  let mine = wrFleetMine(sel) * wrTechMine(m);
+  const full = mine * capF;
+  let cut = 0;
+  if (capF > 0 && full > cargo) { cut = Math.round(full - cargo); mine = cargo / capF; }
+  return { kut, cargo, main: Math.round(mine * rich * fak), units: Math.round(mine * capF),
+           full: Math.round(full), cut, need: capF > 0 ? Math.ceil(full / WR_KUTTER_CARGO) : 0 };
+}
+// Hinweiszeile unter dem Abbau-Knopf (Regel 4: die Regel steht dort, wo man abbaut).
+function wrCargoHintHtml(hp) {
+  if (!hp || hp.full <= 0) return '';
+  if (hp.kut < 1) {
+    return `<div class="wr-warn">🚀 Ohne Espresso-Kutter kommt nichts heim — Röstkometen bauen nur ab,
+      jeder Kutter trägt ${WR_KUTTER_CARGO} Einheiten. Für diese Ausbeute bräuchtest du <strong>${hp.need}</strong>.</div>`;
+  }
+  if (hp.cut > 0) {
+    return `<div class="wr-sub">🚀 ${hp.kut} Kutter tragen <strong>${wrFmt(hp.cargo)}</strong> von ${wrFmt(hp.full)} Einheiten —
+      ${wrFmt(hp.cut)} blieben liegen. Für alles bräuchtest du ${hp.need} Kutter.</div>`;
+  }
+  return `<div class="wr-sub">🚀 Frachtraum: ${hp.kut} Kutter × ${WR_KUTTER_CARGO} = ${wrFmt(hp.cargo)} Einheiten ·
+    genutzt ${wrFmt(hp.units)}</div>`;
+}
+// Zeile im Gefechts-Block: was die mitgeflogenen Kutter bringen (neue UND alte Regel).
+function wrKutterFightTxt(sel) {
+  const k = parseInt(sel?.kutter, 10) || 0;
+  if (k < 1) return '';
+  const b = wrKutterSalvage(k);
+  return b > 0
+    ? `<span class="wr-good">🚀 ${k} Kutter: +${wrFmt(b)} Bergung aus dem Wrackfeld nach einem Sieg</span>`
+    : `<span class="wr-sub">🚀 ${k} Kutter — je volle 10 bergen nach einem Sieg +${WR_KUTTER_SALVAGE}.
+         Kommt ihr zu spät, holen sie je 50 Trümmer.</span>`;
+}
 // ⚠️ AUF ZWEI TECHNIKEN AUFGETEILT: wt_d4 die Hälfte, wt_e15 die andere. Läge alles auf
 // einer, wäre die spätere wertlos — und JPs Sorge („die Investitionen kann man vielleicht
 // gar nicht mehr einholen") verlangt, dass sich beide noch lohnen.
@@ -1092,6 +1143,7 @@ let _wrCart      = null;  // geplanter Werftauftrag { schiffsTyp: anzahl }
                           // (interner Name/RPC heißen weiter *cart* — im UI heißt es
                           //  ausschließlich „Werftauftrag", JP: „bloß kein Einkaufskorb")
 let _wrRouteSel  = null;  // Vorauswahl im Dauerernte-Panel { planetId: anzahl }
+let _wrRouteSelK = null;  // 🚀 27ao: Vorauswahl der Kutter je Route { routenKey: anzahl }
 
 // 🛡️ 27k: Auswahl im Garnison-Panel. Wie _wrSelFleet nur Sitzungszustand — es muss das
 // Neurendern überleben, aber nicht den Reload (der Server hält die Wahrheit).
@@ -1208,11 +1260,19 @@ function wrSpeedPct(m) { return wrTechSpeed(m || _wrMember); }
 // Flugzeit-Anzeige inkl. Technik-Ersparnis (JP 2026-07-22: die Verkürzung durch die
 // Weiterentwicklungen soll DIREKT am Ziel sichtbar sein, nicht erst beim beauftragten
 // Flug). Reine Anzeige — abgerechnet wird serverseitig aus space.tech (21l).
-function wrTravelHtml(baseMin) {
+function wrTravelHtml(baseMin, quadrant) {
   const sp = Math.round(wrSpeedPct(_wrMember) || 0);
-  if (sp <= 0) return `<strong>${baseMin} Min</strong>`;
+  // 🗺️ 2026-09-13: `baseMin` enthält den Regionsbonus bereits (wrTripMin) — er stand
+  // aber nirgends dabei. Jetzt benannt, damit die kürzere Zeit einen Grund hat.
+  let regTag = '';
+  try {
+    if (quadrant && wrRegionMine(quadrant, _wrMember)) {
+      regTag = ` <span class="wr-good">🗺️ inkl. −${wrRegionPct(WR_REGION_RATES.flugzeit)} % Region</span>`;
+    }
+  } catch (e) {}
+  if (sp <= 0) return `<strong>${baseMin} Min</strong>${regTag}`;
   const eff = Math.max(1, Math.round(baseMin * (100 - sp) / 100));
-  return `<strong>${eff} Min</strong> <span class="wr-good">(−${sp} % Technik, statt ${baseMin})</span>`;
+  return `<strong>${eff} Min</strong> <span class="wr-good">(−${sp} % Technik, statt ${baseMin})</span>${regTag}`;
 }
 
 function wrShipCount(m, key) { return parseInt(wrHomeShips(m)[key], 10) || 0; }
@@ -3004,7 +3064,10 @@ function wrFleetPickerHtml(m) {
           const ring = _wrSel?.planet?.ring ?? _wrSel?.q?.ring ?? 0;
           if (!ring) return '';
           const sel  = wrSyncFleetSel(m);
-          const fuel = wrTripFuel(sel, ring);
+          // 🗺️ 2026-09-13: Spiegel von start_space_trip — nur der KRISTALL, nur bei Aufklärung.
+          const fuelRoh = wrTripFuel(sel, ring);
+          const fuel = (_wrSel?.fog && wrRegionMine(_wrSel?.q?.key, m))
+            ? Math.round(fuelRoh * WR_REGION_RATES.sonde) : fuelRoh;
           // 🟣🌀 27aa: Exoten gehören in DIESELBE Zeile wie der Kristall — sie sind
           // derselbe Posten. Eine zweite Treibstoff-Zeile wäre der fünfte Fall von
           // „zwei Dinge, ein Name".
@@ -3961,8 +4024,9 @@ function wrDetailHtml(m) {
           : `<p class="wr-p">Hinter dem Nebel liegen unbekannte Planeten. Schick eine 🛰️ Bohnen-Sonde, um den Quadranten
                für den <strong>gesamten Klan</strong> aufzudecken. Gib ihr Geleitschutz mit — draußen ist
                nicht jeder Nebel leer.${wrHasTech(m, 'wt_e6') ? '' : `<br><span class="wr-sub">📡 Die Forschung „${_wrEsc(wrTechName('wt_e6'))}" ortet angrenzende Quadranten vorab — dann fliegt die Sonde nicht mehr blind.</span>`}</p>`}
+        ${wrRegionBoxHtml(q.key, m)}
         <div class="wr-facts">
-          <span>Flugzeit: ${wrTravelHtml(min)} je Strecke${nAway > 0 ? ` <span class="wr-sub">+${wrFleetGap(m) * nAway} min (${nAway} unterwegs)</span>` : ''}</span>
+          <span>Flugzeit: ${wrTravelHtml(min, q.key)} je Strecke${nAway > 0 ? ` <span class="wr-sub">+${wrFleetGap(m) * nAway} min (${nAway} unterwegs)</span>` : ''}</span>
           <span>Sonden im Hafen: <strong>${wrShipCount(m, 'sonde')}</strong></span>
         </div>
         ${busy ? '' : wrFleetPickerHtml(m)}
@@ -4006,6 +4070,7 @@ function wrDetailHtml(m) {
   // laufen alle über start_space_trip, und die Prüfung sitzt dort vor dem Treibstoff.
   // Die Begründung steht im Picker (wrFleetPickerHtml), damit sie am Regler klebt.
   const gate    = wrCarrierGap(sel, p.ring);
+  const hp      = wrHarvestPreview(m, p, sel);   // 🚀 27ao: Frachtdeckel
 
   return `
     <div class="wr-detail">
@@ -4028,9 +4093,10 @@ function wrDetailHtml(m) {
       <div class="wr-facts">
         <span>Vorkommen: <strong>${resName}</strong></span>
         <span>Reichtum: <strong>${'★'.repeat(p.richness)}${'☆'.repeat(Math.max(0, 5 - p.richness))}</strong></span>
-        <span>Flugzeit: ${wrTravelHtml(min)} je Strecke</span>
+        <span>Flugzeit: ${wrTravelHtml(min, p.quadrant)} je Strecke</span>
         <span>Wächter: <strong>${cleared ? '— befreit' : wrFmt(p.enemy_strength)}</strong></span>
       </div>
+      ${wrRegionBoxHtml(p.quadrant, m)}
       ${cleared
         ? `<div class="wr-ok">✅ Befreit${mine ? ' — von dir' : ''}${colon ? ' · ' + wrIc("colony") + ' bereits kolonisiert' : ''}${
              wrDefLevel(p) ? ` · 🛡️ Geschütze Stufe ${wrDefLevel(p)}` : ''}${wrIsStation(p) ? ' · 📡 Station' : ''}</div>
@@ -4043,6 +4109,7 @@ function wrDetailHtml(m) {
              <span>Gegner: <strong>${wrFmt(Math.round(bp.foe))}</strong> effektiv${
                Math.round(bp.foe) !== Math.round(p.enemy_strength) ? ` (roh ${wrFmt(p.enemy_strength)})` : ''}</span>
              <span>Erwartete Verluste: <strong>${Math.round(lossPct * 100)} %</strong> der Flotte</span>
+             ${wrKutterFightTxt(sel)}
              ${/* ⚠️ Früher `bp.shield > 0 ? … : ''` — bei einer reinen Jägerflotte stand
                    hier also NICHTS, und genau die braucht die Erklärung. Siehe wrSchildTxt. */''}
              ${wrSchildTxt(bp.shield, wrSyncFleetSel(m))}
@@ -4054,11 +4121,13 @@ function wrDetailHtml(m) {
       ${/* 26h: Geschütze des Ziels decken den Anflug mit — exakt wie in claim_space_arrival
             ((Hafen + Planeten-Deckung) × Tech-Faktor), sonst verspricht die Vorschau zu wenig. */''}
       ${busy ? '' : wrAmbushHint(p.ring, power, wrTurretPower(m) + wrPlanetCover(p, m) * wrTechTurret(m))}
+      ${cleared && !busy && ernter > 0 ? wrCargoHintHtml(hp) : ''}
       <div class="wr-actions">
         ${!cleared ? `<button class="wr-btn wr-btn-go" data-wr-send="attack" ${(busy || jaeger < 1 || gate.blocked) ? 'disabled' : ''}>
             ⚔️ Angreifen <span class="wr-btn-sub">⚔️ ${wrFmt(power)} Kampfkraft</span></button>` : ''}
-        ${cleared ? `<button class="wr-btn" data-wr-send="harvest" ${(busy || ernter < 1 || gate.blocked) ? 'disabled' : ''}>
-            ${wrIc("mine")} Abbauen <span class="wr-btn-sub">${resGated ? '🔒 Abbau-Tech fehlt' : `≈ ${wrFmt(Math.round(ernter * p.richness * resMeta.mine))} ${resIcon}`}</span></button>` : ''}
+        ${cleared ? `<button class="wr-btn" data-wr-send="harvest" ${(busy || ernter < 1 || hp.kut < 1 || gate.blocked) ? 'disabled' : ''}>
+            ${wrIc("mine")} Abbauen <span class="wr-btn-sub">${resGated ? '🔒 Abbau-Tech fehlt'
+              : hp.kut < 1 ? '🚀 Kutter fehlt' : `≈ ${wrFmt(hp.main)} ${resIcon}`}</span></button>` : ''}
         ${cleared && !colon ? (() => {
           // 🏛️ 26u: Die Mission verlangt einen kompletten Verband. Ohne diese Vorschau
           // sah man nur „colony_kit_incomplete", nachdem man auf Start gedrückt hatte.
@@ -4521,6 +4590,7 @@ function wrGarrisonHtml(m, p) {
         <span class="wr-fl-name">${_wrEsc(s.name)}</span>
         <span class="wr-fl-n">${wrFmt(parseInt(ships[s.key], 10) || 0)}</span>
         <span class="wr-fl-atk">${wrIc('atk')} ${wrFmt((s.atk || 0) * (parseInt(ships[s.key], 10) || 0))}</span>
+        ${s.key === 'kutter' ? `<span class="wr-good wr-sub">💰 ${wrFmt(wrColonyKutterCc(m, pid))} CC/Tag</span>` : ''}
       </div>`).join('');
 
   // Auswahl-Stepper: beim Verlegen aus dem Hafen, beim Rückholen aus der Garnison.
@@ -4532,7 +4602,8 @@ function wrGarrisonHtml(m, p) {
       const n   = parseInt(sel[s.key], 10) || 0;
       return `<div class="wr-gar-pick">
           <span class="wr-gar-pn">${wrShipArt(s.key, 'wr-mini')} ${_wrEsc(s.name)}
-            <span class="wr-sub">${max} da</span></span>
+            <span class="wr-sub">${max} da${s.key === 'kutter' && _wrGarMode !== 'recall'
+              ? ` · als Handels-Kutter +${WR_KUTTER_CC} CC/Tag` : ''}</span></span>
           <span class="wr-fs-stepper">
             <button class="wr-fs-btn" data-wr-gar="${pid}:${s.key}:-1" ${n < 1 ? 'disabled' : ''}>−</button>
             <span class="wr-fs-n">${n}</span>
@@ -4760,7 +4831,10 @@ function wrColoniesHtml(m) {
     // 29.07. behoben wurden: der Tech-Faktor (_space_tech_colony) fehlte ganz, und
     // 🟣/🌀-Kolonien wurden wie Kristall mit 0,5 gerechnet statt mit 0,3/0,2.
     const typ  = c.type || 'erz';
-    const base = Math.round(days * (c.richness || 1) * 3 * (c.level || 1) * wrTechColony(m));
+    // 🗺️ 2026-09-13: `* v_mult` steht in harvest_space INNERHALB des round() — hier fehlte er,
+    // die Vorschau lag in der eigenen Region 20 % unter der Auszahlung.
+    const regM = wrRegionMine((plRow || wrPlanetById(id))?.quadrant, m) ? WR_REGION_RATES.ertrag : 1;
+    const base = Math.round(days * (c.richness || 1) * 3 * (c.level || 1) * wrTechColony(m) * regM);
     const fak  = { erz: 1, kristall: 0.5, plasmoid: 0.3, quantum: 0.2 }[typ] ?? 1;
     const amt  = wrResMinable(m, typ) ? (fak === 1 ? base : Math.round(base * fak)) : 0;
     // 26n: Ring-Kolonien werfen zusätzlich Erz und Kristall ab — ohne Abbau-Gate.
@@ -4777,7 +4851,7 @@ function wrColoniesHtml(m) {
     // stats zusammengefasst (Abbau/Tag, Level, Stärke usw)"). Der fette Wert rechts war
     // der ANGESAMMELTE Ertrag — ohne Bezugsgrösse nicht deutbar. Jetzt steht die Rate
     // je Tag daneben; sie ist dieselbe Formel mit days = 1.
-    const tagBase = Math.round((c.richness || 1) * 3 * (c.level || 1) * wrTechColony(m));
+    const tagBase = Math.round((c.richness || 1) * 3 * (c.level || 1) * wrTechColony(m) * regM);
     const tagAmt  = wrResMinable(m, typ) ? (fak === 1 ? tagBase : Math.round(tagBase * fak)) : 0;
     const tagSide = (typ === 'plasmoid' || typ === 'quantum')
       ? { erz: Math.round(tagBase * 0.5), kri: Math.round(tagBase * 0.5 * 0.25) } : null;
@@ -4819,6 +4893,7 @@ function wrColoniesHtml(m) {
             wrGarrisonCount(m, id) > 0
               ? ` · ${wrIc('atk')} ${wrFmt(wrGarrisonPower(m, id))}` : ''}${wrIsStation(pl) ? ' · 📡' : ''}
             <span class="wr-col-day">${proTag ? `📥 ${proTag} /Tag` : ''}${
+              regM > 1 ? ` <span class="wr-good" title="Regionsbonus">🗺️ +${wrRegionPct(regM)} %</span>` : ''}${
               (!wrResMinable(m, typ) && tagAmt === 0) ? ` 🔒 ${wrResIc(typ)} braucht die Abbau-Technik` : ''}</span></span>
           <strong>+${wrFmt(amt + (side ? side.erz + side.kri : 0))}</strong>
         </button>
@@ -5703,6 +5778,18 @@ function wrRouteModeHtml(m, p, mode) {
   const sel  = Math.max(0, Math.min(cur + free, Number.isFinite(wunsch) ? wunsch : cur));
   const fuel = wrRouteFuel(sel);
   const sd   = SPACE_SHIP_BY_KEY[ship];
+  // 🚀 27ao: Kutter holen die Ernte ab — je Kutter 20 Einheiten am Tag. Vorgeschlagen wird,
+  // was für den vollen Ertrag nötig ist (höchstens, was im Hafen steht).
+  const kCur   = wreck ? 0 : (parseInt(wrRoutes(m)[rkey]?.kutter, 10) || 0);
+  const kFree  = wreck ? 0 : wrShipCount(m, 'kutter');
+  const units  = wreck ? 0 : wrRouteUnits(m, p.resource_type);
+  const rohTag = wreck ? 0 : wrRouteRate(p.resource_type, p.richness, sel) * wrRouteMult(p, m);
+  const kNeed  = (!wreck && units > 0) ? Math.ceil(rohTag * units / WR_KUTTER_CARGO) : 0;
+  const kWunsch = parseInt(_wrRouteSelK?.[rkey], 10);
+  const kSel   = (wreck || sel === 0) ? 0 : Math.max(0, Math.min(kCur + kFree,
+                   Number.isFinite(kWunsch) ? kWunsch : (kCur > 0 ? kCur : Math.min(kFree, Math.max(1, kNeed)))));
+  const tagMain = wreck || kSel < 1 ? 0
+                : Math.min(rohTag, units > 0 ? kSel * WR_KUTTER_CARGO / units : rohTag);
 
   let facts;
   if (wreck) {
@@ -5719,7 +5806,14 @@ function wrRouteModeHtml(m, p, mode) {
     // `wrResIc()` liefert dasselbe Symbol als Bild mit genau diesem Emoji als Rückfall.
     // Betrifft alle vier Rohstoffe — also ja, auch 🌀.
     const ic = wrResIc(p.resource_type);
-    facts = `<span>Ertrag: <strong>${wrFmt(wrRouteRate(p.resource_type, p.richness, sel))} ${ic}/Tag</strong></span>`;
+    const rf = wrRouteMult(p, m);
+    facts = `<span>Ertrag: <strong>${wrFmt(Math.round(tagMain))} ${ic}/Tag</strong>${
+      rf !== 1 ? ` <span class="wr-good">(${wrTechRoute(m) > 1 ? `+${wrRegionPct(wrTechRoute(m))} % Bohrkopf` : ''}${
+        wrTechRoute(m) > 1 && rf / wrTechRoute(m) > 1 ? ' · ' : ''}${rf / wrTechRoute(m) > 1 ? `🗺️ +${wrRegionPct(WR_REGION_RATES.ertrag)} % Region` : ''})</span>` : ''}</span>`;
+    // 🚀 27ao: Deckel sichtbar machen — sonst sähe ein Kutter zu wenig aus wie ein schwacher Planet.
+    if (kSel > 0 && rohTag - tagMain >= 1) {
+      facts += `<span class="wr-sub">🚀 Kutter ausgelastet — mit ${kNeed} wären es ${wrFmt(Math.round(rohTag))}/Tag</span>`;
+    }
   }
 
   return `
@@ -5738,12 +5832,27 @@ function wrRouteModeHtml(m, p, mode) {
           <button class="wr-fs-btn" data-wr-route="${rkey}:1" ${sel >= cur + free ? 'disabled' : ''}>+</button>
         </span>
       </div>
+      ${wreck ? '' : `
+      <div class="wr-fs-row${kSel > 0 ? ' wr-fs-on' : ''}">
+        <span class="wr-fs-ic">${wrShipArt('kutter', 'wr-mini wr-mini-md')}</span>
+        <span class="wr-fs-name">Espresso-Kutter holen ab
+          <span class="wr-sub">je ${WR_KUTTER_CARGO} Einheiten/Tag · ${kCur > 0 ? `aktuell ${kCur} dort · ` : ''}${kFree} im Hafen${
+            sel > 0 && kNeed > 0 ? ` · voller Ertrag ab ${kNeed}` : ''}</span></span>
+        <span class="wr-fs-stepper">
+          <button class="wr-fs-btn" data-wr-routek="${rkey}:-1" ${(kSel < 1 || sel === 0) ? 'disabled' : ''}>−</button>
+          <span class="wr-fs-n">${kSel}</span>
+          <button class="wr-fs-btn" data-wr-routek="${rkey}:1" ${(kSel >= kCur + kFree || sel === 0) ? 'disabled' : ''}>+</button>
+        </span>
+      </div>`}
       <div class="wr-facts">${facts}
         <span>Treibstoff: <strong>${wrFmt(fuel)} ${wrIc('kri')}/Tag</strong></span></div>
-      ${sel !== cur
-        ? `<button class="wr-btn wr-btn-sm" data-wr-routeset="${p.id}:${sel}:${mode}">
-             ${sel === 0 ? 'Route auflösen' : (cur === 0 ? 'Route einrichten' : 'Route ändern')}</button>`
-        : '<div class="wr-sub">Stelle die Anzahl ein, um die Route zu ändern.</div>'}
+      ${!wreck && sel > 0 && kSel < 1
+        ? `<div class="wr-warn">🚀 Ohne Espresso-Kutter holt niemand die Ernte ab — ${kFree < 1
+             ? 'bau Kutter in der Werft.' : 'stelle mindestens einen Kutter dazu.'}${cur > 0 ? ' Bis dahin pausiert diese Route.' : ''}</div>`
+        : (sel !== cur || kSel !== kCur)
+          ? `<button class="wr-btn wr-btn-sm" data-wr-routeset="${p.id}:${sel}:${mode}${wreck ? '' : ':' + kSel}">
+               ${sel === 0 ? 'Route auflösen' : (cur === 0 ? 'Route einrichten' : 'Route ändern')}</button>`
+          : '<div class="wr-sub">Stelle die Anzahl ein, um die Route zu ändern.</div>'}
     </div>`;
 }
 
@@ -5765,7 +5874,10 @@ function wrRoutesHtml(m) {
     const planet = wrPlanetById(r.planetId || rk.replace(/:w$/, ''));
     const pd = wrRoutePending(r, planet);
     const cnt = parseInt(r.count, 10) || 0;
-    perDayFuel += wrRouteFuel(cnt);
+    // 🚀 27ao: Röstkometen-Route ohne Kutter pausiert — kein Ertrag, kein Treibstoff.
+    const kutO = parseInt(r.kutter, 10) || 0;
+    const pausiertK = !wreck && cnt > 0 && kutO < 1;
+    perDayFuel += pausiertK ? 0 : wrRouteFuel(cnt);
     fuelSum += pd.fuel;
     // ⚠️ 27y — JP 2026-08-21: „bei der Übersicht Dauerernte-Bergung werden immer +0
     // Rohstoffe angezeigt, warum?"
@@ -5799,7 +5911,10 @@ function wrRoutesHtml(m) {
       pendKri += pd.sideKri || 0;
       // Spiegel von wrRoutePending: Ring-Routen werfen zusätzlich 50 % Erz und
       // 25 % davon als Kristall ab.
-      const rate = wrRouteRate(t, r.richness, cnt);
+      const unitsO = wrRouteUnits(m, t);
+      const rate = kutO < 1 ? 0                                                  // 🚀 27ao
+        : Math.min(wrRouteRate(t, r.richness, cnt) * wrRouteMult(planet, m),     // 🗺️ 2026-09-13
+                   unitsO > 0 ? kutO * WR_KUTTER_CARGO / unitsO : Infinity);
       const ring = (t === 'plasmoid' || t === 'quantum');
       day.erz = (t === 'erz' ? rate : 0) + (ring ? rate * 0.5 : 0);
       day.kri = (t === 'kristall' ? rate : 0) + (ring ? rate * 0.5 * 0.25 : 0);
@@ -5829,7 +5944,7 @@ function wrRoutesHtml(m) {
       ? `${cnt}× Bergungsschiff · noch `
         + `${wrFmt(planet ? wrWreckLeft(planet) : 0)} im Feld · `
         + `${wrFmt(wrRouteFuel(cnt))} ${wrIc('kri')}/Tag`
-      : `${cnt}× Röstkomet · ${'★'.repeat(Math.max(1, Math.min(5, r.richness || 1)))}`;
+      : `${cnt}× Röstkomet · ${pausiertK ? '⚠️ kein Kutter' : `${kutO}× Kutter`} · ${'★'.repeat(Math.max(1, Math.min(5, r.richness || 1)))}`;
 
     // ⬇️ JP 2026-07-29: „Bei den Bergungs-Trupps fehlt es noch an Information, wie lange
     // noch abgebaut wird und wann erwarteter Rückflug ist."
@@ -5848,6 +5963,10 @@ function wrRoutesHtml(m) {
           <span class="wr-sub">(${wrWhen(Date.now() + days * 86400000)}) → dann fliegen die
           ${cnt} Bergungsschiffe zurück</span></span>`;
       }
+    } else if (pausiertK) {
+      // 🚀 27ao (JP: „alle pausieren, aber Hinweiszeichen geben")
+      hinweis = `<span class="wr-route-eta wr-bad">⚠️ <strong>Pausiert — kein Kutter.</strong>
+        Tippe den Planeten an und stelle Espresso-Kutter dazu (je ${WR_KUTTER_CARGO} Einheiten/Tag).</span>`;
     } else if (cnt > 0) {
       // Rohstoff-Routen laufen unbefristet — begrenzt ist nur der Treibstoff.
       const reachOne = Math.floor(stock / wrRouteFuel(cnt));
@@ -6225,7 +6344,14 @@ function wrRoutePending(r, planet) {
              fuel: Math.round(days * wrRouteFuel(cnt) * (want > 0 ? got / want : 0)) };
   }
   // 26n: Ring-Routen liefern zusätzlich Erz/Kristall (50 % / 25 % der Routenmenge).
-  const amount = Math.round(days * wrRouteRate(r.type, r.richness, cnt));
+  // 🚀 27ao: Spiegel von harvest_space — ohne Kutter pausiert, sonst Kutter × 20 je Tag.
+  const kut = parseInt(r.kutter, 10) || 0;
+  if (kut < 1) return { days, mode:'res', amount: 0, sideErz: 0, sideKri: 0, fuel: 0, noKutter: true };
+  let amount = Math.round(days * wrRouteRate(r.type, r.richness, cnt) * wrRouteMult(planet));   // 🗺️ 2026-09-13
+  const units = wrRouteUnits(_wrMember, r.type);
+  if (units > 0 && amount * units > days * kut * WR_KUTTER_CARGO) {
+    amount = Math.floor(days * kut * WR_KUTTER_CARGO / units);
+  }
   const ring   = (r.type === 'plasmoid' || r.type === 'quantum');
   return {
     days, mode:'res', amount,
@@ -6851,6 +6977,81 @@ function wrRegionMine(quadrant, m) {
 function wrTripMin(ring, quadrant, m) {
   const bonus = wrRegionMine(quadrant, m) ? WR_REGION_RATES.flugzeit : 1;
   return Math.round(ring * SPACE_MIN_PER_RING * bonus);
+}
+// 🗺️ 2026-09-13 — JP: „Aber die Regionsboni werden nirgends aufgezeigt oder beschrieben
+// und auch wie man sie erhält (Kolonisation?) wird nicht klar definiert."
+// BEFUND: Seit 26z rechnet der Server alle fünf Effekte. Der Client wandte zwei davon
+// still an (Flugzeit, Kolonie-CC) und nannte keinen einzigen — die einzige Erwähnung
+// (Statistik → Regionen) behauptete, die Boni „folgen mit dem nächsten Server-Update".
+// Dazu ZEIGTE er zwei falsch: Rohstoff-Ertrag der Kolonien und der Dauerernte ohne +20 %.
+// ⚠️ Wieder „Server-Mechanik gebaut, Anzeige vergessen" — mothballed 26w, merc 26x,
+// garrison 27k, wrTechColonyCc 27w, und jetzt die Regionen.
+// Der Kasten steht deshalb dort, wo man auf die Region trifft: im Planeten- und im
+// Nebel-Detail (CLAUDE.md Regel 4).
+function wrRegionPct(f) { return Math.round(Math.abs(1 - f) * 100); }
+function wrRegionBoniTxt() {
+  const R = WR_REGION_RATES;
+  return `🪨 Ertrag <strong>+${wrRegionPct(R.ertrag)} %</strong> · 🚀 Flugzeit <strong>−${wrRegionPct(R.flugzeit)} %</strong>`
+       + ` · 🛰️ Aufklärungs-Treibstoff <strong>−${wrRegionPct(R.sonde)} %</strong> · 🛡️ Übernahmeschutz`;
+}
+// Faktor auf die Dauerernte einer Route — Spiegel von harvest_space (27af):
+// `_space_route_rate × _space_tech_route × v_mult`.
+// ⚠️ Der Client zeigte BEIDE Faktoren nicht: wt_c3 (Plasma-Bohrkopf, +25 %) war seit 26e
+// als `wrTechRoute` definiert und NIE aufgerufen — derselbe Fall wie wrTechColonyCc (27w).
+function wrRouteMult(planet, m) {
+  const reg = planet && wrRegionMine(planet.quadrant, m) ? WR_REGION_RATES.ertrag : 1;
+  return wrTechRoute(m || _wrMember) * reg;
+}
+function wrRegionBoxHtml(quadrant, m) {
+  try {
+    const key = wrRegionOfQuad(quadrant);
+    const reg = (window.WR_REGIONS || []).find(r => r.key === key);
+    if (!reg || typeof window.wrRegionStand !== 'function') return '';   // Heimatquadrant: keine Region
+    const me   = (m || _wrMember)?.id;
+    const st   = window.wrRegionStand(key);
+    const need = st.need || reg.q.length;
+    const nameOf = (id) => ((typeof wrAllUsers === 'function' ? wrAllUsers() : []).find(u => u.id === id)?.name) || 'Unbekannt';
+    const ich  = st.list.find(e => e.id === me) || null;
+    const fehlt = reg.q.filter(k => !(ich && ich.quads.has(k)));
+    const H = st.holder, L = st.leader;
+    const kopf = `🗺️ Region <strong style="color:${reg.color}">${reg.icon} ${_wrEsc(reg.name)}</strong>
+      <span class="wr-sub">· ${need} Quadranten</span>`;
+    const wie = `<span class="wr-sub">Region erhalten: die meisten Kolonien darin <strong>und</strong> in jedem der
+      ${need} Quadranten mindestens eine.</span>`;
+    const meinStand = ich
+      ? `<span class="wr-sub">📍 Du: ${ich.col} Kolonie${ich.col === 1 ? '' : 'n'} in ${ich.quads.size}/${need} Quadranten${
+          fehlt.length ? ` — es fehlen: ${fehlt.map(_wrEsc).join(', ')}` : ''}</span>` : '';
+    let body, cls = 'wr-region';
+    if (H && H.id === me) {
+      cls += ' wr-ok';
+      const zweiter = st.list.find(e => e.id !== me);
+      body = `<strong>Deine Region.</strong> Hier gilt für dich: ${wrRegionBoniTxt()}.
+        ${zweiter ? `<span class="wr-sub">📤 ${_wrEsc(nameOf(zweiter.id))} liegt auf Platz 2 und erhält
+          ${Math.round(WR_REGION_RATES.abgabe * 100)} % deines Regionsertrags als Erz — zusätzlich, dir wird nichts abgezogen.</span>` : ''}`;
+    } else if (H) {
+      // Verteidigung wie `_space_region_defense`: Σ planet_defense des Kontrolleurs in der Region.
+      const def = (_wrGalaxy?.planets || [])
+        .filter(p => p.colonized_by === H.id && wrRegionOfQuad(p.quadrant) === key)
+        .reduce((s, p) => s + wrPlanetDef(p), 0);
+      const noetig = Math.round(def * WR_REGION_RATES.uebernahme);
+      const platz2 = st.list[1]?.id === me;
+      body = `Gehört <strong>${_wrEsc(nameOf(H.id))}</strong> (${H.col} Kolonien, alle Quadranten besetzt).
+        <span class="wr-sub">🛡️ Eine Kolonie hier braucht einen Verband mit mindestens ⚔️ <strong>${wrFmt(noetig)}</strong>
+          (${String(WR_REGION_RATES.uebernahme).replace('.', ',')} × Geschütz-Verteidigung ${wrFmt(def)}).</span>
+        ${platz2 ? `<span class="wr-good">📥 Du bist Platz 2 — du erhältst ${Math.round(WR_REGION_RATES.abgabe * 100)} % seines Regionsertrags als Erz.</span>` : ''}`;
+    } else if (L) {
+      body = L.id === me
+        ? `<strong>Du führst</strong> — aber erst ${L.quads.size}/${need} Quadranten sind besetzt. Mit einer Kolonie
+           in jedem Quadranten gilt für dich: ${wrRegionBoniTxt()}.`
+        : `<strong>${_wrEsc(nameOf(L.id))}</strong> führt mit ${L.col} Kolonien, hat aber erst ${L.quads.size}/${need}
+           Quadranten besetzt — noch erhält niemand die Boni.`;
+    } else if (st.list.length) {
+      body = `Gleichstand — niemand erhält die Boni. Eine Kolonie mehr entscheidet.`;
+    } else {
+      body = `Noch frei. Wer sie hält, bekommt hier: ${wrRegionBoniTxt()}.`;
+    }
+    return `<div class="${cls}" style="border-left-color:${reg.color}">${kopf}<br>${body}<br>${meinStand}${meinStand ? '<br>' : ''}${wie}</div>`;
+  } catch (e) { return ''; }   // Regel 3: ein Anzeige-Kasten darf das Detail nie sprengen
 }
 
 // ── 🎖️ 26x: Söldner ─────────────────────────────────────────────────────────
@@ -8013,10 +8214,28 @@ function wrBindEvents() {
       wrRefreshDetail();
       return;
     }
+    // 🚀 27ao: Kutter einer Route. Ausgangswert ist die ANGEZEIGTE Zahl (sie kann ein
+    // Vorschlag sein, der noch nirgends gespeichert ist).
+    const kAdj = e.target.closest('[data-wr-routek]');
+    if (kAdj && !kAdj.disabled) {
+      const raw  = kAdj.dataset.wrRoutek;
+      const cut  = raw.lastIndexOf(':');
+      const rkey = raw.slice(0, cut), d = parseInt(raw.slice(cut + 1), 10);
+      const kCur  = parseInt(wrRoutes(_wrMember)[rkey]?.kutter, 10) || 0;
+      const kFree = wrShipCount(_wrMember, 'kutter');
+      _wrRouteSelK = _wrRouteSelK || {};
+      const gemerkt = parseInt(_wrRouteSelK[rkey], 10);
+      const gezeigt = parseInt(kAdj.closest('.wr-fs-row')?.querySelector('.wr-fs-n')?.textContent, 10);
+      const now = Number.isFinite(gemerkt) ? gemerkt : (Number.isFinite(gezeigt) ? gezeigt : kCur);
+      _wrRouteSelK[rkey] = Math.max(0, Math.min(kCur + kFree, now + d));
+      wrRefreshDetail();
+      return;
+    }
     const rSet = e.target.closest('[data-wr-routeset]');
     if (rSet && !rSet.disabled) {
-      const [pid, n, mode] = rSet.dataset.wrRouteset.split(':');
-      await wrSetRoute(pid, parseInt(n, 10), mode || 'res');
+      const [pid, n, mode, k] = rSet.dataset.wrRouteset.split(':');
+      const kutter = (k === undefined || k === '') ? null : parseInt(k, 10);
+      await wrSetRoute(pid, parseInt(n, 10), mode || 'res', Number.isFinite(kutter) ? kutter : null);
       return;
     }
     if (e.target.closest('#wr-mutter-build')) { await wrBuildMutterschiff(); return; }
@@ -8257,6 +8476,10 @@ async function wrSend(intent) {
     }
   }
   if (intent === 'harvest'  && wrFleetMine(fleet) < 1) { wrToast('Ohne ⛏️ Röstkometen gibt es nichts abzubauen.', 'error'); return; }
+  // 🚀 27ao: Der Server lehnt denselben Fall ab — hier nur der Grund VOR dem Klick.
+  if (intent === 'harvest'  && !((parseInt(fleet.kutter, 10) || 0) > 0)) {
+    wrToast(`Ohne 🚀 Espresso-Kutter kommt nichts heim — jeder Kutter trägt ${WR_KUTTER_CARGO} Einheiten.`, 'error'); return;
+  }
   if (intent === 'attack'   && wrFleetPower(fleet) < 1) { wrToast('Dieser Verband hat keine Kampfkraft.', 'error'); return; }
 
   // 💰 EINSATZKOSTEN-Vorabcheck (27ac). Gleiche Bauart wie die Treibstoff-Checks
@@ -8974,19 +9197,20 @@ async function wrSendHelp(waveId) {
 }
 
 // Dauerernte einrichten/ändern/auflösen.
-async function wrSetRoute(planetId, count, mode) {
+async function wrSetRoute(planetId, count, mode, kutter) {
   if (_wrBusy) return;
   const wreck = mode === 'wreck';
   _wrBusy = true;
   try {
-    const res = await DB.setSpaceRoute(_wrMember.id, planetId, count, mode || 'res');
+    const res = await DB.setSpaceRoute(_wrMember.id, planetId, count, mode || 'res', wreck ? null : kutter);
     if (!res || res.error) { wrErrToast(res?.error); return; }
     if (res.space) wrApplySpace(res.space);
     if (_wrRouteSel) delete _wrRouteSel[planetId + (wreck ? ':w' : '')];
+    if (_wrRouteSelK) delete _wrRouteSelK[planetId];   // 🚀 27ao
     const ship = wreck ? 'berger' : 'ernter';
     const nm   = SPACE_SHIP_BY_KEY[ship].name;
     wrToast(count > 0
-      ? `${wreck ? '♻️' : '🛰️'} ${wrFmt(count)}× ${nm} bei ${res.planet} stationiert`
+      ? `${wreck ? '♻️' : '🛰️'} ${wrFmt(count)}× ${nm}${!wreck && res.kutter ? ` + ${wrFmt(res.kutter)}× Kutter` : ''} bei ${res.planet} stationiert`
       : `${wreck ? '♻️' : '🛰️'} Route bei ${res.planet} aufgelöst`, 'success');
     if (count > 0) {
       wrChat(`${wreck ? '♻️' : '🛰️'} ${_wrEsc(_wrMember.name)} `
@@ -9788,6 +10012,15 @@ function wrReport(r) {
   } else {
     lines.push(`<div class="wr-rep-head">${info.icon} ${_wrEsc(r.planet)}</div>`);
   }
+  // 🚀 27ao: Frachtdeckel und Kutter-Bergung — beides wäre ohne Zeile unerklärlich.
+  if (r.intent === 'harvest' && !r.ambushed && !r.recalled && (r.cargoCut || 0) > 0) {
+    lines.push(`<div class="wr-bad">🚀 Frachtraum voll: ${wrFmt(r.kutter || 0)} Kutter tragen ${wrFmt(r.cargo || 0)} Einheiten —
+      <strong>${wrFmt(r.cargoCut)}</strong> blieben liegen. Mehr Kutter mitnehmen.</div>`);
+  }
+  if ((r.kutterSalvage || 0) > 0) {
+    lines.push(`<div class="wr-good">🚀 ${wrFmt(r.kutter || 0)} Kutter bargen <strong>${wrFmt(r.kutterSalvage)}</strong>
+      Einheiten aus dem Wrackfeld <span class="wr-sub">(70 % ${wrIc('erz')} / 30 % ${wrIc('kri')})</span></div>`);
+  }
   if (r.shipsLost > 0) lines.push(`<div class="wr-bad">Verluste: ${wrFmt(r.shipsLost)} Schiff(e) (${Math.round((r.lossRatio || 0) * 100)} %)${_wrEsc(wrLossBreakdown(r.lost))}</div>`);
   // ⚗️ 27ac: Mitgeführte, aber nicht verschossene Injektion kommt ins Magazin zurück.
   // ⚠️ Ohne diese Zeile wäre die Rückgabe unsichtbar — und ein Spieler, der beim Start
@@ -10037,6 +10270,7 @@ function wrErrText(err) {
     // 💰 27ac
     not_enough_cc_dispatch: 'Nicht genug CC für den Einsatz — das Absenden kostet 3× die Kampfkraft des Verbands.',
     region_too_strong:     'Diese Region gehört jemand anderem — dein Verband ist zu schwach für eine Kolonie dort (nötig: das 1,15-fache der Regionsverteidigung).',
+    no_kutter:             'Ohne 🚀 Espresso-Kutter kommt keine Ausbeute heim — jeder Kutter trägt 20 Einheiten (bei Routen: je Tag).',
     merc_active:           'Es läuft bereits ein Söldner-Geschwader.',
     merc_not_rentable:     'Dieses Schiff lässt sich nicht mieten.',
     merc_too_big:          'So grosse Geschwader vermittelt niemand.',

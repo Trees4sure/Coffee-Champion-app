@@ -85,6 +85,10 @@ function wrsSoldRate(u) {
       if (!d) continue;
       o.routes += n * (d.cc || 0) * WRS_SOLD_ROUTE;
       o.nRoute += n;
+      // 🚀 27ao: Kutter der Route zahlen denselben Satz (Spiegel _space_sold_rate).
+      const kn = parseInt(r?.kutter, 10) || 0;
+      const kd = kn > 0 ? shipDef('kutter') : null;
+      if (kd) { o.routes += kn * (kd.cc || 0) * WRS_SOLD_ROUTE; o.nRoute += kn; }
     }
 
     // ②b 🛡️ Garnison auf Kolonien — VOLLER Satz (27k, R10). Sie erwirtschaftet nichts,

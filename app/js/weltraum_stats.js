@@ -86,22 +86,34 @@ try {
 // Kontrolle einer Region: die meisten Kolonien gewinnen. Gleichstand → Summe der
 // Kolonie-Stufen, dann Planeten-Geschütze; bleibt es gleich, kontrolliert niemand.
 // Rein rechnerisch aus der Planetentabelle — kein gespeicherter Zustand, kein SQL.
+// 🗺️ 27an (JP 2026-09-13: „in jedem Quadranten der Region mindestens 1 Kolonie, ehe man
+// die Boni kassieren kann"): der FÜHRENDE (`leader`) ist erst dann Kontrolleur
+// (`holder`), wenn er in JEDEM Quadranten der Region eine Kolonie hält.
+// ⚠️ Spiegel von `_space_region_holder` (27an). `holder` bedeutet überall — Boni,
+// Rangliste, Erfolge, Kartentönung — dasselbe wie am Server. Wer nur führt, blockiert
+// die Region, bekommt aber nichts.
+// ⚠️ `need` = Quadranten laut WR_REGIONS; der Server zählt die Quadranten mit Planeten.
+// Beides ist gleich, solange jeder Quadrant Planeten trägt (Probe 1 in 27an).
 function wrRegionStand(regionKey) {
   const pls = (typeof _wrGalaxy !== 'undefined' && _wrGalaxy?.planets) || [];
+  const need = wrRegionDef(regionKey)?.q.length || 0;
   const by = {};
   for (const p of pls) {
     if (!p || WR_REGION_OF[p.quadrant] !== regionKey) continue;
     if (!p.colonized_by) continue;
-    const e = by[p.colonized_by] || (by[p.colonized_by] = { id: p.colonized_by, col: 0, lvl: 0, def: 0 });
+    const e = by[p.colonized_by] || (by[p.colonized_by] = { id: p.colonized_by, col: 0, lvl: 0, def: 0, quads: new Set() });
     e.col += 1;
     e.lvl += (typeof wrColonyLevel === 'function') ? wrColonyLevel(p) : 1;
     e.def += (typeof wrPlanetDef === 'function') ? wrPlanetDef(p) : 0;
+    e.quads.add(p.quadrant);
   }
   const list = Object.values(by).sort((a, b) => b.col - a.col || b.lvl - a.lvl || b.def - a.def);
-  if (!list.length) return { list, holder: null };
+  if (!list.length) return { list, leader: null, holder: null, need };
   const t = list[0];
   const gleich = list[1] && list[1].col === t.col && list[1].lvl === t.lvl && list[1].def === t.def;
-  return { list, holder: gleich ? null : t };
+  const leader = gleich ? null : t;
+  const holder = leader && need > 0 && leader.quads.size >= need ? leader : null;   // 🗺️ 27an
+  return { list, leader, holder, need };
 }
 function wrRegionsOf(memberId) {
   return WR_REGIONS.filter(r => wrRegionStand(r.key).holder?.id === memberId).length;
@@ -602,6 +614,31 @@ function wrsRanglisteHtml(rows) {
     </div>`;
 }
 
+// 🗺️ 27an: Die Regionsregeln an EINER Stelle formuliert — Statistik-Karte und Handbuch
+// nennen dieselben Sätze; die Zahlen kommen aus WR_REGION_RATES (Spiegel von
+// `_space_region_rates`), nicht aus dem Fliesstext.
+function wrsRegionRegelnHtml() {
+  const R = (typeof WR_REGION_RATES !== 'undefined') ? WR_REGION_RATES
+    : { ertrag: 1.2, flugzeit: 0.8, sonde: 0.5, abgabe: 0.05, uebernahme: 1.15 };
+  const pct = (f) => Math.round(Math.abs(1 - f) * 100);
+  return `
+      <div class="wrs-note">
+        <strong>So bekommst du eine Region:</strong> die <strong>meisten Kolonien</strong> darin halten
+        <strong>und</strong> in <strong>jedem ihrer Quadranten</strong> mindestens eine Kolonie haben.
+        Gleichstand entscheidet über die Kolonie-Stufen, dann die Geschütze. Es wird laufend neu
+        berechnet — wer verdrängt wird oder eine Kolonie verliert, verliert die Region sofort.<br>
+        <strong>Das bringt sie dir</strong> (nur in dieser Region):
+        🪨 Kolonie- und Dauerernte-Ertrag <strong>+${pct(R.ertrag)} %</strong> ·
+        🚀 Flugzeit <strong>−${pct(R.flugzeit)} %</strong> ·
+        🛰️ Treibstoff für Aufklärungsflüge <strong>−${pct(R.sonde)} %</strong> ·
+        🛡️ Übernahmeschutz: wer dort eine Kolonie gründen will, braucht einen Verband mit
+        <strong>${String(R.uebernahme).replace('.', ',')}×</strong> deiner Geschütz-Verteidigung in der Region.<br>
+        <strong>Platz 2</strong> geht nicht leer aus: er erhält <strong>${Math.round(R.abgabe * 100)} %</strong> des
+        Regionsertrags als 🪨 Erz — zusätzlich, dem Kontrolleur wird nichts abgezogen.
+        Wrackbergung bekommt keinen Bonus (ein Wrackfeld ist endlich).
+      </div>`;
+}
+
 function wrsRegionenHtml() {
   const me = (typeof currentUserData !== 'undefined' && currentUserData?.id) || null;
   const nameOf = (id) => wrAllUsers().find(u => u.id === id)?.name || 'Unbekannt';
@@ -609,19 +646,29 @@ function wrsRegionenHtml() {
     const st = wrRegionStand(r.key);
     const h  = st.holder;
     const col = h && typeof wrMemberColor === 'function' ? wrMemberColor(h.id) : '#7f8fbb';
-    const strittig = !h && st.list.length > 0;
+    const L  = st.leader;
+    const strittig = !L && st.list.length > 0;
+    // 🗺️ 27an: mein eigener Stand in dieser Region — die Frage „was fehlt MIR?"
+    const ich = me ? st.list.find(e => e.id === me) : null;
+    const ichTxt = ich && !(h && h.id === me)
+      ? `<span class="wrs-reg-d">📍 Du: ${ich.col} Kolonie${ich.col === 1 ? '' : 'n'} in
+           ${ich.quads.size}/${st.need} Quadranten</span>` : '';
     return `
       <div class="wrs-reg">
         <span class="wrs-reg-ic" style="border-color:${h ? col : '#24305a'}">${r.icon}</span>
         <span class="wrs-reg-txt">
           <span class="wrs-reg-n">${_e(r.name)} <span class="wr-sub">${r.q.length} Quadranten</span></span>
           <span class="wrs-reg-d">${_e(r.desc)}</span>
+          ${ichTxt}
         </span>
         <span class="wrs-reg-h" style="color:${h ? col : ''}">${h
-          ? `${_e(nameOf(h.id))}<br><span class="wr-sub">${h.col} Kolonien</span>`
-          : strittig
-            ? `<span class="wrs-reg-free">umkämpft</span><br><span class="wr-sub">${st.list.length} Parteien gleichauf</span>`
-            : '<span class="wrs-reg-free">frei</span>'}</span>
+          ? `${_e(nameOf(h.id))}${h.id === me ? ' (du)' : ''}<br><span class="wr-sub">${h.col} Kolonien · Boni aktiv</span>`
+          : L
+            ? `<span class="wrs-reg-free">${_e(nameOf(L.id))}${L.id === me ? ' (du)' : ''} führt</span><br>
+               <span class="wr-sub">${L.quads.size}/${st.need} Quadranten — noch keine Boni</span>`
+            : strittig
+              ? `<span class="wrs-reg-free">umkämpft</span><br><span class="wr-sub">${st.list.length} Parteien gleichauf</span>`
+              : '<span class="wrs-reg-free">frei</span>'}</span>
       </div>`;
   }).join('');
   const meineRegionen = me ? wrRegionsOf(me) : 0;
@@ -630,10 +677,10 @@ function wrsRegionenHtml() {
       <div class="wr-card-title">🗺️ Regionen
         <span class="wr-sub">— du kontrollierst ${meineRegionen} von ${WR_REGIONS.length}</span></div>
       ${rows}
-      <div class="wrs-note">Eine Region gehört dem, der dort die <strong>meisten Kolonien</strong> hält
-        (Gleichstand: Kolonie-Stufen, dann Geschütze). Sie wird laufend neu berechnet — wer verdrängt wird,
-        verliert sie sofort. <em>Regionsboni und die Übernahmeregel für fremde Regionen folgen mit dem
-        nächsten Server-Update; im Moment sind Regionen Ehre und Score.</em></div>
+      ${/* ⚠️ Hier stand bis 2026-09-13 „Regionsboni … folgen mit dem nächsten Server-Update;
+            im Moment sind Regionen Ehre und Score" — seit 26z (2026-08-17) falsch. Die Boni
+            wirkten, und die EINZIGE Stelle, die sie nannte, sagte, es gäbe sie nicht. */''}
+      ${wrsRegionRegelnHtml()}
     </div>`;
 }
 
@@ -1438,7 +1485,10 @@ const WRS_EDGE_DIR = [[1,0],[0,1],[-1,1],[-1,0],[0,-1],[1,-1]];
         if (n) {
           const mx = sx / n, my = sy / n - size * 0.55;
           const txt = r.icon + ' ' + r.name;
-          const sub = h ? nameOf(h.id) : null;
+          // 🗺️ 27an: wer nur führt, steht mit Fortschritt da — sonst sähe eine blockierte
+          // Region auf der Karte aus wie eine freie.
+          const sub = h ? nameOf(h.id)
+            : st.leader ? `${nameOf(st.leader.id)} · ${st.leader.quads.size}/${st.need}` : null;
           ctx.font = 'bold 11px system-ui';
           ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
           const w = Math.max(ctx.measureText(txt).width,

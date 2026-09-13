@@ -158,7 +158,7 @@ function wrxStartPopup(betrag) {
         <p style="font-size:.84rem;line-height:1.5;color:var(--muted);text-align:left">
           Damit du nicht bei null anfängst, während andere schon Ring 2 halten:
           Die Behörde spendiert dir ein <strong>einmaliges Startkapital</strong> für deine
-          erste Sonde, ein paar Jäger und den ersten Röstkometen.<br><br>
+          erste Sonde, ein paar Jäger und den ersten Röstkometen — samt Espresso-Kutter, die die Ausbeute heimtragen.<br><br>
           Der Betrag richtet sich nach deinem <strong>Rückstand auf den Spitzenreiter</strong> —
           je weiter der vorn ist, desto mehr bekommst du. Wer im All schon etwas erreicht hat,
           bekommt <strong>nichts</strong>, auch nicht rückwirkend: die Starthilfe soll den
@@ -655,9 +655,16 @@ function wrxHandbuchGesehen(me) {
   } catch (e) { return false; }
 }
 
+// ⛔ 2026-09-13 — JP: „bitte keine Regelpopup jetzt." Die automatische Einblendung beim
+// Login ist AUS. Das Handbuch bleibt über die 📖-Zeile im 🚀-Tab erreichbar.
+// ⚠️ Bewusst ein Schalter statt Löschen: der Merker (`map_data.wrHandbuch`) wird dann auch
+// NICHT gesetzt — wer das Popup nie gesehen hat, bekommt es beim späteren Wiedereinschalten.
+const WRX_HANDBUCH_POPUP_AN = false;
+
 let _wrxHbBusy = false;
 async function wrxHandbuchPopup() {
   if (_wrxHbBusy) return;
+  if (!WRX_HANDBUCH_POPUP_AN) return;
   try {
     const me = wrxMe();
     if (!me?.id) return;
@@ -690,7 +697,7 @@ async function wrxHandbuchPopup() {
         <div class="quiz-emoji">🚀</div>
         <h2>Das All wartet auf dich</h2>
         <p style="font-size:.84rem;line-height:1.55;color:var(--muted);text-align:left">
-          Fast alle im Clan sind inzwischen im Weltraum angekommen — <strong>108 Planeten</strong>
+          Fast alle im Clan sind inzwischen im Weltraum angekommen — <strong>288 Planeten</strong>
           liegen vor uns, verteilt auf drei Ringe. Jeder baut sein eigenes Ding:
           eigene Flotte, eigene Kolonien, eigene Forschung.
           <strong>Aber erobern können wir das All nur gemeinsam.</strong><br><br>
