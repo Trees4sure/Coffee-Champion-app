@@ -125,7 +125,7 @@ a{color:var(--blue)}
 <div class="ziel">
   <p class="satz">Jeder baut sein eigenes Ding — aber <em>erobern</em> können wir das All nur gemeinsam.</p>
   <p style="margin-top:10px;color:#c3d2ff">
-    Eure Galaxie hat <strong>108 Planeten</strong>: 18 im Ring&nbsp;1, 36 im Ring&nbsp;2, 54 im Ring&nbsp;3.
+    Eure Galaxie hat <strong>288 Planeten</strong>: 48 im Ring&nbsp;1, 96 im Ring&nbsp;2, 144 im Ring&nbsp;3 — acht in jedem Quadranten.
     Ihr teilt euch <strong>eine einzige Karte</strong>. Es gibt <strong>kein Gegeneinander</strong> —
     niemand kann dich angreifen, der Gegner ist immer die KI. Was einer befreit, steht für alle offen;
     was niemand hält, holen sich die Wächter zurück.
@@ -143,6 +143,7 @@ a{color:var(--blue)}
     <li><a href="#schild">Der Schild</a></li>
     <li><a href="#forschung">Forschung</a></li>
     <li><a href="#kolonien">Kolonien</a></li>
+    <li><a href="#regionen">Regionen</a></li>
     <li><a href="#verteidigung">Verteidigung</a></li>
     <li><a href="#zusammen">Zusammen spielen</a></li>
     <li><a href="#kosten">Laufende Kosten</a></li>
@@ -166,9 +167,9 @@ Raumhafen — und der Rest liegt an dir.</p>
   <li><b>Bau <img class="ic" src="assets/space/ship_jaeger.png" alt="" onerror="this.remove()"> Jäger und nimm einen Ring‑1‑Planeten</b>
       Ring‑1‑Wächter haben <strong>40–119</strong> Kampfkraft. Ein Jäger bringt 10 —
       mit 15–20&nbsp;Jägern bist du auf der sicheren Seite. Die Kampfvorschau rechnet es dir vor dem Start aus.</li>
-  <li><b>Bau <img class="ic" src="assets/space/ship_ernter.png" alt="" onerror="this.remove()"> Röstkometen und richte eine Dauerernte ein</b>
-      Das ist deine erste <strong>Einnahmequelle, die ohne dich läuft</strong>. Stationierte Röstkometen
-      fördern Tag für Tag, auch wenn du die App nicht öffnest.</li>
+  <li><b>Bau <img class="ic" src="assets/space/ship_ernter.png" alt="" onerror="this.remove()"> Röstkometen und <img class="ic" src="assets/space/ship_kutter.png" alt="" onerror="this.remove()"> Espresso-Kutter und richte eine Dauerernte ein</b>
+      Das ist deine erste <strong>Einnahmequelle, die ohne dich läuft</strong>. Röstkometen fördern Tag für Tag,
+      die Kutter tragen es heim — <strong>je Kutter 20&nbsp;Einheiten am Tag</strong>. Ohne Kutter steht die Route still.</li>
   <li><b>Forsche breit, nicht tief</b>
       Du hast <strong>drei Laborplätze</strong>. Sie helfen dir nur, wenn du in
       <strong>drei verschiedenen Ästen</strong> forschst — eine Kette wartet weiter aufeinander.</li>
@@ -190,21 +191,21 @@ Raumhafen — und der Rest liegt an dir.</p>
 <div class="card">
   <div class="ring r1">
     <div class="no">1</div>
-    <div><b>18 Planeten · Wächter 40–119</b><br>
+    <div><b>48 Planeten · Wächter 40–119</b><br>
       Reichtum 1–3. Dein Übungsgelände: hier lernst du Kampf, Ernte und Kolonie.
       Erz <img class="ic" src="assets/space/res_erz.png" alt="" onerror="this.remove()"> und
       Koffeinkristall <img class="ic" src="assets/space/res_kristall.png" alt="" onerror="this.remove()">.</div>
   </div>
   <div class="ring r2">
     <div class="no">2</div>
-    <div><b>36 Planeten · Wächter 150–399</b><br>
+    <div><b>96 Planeten · Wächter 150–399</b><br>
       Reichtum 2–4. Hier gibt es zusätzlich <img class="ic" src="assets/space/res_plasmoid.png" alt="" onerror="this.remove()">
       <strong>Plasmoiden-Staub</strong>. Und hier lauern Hinterhalte:
       <strong>30&nbsp;%</strong> Wahrscheinlichkeit pro Anflug (Ring&nbsp;1: 12&nbsp;%).</div>
   </div>
   <div class="ring r3">
     <div class="no">3</div>
-    <div><b>54 Planeten · der Orbitalring</b><br>
+    <div><b>144 Planeten · der Orbitalring</b><br>
       Nur hier fällt <img class="ic" src="assets/space/res_quantum.png" alt="" onerror="this.remove()">
       <strong>Quantenschaum</strong> an. Kleine Jäger schaffen den Sprung nicht allein —
       je 20&nbsp;Jäger braucht es ein <img class="ic" src="assets/space/ship_traeger.png" alt="" onerror="this.remove()">
@@ -268,7 +269,8 @@ Raumhafen — und der Rest liegt an dir.</p>
   <div class="tile">
     <div class="top"><img class="sh" src="assets/space/ship_ernter.png" alt="" onerror="this.remove()"><b>Dauerernte</b></div>
     <p>Stationierte Röstkometen fördern <strong>jeden Tag</strong>, ohne dass du etwas tust.
-       Die verlässlichste Einnahme im Spiel.</p>
+       Die verlässlichste Einnahme im Spiel — solange genug <strong>Kutter</strong> dabeistehen
+       (je Kutter 20&nbsp;Einheiten am Tag; ohne Kutter pausiert die Route).</p>
   </div>
   <div class="tile">
     <div class="top"><img class="sh" src="assets/space/base_raffinerie.png" alt="" onerror="this.remove()"><b>🏭 Raffinerie</b></div>
@@ -292,7 +294,8 @@ Raumhafen — und der Rest liegt an dir.</p>
   </div>
   <div class="tile">
     <div class="top"><img class="sh" src="assets/space/foe_waechter.png" alt="" onerror="this.remove()"><b>⚔️ Kampfbeute</b></div>
-    <p>Jeder gewonnene Kampf bringt Rohstoffe — ab Ring&nbsp;2 auch 🟣, ab Ring&nbsp;3 auch 🌀.</p>
+    <p>Jeder gewonnene Kampf bringt Rohstoffe — ab Ring&nbsp;2 auch 🟣, ab Ring&nbsp;3 auch 🌀.
+       Je volle 10 mitgeflogene Kutter bergen <strong>+50&nbsp;Einheiten</strong> aus dem Wrackfeld.</p>
   </div>
 </div>
 
@@ -311,8 +314,8 @@ Schere-Stein-Papier: leicht schlägt leicht, schwer schlägt schwer.</p>
     <tr><td><div class="namecell"><img class="sh" src="assets/space/ship_grossjaeger.png" alt="" onerror="this.remove()">Großer Jäger</div></td><td class="n">20</td><td class="n">5 %</td><td class="n">2.000 CC</td><td>früh</td></tr>
     <tr><td><div class="namecell"><img class="sh" src="assets/space/ship_fregatte.png" alt="" onerror="this.remove()">Fregatte</div></td><td class="n">28</td><td class="n">15 %</td><td class="n">2.250 CC</td><td>früh</td></tr>
     <tr><td><div class="namecell"><img class="sh" src="assets/space/ship_traeger.png" alt="" onerror="this.remove()">Trägerschiff</div></td><td class="n">40</td><td class="n">30 %</td><td class="n">22.500 CC</td><td>spät</td></tr>
-    <tr><td><div class="namecell"><img class="sh" src="assets/space/ship_bomber.png" alt="" onerror="this.remove()">Kreuzer</div></td><td class="n">65</td><td class="n">5 %</td><td class="n">4.500 CC</td><td>mittel</td></tr>
-    <tr><td><div class="namecell"><img class="sh" src="assets/space/ship_kreuzer.png" alt="" onerror="this.remove()">Bomber</div></td><td class="n">90</td><td class="n">10 %</td><td class="n">6.900 CC</td><td>mittel</td></tr>
+    <tr><td><div class="namecell"><img class="sh" src="assets/space/ship_kreuzer.png" alt="" onerror="this.remove()">Kreuzer</div></td><td class="n">65</td><td class="n">5 %</td><td class="n">4.500 CC</td><td>mittel</td></tr>
+    <tr><td><div class="namecell"><img class="sh" src="assets/space/ship_bomber.png" alt="" onerror="this.remove()">Bomber</div></td><td class="n">90</td><td class="n">10 %</td><td class="n">6.900 CC</td><td>mittel</td></tr>
     <tr><td><div class="namecell"><img class="sh" src="assets/space/ship_schlachtschiff.png" alt="" onerror="this.remove()">Schlachtschiff</div></td><td class="n">180</td><td class="n">20 %</td><td class="n">13.800 CC</td><td>spät</td></tr>
     <tr><td><div class="namecell"><img class="sh" src="assets/space/ship_dunkle_roestung.png" alt="" onerror="this.remove()">Dunkle Röstung</div></td><td class="n">320</td><td class="n">30 %</td><td class="n">26.300 CC</td><td>sehr spät</td></tr>
     <tr><td><div class="namecell"><img class="sh" src="assets/space/ship_mutterschiff.png" alt="" onerror="this.remove()">Mutterschiff</div></td><td class="n">1.170</td><td class="n" style="color:var(--green)">35 %</td><td class="n">37.500 CC + Rümpfe</td><td>als letztes</td></tr>
@@ -327,13 +330,36 @@ und 45 % schneller.</p>
   <h3>Die Nutzschiffe</h3>
   <p>
   <img class="ic" src="assets/space/ship_spaeher.png" alt="" onerror="this.remove()"> <strong>Bohnen-Sonde</strong> — deckt Nebel auf ·
-  <img class="ic" src="assets/space/ship_kutter.png" alt="" onerror="this.remove()"> <strong>Espresso-Kutter</strong> — Frachtraum ·
+  <img class="ic" src="assets/space/ship_kutter.png" alt="" onerror="this.remove()"> <strong>Espresso-Kutter</strong> — trägt die Ausbeute heim (Details unten) ·
   <img class="ic" src="assets/space/ship_ernter.png" alt="" onerror="this.remove()"> <strong>Röstkomet</strong> — Abbau und Dauerernte ·
   <img class="ic" src="assets/space/ship_berger.png" alt="" onerror="this.remove()"> <strong>Bergungsschiff</strong> — Wracks ·
   <img class="ic" src="assets/space/ship_kolonie.png" alt="" onerror="this.remove()"> <strong>Kolonieschiff</strong> — gründet Kolonien
   </p>
   <p style="margin-top:8px">⚠️ <strong>Nimm sie nicht in einen Kampfverband mit.</strong> Sie haben fast keine
-  Kampfkraft, aber die Verluste treffen die kleinen Schiffe zuerst — sie sind reines Kanonenfutter.</p>
+  Kampfkraft, aber die Verluste treffen die kleinen Schiffe zuerst — sie sind reines Kanonenfutter.
+  Einzige Ausnahme: Kutter in <strong>vollen Zehnern</strong> (siehe unten).</p>
+</div>
+
+<!-- 🚀 2026-09-13 · 27ao: die Kutter-Regeln an EINER Stelle. Zahlen: WR_KUTTER_CARGO /
+     WR_KUTTER_SALVAGE (Spiegel _space_kutter_cargo/_space_kutter_salvage). -->
+<div class="card tip" id="kutter">
+  <h3><img class="ic" src="assets/space/ship_kutter.png" alt="" onerror="this.remove()"> Der Espresso-Kutter — ohne ihn kommt nichts heim</h3>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Wo</th><th>Was der Kutter tut</th></tr></thead>
+    <tbody>
+      <tr><td>⛏️ Abbauflug</td><td><strong>Pflicht.</strong> Röstkometen bauen ab, jeder Kutter trägt <strong>20&nbsp;Einheiten</strong>
+          heim (alle Rohstoffe zusammen). Was darüber liegt, bleibt liegen — die Vorschau am Abbau-Knopf rechnet es dir aus.</td></tr>
+      <tr><td>🛰️ Dauerernte-Route</td><td><strong>Pflicht.</strong> Neben den Röstkometen stehen Kutter: je Kutter <strong>20&nbsp;Einheiten am Tag</strong>.
+          Ohne Kutter <strong>pausiert</strong> die Route (⚠️-Hinweis in der Übersicht). Das Panel schlägt vor, wie viele du für den vollen Ertrag brauchst.</td></tr>
+      <tr><td>⚔️ Gewonnener Angriff</td><td>Je volle <strong>10&nbsp;Kutter</strong> <strong>+50&nbsp;Einheiten</strong> Bergung aus dem neuen Wrackfeld (70&nbsp;% Erz, 30&nbsp;% Kristall).</td></tr>
+      <tr><td>🏁 Zu spät gekommen</td><td>War ein Mitspieler schneller, holt jeder Kutter bis zu <strong>50&nbsp;Trümmer</strong> — höchstens ein Viertel des Feldes.</td></tr>
+      <tr><td>🏛️ Kolonie gründen</td><td>Pflichtteil des Kolonie-Kits (3 / 5 / 8 Kutter je Ring).</td></tr>
+      <tr><td>🛡️ Garnison</td><td>Als <strong>Handels-Kutter</strong> auf einer Kolonie: <strong>+150&nbsp;CC am Tag</strong> je Kutter.</td></tr>
+      <tr><td>⛽ Treibstoff</td><td>Kutter fliegen immer <strong>ohne Treibstoff</strong>.</td></tr>
+    </tbody>
+  </table>
+  </div>
 </div>
 
 <!-- ══════════════════════════════════════════════════════════════════════ -->
@@ -412,7 +438,66 @@ Schiffe <em>und</em> Rohstoffe zusammen.</p>
 </ul>
 
 <!-- ══════════════════════════════════════════════════════════════════════ -->
-<h2 id="verteidigung">9 · Verteidigung</h2>
+<!-- 🗺️ 2026-09-13: Regionen. Die Boni wirken serverseitig seit 26z (2026-08-17) — bis
+     heute stand davon nichts im Handbuch. Zahlen: WR_REGION_RATES / _space_region_rates,
+     Quadranten: WR_REGIONS, Vollbesetzung: 27an. Prüfstand: test_h_handbuch.js (3). -->
+<h2 id="regionen">9 · Regionen — wofür sich Kolonien doppelt lohnen</h2>
+
+<p>Die Galaxie ist in <strong>acht Regionen</strong> aufgeteilt, jede aus 3 bis 6 Quadranten.
+Auf der Karte siehst du ihre Umrisse; wer eine Region hält, dessen Name steht darunter.</p>
+
+<div class="card good">
+  <h3>🗺️ So bekommst du eine Region</h3>
+  <p>Zwei Bedingungen, beide müssen gleichzeitig erfüllt sein:</p>
+  <ul>
+    <li><strong>Die meisten Kolonien</strong> in der Region (Gleichstand: Summe der Kolonie-Stufen, dann Geschütze —
+        ist alles gleich, hält <em>niemand</em> die Region).</li>
+    <li><strong>In jedem Quadranten der Region mindestens eine Kolonie.</strong> Wer zwar führt, aber Lücken hat,
+        blockiert die Region — die Boni bekommt dann niemand. Auf der Karte steht er mit seinem Fortschritt, z.&nbsp;B. „Name · 4/6".</li>
+  </ul>
+  <p>Befreite Planeten zählen nicht, nur <strong>Kolonien</strong>. Es wird laufend neu gerechnet: wer eine Kolonie
+  verliert oder überholt wird, verliert die Region sofort.</p>
+</div>
+
+<div class="scroll">
+<table>
+  <thead><tr><th>Das bringt dir deine Region</th><th class="n">Wirkung</th></tr></thead>
+  <tbody>
+    <tr><td>🪨 Ertrag deiner Kolonien und Dauerernte-Routen dort (Rohstoffe <em>und</em> CC)</td><td class="n">+20&nbsp;%</td></tr>
+    <tr><td>🚀 Flugzeit zu allen Zielen in der Region (auch Garnisons-Verlegungen)</td><td class="n">−20&nbsp;%</td></tr>
+    <tr><td>🛰️ Kristall-Treibstoff für Aufklärungsflüge dorthin</td><td class="n">−50&nbsp;%</td></tr>
+    <tr><td>🛡️ Übernahmeschutz: eine Kolonie in <em>deiner</em> Region gründet nur, wer mit dem 1,15-fachen deiner Geschütz-Verteidigung dort anfliegt</td><td class="n">×1,15</td></tr>
+    <tr><td>📥 <strong>Platz 2</strong> erhält 5&nbsp;% deines Regionsertrags als Erz — zusätzlich, dir wird nichts abgezogen</td><td class="n">5&nbsp;%</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="scroll">
+<table>
+  <thead><tr><th>Region</th><th class="n">Quadranten</th></tr></thead>
+  <tbody>
+    <tr><td>🥛 Lactea-Rift</td><td class="n">6</td></tr>
+    <tr><td>🔥 Röstgürtel</td><td class="n">6</td></tr>
+    <tr><td>♨️ Boreas-Kessel</td><td class="n">5</td></tr>
+    <tr><td>✨ Saccharia-Nebel</td><td class="n">4</td></tr>
+    <tr><td>🧊 Filtratbarriere</td><td class="n">4</td></tr>
+    <tr><td>🌑 Sedimentgraben</td><td class="n">4</td></tr>
+    <tr><td>☕ Crema-Bogen</td><td class="n">4</td></tr>
+    <tr><td>☄️ Rührsporn</td><td class="n">3</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="card tip">
+  <h3>💡 Wo du deinen Stand siehst</h3>
+  <p>Tippst du einen Planeten oder Nebel an, zeigt ein Kasten die Region, wem sie gehört, wie viele Quadranten
+  du schon besetzt hast und <strong>welche dir noch fehlen</strong>. Die Übersicht aller acht steht unter
+  📊&nbsp;Statistik → 🗺️&nbsp;Regionen. Die kleinste Region, der ☄️&nbsp;Rührsporn, braucht nur drei Kolonien —
+  ein guter erster Griff. Und: <strong>Wrackbergung</strong> bekommt keinen Bonus, ein Wrackfeld ist endlich.</p>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<h2 id="verteidigung">10 · Verteidigung</h2>
 
 <h3>🛡️ Geschütze</h3>
 <p>Geschütze stehen am Raumhafen und auf Kolonien. Sie decken anfliegende Verbände mit ab
@@ -422,12 +507,12 @@ und wehren KI-Angriffswellen eigenständig.</p>
 <table>
   <thead><tr><th>Geschütz</th><th class="n">Feuerkraft</th><th>Braucht</th></tr></thead>
   <tbody>
-    <tr><td><div class="namecell"><img class="sh" src="assets/space/turret_railgun.png" alt="" onerror="this.remove()">Railgun</div></td><td class="n">20</td><td>Einstieg</td></tr>
-    <tr><td><div class="namecell"><img class="sh" src="assets/space/turret_laser.png" alt="" onerror="this.remove()">Laserbatterie</div></td><td class="n">45</td><td>Forschung</td></tr>
-    <tr><td><div class="namecell"><img class="sh" src="assets/space/turret_plasma.png" alt="" onerror="this.remove()">Plasmawerfer</div></td><td class="n">85</td><td>Forschung</td></tr>
-    <tr><td><div class="namecell"><img class="sh" src="assets/space/turret_singularity.png" alt="" onerror="this.remove()">Singularität</div></td><td class="n">130</td><td>🟣 Plasmoid</td></tr>
-    <tr><td><div class="namecell"><img class="sh" src="assets/space/turret_resonanz.png" alt="" onerror="this.remove()">Resonanz-Geschütz</div></td><td class="n">200</td><td>🟣 Plasmoid</td></tr>
-    <tr><td><div class="namecell"><img class="sh" src="assets/space/turret_quantenlanze.png" alt="" onerror="this.remove()">Quanten-Geschütz</div></td><td class="n">320</td><td>🌀 Quantenschaum</td></tr>
+    <tr><td><div class="namecell"><img class="sh" src="assets/weltraum/wt1_railgun.png" alt="" onerror="this.remove()">Railgun</div></td><td class="n">20</td><td>Einstieg</td></tr>
+    <tr><td><div class="namecell"><img class="sh" src="assets/weltraum/wt2_koffein_laser.png" alt="" onerror="this.remove()">Laserbatterie</div></td><td class="n">45</td><td>Forschung</td></tr>
+    <tr><td><div class="namecell"><img class="sh" src="assets/weltraum/wt3_plasma_kanone.png" alt="" onerror="this.remove()">Plasmawerfer</div></td><td class="n">85</td><td>Forschung</td></tr>
+    <tr><td><div class="namecell"><img class="sh" src="assets/weltraum/wt5_singularitaet.png" alt="" onerror="this.remove()">Singularität</div></td><td class="n">130</td><td>🟣 Plasmoid</td></tr>
+    <tr><td><div class="namecell"><img class="sh" src="assets/weltraum/wt6_resonanz_geschuetz.png" alt="" onerror="this.remove()">Resonanz-Geschütz</div></td><td class="n">200</td><td>🟣 Plasmoid</td></tr>
+    <tr><td><div class="namecell"><img class="sh" src="assets/weltraum/wt7_quanten_lanze.png" alt="" onerror="this.remove()">Quanten-Geschütz</div></td><td class="n">320</td><td>🌀 Quantenschaum</td></tr>
   </tbody>
 </table>
 </div>
@@ -450,7 +535,7 @@ deine Werft schnell.</p>
 </div>
 
 <!-- ══════════════════════════════════════════════════════════════════════ -->
-<h2 id="zusammen">10 · Zusammen spielen — und warum sich das für dich lohnt</h2>
+<h2 id="zusammen">11 · Zusammen spielen — und warum sich das für dich lohnt</h2>
 
 <div class="card good">
   <h3>🤝 Hilfe bringt dir selbst etwas ein</h3>
@@ -471,7 +556,7 @@ deine Werft schnell.</p>
 </ul>
 
 <!-- ══════════════════════════════════════════════════════════════════════ -->
-<h2 id="kosten">11 · Laufende Kosten — der häufigste Anfängerfehler</h2>
+<h2 id="kosten">12 · Laufende Kosten — der häufigste Anfängerfehler</h2>
 
 <p><strong>Besitz kostet Geld, jeden Tag.</strong> Wer nur baut und nicht rechnet, rutscht ins Minus.</p>
 
@@ -495,7 +580,7 @@ deine Werft schnell.</p>
 </div>
 
 <!-- ══════════════════════════════════════════════════════════════════════ -->
-<h2 id="tempo">12 · Tempo — Zeit ist die eigentliche Währung</h2>
+<h2 id="tempo">13 · Tempo — Zeit ist die eigentliche Währung</h2>
 
 <ul>
   <li><strong>Flugzeit:</strong> rund <strong>4 Stunden je Ring</strong>. Der <em>Warp-Kessel</em> (−25 %),
@@ -511,14 +596,15 @@ deine Werft schnell.</p>
 </ul>
 
 <!-- ══════════════════════════════════════════════════════════════════════ -->
-<h2 id="fehler">13 · Die häufigsten Fehler</h2>
+<h2 id="fehler">14 · Die häufigsten Fehler</h2>
 
 <div class="card warn">
   <ol style="margin-bottom:0">
     <li><strong>Nur Jäger schicken.</strong> 0 % Schild, fallen zuerst — ein reiner Jägerschwarm
         verliert auch im Sieg fast alles. Nimm etwas Schweres mit.</li>
-    <li><strong>Nutzschiffe im Kampfverband.</strong> Kutter, Sonden und Röstkometen sind Kanonenfutter.
-        Lass sie zu Hause.</li>
+    <li><strong>Nutzschiffe im Kampfverband.</strong> Sonden und Röstkometen sind Kanonenfutter.
+        Lass sie zu Hause — Kutter nur in vollen Zehnern, dann bergen sie mit.</li>
+    <li><strong>Abbauen ohne Kutter.</strong> Röstkometen allein bringen nichts heim — und eine Route ohne Kutter steht still.</li>
     <li><strong>Flotte vor Einnahmen bauen.</strong> Der Sold läuft täglich, die Ernte auch —
         aber nur eines davon in deine Richtung.</li>
     <li><strong>Ohne Aufklärung angreifen.</strong> Die Kampfvorschau sagt dir vorher, ob du gewinnst.
